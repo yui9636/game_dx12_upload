@@ -4,12 +4,112 @@
 #include "Material/MaterialPreviewStudio.h"
 #include "ImGuiRenderer.h"
 #include "Graphics.h"
+#include "Generated/ComponentMeta.generated.h"
 #include "Icon/IconsFontAwesome7.h"
+#include "Component/NameComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/MeshComponent.h"
+#include "Component/LightComponent.h"
+#include "Component/HierarchyComponent.h"
+#include "Component/MaterialComponent.h"
+#include "Component/CameraComponent.h"
+#include "Component/EnvironmentComponent.h"
+#include "Component/PostEffectComponent.h"
+#include "Component/ReflectionProbeComponent.h"
+#include "Component/ShadowSettingsComponent.h"
+#include "Registry/Registry.h"
 #include <imgui.h>
 #include <filesystem>
 #include <algorithm>
+#include <memory>
+#include <type_traits>
 
 namespace {
+    template <typename T>
+    struct IsSharedPtr : std::false_type {};
+
+    template <typename T>
+    struct IsSharedPtr<std::shared_ptr<T>> : std::true_type {};
+
+    template <typename T>
+    bool DrawValueWidget(const char* label, T& value) {
+        ImGui::PushID(label);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("%s", label);
+        ImGui::TableNextColumn();
+        ImGui::SetNextItemWidth(-1.0f);
+
+        bool changed = false;
+        if constexpr (std::is_same_v<T, bool>) {
+            changed = ImGui::Checkbox("##value", &value);
+        } else if constexpr (std::is_same_v<T, float>) {
+            changed = ImGui::DragFloat("##value", &value, 0.01f);
+        } else if constexpr (std::is_same_v<T, int>) {
+            changed = ImGui::DragInt("##value", &value, 1.0f);
+        } else if constexpr (std::is_same_v<T, uint32_t>) {
+            int temp = static_cast<int>(value);
+            if (ImGui::DragInt("##value", &temp, 1.0f, 0)) {
+                value = static_cast<uint32_t>(temp);
+                changed = true;
+            }
+        } else if constexpr (std::is_same_v<T, std::string>) {
+            char buffer[512] = {};
+            strcpy_s(buffer, value.c_str());
+            if (ImGui::InputText("##value", buffer, sizeof(buffer))) {
+                value = buffer;
+                changed = true;
+            }
+        } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT3>) {
+            changed = ImGui::DragFloat3("##value", &value.x, 0.01f);
+        } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT4>) {
+            changed = ImGui::DragFloat4("##value", &value.x, 0.01f);
+        } else if constexpr (std::is_same_v<T, EntityID>) {
+            ImGui::Text("%llu", static_cast<unsigned long long>(value));
+        } else if constexpr (std::is_enum_v<T>) {
+            int enumValue = static_cast<int>(value);
+            if (ImGui::DragInt("##value", &enumValue, 1.0f, 0)) {
+                value = static_cast<T>(enumValue);
+                changed = true;
+            }
+        } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT4X4>) {
+            ImGui::TextDisabled("Matrix");
+        } else if constexpr (IsSharedPtr<T>::value) {
+            ImGui::TextDisabled(value ? "Loaded" : "None");
+        } else {
+            ImGui::TextDisabled("Unsupported");
+        }
+
+        ImGui::PopID();
+        ImGui::TableNextColumn();
+        return changed;
+    }
+
+    template <typename T>
+    void DrawComponentBlock(const char* label, T& component) {
+        if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+
+        if (ImGui::BeginTable(label, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextColumn();
+
+            std::apply([&](auto... fields) {
+                ((DrawValueWidget(fields.name.data(), component.*(fields.ptr))), ...);
+            }, ComponentMeta<T>::Fields);
+
+            ImGui::EndTable();
+        }
+    }
+
+    template <typename T>
+    void DrawComponentIfPresent(Registry* registry, EntityID entity) {
+        if (T* component = registry->GetComponent<T>(entity)) {
+            DrawComponentBlock(ComponentMeta<T>::Name.data(), *component);
+        }
+    }
+
     void DrawTextureInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Texture");
         ImGui::TextWrapped("%s", filename.c_str());
@@ -108,7 +208,6 @@ namespace {
 }
 
 void InspectorECSUI::Render(Registry* registry) {
-    (void)registry;
     ImGui::Begin(ICON_FA_CIRCLE_INFO " Inspector");
 
     auto& selection = EditorSelection::Instance();
@@ -117,10 +216,34 @@ void InspectorECSUI::Render(Registry* registry) {
         DrawAssetInspector(selection.GetAssetPath());
         break;
     case SelectionType::Entity:
-        ImGui::Text("Entity");
-        ImGui::Separator();
-        ImGui::Text("Entity ID: %llu", static_cast<unsigned long long>(selection.GetEntity()));
-        ImGui::TextDisabled("Detailed ECS inspector is temporarily simplified.");
+        if (!registry) {
+            ImGui::TextDisabled("Registry unavailable.");
+            break;
+        }
+        {
+            const EntityID entity = selection.GetEntity();
+            ImGui::Text("Entity");
+            ImGui::Separator();
+            ImGui::Text("Entity ID: %llu", static_cast<unsigned long long>(entity));
+
+            if (auto* name = registry->GetComponent<NameComponent>(entity)) {
+                ImGui::Text("Name: %s", name->name.c_str());
+            }
+
+            ImGui::Spacing();
+            DrawComponentIfPresent<NameComponent>(registry, entity);
+            DrawComponentIfPresent<TransformComponent>(registry, entity);
+            DrawComponentIfPresent<MeshComponent>(registry, entity);
+            DrawComponentIfPresent<MaterialComponent>(registry, entity);
+            DrawComponentIfPresent<HierarchyComponent>(registry, entity);
+            DrawComponentIfPresent<LightComponent>(registry, entity);
+            DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);
+            DrawComponentIfPresent<CameraLensComponent>(registry, entity);
+            DrawComponentIfPresent<EnvironmentComponent>(registry, entity);
+            DrawComponentIfPresent<PostEffectComponent>(registry, entity);
+            DrawComponentIfPresent<ReflectionProbeComponent>(registry, entity);
+            DrawComponentIfPresent<ShadowSettingsComponent>(registry, entity);
+        }
         break;
     default:
         ImGui::TextDisabled("Nothing selected.");
