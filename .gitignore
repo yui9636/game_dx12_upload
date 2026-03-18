@@ -5,13 +5,17 @@
 *.user
 *.opendb
 
-# Build outputs
-bin/
-obj/
-x64/
-Saved/
+# Build outputs (repo root only)
+/bin/
+/obj/
+/x64/
+/Saved/
 *.tlog
 *.lastbuildstate
+
+# Generated runtime/cache artifacts
+Data/Shader/*.cso
+Data/Model/**/*.cereal
 
 # Local editor/runtime state
 imgui.ini

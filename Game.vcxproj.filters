@@ -1642,6 +1642,9 @@
     <FxCompile Include="Shader\DeferredLightingPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
+    <FxCompile Include="Shader\FinalBlitPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
     <FxCompile Include="Shader\GTAOPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
