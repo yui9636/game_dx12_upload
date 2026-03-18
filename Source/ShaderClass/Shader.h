@@ -13,7 +13,7 @@ public:
 	virtual void Begin(const RenderContext& rc) = 0;
 
 	////モデル描画
-	//virtual void Draw(const RenderContext& rc, const Model* model) = 0;
+	//virtual void Draw(const RenderContext& rc, const ModelResource* modelResource) = 0;
 
 	// 個々のメッシュごとに呼ばれる（DrawIndexed は呼ばない！）
 	virtual void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) = 0;
@@ -32,7 +32,7 @@ public:
 	virtual void Begin(const RenderContext& rc) = 0;
 
 	////モデル描画
-	virtual void Draw(const RenderContext& rc, const Model* model) = 0;
+	virtual void Draw(const RenderContext& rc, const ModelResource* modelResource) = 0;
 
 	//描画終了
 	virtual void End(const RenderContext& rc) = 0;

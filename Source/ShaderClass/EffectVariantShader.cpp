@@ -1,9 +1,10 @@
 #include "EffectVariantShader.h"
 #include "Graphics.h"
 #include "RenderContext/RenderContext.h"
-#include "Model/Model.h"
+#include "Model/ModelResource.h"
 #include "GpuResourceUtils.h"
 #include "RHI/ICommandList.h"
+#include "RHI/DX11/DX11Buffer.h"
 
 using namespace Microsoft::WRL;
 using namespace DirectX;
@@ -103,45 +104,48 @@ void EffectVariantShader::Begin(const RenderContext& rc)
     dc->UpdateSubresource(sceneConstantBuffer.Get(), 0, 0, &cbScene, 0, 0);
 }
 
-void EffectVariantShader::Draw(const RenderContext& rc, const Model* model)
+void EffectVariantShader::Draw(const RenderContext& rc, const ModelResource* modelResource)
 {
-    if (!model) return;
+    if (!modelResource) return;
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 
-    for (const Model::Mesh& mesh : model->GetMeshes())
+    for (const ModelResource::MeshResource& mesh : modelResource->GetMeshResources())
     {
-        // 頂点バッファ設定
-        UINT stride = sizeof(Model::Vertex);
-        UINT offset = 0;
-        //dc->IASetVertexBuffers(0, 1, mesh.vertexBuffer.GetAddressOf(), &stride, &offset);
-        //dc->IASetIndexBuffer(mesh.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-        //dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-        // ※ b1 (Material) の更新は EffectMaterial::Apply で行われているため、ここでは何もしない
-
-        // スケルトン更新 (b6)
-        CbSkeleton cbSkeleton{};
-        if (mesh.bones.size() > 0)
+        auto* vertexBuffer = dynamic_cast<DX11Buffer*>(mesh.vertexBuffer.get());
+        auto* indexBuffer = dynamic_cast<DX11Buffer*>(mesh.indexBuffer.get());
+        if (!vertexBuffer || !indexBuffer || mesh.indexCount == 0)
         {
-            for (size_t i = 0; i < mesh.bones.size(); ++i)
-            {
-                const Model::Bone& bone = mesh.bones.at(i);
-                XMMATRIX WorldTransform = DirectX::XMLoadFloat4x4(&bone.node->worldTransform);
-                XMMATRIX OffsetTransform = DirectX::XMLoadFloat4x4(&bone.offsetTransform);
-                XMMATRIX BoneTransform = OffsetTransform * WorldTransform;
-                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], BoneTransform);
-            }
+            continue;
+        }
 
+        UINT stride = mesh.vertexStride;
+        UINT offset = 0;
+        ID3D11Buffer* vb = vertexBuffer->GetNative();
+        ID3D11Buffer* ib = indexBuffer->GetNative();
+        dc->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
+        dc->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
+        dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        CbSkeleton cbSkeleton{};
+        if (!mesh.bones.empty())
+        {
+            for (size_t i = 0; i < mesh.bones.size() && i < _countof(cbSkeleton.boneTransforms); ++i)
+            {
+                const ModelResource::BoneResource& bone = mesh.bones[i];
+                XMMATRIX worldTransform = DirectX::XMLoadFloat4x4(&bone.worldTransform);
+                XMMATRIX offsetTransform = DirectX::XMLoadFloat4x4(&bone.offsetTransform);
+                XMMATRIX boneTransform = offsetTransform * worldTransform;
+                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], boneTransform);
+            }
         }
         else
         {
-                cbSkeleton.boneTransforms[0] = mesh.node->worldTransform;
+            cbSkeleton.boneTransforms[0] = mesh.nodeWorldTransform;
         }
+
         dc->UpdateSubresource(skeletonConstantBuffer.Get(), 0, 0, &cbSkeleton, 0, 0);
         dc->VSSetConstantBuffers(6, 1, skeletonConstantBuffer.GetAddressOf());
-
-        // 描画
-        dc->DrawIndexed(static_cast<UINT>(mesh.indices.size()), 0, 0);
+        dc->DrawIndexed(mesh.indexCount, 0, 0);
     }
 }
 

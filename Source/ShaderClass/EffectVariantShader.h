@@ -20,7 +20,7 @@ public:
 
     // メッシュ描画 (VB/IB設定, スケルトン更新, Drawコール)
     // ※ PSのセットとマテリアル定数バッファ(b1)の更新は呼び出し元(MeshEmitter)で行う前提
-    void Draw(const RenderContext& rc, const ::Model* model) override;
+    void Draw(const RenderContext& rc, const ModelResource* modelResource) override;
 
     // 描画終了
     void End(const RenderContext& rc) override;

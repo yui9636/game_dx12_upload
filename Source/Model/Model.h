@@ -11,8 +11,6 @@
 #include <Collision\Collision.h>
 
 class ITexture;
-class IBuffer;
-class ICommandList;
 class ModelResource;
 
 
@@ -101,7 +99,6 @@ public:
 	struct Bone
 	{
 		int nodeIndex;
-		Node* node = nullptr;
 		DirectX::XMFLOAT4X4 offsetTransform;
 
 
@@ -119,11 +116,6 @@ public:
 		std::vector<Bone> bones;
 		int materialIndex = 0;
 		int nodeIndex = 0;
-		Material* material = nullptr;
-		Node* node = nullptr;
-
-		std::shared_ptr<IBuffer> vertexBuffer;
-		std::shared_ptr<IBuffer> indexBuffer;
 
 
 		template<class Archive>
@@ -233,14 +225,15 @@ public:
 	const float GetCurrentAnimSeconds()const { return currentAnimationSeconds; }
 	const float GetCurrentAnimLength()const;
 	
-	void BindBuffers(ICommandList* commandList, int meshIndex = 0);
-
 	// ノード検索
 	Node* FindNode(const char* name);
 
 	//メッシュデータ取得
 	const std::vector<Mesh>& GetMeshes()const { return meshes; }
 	std::shared_ptr<ModelResource> GetModelResource() const { return modelResource; }
+	int GetMeshMaterialIndex(int meshIndex) const;
+	int GetMeshNodeIndex(int meshIndex) const;
+	int GetMeshBoneNodeIndex(int meshIndex, int boneIndex) const;
 	//マテリアルデータ取得
 	const std::vector<Material>& GetMaterials()const { return materials; }
 
@@ -291,6 +284,12 @@ private:
 	//デシリアライズ
 	void Deserialize(const char* filename);
 
+	// ModelResource????: ??????Rebuild???????SceneSync?????????MeshBufferSync???
+	void RefreshMeshBindingData();
+	void RebuildModelResource();
+	void SyncModelResourceSceneData();
+	void SyncModelResourceMeshBuffers(int subsetIndex);
+
 
 	struct NodeCache
 	{
@@ -298,12 +297,19 @@ private:
 		DirectX::XMFLOAT4 rotation = { 0,0,0,1 };
 		DirectX::XMFLOAT3 scale = { 1,1,1 };
 	};
+	struct MeshBindingData
+	{
+		int materialIndex = -1;
+		int nodeIndex = -1;
+		std::vector<int> boneNodeIndices;
+	};
 	std::vector<NodeCache> nodeCaches;
 
 
 
 	std::vector<Animation>animations;
 	std::vector<Mesh> meshes;
+	std::vector<MeshBindingData> meshBindingData;
 	std::vector<Material>materials;
 	std::vector<Node>nodes;
 	std::shared_ptr<ModelResource> modelResource;

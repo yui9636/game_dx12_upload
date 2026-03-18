@@ -7,6 +7,7 @@
 
 class IBuffer;
 class ICommandList;
+class IResourceFactory;
 
 class ModelResource
 {
@@ -34,7 +35,7 @@ public:
     ModelResource() = default;
     ~ModelResource() = default;
 
-    void RebuildFromModel(const Model& model);
+    void RebuildFromModel(const Model& model, IResourceFactory* factory);
     void SyncSceneDataFromModel(const Model& model);
     void SyncMeshBuffers(int meshIndex,
         const std::shared_ptr<IBuffer>& vertexBuffer,

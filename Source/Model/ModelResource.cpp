@@ -1,7 +1,9 @@
-﻿#include "ModelResource.h"
+#include "ModelResource.h"
 
 #include "Model.h"
 #include "RHI/ICommandList.h"
+#include "RHI/IResourceFactory.h"
+#include "RHI/IBuffer.h"
 
 namespace
 {
@@ -15,21 +17,34 @@ namespace
     }
 }
 
-void ModelResource::RebuildFromModel(const Model& model)
+void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* factory)
 {
     const auto& meshes = model.GetMeshes();
     m_meshResources.clear();
     m_meshResources.reserve(meshes.size());
 
-    for (const auto& mesh : meshes)
+    for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
     {
+        const auto& mesh = meshes[meshIndex];
         MeshResource resource{};
-        resource.vertexBuffer = mesh.vertexBuffer;
-        resource.indexBuffer = mesh.indexBuffer;
         resource.vertexStride = sizeof(Model::Vertex);
         resource.indexCount = static_cast<uint32_t>(mesh.indices.size());
-        resource.materialIndex = mesh.materialIndex;
-        resource.nodeIndex = mesh.nodeIndex;
+        if (factory)
+        {
+            resource.vertexBuffer = std::shared_ptr<IBuffer>(
+                factory->CreateBuffer(
+                    static_cast<uint32_t>(sizeof(Model::Vertex) * mesh.vertices.size()),
+                    BufferType::Vertex,
+                    mesh.vertices.empty() ? nullptr : mesh.vertices.data()).release());
+
+            resource.indexBuffer = std::shared_ptr<IBuffer>(
+                factory->CreateBuffer(
+                    static_cast<uint32_t>(sizeof(uint32_t) * mesh.indices.size()),
+                    BufferType::Index,
+                    mesh.indices.empty() ? nullptr : mesh.indices.data()).release());
+        }
+        resource.materialIndex = model.GetMeshMaterialIndex(static_cast<int>(meshIndex));
+        resource.nodeIndex = model.GetMeshNodeIndex(static_cast<int>(meshIndex));
         m_meshResources.push_back(std::move(resource));
     }
 
@@ -42,12 +57,10 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
     const auto& materials = model.GetMaterials();
     const auto& nodes = model.GetNodes();
 
-    const auto getMaterial = [&](const Model::Mesh& mesh) -> Model::Material {
-        if (mesh.materialIndex >= 0 && static_cast<size_t>(mesh.materialIndex) < materials.size()) {
-            return materials[mesh.materialIndex];
-        }
-        if (mesh.material) {
-            return *mesh.material;
+    const auto getMaterial = [&](int meshIndex) -> Model::Material {
+        const int materialIndex = model.GetMeshMaterialIndex(meshIndex);
+        if (materialIndex >= 0 && static_cast<size_t>(materialIndex) < materials.size()) {
+            return materials[materialIndex];
         }
         return Model::Material{};
     };
@@ -57,24 +70,25 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
         const auto& mesh = meshes[meshIndex];
         auto& resource = m_meshResources[meshIndex];
 
-        resource.materialIndex = mesh.materialIndex;
-        resource.nodeIndex = mesh.nodeIndex;
-        resource.material = getMaterial(mesh);
+        resource.materialIndex = model.GetMeshMaterialIndex(static_cast<int>(meshIndex));
+        resource.nodeIndex = model.GetMeshNodeIndex(static_cast<int>(meshIndex));
+        resource.material = getMaterial(static_cast<int>(meshIndex));
         resource.nodeWorldTransform = IdentityMatrix();
-        if (mesh.nodeIndex >= 0 && static_cast<size_t>(mesh.nodeIndex) < nodes.size()) {
-            resource.nodeWorldTransform = nodes[mesh.nodeIndex].worldTransform;
+        if (resource.nodeIndex >= 0 && static_cast<size_t>(resource.nodeIndex) < nodes.size()) {
+            resource.nodeWorldTransform = nodes[resource.nodeIndex].worldTransform;
         }
 
         resource.bones.clear();
         resource.bones.reserve(mesh.bones.size());
-        for (const auto& bone : mesh.bones)
+        for (size_t boneIndex = 0; boneIndex < mesh.bones.size(); ++boneIndex)
         {
+            const auto& bone = mesh.bones[boneIndex];
             BoneResource boneResource{};
-            boneResource.nodeIndex = bone.nodeIndex;
+            boneResource.nodeIndex = model.GetMeshBoneNodeIndex(static_cast<int>(meshIndex), static_cast<int>(boneIndex));
             boneResource.offsetTransform = bone.offsetTransform;
             boneResource.worldTransform = IdentityMatrix();
-            if (bone.nodeIndex >= 0 && static_cast<size_t>(bone.nodeIndex) < nodes.size()) {
-                boneResource.worldTransform = nodes[bone.nodeIndex].worldTransform;
+            if (boneResource.nodeIndex >= 0 && static_cast<size_t>(boneResource.nodeIndex) < nodes.size()) {
+                boneResource.worldTransform = nodes[boneResource.nodeIndex].worldTransform;
             }
             resource.bones.push_back(std::move(boneResource));
         }

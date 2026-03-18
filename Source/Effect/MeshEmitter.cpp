@@ -107,7 +107,7 @@ void MeshEmitter::ApplyCurves(float t)
 //            material->Apply(rc);
 //        }
 //
-//        shaderToUse->Draw(rc, model.get());
+//        shaderToUse->Draw(rc, model->GetModelResource().get());
 //
 //        shaderToUse->End(rc);
 //    }
@@ -211,7 +211,7 @@ void MeshEmitter::Render(const RenderContext& rc)
             material->Apply(rc);
         }
         model->UpdateTransform(worldMatrix);
-        shaderToUse->Draw(rc, model.get());
+        shaderToUse->Draw(rc, model->GetModelResource().get());
     }
 
     shaderToUse->End(rc);
