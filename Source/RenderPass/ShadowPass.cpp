@@ -51,8 +51,8 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         shadowMap->BeginCascade(rc, i); // ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ rc ・ｽ・ｽ・ｽﾌ行・ｽｪ一時・ｽI・ｽﾉ・ｿｽ・ｽC・ｽg・ｽ・ｽ・ｽ_・ｽﾉなゑｿｽ
 
         for (const auto& packet : queue.opaquePackets) {
-            if (packet.model && packet.castShadow) {
-                shadowMap->Draw(rc, packet.model, packet.worldMatrix);
+            if (packet.modelResource && packet.castShadow) {
+                shadowMap->Draw(rc, packet.modelResource.get(), packet.worldMatrix);
             }
         }
     }

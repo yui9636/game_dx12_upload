@@ -235,7 +235,7 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
 
     RenderQueue queue;
     RenderPacket packet;
-    packet.model = model.get();
+    packet.modelResource = model->GetModelResource();
     packet.worldMatrix = identity;
     packet.shaderId = 0;
     packet.castShadow = false;

@@ -1,4 +1,4 @@
-#include "ForwardTransparentPass.h"
+﻿#include "ForwardTransparentPass.h"
 #include "Graphics.h"
 #include "Model/ModelRenderer.h"
 #include "RHI/ICommandList.h"
@@ -51,13 +51,12 @@ void ForwardTransparentPass::Execute(FrameGraphResources& resources, const Rende
 
     // 2. �`�[���甼�����p�P�b�g��o�^
     for (const auto& packet : queue.transparentPackets) {
-        if (!packet.model) continue;
+        if (!packet.modelResource) continue;
 
         // ���L���������Ȃ� shared_ptr �Ƃ��ă��b�v�iModelRenderer�̈����ɍ��킹��j
-        std::shared_ptr<Model> sharedModel(packet.model, [](Model*) {});
 
         renderer->Draw(
-            static_cast<ShaderId>(packet.shaderId), sharedModel, packet.worldMatrix, packet.prevWorldMatrix,
+            static_cast<ShaderId>(packet.shaderId), packet.modelResource, packet.worldMatrix, packet.prevWorldMatrix,
             packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
             packet.blendState, packet.depthState, packet.rasterizerState
         );

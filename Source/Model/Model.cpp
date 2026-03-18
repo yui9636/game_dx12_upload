@@ -1,6 +1,7 @@
 #include "System/Misc.h"
 
 #include "Model.h"
+#include "ModelResource.h"
 
 #include "AssimpImporter.h"
 
@@ -848,6 +849,9 @@ Model::Model(const char* filename, float scaling)
 
 	nodeCaches.resize(nodes.size());
 
+	modelResource = std::make_shared<ModelResource>();
+	modelResource->RebuildFromModel(*this);
+
 }
 
 
@@ -925,6 +929,10 @@ void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 	}
 
 	ComputeWorldBounds();
+	if (modelResource)
+	{
+		modelResource->SyncSceneDataFromModel(*this);
+	}
 
 }
 
@@ -2121,6 +2129,18 @@ void Model::UpdateMeshIndices(ID3D11Device* device, int subsetIndex, const std::
 		mesh.indices.data()
 
 	);
+
+	if (modelResource)
+	{
+		modelResource->SyncMeshBuffers(
+			subsetIndex,
+			mesh.vertexBuffer,
+			mesh.indexBuffer,
+			static_cast<uint32_t>(sizeof(Vertex)),
+			static_cast<uint32_t>(mesh.indices.size()),
+			mesh.materialIndex,
+			mesh.nodeIndex);
+	}
 
 }
 

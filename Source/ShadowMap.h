@@ -1,4 +1,4 @@
-//#pragma once
+﻿//#pragma once
 //
 //#include <memory>
 //#include <wrl.h>
@@ -35,7 +35,7 @@
 //
 //    // --- �`��֐� ---
 //    void DrawSceneImmediate(const RenderContext& rc, const std::vector<std::shared_ptr<Actor>>& actors);
-//    void Draw(const RenderContext& rc, const ::Model* model, const DirectX::XMFLOAT4X4& worldMatrix);
+//    void Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix);
 //
 //    // --- �Q�b�^�[ ---
 //
@@ -139,7 +139,7 @@ public:
     void End(const RenderContext& rc);
 
     void DrawSceneImmediate(const RenderContext& rc, const std::vector<std::shared_ptr<Actor>>& actors);
-    void Draw(const RenderContext& rc, const ::Model* model, const DirectX::XMFLOAT4X4& worldMatrix);
+    void Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix);
 
     // ==========================================
     // �� �C���F���� RHI �����ꂽ ITexture ��Ԃ��悤�ɁI

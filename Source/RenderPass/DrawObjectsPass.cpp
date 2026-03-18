@@ -1,6 +1,7 @@
-#include "DrawObjectsPass.h"
+﻿#include "DrawObjectsPass.h"
 #include "Graphics.h"
 #include "Model/ModelRenderer.h"
+#include "Model/Model.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RenderGraph/FrameGraphBuilder.h"
@@ -42,10 +43,9 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
     // 不透明オブジェクト
     for (const auto& packet : queue.opaquePackets) {
-        if (!packet.model) continue;
-        std::shared_ptr<Model> sharedModel(packet.model, [](Model*) {});
+        if (!packet.modelResource) continue;
         renderer->Draw(
-            static_cast<ShaderId>(packet.shaderId), sharedModel,
+            static_cast<ShaderId>(packet.shaderId), packet.modelResource,
             packet.worldMatrix, packet.prevWorldMatrix,
             packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
             packet.blendState, packet.depthState, packet.rasterizerState
@@ -54,10 +54,9 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
     // 半透明オブジェクト
     for (const auto& packet : queue.transparentPackets) {
-        if (!packet.model) continue;
-        std::shared_ptr<Model> sharedModel(packet.model, [](Model*) {});
+        if (!packet.modelResource) continue;
         renderer->Draw(
-            static_cast<ShaderId>(packet.shaderId), sharedModel,
+            static_cast<ShaderId>(packet.shaderId), packet.modelResource,
             packet.worldMatrix, packet.prevWorldMatrix,
             packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
             packet.blendState, packet.depthState, packet.rasterizerState

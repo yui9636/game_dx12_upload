@@ -1,6 +1,7 @@
 ﻿//#include "GBufferPass.h"
 //#include "Graphics.h"
 //#include "Model/ModelRenderer.h"
+#include "Model/Model.h"
 //#include "RHI/ICommandList.h"
 //
 //void GBufferPass::Setup(FrameGraphBuilder& builder)
@@ -38,6 +39,7 @@
 #include "GBufferPass.h"
 #include "Graphics.h"
 #include "Model/ModelRenderer.h"
+#include "Model/Model.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RHI/DX12/DX12Texture.h"
@@ -157,10 +159,9 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
     }
 
     for (const auto& packet : queue.opaquePackets) {
-        if (!packet.model) continue;
-        std::shared_ptr<Model> sharedModel(packet.model, [](Model*) {});
+        if (!packet.modelResource) continue;
         renderer->Draw(
-            ShaderId::GBufferPBR, sharedModel, packet.worldMatrix, packet.prevWorldMatrix,
+            ShaderId::GBufferPBR, packet.modelResource, packet.worldMatrix, packet.prevWorldMatrix,
             packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
             packet.blendState, packet.depthState, packet.rasterizerState
         );

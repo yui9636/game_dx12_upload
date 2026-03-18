@@ -70,9 +70,9 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
                 auto cpuBase = m_dx12SrvHeap->GetCPUDescriptorHandleForHeapStart();
                 m_dx12SrvGpuBase = m_dx12SrvHeap->GetGPUDescriptorHandleForHeapStart();
 
-                m_dx12NullSrv2D = cpuBase;
-                m_dx12NullSrv2DArray = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, 1);
-                m_dx12NullSrvCube = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, 2);
+                m_dx12NullSrv2D = dx12Device->AllocateSRVDescriptor();
+                m_dx12NullSrv2DArray = dx12Device->AllocateSRVDescriptor();
+                m_dx12NullSrvCube = dx12Device->AllocateSRVDescriptor();
 
                 D3D12_SHADER_RESOURCE_VIEW_DESC null2DDesc = {};
                 null2DDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;

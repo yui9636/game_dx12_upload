@@ -14,7 +14,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         if (!mesh.isVisible || !mesh.model) return;
 
         RenderPacket packet;
-        packet.model = mesh.model.get();
+        packet.modelResource = mesh.model->GetModelResource();
         packet.worldMatrix = transform.worldMatrix;
         packet.prevWorldMatrix = transform.prevWorldMatrix;
         packet.castShadow = mesh.castShadow;

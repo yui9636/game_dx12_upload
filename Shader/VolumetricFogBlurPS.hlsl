@@ -1,10 +1,10 @@
 // ==========================================
-// VolumetricFogBlurPS.hlsl (フォグ用バイラテラルブラー)
+// VolumetricFogBlurPS.hlsl
 // ==========================================
 #include "FullScreenQuad.hlsli"
 
 Texture2D FogMap : register(t0);
-Texture2D GBuffer2 : register(t1); // WorldPosDepth
+Texture2D GBuffer2 : register(t1);
 
 SamplerState pointSampler : register(s2);
 
@@ -17,10 +17,8 @@ float4 main(VS_OUT pin) : SV_TARGET
     float3 centerPos = GBuffer2.Sample(pointSampler, pin.texcoord).xyz;
     float centerDepth = GBuffer2.Sample(pointSampler, pin.texcoord).w;
 
-    float3 totalFog = float3(0, 0, 0);
+    float3 totalFog = float3(0.0f, 0.0f, 0.0f);
     float totalWeight = 0.0f;
-
-    // ぼかし半径 (フォグは低周波なので少し広めにとる)
     const int BLUR_RADIUS = 3;
 
     [unroll]
@@ -36,11 +34,7 @@ float4 main(VS_OUT pin) : SV_TARGET
             float3 samplePos = GBuffer2.SampleLevel(pointSampler, sampleUV, 0).xyz;
             float sampleDepth = GBuffer2.SampleLevel(pointSampler, sampleUV, 0).w;
 
-            // 空間的ウェイト (ガウス分布)
             float spatialWeight = exp(-(x * x + y * y) / 8.0f);
-
-            // 深度ウェイト (エッジをまたがないようにする)
-            // 背景(depth >= 1.0)同士なら混ぜる、前景と背景は混ぜない
             float depthWeight = 1.0f;
             if (centerDepth < 1.0f && sampleDepth < 1.0f)
             {
@@ -53,11 +47,10 @@ float4 main(VS_OUT pin) : SV_TARGET
             }
             else
             {
-                depthWeight = 0.0f; // 前景と背景は完全に分離
+                depthWeight = 0.0f;
             }
 
             float weight = spatialWeight * depthWeight;
-
             totalFog += sampleFog * weight;
             totalWeight += weight;
         }

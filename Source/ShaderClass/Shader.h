@@ -1,7 +1,7 @@
 #pragma once
 
 #include"RenderContext/RenderContext.h"
-#include "Model/Model.h"
+#include "Model/ModelResource.h"
 
 class Shader
 {
@@ -16,7 +16,7 @@ public:
 	//virtual void Draw(const RenderContext& rc, const Model* model) = 0;
 
 	// 個々のメッシュごとに呼ばれる（DrawIndexed は呼ばない！）
-	virtual void Update(const RenderContext& rc, const Model::Mesh& mesh) = 0;
+	virtual void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) = 0;
 
 	//描画終了
 	virtual void End(const RenderContext& rc) = 0;

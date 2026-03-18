@@ -13,6 +13,7 @@
 class ITexture;
 class IBuffer;
 class ICommandList;
+class ModelResource;
 
 
 // モデル
@@ -239,6 +240,7 @@ public:
 
 	//メッシュデータ取得
 	const std::vector<Mesh>& GetMeshes()const { return meshes; }
+	std::shared_ptr<ModelResource> GetModelResource() const { return modelResource; }
 	//マテリアルデータ取得
 	const std::vector<Material>& GetMaterials()const { return materials; }
 
@@ -304,6 +306,7 @@ private:
 	std::vector<Mesh> meshes;
 	std::vector<Material>materials;
 	std::vector<Node>nodes;
+	std::shared_ptr<ModelResource> modelResource;
 
 
 

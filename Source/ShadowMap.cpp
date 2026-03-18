@@ -292,13 +292,13 @@
 //    {
 //        Model* model = actor->GetModelRaw();
 //        if (!model) continue;
-//        this->Draw(rc, model, actor->GetTransform());
+//        this->Draw(rc, model->GetModelResource().get(), actor->GetTransform());
 //    }
 //}
 //
 //void ShadowMap::Draw(const RenderContext& rc, const Model* model, const DirectX::XMFLOAT4X4& worldMatrix)
 //{
-//    if (!model) return;
+//    if (!modelResource) return;
 //    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //    DirectX::XMMATRIX W_Actor = DirectX::XMLoadFloat4x4(&worldMatrix);
 //
@@ -614,13 +614,13 @@
 //    {
 //        Model* model = actor->GetModelRaw();
 //        if (!model) continue;
-//        this->Draw(rc, model, actor->GetTransform());
+//        this->Draw(rc, model->GetModelResource().get(), actor->GetTransform());
 //    }
 //}
 //
 //void ShadowMap::Draw(const RenderContext& rc, const Model* model, const DirectX::XMFLOAT4X4& worldMatrix)
 //{
-//    if (!model) return;
+//    if (!modelResource) return;
 //    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //    DirectX::XMMATRIX W_Actor = DirectX::XMLoadFloat4x4(&worldMatrix);
 //
@@ -882,40 +882,37 @@ void ShadowMap::End(const RenderContext& rc)
     m_cachedDS = nullptr;
 }
 
-void ShadowMap::Draw(const RenderContext& rc, const ::Model* model, const DirectX::XMFLOAT4X4& worldMatrix)
+void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix)
 {
-    if (!model) return;
-    XMMATRIX W_Actor = XMLoadFloat4x4(&worldMatrix);
+    if (!modelResource) return;
+    XMMATRIX actorWorld = XMLoadFloat4x4(&worldMatrix);
 
-    for (const Model::Mesh& mesh : model->GetMeshes())
+    for (int meshIndex = 0; meshIndex < modelResource->GetMeshCount(); ++meshIndex)
     {
-        // 頂点・インデックスバッファのセット (RHI)
-        rc.commandList->SetVertexBuffer(0, mesh.vertexBuffer.get(), sizeof(Model::Vertex), 0);
-        rc.commandList->SetIndexBuffer(mesh.indexBuffer.get(), IndexFormat::Uint32, 0);
+        const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
+        if (!mesh) continue;
+        if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
-        // スケルトン計算と転送
         CbSkeleton cbSkeleton{};
-        if (mesh.bones.size() > 0)
+        if (!mesh->bones.empty())
         {
-            for (size_t i = 0; i < mesh.bones.size(); ++i)
+            for (size_t i = 0; i < mesh->bones.size(); ++i)
             {
-                const Model::Bone& bone = mesh.bones.at(i);
-                XMMATRIX NodeTransform = XMLoadFloat4x4(&bone.node->worldTransform);
-                XMMATRIX OffsetTransform = XMLoadFloat4x4(&bone.offsetTransform);
-                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], OffsetTransform * NodeTransform * W_Actor);
+                const auto& bone = mesh->bones[i];
+                XMMATRIX nodeTransform = XMLoadFloat4x4(&bone.worldTransform);
+                XMMATRIX offsetTransform = XMLoadFloat4x4(&bone.offsetTransform);
+                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], offsetTransform * nodeTransform * actorWorld);
             }
         }
         else
         {
-            XMMATRIX NodeTransform = XMLoadFloat4x4(&mesh.node->worldTransform);
-            XMStoreFloat4x4(&cbSkeleton.boneTransforms[0], NodeTransform * W_Actor);
+            XMMATRIX nodeTransform = XMLoadFloat4x4(&mesh->nodeWorldTransform);
+            XMStoreFloat4x4(&cbSkeleton.boneTransforms[0], nodeTransform * actorWorld);
         }
 
         rc.commandList->VSSetConstantBuffer(6, skeletonConstantBuffer.get());
         rc.commandList->UpdateBuffer(skeletonConstantBuffer.get(), &cbSkeleton, sizeof(cbSkeleton));
-
-        // 描画
-        rc.commandList->DrawIndexed(static_cast<UINT>(mesh.indices.size()), 0, 0);
+        rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
     }
 }
 
@@ -925,7 +922,7 @@ void ShadowMap::DrawSceneImmediate(const RenderContext& rc, const std::vector<st
     {
         ::Model* model = actor->GetModelRaw();
         if (!model) continue;
-        this->Draw(rc, model, actor->GetTransform());
+        this->Draw(rc, model->GetModelResource().get(), actor->GetTransform());
     }
 }
 

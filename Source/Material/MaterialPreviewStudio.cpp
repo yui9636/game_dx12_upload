@@ -1,4 +1,4 @@
-#include "MaterialPreviewStudio.h"
+﻿#include "MaterialPreviewStudio.h"
 #include "Graphics.h"
 #include "System/ResourceManager.h"
 #include "Material/MaterialAsset.h"
@@ -139,7 +139,7 @@ void MaterialPreviewStudio::RenderPreview(MaterialAsset* material, float scaleMu
     // =========================================================
     RenderQueue queue;
     RenderPacket packet;
-    packet.model = m_sphereModel.get();
+    packet.modelResource = m_sphereModel->GetModelResource();
 
     XMMATRIX S = XMMatrixScaling(scaleMult, scaleMult, scaleMult);
     XMMATRIX R = XMMatrixRotationY(XMConvertToRadians(rotY));

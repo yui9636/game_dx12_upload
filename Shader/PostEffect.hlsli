@@ -6,7 +6,7 @@ cbuffer CbPostEffect : register(b0)
     float bloomIntensity;
     
     // -------------------------
-    float exposure; // š’Ç‰Á: ACES ƒg[ƒ“ƒ}ƒbƒsƒ“ƒO—p‚Ì˜Io’l
+    float exposure; // ï¿½ï¿½ï¿½Ç‰ï¿½: ACES ï¿½gï¿½[ï¿½ï¿½ï¿½}ï¿½bï¿½sï¿½ï¿½ï¿½Oï¿½pï¿½Ì˜Iï¿½oï¿½l
     float monoBlend;
     float hueShift;
     float flashAmount;

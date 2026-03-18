@@ -256,6 +256,7 @@
     <ClInclude Include="Source\Message\MessageData.h" />
     <ClInclude Include="Source\Message\Messenger.h" />
     <ClInclude Include="Source\Model\Model.h" />
+    <ClInclude Include="Source\Model\ModelResource.h" />
     <ClInclude Include="Source\Model\ModelRenderer.h" />
     <ClInclude Include="Source\Noise\CurlNoiseGenerator.h" />
     <ClInclude Include="Source\Particle\compute_particle_system.h" />
@@ -483,6 +484,7 @@
     <ClCompile Include="Source\Mesh\MeshExtractSystem.cpp" />
     <ClCompile Include="Source\Message\Messenger.cpp" />
     <ClCompile Include="Source\Model\Model.cpp" />
+    <ClCompile Include="Source\Model\ModelResource.cpp" />
     <ClCompile Include="Source\Model\ModelRenderer.cpp" />
     <ClCompile Include="Source\Noise\CurlNoiseGenerator.cpp" />
     <ClCompile Include="Source\Particle\compute_particle_system.cpp" />
