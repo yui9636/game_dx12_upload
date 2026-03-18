@@ -8,13 +8,13 @@
 
 void SkyboxPass::Setup(FrameGraphBuilder& builder)
 {
-    // 1. �������ݐ�i���C�e�B���O�ς݂̐F�j�� �ǂݍ��݌��i�[�x�j���擾
+    // SceneColor に加算描画し、深度は既存 GBufferDepth を参照する。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
 
-    // 2. �g�p�錾
     if (m_hSceneColor.IsValid()) {
-        builder.Read(m_hSceneColor);
+        m_hSceneColor = builder.Write(m_hSceneColor);
+        builder.RegisterHandle("SceneColor", m_hSceneColor);
     }
     if (m_hDepth.IsValid()) {
         builder.Read(m_hDepth);
