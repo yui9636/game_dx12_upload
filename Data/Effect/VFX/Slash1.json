@@ -1,0 +1,168 @@
+{
+    "Root": {
+        "Children": [
+            {
+                "Material": {
+                    "BlendMode": 2,
+                    "Constants": {
+                        "baseColor": [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "chromaticAberrationStrength": 0.0,
+                        "clipEnd": 1.0,
+                        "clipSoftness": 0.009999999776482582,
+                        "clipStart": 0.0,
+                        "dissolveEdgeColor": [
+                            1.0,
+                            0.5,
+                            0.20000000298023224
+                        ],
+                        "dissolveEdgeWidth": 0.05000000074505806,
+                        "dissolveGlowColor": [
+                            1.0,
+                            0.5,
+                            0.0
+                        ],
+                        "dissolveGlowIntensity": 0.0,
+                        "dissolveGlowRange": 0.10000000149011612,
+                        "dissolveTexIndex": 2,
+                        "dissolveThreshold": 0.8500000238418579,
+                        "distortionStrength": 0.0,
+                        "distortionTexIndex": -1,
+                        "distortionUvScrollSpeed": [
+                            0.0,
+                            0.0
+                        ],
+                        "emissiveIntensity": 20.0,
+                        "flipbookHeight": 1.0,
+                        "flipbookSpeed": 0.0,
+                        "flipbookWidth": 1.0,
+                        "flowSpeed": 1.0,
+                        "flowStrength": 0.10000000149011612,
+                        "flowTexIndex": -1,
+                        "fresnelColor": [
+                            0.0,
+                            0.5,
+                            1.0
+                        ],
+                        "fresnelPower": 0.0,
+                        "gradientStrength": 1.0,
+                        "gradientTexIndex": -1,
+                        "mainTexIndex": 0,
+                        "mainUvScrollSpeed": [
+                            0.0,
+                            0.0
+                        ],
+                        "maskContrast": 1.0,
+                        "maskEdgeFade": 0.10000000149011612,
+                        "maskIntensity": 1.0,
+                        "maskTexIndex": -1,
+                        "matCapBlend": 0.5,
+                        "matCapColor": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "matCapStrength": 1.0,
+                        "matCapTexIndex": -1,
+                        "normalStrength": 1.0,
+                        "normalTexIndex": -1,
+                        "sideFadeWidth": 0.0,
+                        "startEndFadeWidth": 0.0,
+                        "subBlendMode": 0,
+                        "subTexIndex": -1,
+                        "subTexStrength": 1.0,
+                        "subUvRotationSpeed": 0.0,
+                        "subUvScrollSpeed": [
+                            0.0,
+                            0.0
+                        ],
+                        "toonNoiseSpeed": 0.5,
+                        "toonNoiseStrength": 0.0,
+                        "toonNoiseTexIndex": -1,
+                        "toonRampTexIndex": -1,
+                        "toonShadowColor": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "toonSmoothing": 0.009999999776482582,
+                        "toonSpecular": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "toonSteps": 0.0,
+                        "toonThreshold": 0.5,
+                        "usePolarCoords": 0.0,
+                        "uvScrollMode": 0,
+                        "visibility": 1.0,
+                        "wpoFrequency": 1.0,
+                        "wpoSpeed": 1.0,
+                        "wpoStrength": 0.0
+                    },
+                    "Textures": [
+                        {
+                            "Path": "Data/Effect/Effect/Aurora_B.png",
+                            "Slot": 0
+                        },
+                        {
+                            "Path": "Data/Effect/Effect/Distortion8.png",
+                            "Slot": 2
+                        }
+                    ]
+                },
+                "Model": "Data/Model/Slash/fbx_slash_003_1.fbx",
+                "Name": "Mesh Emitter",
+                "Transform": {
+                    "Position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Type": "MeshEmitter"
+            }
+        ],
+        "Name": "Root",
+        "Transform": {
+            "Position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Scale": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        "Type": "Empty"
+    },
+    "Settings": {
+        "FadeIn": 0.0,
+        "FadeOut": 0.25,
+        "LifeTime": 0.30000001192092896,
+        "Loop": true
+    }
+}

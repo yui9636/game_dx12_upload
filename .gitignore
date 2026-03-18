@@ -1,0 +1,19 @@
+# Visual Studio
+.vs/
+*.VC.db
+*.suo
+*.user
+*.opendb
+
+# Build outputs
+bin/
+obj/
+x64/
+Saved/
+*.tlog
+*.lastbuildstate
+
+# Local editor/runtime state
+imgui.ini
+Data/Effect/imgui.ini
+Data/Scene/imgui.ini

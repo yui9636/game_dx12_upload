@@ -1,0 +1,125 @@
+{
+    "activePhase": "Default",
+    "links": [
+        {
+            "e": 11,
+            "id": 50,
+            "s": 10
+        },
+        {
+            "e": 13,
+            "id": 51,
+            "s": 12
+        },
+        {
+            "e": 15,
+            "id": 52,
+            "s": 14
+        },
+        {
+            "e": 16,
+            "id": 53,
+            "s": 12
+        }
+    ],
+    "nextId": 100,
+    "nodes": [
+        {
+            "id": 1,
+            "inputs": [],
+            "name": "Root_Default",
+            "outputs": [
+                {
+                    "id": 10
+                }
+            ],
+            "pos": [
+                100.0,
+                250.0
+            ],
+            "props": null,
+            "type": 0
+        },
+        {
+            "id": 2,
+            "inputs": [
+                {
+                    "id": 11
+                }
+            ],
+            "name": "Selector",
+            "outputs": [
+                {
+                    "id": 12
+                }
+            ],
+            "pos": [
+                350.0,
+                250.0
+            ],
+            "props": null,
+            "type": 1
+        },
+        {
+            "id": 3,
+            "inputs": [
+                {
+                    "id": 13
+                }
+            ],
+            "name": "CheckDist (3m)",
+            "outputs": [
+                {
+                    "id": 14
+                }
+            ],
+            "pos": [
+                600.0,
+                150.0
+            ],
+            "props": {
+                "Range": 316.29998779296875
+            },
+            "type": 2
+        },
+        {
+            "id": 4,
+            "inputs": [
+                {
+                    "id": 15
+                }
+            ],
+            "name": "PlayAction (Attack)",
+            "outputs": [],
+            "pos": [
+                850.0,
+                150.0
+            ],
+            "props": {
+                "animIndex": 1
+            },
+            "type": 3
+        },
+        {
+            "id": 5,
+            "inputs": [
+                {
+                    "id": 16
+                }
+            ],
+            "name": "Chase Player",
+            "outputs": [],
+            "pos": [
+                600.0,
+                350.0
+            ],
+            "props": {
+                "StopDist": 2.0
+            },
+            "type": 3
+        }
+    ],
+    "phases": {
+        "Default": 1
+    }
+}

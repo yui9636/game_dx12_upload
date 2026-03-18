@@ -1,0 +1,180 @@
+{
+    "Root": {
+        "Children": [
+            {
+                "Material": {
+                    "BlendMode": 2,
+                    "Constants": {
+                        "baseColor": [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "chromaticAberrationStrength": 0.0,
+                        "clipEnd": 1.0,
+                        "clipSoftness": 0.009999999776482582,
+                        "clipStart": 0.0,
+                        "dissolveEdgeColor": [
+                            1.0,
+                            0.5,
+                            0.20000000298023224
+                        ],
+                        "dissolveEdgeWidth": 0.05000000074505806,
+                        "dissolveGlowColor": [
+                            1.0,
+                            0.0,
+                            0.0
+                        ],
+                        "dissolveGlowIntensity": 39.900001525878906,
+                        "dissolveGlowRange": 0.10199999809265137,
+                        "dissolveTexIndex": -1,
+                        "dissolveThreshold": 0.07000000029802322,
+                        "distortionStrength": 1.9700000286102295,
+                        "distortionTexIndex": 3,
+                        "distortionUvScrollSpeed": [
+                            0.0,
+                            0.0
+                        ],
+                        "emissiveIntensity": 100.0,
+                        "flipbookHeight": 1.0,
+                        "flipbookSpeed": 0.0,
+                        "flipbookWidth": 1.0,
+                        "flowSpeed": 1.0,
+                        "flowStrength": 1.0,
+                        "flowTexIndex": 2,
+                        "fresnelColor": [
+                            0.0,
+                            0.5,
+                            1.0
+                        ],
+                        "fresnelPower": 0.0,
+                        "gradientStrength": 1.0,
+                        "gradientTexIndex": 1,
+                        "mainTexIndex": 0,
+                        "mainUvScrollSpeed": [
+                            0.0,
+                            -2.9600000381469727
+                        ],
+                        "maskContrast": 1.0,
+                        "maskEdgeFade": 0.10000000149011612,
+                        "maskIntensity": 1.0,
+                        "maskTexIndex": -1,
+                        "matCapBlend": 0.5,
+                        "matCapColor": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "matCapStrength": 1.2569999694824219,
+                        "matCapTexIndex": -1,
+                        "normalStrength": 1.0,
+                        "normalTexIndex": -1,
+                        "sideFadeWidth": 0.0,
+                        "startEndFadeWidth": 0.0,
+                        "subBlendMode": 0,
+                        "subTexIndex": -1,
+                        "subTexStrength": 0.0,
+                        "subUvRotationSpeed": 0.0,
+                        "subUvScrollSpeed": [
+                            0.0,
+                            0.0
+                        ],
+                        "toonNoiseSpeed": 0.5,
+                        "toonNoiseStrength": 0.0,
+                        "toonNoiseTexIndex": -1,
+                        "toonRampTexIndex": -1,
+                        "toonShadowColor": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "toonSmoothing": 0.009999999776482582,
+                        "toonSpecular": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "toonSteps": 0.0,
+                        "toonThreshold": 0.5,
+                        "usePolarCoords": 0.0,
+                        "uvScrollMode": 1,
+                        "visibility": 50.0,
+                        "wpoFrequency": 1.0,
+                        "wpoSpeed": 1.0,
+                        "wpoStrength": 0.0
+                    },
+                    "Textures": [
+                        {
+                            "Path": "C:\\Users\\yuito\\Documents\\game\\Data\\Effect\\Effect\\Blur4.png",
+                            "Slot": 0
+                        },
+                        {
+                            "Path": "C:\\Users\\yuito\\Documents\\game\\Data\\Effect\\Ramp\\ramp.png",
+                            "Slot": 1
+                        },
+                        {
+                            "Path": "C:\\Users\\yuito\\Documents\\game\\Data\\Effect\\Effect\\Aura.png",
+                            "Slot": 2
+                        },
+                        {
+                            "Path": "C:\\Users\\yuito\\Documents\\game\\Data\\Effect\\Flow\\Flow.png",
+                            "Slot": 3
+                        },
+                        {
+                            "Path": "C:\\Users\\yuito\\Documents\\game\\Data\\Effect\\Effect\\FractalNoise_2.png",
+                            "Slot": 4
+                        }
+                    ]
+                },
+                "Model": "C:\\Users\\yuito\\Documents\\game\\Data\\Model\\Slash\\fbx_slash_001_2.fbx",
+                "Name": "Mesh Emitter",
+                "Transform": {
+                    "Position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Type": "MeshEmitter"
+            }
+        ],
+        "Name": "Root",
+        "Transform": {
+            "Position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Scale": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        "Type": "Empty"
+    },
+    "Settings": {
+        "FadeIn": 0.0,
+        "FadeOut": 0.3799999952316284,
+        "LifeTime": 0.4000000059604645,
+        "Loop": true
+    }
+}

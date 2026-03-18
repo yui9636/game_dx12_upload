@@ -1,0 +1,94 @@
+{
+    "actors": [
+        {
+            "components": [],
+            "id": 0,
+            "materials": [
+                {
+                    "albedo_tex": "",
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.800000011920929,
+                        "y": 0.800000011920929,
+                        "z": 0.800000011920929
+                    },
+                    "emissive_tex": "",
+                    "metallic": 0.0,
+                    "metallic_tex": "",
+                    "name": "lambert1",
+                    "normal_tex": "",
+                    "occlusion": 1.0,
+                    "occlusion_tex": "",
+                    "roughness": 0.0,
+                    "roughness_tex": ""
+                }
+            ],
+            "model_path": "Data/Model/fbx/fbx_sphere_001.fbx",
+            "name": "Directional Light",
+            "parent_id": -1,
+            "transform": {
+                "position": {
+                    "x": 0.0,
+                    "y": 10.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "w": 0.9200000166893005,
+                    "x": 0.3799999952316284,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                }
+            }
+        },
+        {
+            "components": [],
+            "id": 1,
+            "materials": [
+                {
+                    "albedo_tex": "Textures\\InteractableDefault_18906_Diffuse.png",
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "emissive_tex": "",
+                    "metallic": 0.0,
+                    "metallic_tex": "",
+                    "name": "InteractableDefault_18906",
+                    "normal_tex": "",
+                    "occlusion": 1.0,
+                    "occlusion_tex": "",
+                    "roughness": 0.9292893409729004,
+                    "roughness_tex": ""
+                }
+            ],
+            "model_path": "Data/Model/Stage\\Cube.fbx",
+            "name": "Cube",
+            "parent_id": -1,
+            "transform": {
+                "position": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "rotation": {
+                    "w": 1.0,
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                }
+            }
+        }
+    ]
+}

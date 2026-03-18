@@ -1,0 +1,17 @@
+{
+    "alphaMode": 0,
+    "baseColor": {
+        "w": 1.0,
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.0
+    },
+    "diffuseTexturePath": "Data/Effect/Effect/aura3_type2.png",
+    "emissive": 10.0,
+    "emissiveTexturePath": "Data/Effect/Effect/7iro.png",
+    "metallic": 1.0,
+    "metallicRoughnessTexturePath": "",
+    "normalTexturePath": "Data/Effect/Effect/Normal01.png",
+    "roughness": 1.0,
+    "shaderId": 1
+}

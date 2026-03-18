@@ -1,0 +1,242 @@
+﻿#include "DX12Device.h"
+#include "Console/Logger.h"
+#include <cassert>
+#include <stdexcept>
+#include <vector>
+
+#ifdef _DEBUG
+#include <d3d12sdklayers.h>
+#endif
+
+DX12Device::DX12Device(HWND hWnd, uint32_t width, uint32_t height) {
+    CreateDevice();
+    CreateCommandQueue();
+    CreateSwapChain(hWnd, width, height);
+    CreateDescriptorHeaps();
+    CreateFrameResources();
+    CreateFence();
+}
+
+DX12Device::~DX12Device() {
+    WaitForGPU();
+    if (m_fenceEvent) {
+        CloseHandle(m_fenceEvent);
+        m_fenceEvent = nullptr;
+    }
+}
+
+void DX12Device::CreateDevice() {
+#ifdef _DEBUG
+    {
+        ComPtr<ID3D12Debug> debugController;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
+            debugController->EnableDebugLayer();
+        }
+    }
+#endif
+
+    HRESULT hr = CreateDXGIFactory2(
+#ifdef _DEBUG
+        DXGI_CREATE_FACTORY_DEBUG,
+#else
+        0,
+#endif
+        IID_PPV_ARGS(&m_dxgiFactory));
+    assert(SUCCEEDED(hr));
+
+    // Try hardware adapter
+    ComPtr<IDXGIAdapter1> adapter;
+    for (UINT i = 0; m_dxgiFactory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+        DXGI_ADAPTER_DESC1 desc;
+        adapter->GetDesc1(&desc);
+        if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
+
+        if (SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0,
+            IID_PPV_ARGS(&m_device)))) {
+            break;
+        }
+    }
+
+    if (!m_device) {
+        // Fallback to WARP
+        ComPtr<IDXGIAdapter> warpAdapter;
+        m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter));
+        hr = D3D12CreateDevice(warpAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device));
+        assert(SUCCEEDED(hr));
+    }
+}
+
+void DX12Device::CreateCommandQueue() {
+    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    HRESULT hr = m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue));
+    assert(SUCCEEDED(hr));
+}
+
+void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
+    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+    swapChainDesc.BufferCount = FRAME_COUNT;
+    swapChainDesc.Width = width;
+    swapChainDesc.Height = height;
+    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapChainDesc.SampleDesc.Count = 1;
+
+    ComPtr<IDXGISwapChain1> swapChain1;
+    HRESULT hr = m_dxgiFactory->CreateSwapChainForHwnd(
+        m_commandQueue.Get(), hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
+    assert(SUCCEEDED(hr));
+
+    // Disable ALT+ENTER fullscreen
+    m_dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER);
+
+    swapChain1.As(&m_swapChain);
+    m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+}
+
+void DX12Device::CreateDescriptorHeaps() {
+    // RTV heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = FRAME_COUNT + 64; // back buffers + render targets
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
+        m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    }
+    // DSV heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = 32;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
+        m_dsvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    }
+    // CBV/SRV/UAV heap (shader visible) - 将来のバインドレス用に予約
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = 4096;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavHeap));
+        m_cbvSrvUavDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
+    // CBV/SRV/UAV staging heap (non-shader-visible) - SRV作成用
+    // CopyDescriptorsSimple のソースとして使用。Shader-Visible ヒープからの
+    // CPU 読み出しは Write-Combined メモリ上で不正確になるため、
+    // SRV は必ずこの Non-Shader-Visible ヒープに作成する。
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+        desc.NumDescriptors = 4096;
+        desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavStagingHeap));
+    }
+}
+
+void DX12Device::CreateFrameResources() {
+    for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
+        m_device->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&m_commandAllocators[i]));
+
+        m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
+    }
+}
+
+void DX12Device::CreateFence() {
+    m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+    m_fenceValues[m_frameIndex] = 1;
+    m_fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    assert(m_fenceEvent != nullptr);
+}
+
+void DX12Device::WaitForGPU() {
+    if (!m_commandQueue || !m_fence || !m_fenceEvent) return;
+
+    const uint64_t fenceValue = m_fenceValues[m_frameIndex];
+    m_commandQueue->Signal(m_fence.Get(), fenceValue);
+
+    if (m_fence->GetCompletedValue() < fenceValue) {
+        m_fence->SetEventOnCompletion(fenceValue, m_fenceEvent);
+        WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
+    }
+
+    m_fenceValues[m_frameIndex]++;
+}
+
+void DX12Device::MoveToNextFrame() {
+    const uint64_t currentFenceValue = m_fenceValues[m_frameIndex];
+    m_commandQueue->Signal(m_fence.Get(), currentFenceValue);
+
+    m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+
+    if (m_fence->GetCompletedValue() < m_fenceValues[m_frameIndex]) {
+        m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent);
+        WaitForSingleObjectEx(m_fenceEvent, INFINITE, FALSE);
+    }
+
+    m_fenceValues[m_frameIndex] = currentFenceValue + 1;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateRTVDescriptor() {
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr += static_cast<SIZE_T>(m_nextRtvDescriptor++) * m_rtvDescriptorSize;
+    return handle;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateDSVDescriptor() {
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr += static_cast<SIZE_T>(m_nextDsvDescriptor++) * m_dsvDescriptorSize;
+    return handle;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateSRVDescriptor() {
+    // Non-Shader-Visible ステージングヒープから割り当て。
+    // CopyDescriptorsSimple のソースとして安全に CPU 読み出し可能。
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = m_cbvSrvUavStagingHeap->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr += static_cast<SIZE_T>(m_nextStagingSrvDescriptor++) * m_cbvSrvUavDescriptorSize;
+    return handle;
+}
+
+void DX12Device::FlushDebugMessages() {
+#ifdef _DEBUG
+    ComPtr<ID3D12InfoQueue> infoQueue;
+    if (FAILED(m_device.As(&infoQueue))) return;
+
+    const UINT64 messageCount = infoQueue->GetNumStoredMessages();
+    if (messageCount == 0) return;
+
+    // 最初のフレームのみ最大50件出力（大量ログ防止）
+    UINT64 logCount = (messageCount > 50) ? 50 : messageCount;
+    for (UINT64 i = 0; i < logCount; ++i) {
+        SIZE_T msgLen = 0;
+        infoQueue->GetMessage(i, nullptr, &msgLen);
+        if (msgLen == 0) continue;
+
+        std::vector<char> buf(msgLen);
+        auto* msg = reinterpret_cast<D3D12_MESSAGE*>(buf.data());
+        infoQueue->GetMessage(i, msg, &msgLen);
+
+        if (msg->ID == static_cast<D3D12_MESSAGE_ID>(820)) {
+            continue;
+        }
+
+        const char* severity = "INFO";
+        if (msg->Severity == D3D12_MESSAGE_SEVERITY_ERROR) severity = "ERROR";
+        else if (msg->Severity == D3D12_MESSAGE_SEVERITY_WARNING) severity = "WARN";
+        else if (msg->Severity == D3D12_MESSAGE_SEVERITY_CORRUPTION) severity = "CORRUPT";
+
+        LOG_ERROR("[D3D12 %s #%d] %s", severity, (int)msg->ID, msg->pDescription);
+    }
+
+    if (messageCount > logCount) {
+        LOG_ERROR("[D3D12] ... and %llu more messages", messageCount - logCount);
+    }
+
+    infoQueue->ClearStoredMessages();
+#endif
+}

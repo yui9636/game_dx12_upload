@@ -1,0 +1,214 @@
+{
+    "Root": {
+        "Children": [
+            {
+                "Name": "Particle Emitter",
+                "RenderSettings": {
+                    "curlMoveSpeed": 0.20000000298023224,
+                    "curlNoiseScale": 0.10000000149011612,
+                    "curlNoiseStrength": 0.0,
+                    "velocityStretchEnabled": false,
+                    "velocityStretchMaxAspect": 8.0,
+                    "velocityStretchMinSpeed": 0.0,
+                    "velocityStretchScale": 0.05000000074505806
+                },
+                "Settings": {
+                    "acceleration": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "angularVelocityRangeZ": {
+                        "x": -0.7853981852531433,
+                        "y": 0.7853981852531433
+                    },
+                    "arcEndDegree": 45.0,
+                    "arcFill": true,
+                    "arcStartDegree": -45.0,
+                    "boxSize": {
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "burst": true,
+                    "burstFactor": 24,
+                    "circleRadius": 1.0,
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 1.0,
+                        "z": 1.0
+                    },
+                    "coneAngleDeg": 30.0,
+                    "coneDirection": {
+                        "x": 0.0,
+                        "y": 1.0,
+                        "z": 0.0
+                    },
+                    "count": 10,
+                    "ellipsoidRadii": {
+                        "x": 0.699999988079071,
+                        "y": 1.0,
+                        "z": 0.699999988079071
+                    },
+                    "fadeInRatio": 0.0,
+                    "fadeOutRatio": 0.0,
+                    "gradientColors": [
+                        {
+                            "color": {
+                                "w": 1.0,
+                                "x": 1.0,
+                                "y": 0.0,
+                                "z": 0.0
+                            },
+                            "time": 0.0
+                        }
+                    ],
+                    "gradientCount": 1,
+                    "gravityDirection": {
+                        "x": 0.0,
+                        "y": -1.0,
+                        "z": 0.0
+                    },
+                    "gravityPower": 9.800000190734863,
+                    "lifeMax": 3.0,
+                    "lifeMin": 1.0,
+                    "lifeMode": "Constant",
+                    "lifeSeconds": 2.0,
+                    "linePointA": {
+                        "x": -0.5,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "linePointB": {
+                        "x": 0.5,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "loop": true,
+                    "maxSpeed": 5.0,
+                    "maxVelocity": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "meshEmitFromNormal": true,
+                    "meshUVMax": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "meshUVMin": {
+                        "x": 0.0,
+                        "y": 0.0
+                    },
+                    "minSpeed": 1.0,
+                    "minVelocity": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "parentMatrix": [
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        1.0
+                    ],
+                    "playSeconds": 5.0,
+                    "position": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "positionMode": "Random",
+                    "radius": 0.5,
+                    "ringInnerRadius": 0.5,
+                    "ringOuterRadius": 1.0,
+                    "scale": {
+                        "x": 0.20000000298023224,
+                        "y": 0.2800000011920929
+                    },
+                    "scaleBeginRange": {
+                        "x": 0.20000000298023224,
+                        "y": 0.2800000011920929
+                    },
+                    "scaleEndRange": {
+                        "x": 1.0,
+                        "y": 1.0
+                    },
+                    "scaleMode": "Uniform",
+                    "shape": "Sphere",
+                    "spawnRate": 10.0,
+                    "spriteFPS": 16.0,
+                    "spriteFrameCount": 1,
+                    "spriteIndex": 0,
+                    "surfaceOnly": false,
+                    "textureSplitCount": {
+                        "x": 1,
+                        "y": 1
+                    },
+                    "torusMajorRadius": 1.0,
+                    "torusMinorRadius": 0.25,
+                    "useGravity": false,
+                    "useLocalSpace": false,
+                    "useMeshUVFilter": false
+                },
+                "Texture": "Data/Effect/particle/particle.png",
+                "Transform": {
+                    "Position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "Scale": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                "Type": "ParticleEmitter"
+            }
+        ],
+        "Name": "Root",
+        "Transform": {
+            "Position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Rotation": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "Scale": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        "Type": "Empty"
+    },
+    "Settings": {
+        "FadeIn": 0.0,
+        "FadeOut": 0.0,
+        "LifeTime": 0.5,
+        "Loop": true
+    }
+}

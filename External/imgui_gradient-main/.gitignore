@@ -1,0 +1,11 @@
+﻿tests/build
+build/*
+!build/imgui.ini
+.vs
+.vscode/*
+!.vscode/settings.json
+
+.DS_Store
+__pycache__
+.cache
+.tmp-projections

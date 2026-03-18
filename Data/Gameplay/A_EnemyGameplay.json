@@ -1,0 +1,418 @@
+{
+    "gameplayAsset": {
+        "curves": [
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": true,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 0.8025681972503662,
+                        "y": 1.4000000953674316
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.2333333492279053
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": true,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 0.8459069132804871,
+                        "y": 2.0
+                    },
+                    {
+                        "x": 0.9871588945388794,
+                        "y": 1.3333333730697632
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            },
+            {
+                "enabled": false,
+                "points": [
+                    {
+                        "x": 0.0,
+                        "y": 1.0
+                    },
+                    {
+                        "x": 1.0,
+                        "y": 1.0
+                    }
+                ],
+                "useRange": false
+            }
+        ],
+        "timelines": [
+            [],
+            [],
+            [
+                {
+                    "audio": {
+                        "assetId": "",
+                        "is3D": false,
+                        "loop": false,
+                        "nodeIndex": -1,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                    },
+                    "color": 4282168177,
+                    "end": 94,
+                    "hb": {
+                        "nodeIndex": 12,
+                        "offsetLocal": {
+                            "x": -10.079999923706055,
+                            "y": 52.09000015258789,
+                            "z": 6.659999847412109
+                        },
+                        "radius": 12.0,
+                        "rgba": 1090453504
+                    },
+                    "label": "Hitbox",
+                    "shake": {
+                        "amplitude": 0.5,
+                        "decay": 0.8999999761581421,
+                        "duration": 0.20000000298023224,
+                        "frequency": 20.0,
+                        "hitStopDuration": 0.0,
+                        "timeScale": 0.0
+                    },
+                    "start": 55,
+                    "type": 0,
+                    "vfx": {
+                        "assetId": "",
+                        "fireOnEnterOnly": true,
+                        "nodeIndex": -1,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetRotDeg": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetScale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    }
+                },
+                {
+                    "audio": {
+                        "assetId": "",
+                        "is3D": false,
+                        "loop": false,
+                        "nodeIndex": -1,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                    },
+                    "color": 4294918208,
+                    "end": 79,
+                    "hb": {
+                        "nodeIndex": 0,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "radius": 30.0,
+                        "rgba": 1090453504
+                    },
+                    "label": "Shake",
+                    "shake": {
+                        "amplitude": 0.5,
+                        "decay": 0.8999999761581421,
+                        "duration": 0.20000000298023224,
+                        "frequency": 20.0,
+                        "hitStopDuration": 0.05999999865889549,
+                        "timeScale": 0.0
+                    },
+                    "start": 74,
+                    "type": 4,
+                    "vfx": {
+                        "assetId": "",
+                        "fireOnEnterOnly": true,
+                        "nodeIndex": -1,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetRotDeg": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetScale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    }
+                },
+                {
+                    "audio": {
+                        "assetId": "",
+                        "is3D": false,
+                        "loop": false,
+                        "nodeIndex": -1,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                    },
+                    "color": 4284927231,
+                    "end": 86,
+                    "hb": {
+                        "nodeIndex": 0,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "radius": 30.0,
+                        "rgba": 1090453504
+                    },
+                    "label": "Effect",
+                    "shake": {
+                        "amplitude": 0.5,
+                        "decay": 0.8999999761581421,
+                        "duration": 0.20000000298023224,
+                        "frequency": 20.0,
+                        "hitStopDuration": 0.0,
+                        "timeScale": 0.0
+                    },
+                    "start": 74,
+                    "type": 2,
+                    "vfx": {
+                        "assetId": "Data/Effect/VFX/Slash1.json",
+                        "fireOnEnterOnly": true,
+                        "nodeIndex": 12,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": -29.079999923706055,
+                            "z": 0.0
+                        },
+                        "offsetRotDeg": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": -119.0
+                        },
+                        "offsetScale": {
+                            "x": 80.0,
+                            "y": 80.0,
+                            "z": 80.0
+                        }
+                    }
+                }
+            ],
+            [
+                {
+                    "audio": {
+                        "assetId": "",
+                        "is3D": false,
+                        "loop": false,
+                        "nodeIndex": -1,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                    },
+                    "color": 4282168177,
+                    "end": 43,
+                    "hb": {
+                        "nodeIndex": 18,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "radius": 12.0,
+                        "rgba": 1090453504
+                    },
+                    "label": "Hitbox",
+                    "shake": {
+                        "amplitude": 0.5,
+                        "decay": 0.8999999761581421,
+                        "duration": 0.20000000298023224,
+                        "frequency": 20.0,
+                        "hitStopDuration": 0.0,
+                        "timeScale": 0.0
+                    },
+                    "start": 16,
+                    "type": 0,
+                    "vfx": {
+                        "assetId": "",
+                        "fireOnEnterOnly": true,
+                        "nodeIndex": -1,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetRotDeg": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetScale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    }
+                },
+                {
+                    "audio": {
+                        "assetId": "",
+                        "is3D": false,
+                        "loop": false,
+                        "nodeIndex": -1,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                    },
+                    "color": 4294918208,
+                    "end": 22,
+                    "hb": {
+                        "nodeIndex": 0,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "radius": 30.0,
+                        "rgba": 1090453504
+                    },
+                    "label": "Shake",
+                    "shake": {
+                        "amplitude": 0.5,
+                        "decay": 0.8999999761581421,
+                        "duration": 0.20000000298023224,
+                        "frequency": 20.0,
+                        "hitStopDuration": 0.1599999964237213,
+                        "timeScale": 0.0
+                    },
+                    "start": 17,
+                    "type": 4,
+                    "vfx": {
+                        "assetId": "",
+                        "fireOnEnterOnly": true,
+                        "nodeIndex": -1,
+                        "offsetLocal": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetRotDeg": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "offsetScale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        }
+                    }
+                }
+            ],
+            [],
+            [],
+            [],
+            [],
+            []
+        ]
+    }
+}
