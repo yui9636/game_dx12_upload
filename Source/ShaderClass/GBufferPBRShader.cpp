@@ -8,30 +8,6 @@
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
-#include "RHI/DX12/DX12Texture.h"
-#include "RHI/DX12/DX12RootSignature.h"
-
-namespace {
-void CopyOrCreateNull2D(ID3D12Device* device,
-                        D3D12_CPU_DESCRIPTOR_HANDLE dst,
-                        ITexture* texture)
-{
-    if (texture) {
-        auto* dx12Tex = dynamic_cast<DX12Texture*>(texture);
-        if (dx12Tex && dx12Tex->HasSRV()) {
-            device->CopyDescriptorsSimple(1, dst, dx12Tex->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            return;
-        }
-    }
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC nullDesc = {};
-    nullDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    nullDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    nullDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    nullDesc.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(nullptr, &nullDesc, dst);
-}
-}
 
 GBufferPBRShader::GBufferPBRShader(IResourceFactory* factory)
     : PBRShader(factory)
@@ -70,30 +46,6 @@ GBufferPBRShader::GBufferPBRShader(IResourceFactory* factory)
     desc.blendState = rs->GetBlendState(BlendState::Opaque);
 
     m_pso = factory->CreatePipelineState(desc);
-}
-
-void GBufferPBRShader::EnsureDx12MaterialHeap()
-{
-    if (m_dx12MaterialHeap || Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
-        return;
-    }
-
-    auto* dx12Device = Graphics::Instance().GetDX12Device();
-    if (!dx12Device) {
-        return;
-    }
-
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors = 4;
-    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    HRESULT hr = dx12Device->GetDevice()->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dx12MaterialHeap));
-    if (FAILED(hr)) {
-        LOG_ERROR("[GBufferPBRShader] Failed to create DX12 material heap hr=0x%08X", hr);
-        return;
-    }
-
-    m_dx12SrvDescriptorSize = dx12Device->GetCBVSRVUAVDescriptorSize();
 }
 
 void GBufferPBRShader::Begin(const RenderContext& rc)
@@ -138,21 +90,15 @@ void GBufferPBRShader::Update(const RenderContext& rc, const Model::Mesh& mesh)
     }
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        EnsureDx12MaterialHeap();
         auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        auto* dx12Device = Graphics::Instance().GetDX12Device();
-        if (m_dx12MaterialHeap && dx12Cmd && dx12Device) {
-            ID3D12DescriptorHeap* heaps[] = { m_dx12MaterialHeap.Get() };
-            dx12Cmd->GetNativeCommandList()->SetDescriptorHeaps(1, heaps);
-
-            D3D12_CPU_DESCRIPTOR_HANDLE cpu = m_dx12MaterialHeap->GetCPUDescriptorHandleForHeapStart();
-            D3D12_GPU_DESCRIPTOR_HANDLE gpu = m_dx12MaterialHeap->GetGPUDescriptorHandleForHeapStart();
-            for (UINT i = 0; i < 4; ++i) {
-                D3D12_CPU_DESCRIPTOR_HANDLE dst = cpu;
-                dst.ptr += static_cast<SIZE_T>(i) * m_dx12SrvDescriptorSize;
-                CopyOrCreateNull2D(dx12Device->GetDevice(), dst, srvs[i]);
-            }
-            dx12Cmd->GetNativeCommandList()->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, gpu);
+        if (dx12Cmd) {
+            DX12CommandList::PixelTextureBinding bindings[] = {
+                { 0, srvs[0], DX12CommandList::NullSrvKind::Texture2D },
+                { 1, srvs[1], DX12CommandList::NullSrvKind::Texture2D },
+                { 2, srvs[2], DX12CommandList::NullSrvKind::Texture2D },
+                { 3, srvs[3], DX12CommandList::NullSrvKind::Texture2D },
+            };
+            dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
             return;
         }
     }
@@ -162,14 +108,6 @@ void GBufferPBRShader::Update(const RenderContext& rc, const Model::Mesh& mesh)
 
 void GBufferPBRShader::End(const RenderContext& rc)
 {
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd) {
-            dx12Cmd->RestoreFrameDescriptorHeap();
-        }
-        return;
-    }
-
     ITexture* nullTextures[] = { nullptr, nullptr, nullptr, nullptr };
     rc.commandList->PSSetTextures(0, _countof(nullTextures), nullTextures);
 }

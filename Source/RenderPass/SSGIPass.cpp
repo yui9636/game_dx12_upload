@@ -6,6 +6,7 @@
 #include "RHI/IResourceFactory.h"
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
+#include "RHI/DX12/DX12CommandList.h"
 #include "RenderGraph/FrameGraphResources.h"
 
 SSGIPass::~SSGIPass() = default;
@@ -91,6 +92,7 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     rc.mainRenderTarget = ssgiTex;
     rc.mainDepthStencil = nullptr;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, halfWidth, halfHeight);
+    rc.commandList->SetViewport(rc.mainViewport);
 
     rc.commandList->SetPipelineState(m_psoRaymarch.get());
     rc.commandList->PSSetSampler(2, rc.renderState->GetSamplerState(SamplerState::PointClamp));
@@ -101,7 +103,18 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
         resources.GetTexture(m_hGBuffer2),
         resources.GetTexture(m_hPrevScene)
     };
-    rc.commandList->PSSetTextures(0, 3, rayInputs);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        DX12CommandList::PixelTextureBinding bindings[] = {
+            { 0, rayInputs[0], DX12CommandList::NullSrvKind::Texture2D },
+            { 1, rayInputs[1], DX12CommandList::NullSrvKind::Texture2D },
+            { 2, rayInputs[2], DX12CommandList::NullSrvKind::Texture2D },
+        };
+        dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+    }
+    else {
+        rc.commandList->PSSetTextures(0, 3, rayInputs);
+    }
 
     rc.commandList->Draw(3, 0);
 
@@ -111,6 +124,7 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
 
     rc.mainRenderTarget = blurTex;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, halfWidth, halfHeight);
+    rc.commandList->SetViewport(rc.mainViewport);
 
     rc.commandList->SetPipelineState(m_psoBlur.get());
 
@@ -119,12 +133,25 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
         resources.GetTexture(m_hGBuffer1),
         resources.GetTexture(m_hGBuffer2)
     };
-    rc.commandList->PSSetTextures(0, 3, blurInputs);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        DX12CommandList::PixelTextureBinding bindings[] = {
+            { 0, blurInputs[0], DX12CommandList::NullSrvKind::Texture2D },
+            { 1, blurInputs[1], DX12CommandList::NullSrvKind::Texture2D },
+            { 2, blurInputs[2], DX12CommandList::NullSrvKind::Texture2D },
+        };
+        dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+    }
+    else {
+        rc.commandList->PSSetTextures(0, 3, blurInputs);
+    }
 
     rc.commandList->Draw(3, 0);
 
-    ITexture* null3[3] = { nullptr };
-    rc.commandList->PSSetTextures(0, 3, null3);
-    rc.commandList->PSSetSampler(2, nullptr);
-    rc.commandList->PSSetSampler(3, nullptr);
+    if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        ITexture* null3[3] = { nullptr };
+        rc.commandList->PSSetTextures(0, 3, null3);
+        rc.commandList->PSSetSampler(2, nullptr);
+        rc.commandList->PSSetSampler(3, nullptr);
+    }
 }

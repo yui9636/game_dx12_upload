@@ -6,6 +6,7 @@
 #include "RHI/IResourceFactory.h"
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
+#include "RHI/DX12/DX12CommandList.h"
 #include "RenderGraph/FrameGraphResources.h"
 
 VolumetricFogPass::~VolumetricFogPass() = default;
@@ -95,13 +96,23 @@ void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueu
     rc.mainRenderTarget = fogTex;
     rc.mainDepthStencil = nullptr;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, halfWidth, halfHeight);
+    rc.commandList->SetViewport(rc.mainViewport);
 
     rc.commandList->SetPipelineState(m_psoRaymarch.get());
     rc.commandList->PSSetSampler(2, rc.renderState->GetSamplerState(SamplerState::PointClamp));
     if (rc.shadowMap) {
         rc.commandList->PSSetSampler(1, rc.shadowMap->GetSamplerState());
     }
-    rc.commandList->PSSetTexture(0, gbuffer2);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        DX12CommandList::PixelTextureBinding bindings[] = {
+            { 0, gbuffer2, DX12CommandList::NullSrvKind::Texture2D },
+        };
+        dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+    }
+    else {
+        rc.commandList->PSSetTexture(0, gbuffer2);
+    }
     rc.commandList->Draw(3, 0);
 
     // ==========================================
@@ -112,17 +123,30 @@ void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueu
 
     rc.mainRenderTarget = blurTex;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, halfWidth, halfHeight);
+    rc.commandList->SetViewport(rc.mainViewport);
 
     rc.commandList->SetPipelineState(m_psoBlur.get());
 
     ITexture* blurTextures[] = { fogTex, gbuffer2 };
-    rc.commandList->PSSetTextures(0, 2, blurTextures);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        DX12CommandList::PixelTextureBinding bindings[] = {
+            { 0, blurTextures[0], DX12CommandList::NullSrvKind::Texture2D },
+            { 1, blurTextures[1], DX12CommandList::NullSrvKind::Texture2D },
+        };
+        dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+    }
+    else {
+        rc.commandList->PSSetTextures(0, 2, blurTextures);
+    }
 
     rc.commandList->Draw(3, 0);
 
     // お片付け
-    ITexture* null2[2] = { nullptr, nullptr };
-    rc.commandList->PSSetTextures(0, 2, null2);
-    rc.commandList->PSSetSampler(2, nullptr);
-    rc.commandList->PSSetSampler(1, nullptr);
+    if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        ITexture* null2[2] = { nullptr, nullptr };
+        rc.commandList->PSSetTextures(0, 2, null2);
+        rc.commandList->PSSetSampler(2, nullptr);
+        rc.commandList->PSSetSampler(1, nullptr);
+    }
 }

@@ -6,6 +6,7 @@
 #include "RHI/IResourceFactory.h"
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
+#include "RHI/DX12/DX12CommandList.h"
 #include "RenderGraph/FrameGraphResources.h"
 
 GTAOPass::~GTAOPass() = default;
@@ -85,15 +86,27 @@ void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
 
     rc.commandList->SetPipelineState(m_pso.get());
 
-    ITexture* inputs[] = { gbuffer1, gbuffer2 };
-    rc.commandList->PSSetTextures(0, 2, inputs);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        DX12CommandList::PixelTextureBinding bindings[] = {
+            { 0, gbuffer1, DX12CommandList::NullSrvKind::Texture2D },
+            { 1, gbuffer2, DX12CommandList::NullSrvKind::Texture2D },
+        };
+        dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+    }
+    else {
+        ITexture* inputs[] = { gbuffer1, gbuffer2 };
+        rc.commandList->PSSetTextures(0, 2, inputs);
+    }
 
     auto* pointSampler = rc.renderState->GetSamplerState(SamplerState::PointClamp);
     rc.commandList->PSSetSampler(2, pointSampler);
 
     rc.commandList->Draw(3, 0);
 
-    rc.commandList->PSSetSampler(2, nullptr);
-    ITexture* nullTextures[2] = { nullptr };
-    rc.commandList->PSSetTextures(0, 2, nullTextures);
+    if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        rc.commandList->PSSetSampler(2, nullptr);
+        ITexture* nullTextures[2] = { nullptr };
+        rc.commandList->PSSetTextures(0, 2, nullTextures);
+    }
 }

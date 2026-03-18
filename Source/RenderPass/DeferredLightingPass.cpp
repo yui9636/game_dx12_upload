@@ -8,8 +8,28 @@
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
+#include "RHI/DX12/DX12Texture.h"
+#include "RHI/DX12/DX12RootSignature.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "Console/Logger.h"
+
+namespace {
+    D3D12_CPU_DESCRIPTOR_HANDLE OffsetHandle(D3D12_CPU_DESCRIPTOR_HANDLE base, UINT stride, UINT index) {
+        base.ptr += static_cast<SIZE_T>(stride) * index;
+        return base;
+    }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE GetDeferredNullHandle(
+        uint32_t slot,
+        D3D12_CPU_DESCRIPTOR_HANDLE null2D,
+        D3D12_CPU_DESCRIPTOR_HANDLE null2DArray,
+        D3D12_CPU_DESCRIPTOR_HANDLE nullCube)
+    {
+        if (slot == 4) return null2DArray;
+        if (slot == 8 || slot == 33 || slot == 34) return nullCube;
+        return null2D;
+    }
+}
 
 DeferredLightingPass::~DeferredLightingPass() = default;
 
@@ -34,6 +54,56 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
     desc.dsvFormat = TextureFormat::Unknown;
 
     m_pso = factory->CreatePipelineState(desc);
+
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Device = Graphics::Instance().GetDX12Device();
+        auto* d3dDevice = dx12Device ? dx12Device->GetDevice() : nullptr;
+        if (d3dDevice) {
+            m_dx12SrvDescriptorSize = dx12Device->GetCBVSRVUAVDescriptorSize();
+
+            D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+            heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            heapDesc.NumDescriptors = 64;
+            heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+            HRESULT hr = d3dDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&m_dx12SrvHeap));
+            if (SUCCEEDED(hr) && m_dx12SrvHeap) {
+                auto cpuBase = m_dx12SrvHeap->GetCPUDescriptorHandleForHeapStart();
+                m_dx12SrvGpuBase = m_dx12SrvHeap->GetGPUDescriptorHandleForHeapStart();
+
+                m_dx12NullSrv2D = cpuBase;
+                m_dx12NullSrv2DArray = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, 1);
+                m_dx12NullSrvCube = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, 2);
+
+                D3D12_SHADER_RESOURCE_VIEW_DESC null2DDesc = {};
+                null2DDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                null2DDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                null2DDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                null2DDesc.Texture2D.MipLevels = 1;
+                d3dDevice->CreateShaderResourceView(nullptr, &null2DDesc, m_dx12NullSrv2D);
+
+                D3D12_SHADER_RESOURCE_VIEW_DESC null2DArrayDesc = {};
+                null2DArrayDesc.Format = DXGI_FORMAT_R32_FLOAT;
+                null2DArrayDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                null2DArrayDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                null2DArrayDesc.Texture2DArray.MipLevels = 1;
+                null2DArrayDesc.Texture2DArray.ArraySize = 1;
+                d3dDevice->CreateShaderResourceView(nullptr, &null2DArrayDesc, m_dx12NullSrv2DArray);
+
+                D3D12_SHADER_RESOURCE_VIEW_DESC nullCubeDesc = {};
+                nullCubeDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                nullCubeDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                nullCubeDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                nullCubeDesc.TextureCube.MipLevels = 1;
+                d3dDevice->CreateShaderResourceView(nullptr, &nullCubeDesc, m_dx12NullSrvCube);
+
+                for (UINT slot = 0; slot < 64; ++slot) {
+                    auto dst = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, slot);
+                    auto src = GetDeferredNullHandle(slot, m_dx12NullSrv2D, m_dx12NullSrv2DArray, m_dx12NullSrvCube);
+                    d3dDevice->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                }
+            }
+        }
+    }
 }
 
 void DeferredLightingPass::Setup(FrameGraphBuilder& builder)
@@ -120,23 +190,47 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd) {
-            DX12CommandList::PixelTextureBinding bindings[] = {
-                { 0, gbuffer0, DX12CommandList::NullSrvKind::Texture2D },
-                { 1, gbuffer1, DX12CommandList::NullSrvKind::Texture2D },
-                { 2, gbuffer2, DX12CommandList::NullSrvKind::Texture2D },
-                { 3, ao, DX12CommandList::NullSrvKind::Texture2D },
-                { 4, shadow, DX12CommandList::NullSrvKind::Texture2DArray },
-                { 5, ssgi, DX12CommandList::NullSrvKind::Texture2D },
-                { 6, fog, DX12CommandList::NullSrvKind::Texture2D },
-                { 7, ssr, DX12CommandList::NullSrvKind::Texture2D },
-                { 8, probe, DX12CommandList::NullSrvKind::TextureCube },
-                { 9, depth, DX12CommandList::NullSrvKind::Texture2D },
-                { 33, diffuseIBL, DX12CommandList::NullSrvKind::TextureCube },
-                { 34, specularIBL, DX12CommandList::NullSrvKind::TextureCube },
-                { 35, m_lutGGX.get(), DX12CommandList::NullSrvKind::Texture2D },
-            };
-            dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+        if (dx12Cmd && m_dx12SrvHeap) {
+            auto* dx12Device = Graphics::Instance().GetDX12Device();
+            auto* d3dDevice = dx12Device ? dx12Device->GetDevice() : nullptr;
+            if (d3dDevice) {
+                struct SlotBinding {
+                    uint32_t slot;
+                    ITexture* texture;
+                };
+                const SlotBinding bindings[] = {
+                    { 0, gbuffer0 },
+                    { 1, gbuffer1 },
+                    { 2, gbuffer2 },
+                    { 3, ao },
+                    { 4, shadow },
+                    { 5, ssgi },
+                    { 6, fog },
+                    { 7, ssr },
+                    { 8, probe },
+                    { 9, depth },
+                    { 33, diffuseIBL },
+                    { 34, specularIBL },
+                    { 35, m_lutGGX.get() },
+                };
+
+                auto cpuBase = m_dx12SrvHeap->GetCPUDescriptorHandleForHeapStart();
+                for (const auto& binding : bindings) {
+                    auto dst = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, binding.slot);
+                    auto src = GetDeferredNullHandle(binding.slot, m_dx12NullSrv2D, m_dx12NullSrv2DArray, m_dx12NullSrvCube);
+                    if (binding.texture) {
+                        auto* dx12Tex = dynamic_cast<DX12Texture*>(binding.texture);
+                        if (dx12Tex && dx12Tex->HasSRV()) {
+                            src = dx12Tex->GetSRV();
+                        }
+                    }
+                    d3dDevice->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                }
+
+                ID3D12DescriptorHeap* heaps[] = { m_dx12SrvHeap.Get() };
+                dx12Cmd->GetNativeCommandList()->SetDescriptorHeaps(1, heaps);
+                dx12Cmd->GetNativeCommandList()->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, m_dx12SrvGpuBase);
+            }
         }
     } else {
         ITexture* gbuffers[] = { gbuffer0, gbuffer1, gbuffer2, ao };
@@ -164,6 +258,13 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
     }
 
     rc.commandList->Draw(3, 0);
+
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        if (dx12Cmd) {
+            dx12Cmd->RestoreFrameDescriptorHeap();
+        }
+    }
 
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
         rc.commandList->PSSetSampler(2, nullptr);

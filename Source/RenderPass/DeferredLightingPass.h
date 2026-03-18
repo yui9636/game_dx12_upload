@@ -1,6 +1,8 @@
 #pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
+#include <d3d12.h>
+#include <wrl/client.h>
 #include <memory>
 
 class IShader;
@@ -23,6 +25,13 @@ private:
     std::unique_ptr<IShader> m_ps;
     std::unique_ptr<IPipelineState> m_pso;
     std::shared_ptr<ITexture> m_lutGGX;
+
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dx12SrvHeap;
+    UINT m_dx12SrvDescriptorSize = 0;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_dx12SrvGpuBase = {};
+    D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrv2D = {};
+    D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrv2DArray = {};
+    D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrvCube = {};
 
     // ====================================================
     // �� �u���b�N�{�[�h����󂯎��n���h���ꗗ
