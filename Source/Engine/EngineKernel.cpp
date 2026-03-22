@@ -396,10 +396,9 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<ExtractVisibleInstancesPass>());
     m_renderPipeline->AddPass(std::make_shared<BuildInstanceBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<BuildIndirectCommandPass>());
-    // ComputeCullingPass は仕様策定後に再有効化
-    // if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-    //     m_renderPipeline->AddPass(std::make_shared<ComputeCullingPass>());
-    // }
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        m_renderPipeline->AddPass(std::make_shared<ComputeCullingPass>());
+    }
     m_renderPipeline->AddPass(std::make_shared<ShadowPass>());
     m_renderPipeline->AddPass(std::make_shared<GBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<GTAOPass>(factory));

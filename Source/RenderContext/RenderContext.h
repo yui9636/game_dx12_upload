@@ -200,11 +200,8 @@ struct RenderContext
     std::vector<IndirectDrawCommand> activeDrawCommands;
     std::vector<IndirectDrawCommand> activeSkinnedCommands;
 
-    // GPU compute culling output (DX12 only, set by ComputeCullingPass)
+    // GPU culling active flag (set by ComputeCullingPass, read by no one currently)
     bool useGpuCulling = false;
-    std::shared_ptr<IBuffer> gpuCulledInstanceBuffer;       // UAVStorage, VB state
-    std::shared_ptr<IBuffer> gpuCulledDrawArgsBuffer;        // UAVStorage, INDIRECT state
-    std::vector<PreparedIndirectCommand> gpuCulledIndirectCommands;
 
     // �|�X�g�v���Z�X�p�f�[�^
     BloomData       bloomData;      // ���ǉ�
