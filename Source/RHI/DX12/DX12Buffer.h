@@ -13,7 +13,10 @@ public:
     uint32_t GetStride() const override { return m_stride; }
 
     ID3D12Resource* GetNativeResource() const { return m_resource.Get(); }
-    D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const { return m_resource->GetGPUVirtualAddress(); }
+    bool IsValid() const { return m_resource.Get() != nullptr; }
+    D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const {
+        return m_resource ? m_resource->GetGPUVirtualAddress() : 0;
+    }
 
     void* Map();
     void Unmap();

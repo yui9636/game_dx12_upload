@@ -571,6 +571,7 @@ void DX12CommandList::SetPrimitiveTopology(PrimitiveTopology topology) {
 void DX12CommandList::SetVertexBuffer(uint32_t slot, IBuffer* buffer, uint32_t stride, uint32_t offset) {
     if (!buffer) return;
     auto* dx12Buf = static_cast<DX12Buffer*>(buffer);
+    if (!dx12Buf->IsValid()) return;
 
     D3D12_VERTEX_BUFFER_VIEW vbView = {};
     vbView.BufferLocation = dx12Buf->GetGPUVirtualAddress() + offset;
@@ -582,6 +583,7 @@ void DX12CommandList::SetVertexBuffer(uint32_t slot, IBuffer* buffer, uint32_t s
 void DX12CommandList::SetIndexBuffer(IBuffer* buffer, IndexFormat format, uint32_t offset) {
     if (!buffer) return;
     auto* dx12Buf = static_cast<DX12Buffer*>(buffer);
+    if (!dx12Buf->IsValid()) return;
 
     D3D12_INDEX_BUFFER_VIEW ibView = {};
     ibView.BufferLocation = dx12Buf->GetGPUVirtualAddress() + offset;
