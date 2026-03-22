@@ -396,9 +396,10 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<ExtractVisibleInstancesPass>());
     m_renderPipeline->AddPass(std::make_shared<BuildInstanceBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<BuildIndirectCommandPass>());
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        m_renderPipeline->AddPass(std::make_shared<ComputeCullingPass>());
-    }
+    // TODO: Re-enable after fixing GPU hang with multiple models
+    //if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+    //    m_renderPipeline->AddPass(std::make_shared<ComputeCullingPass>());
+    //}
     m_renderPipeline->AddPass(std::make_shared<ShadowPass>());
     m_renderPipeline->AddPass(std::make_shared<GBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<GTAOPass>(factory));
