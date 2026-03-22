@@ -43,4 +43,15 @@ private:
     std::unique_ptr<DX12RootSignature> m_dx12RootSig;
     FrameGraph m_frameGraph;
 
+    // Keep GPU buffers alive across frames to prevent use-after-free
+    // (GPU may still be reading previous frame's buffers)
+    static constexpr int kMaxInFlight = 3;
+    struct FrameGpuResources {
+        std::shared_ptr<IBuffer> instanceBuffer;
+        std::shared_ptr<IBuffer> instanceStructuredBuffer;
+        std::shared_ptr<IBuffer> drawArgsBuffer;
+        std::shared_ptr<IBuffer> metadataBuffer;
+    };
+    FrameGpuResources m_inFlightResources[kMaxInFlight];
+    int m_inFlightIndex = 0;
 };

@@ -1,17 +1,11 @@
-﻿#include "GBufferPBRShader.h"
+#include "GBufferPBRShader.h"
 
 #include "Graphics.h"
-
 #include "Console/Logger.h"
-
 #include "RHI/IResourceFactory.h"
-
 #include "RHI/ICommandList.h"
-
 #include "RHI/ITexture.h"
-
 #include "RHI/IBuffer.h"
-
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
@@ -27,80 +21,67 @@ namespace {
     }
 }
 
-
 GBufferPBRShader::GBufferPBRShader(IResourceFactory* factory)
-
     : PBRShader(factory)
-
 {
-
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/PBRVS.cso");
-
     m_ps = factory->CreateShader(ShaderType::Pixel, "Data/Shader/GBufferPBRPS.cso");
-
-
+    m_instancedVs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/PBRInstancedVS.cso");
 
     InputLayoutElement layoutElements[] = {
-
         {"POSITION", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
-
         {"BONE_WEIGHTS", 0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement},
-
         {"BONE_INDICES", 0, TextureFormat::R32G32B32A32_UINT, 0, kAppendAlignedElement},
-
         {"TEXCOORD", 0, TextureFormat::R32G32_FLOAT, 0, kAppendAlignedElement},
-
         {"NORMAL", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
-
         {"TANGENT", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
-
     };
-
     InputLayoutDesc layoutDesc = { layoutElements, _countof(layoutElements) };
-
     m_inputLayout = factory->CreateInputLayout(layoutDesc, m_vs.get());
 
-
+    InputLayoutElement instancedLayoutElements[] = {
+        {"POSITION", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
+        {"BONE_WEIGHTS", 0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement},
+        {"BONE_INDICES", 0, TextureFormat::R32G32B32A32_UINT, 0, kAppendAlignedElement},
+        {"TEXCOORD", 0, TextureFormat::R32G32_FLOAT, 0, kAppendAlignedElement},
+        {"NORMAL", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
+        {"TANGENT", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement},
+        {"INSTANCE_WORLD", 0, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_WORLD", 1, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_WORLD", 2, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_WORLD", 3, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_PREV_WORLD", 0, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_PREV_WORLD", 1, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_PREV_WORLD", 2, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+        {"INSTANCE_PREV_WORLD", 3, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1},
+    };
+    InputLayoutDesc instancedLayoutDesc = { instancedLayoutElements, _countof(instancedLayoutElements) };
+    m_instancedInputLayout = factory->CreateInputLayout(instancedLayoutDesc, m_instancedVs.get());
 
     m_meshConstantBuffer = factory->CreateBuffer(sizeof(CbMesh), BufferType::Constant);
 
-
-
     PipelineStateDesc desc{};
-
     desc.vertexShader = m_vs.get();
-
     desc.pixelShader = m_ps.get();
-
     desc.inputLayout = m_inputLayout.get();
-
     desc.primitiveTopology = PrimitiveTopology::TriangleList;
-
     desc.numRenderTargets = 4;
-
     desc.rtvFormats[0] = TextureFormat::R16G16B16A16_FLOAT;
-
     desc.rtvFormats[1] = TextureFormat::R16G16B16A16_FLOAT;
-
     desc.rtvFormats[2] = TextureFormat::R32G32B32A32_FLOAT;
-
     desc.rtvFormats[3] = TextureFormat::R32G32_FLOAT;
-
     desc.dsvFormat = TextureFormat::D32_FLOAT;
 
-
-
     auto* rs = Graphics::Instance().GetRenderState();
-
     desc.rasterizerState = rs->GetRasterizerState(RasterizerState::SolidCullBack);
-
     desc.depthStencilState = rs->GetDepthStencilState(DepthState::TestAndWrite);
-
     desc.blendState = rs->GetBlendState(BlendState::Opaque);
-
-
-
     m_pso = factory->CreatePipelineState(desc);
+
+    PipelineStateDesc instancedDesc = desc;
+    instancedDesc.vertexShader = m_instancedVs.get();
+    instancedDesc.inputLayout = m_instancedInputLayout.get();
+    m_instancedPso = factory->CreatePipelineState(instancedDesc);
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         auto* dx12Device = Graphics::Instance().GetDX12Device();
@@ -134,120 +115,64 @@ GBufferPBRShader::GBufferPBRShader(IResourceFactory* factory)
     }
 }
 
-
 void GBufferPBRShader::Begin(const RenderContext& rc)
 {
     rc.commandList->SetPipelineState(m_pso.get());
-    rc.commandList->PSSetConstantBuffer(1, m_meshConstantBuffer.get());
+    if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        rc.commandList->PSSetConstantBuffer(1, m_meshConstantBuffer.get());
+    }
 }
 
+void GBufferPBRShader::BeginInstanced(const RenderContext& rc)
+{
+    rc.commandList->SetPipelineState(m_instancedPso ? m_instancedPso.get() : m_pso.get());
+    if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        rc.commandList->PSSetConstantBuffer(1, m_meshConstantBuffer.get());
+    }
+}
+
+bool GBufferPBRShader::SupportsInstancing(const ModelResource::MeshResource& mesh) const
+{
+    return mesh.bones.empty();
+}
 
 void GBufferPBRShader::Update(const RenderContext& rc, const ModelResource::MeshResource& mesh)
-
 {
-
     CbMesh cbMesh{};
-
     const auto meshColor = mesh.material.color;
-
     cbMesh.materialColor = {
-
         meshColor.x * m_matColor.x,
-
         meshColor.y * m_matColor.y,
-
         meshColor.z * m_matColor.z,
-
         meshColor.w * m_matColor.w
-
     };
-
     cbMesh.metallicFactor = mesh.material.metallicFactor * m_matMetallic;
-
     cbMesh.roughnessFactor = mesh.material.roughnessFactor * m_matRoughness;
-
     cbMesh.emissiveFactor = m_matEmissive;
 
-
-
-    rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
-
-
+    auto* dx12Cmd = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+        ? static_cast<DX12CommandList*>(rc.commandList)
+        : nullptr;
+    if (dx12Cmd) {
+        dx12Cmd->PSSetDynamicConstantBuffer(1, &cbMesh, sizeof(cbMesh));
+    } else {
+        rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
+    }
 
     ITexture* srvs[] = {
-
         mesh.material.albedoMap.get(),
-
         mesh.material.normalMap.get(),
-
         mesh.material.metallicMap.get(),
-
         mesh.material.roughnessMap.get()
-
     };
 
-
-
-    static int s_loggedMaterialCount = 0;
-
-    if (s_loggedMaterialCount < 6) {
-
-        LOG_INFO("[GBufferPBRShader] material='%s' albedoFile='%s' normalFile='%s' color=(%.3f, %.3f, %.3f, %.3f) metallic=%.3f roughness=%.3f albedo=%p normal=%p metallicTex=%p roughnessTex=%p",
-
-            mesh.material.name.c_str(),
-
-            mesh.material.albedoTextureFileName.c_str(),
-
-            mesh.material.normalTextureFileName.c_str(),
-
-            cbMesh.materialColor.x, cbMesh.materialColor.y, cbMesh.materialColor.z, cbMesh.materialColor.w,
-
-            cbMesh.metallicFactor, cbMesh.roughnessFactor,
-
-            srvs[0], srvs[1], srvs[2], srvs[3]);
-
-        ++s_loggedMaterialCount;
-
-    }
-
-
-
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd && m_dx12SrvHeap) {
-            auto* d3dDevice = Graphics::Instance().GetDX12Device()->GetDevice();
-            auto cpuBase = m_dx12SrvHeap->GetCPUDescriptorHandleForHeapStart();
-            for (UINT slot = 0; slot < 4; ++slot) {
-                auto dst = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, slot);
-                D3D12_CPU_DESCRIPTOR_HANDLE src = m_dx12NullSrv2D;
-                if (srvs[slot]) {
-                    auto* dx12Tex = static_cast<DX12Texture*>(srvs[slot]);
-                    if (dx12Tex->HasSRV()) {
-                        src = dx12Tex->GetSRV();
-                    }
-                }
-                d3dDevice->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            }
-
-            ID3D12DescriptorHeap* heaps[] = { m_dx12SrvHeap.Get() };
-            dx12Cmd->GetNativeCommandList()->SetDescriptorHeaps(1, heaps);
-            dx12Cmd->GetNativeCommandList()->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, m_dx12SrvGpuBase);
-            return;
-        }
-    }
-
+    // Use the standard frame-heap PSSetTextures path for all APIs.
+    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
     rc.commandList->PSSetTextures(0, _countof(srvs), srvs);
 }
 
 void GBufferPBRShader::End(const RenderContext& rc)
 {
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd) {
-            dx12Cmd->RestoreFrameDescriptorHeap();
-        }
-    }
-
     ITexture* nullTextures[] = { nullptr, nullptr, nullptr, nullptr };
     rc.commandList->PSSetTextures(0, _countof(nullTextures), nullTextures);
 }

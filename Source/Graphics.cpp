@@ -243,10 +243,58 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	frameBuffers[static_cast<int>(FrameBufferId::PrevScene)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, hdrFormat);
 }
 
+static void DumpDRED(ID3D12Device* device) {
+	ComPtr<ID3D12DeviceRemovedExtendedData> dred;
+	if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dred)))) return;
+
+	D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs = {};
+	if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
+		FILE* f = nullptr;
+		fopen_s(&f, "dx12_dred.log", "a");
+		if (!f) return;
+		const D3D12_AUTO_BREADCRUMB_NODE* node = breadcrumbs.pHeadAutoBreadcrumbNode;
+		while (node) {
+			fprintf(f, "[DRED] CommandList: %S\n", node->pCommandListDebugNameW ? node->pCommandListDebugNameW : L"(unnamed)");
+			fprintf(f, "[DRED] CommandQueue: %S\n", node->pCommandQueueDebugNameW ? node->pCommandQueueDebugNameW : L"(unnamed)");
+			if (node->pLastBreadcrumbValue && node->pCommandHistory) {
+				uint32_t lastCompleted = *node->pLastBreadcrumbValue;
+				fprintf(f, "[DRED] LastCompleted=%u / Total=%u\n", lastCompleted, node->BreadcrumbCount);
+				for (uint32_t i = 0; i < node->BreadcrumbCount && i < 64; ++i) {
+					const char* marker = (i < lastCompleted) ? "DONE" : (i == lastCompleted ? ">>LAST>>" : "pending");
+					fprintf(f, "[DRED]   [%u] op=%d %s\n", i, (int)node->pCommandHistory[i], marker);
+				}
+			}
+			node = node->pNext;
+		}
+		fclose(f);
+	}
+
+	D3D12_DRED_PAGE_FAULT_OUTPUT pageFault = {};
+	if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault))) {
+		FILE* f = nullptr;
+		fopen_s(&f, "dx12_dred.log", "a");
+		if (f) {
+			fprintf(f, "[DRED] PageFault VA=0x%llX\n", pageFault.PageFaultVA);
+			fclose(f);
+		}
+	}
+}
+
 void Graphics::Present(UINT syncInterval)
 {
 	if (m_api == GraphicsAPI::DX12) {
-		m_dx12Device->GetSwapChain()->Present(syncInterval, 0);
+		HRESULT hr = m_dx12Device->GetSwapChain()->Present(syncInterval, 0);
+		if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+			HRESULT reason = m_dx12Device->GetDevice()->GetDeviceRemovedReason();
+			char buf[256];
+			sprintf_s(buf, "[Graphics::Present] DEVICE LOST! Present hr=0x%08X reason=0x%08X\n",
+				(unsigned)hr, (unsigned)reason);
+			OutputDebugStringA(buf);
+			FILE* f = nullptr;
+			fopen_s(&f, "dx12_device_lost.log", "a");
+			if (f) { fprintf(f, "%s", buf); fclose(f); }
+			DumpDRED(m_dx12Device->GetDevice());
+		}
 		m_dx12Device->MoveToNextFrame();
 		backBufferTexture = m_dx12BackBuffers[m_dx12Device->GetCurrentBackBufferIndex()];
 		return;

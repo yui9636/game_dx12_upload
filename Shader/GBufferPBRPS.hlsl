@@ -38,9 +38,7 @@ PS_OUTPUT main(VS_OUT pin)
 
     output.normalRoughness = float4(N, roughness);
 
-    // --- [ 2. �[�x (Depth) ] ---
-    // SV_Position.z �͂��łɗh��Ă���̂ŁA�K�v�ɉ����� pin.curClipPos.z / pin.curClipPos.w �ɕς����
-    // �[�x�x�[�X�̃|�X�g�G�t�F�N�g����肵�܂��B�܂��͌���ێ��� pin.vertex.z ��OK�ł��B
+    // --- [ 2. WorldPos / Depth ] ---
     output.worldPosDepth = float4(pin.position, pin.vertex.z);
 
     float4 stableCurClip = mul(float4(pin.position, 1.0f), viewProjectionUnjittered);

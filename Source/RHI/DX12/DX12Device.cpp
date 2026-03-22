@@ -3,6 +3,7 @@
 #include <cassert>
 #include <stdexcept>
 #include <vector>
+#include <cstdio>
 
 #ifdef _DEBUG
 #include <d3d12sdklayers.h>
@@ -27,10 +28,24 @@ DX12Device::~DX12Device() {
 
 void DX12Device::CreateDevice() {
 #ifdef _DEBUG
+    // DRED (Device Removed Extended Data) を有効化。
+    // debug layer と異なり、break-on-error で強制終了しない。
+    // GPU ハング時にどのコマンドで止まったか記録する。
     {
-        ComPtr<ID3D12Debug> debugController;
-        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController)))) {
-            debugController->EnableDebugLayer();
+        ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dredSettings;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings)))) {
+            dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        }
+    }
+#endif
+
+#ifdef _DEBUG
+    // Enable D3D12 debug layer for validation messages
+    {
+        ComPtr<ID3D12Debug> debugInterface;
+        if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)))) {
+            debugInterface->EnableDebugLayer();
         }
     }
 #endif
@@ -64,6 +79,18 @@ void DX12Device::CreateDevice() {
         hr = D3D12CreateDevice(warpAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device));
         assert(SUCCEEDED(hr));
     }
+
+#ifdef _DEBUG
+    // Prevent debug layer from force-terminating on validation errors
+    {
+        ComPtr<ID3D12InfoQueue> infoQueue;
+        if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
+            infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+            infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, FALSE);
+            infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+        }
+    }
+#endif
 }
 
 void DX12Device::CreateCommandQueue() {

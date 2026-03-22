@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <string>
 #include "RenderGraph/FrameGraphTypes.h"
@@ -25,6 +25,8 @@ struct InputLayoutElement {
     TextureFormat format;
     uint32_t inputSlot;
     uint32_t byteOffset;
+    bool perInstance = false;
+    uint32_t instanceDataStepRate = 0;
 };
 
 struct InputLayoutDesc {
@@ -42,6 +44,7 @@ public:
     virtual std::unique_ptr<ITexture> CreateTexture(const std::string& name, const TextureDesc& desc) = 0;
     virtual std::unique_ptr<IShader> CreateShader(ShaderType type, const std::string& fileName) = 0;
     virtual std::unique_ptr<IBuffer> CreateBuffer(uint32_t size, BufferType type, const void* initialData = nullptr) = 0;
+    virtual std::unique_ptr<IBuffer> CreateStructuredBuffer(uint32_t elementSize, uint32_t elementCount, const void* initialData = nullptr) = 0;
     virtual std::unique_ptr<IInputLayout> CreateInputLayout(const InputLayoutDesc& desc, const IShader* vs) = 0;
     virtual std::unique_ptr<IPipelineState> CreatePipelineState(const PipelineStateDesc& desc) = 0;
 

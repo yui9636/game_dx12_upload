@@ -258,6 +258,7 @@
     <ClInclude Include="Source\Model\Model.h" />
     <ClInclude Include="Source\Model\ModelResource.h" />
     <ClInclude Include="Source\Model\ModelRenderer.h" />
+    <ClInclude Include="Source\Model\ModelUpdateSystem.h" />
     <ClInclude Include="Source\Noise\CurlNoiseGenerator.h" />
     <ClInclude Include="Source\Particle\compute_particle_system.h" />
     <ClInclude Include="Source\Particle\ParticleEmitter.h" />
@@ -287,6 +288,10 @@
     <ClInclude Include="Source\RenderPass\DrawObjectsPass.h" />
     <ClInclude Include="Source\RenderPass\ForwardTransparentPass.h" />
     <ClInclude Include="Source\RenderPass\GBufferPass.h" />
+    <ClInclude Include="Source\RenderPass\ExtractVisibleInstancesPass.h" />
+    <ClInclude Include="Source\RenderPass\BuildInstanceBufferPass.h" />
+    <ClInclude Include="Source\RenderPass\BuildIndirectCommandPass.h" />
+    <ClInclude Include="Source\RenderPass\ComputeCullingPass.h" />
     <ClInclude Include="Source\RenderPass\GTAOPass.h" />
     <ClInclude Include="Source\RenderPass\IRenderPass.h" />
     <ClInclude Include="Source\RenderPass\PostProcessPass.h" />
@@ -486,6 +491,7 @@
     <ClCompile Include="Source\Model\Model.cpp" />
     <ClCompile Include="Source\Model\ModelResource.cpp" />
     <ClCompile Include="Source\Model\ModelRenderer.cpp" />
+    <ClCompile Include="Source\Model\ModelUpdateSystem.cpp" />
     <ClCompile Include="Source\Noise\CurlNoiseGenerator.cpp" />
     <ClCompile Include="Source\Particle\compute_particle_system.cpp" />
     <ClCompile Include="Source\Particle\ParticleEmitter.cpp" />
@@ -509,6 +515,10 @@
     <ClCompile Include="Source\RenderPass\DrawObjectsPass.cpp" />
     <ClCompile Include="Source\RenderPass\ForwardTransparentPass.cpp" />
     <ClCompile Include="Source\RenderPass\GBufferPass.cpp" />
+    <ClCompile Include="Source\RenderPass\ExtractVisibleInstancesPass.cpp" />
+    <ClCompile Include="Source\RenderPass\BuildInstanceBufferPass.cpp" />
+    <ClCompile Include="Source\RenderPass\BuildIndirectCommandPass.cpp" />
+    <ClCompile Include="Source\RenderPass\ComputeCullingPass.cpp" />
     <ClCompile Include="Source\RenderPass\FinalBlitPass.cpp" />
     <ClCompile Include="Source\RenderPass\GTAOPass.cpp" />
     <ClCompile Include="Source\RenderPass\PostProcessPass.cpp" />
@@ -595,6 +605,12 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\FrustumCullCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\compute_particle_begin_frame_cs.hlsl">
@@ -792,6 +808,12 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
+    <FxCompile Include="Shader\PBRInstancedVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
     <FxCompile Include="Shader\PhongPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
@@ -799,6 +821,12 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\PhongVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\PhongInstancedVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
@@ -817,6 +845,12 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\ShadowMapVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\ShadowMapInstancedVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>

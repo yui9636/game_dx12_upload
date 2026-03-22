@@ -6,6 +6,10 @@
 #include "Icon/IconFontManager.h"
 #include "Asset/ThumbnailGenerator.h"
 #include "RenderPass/DrawObjectsPass.h"
+#include "RenderPass/ExtractVisibleInstancesPass.h"
+#include "RenderPass/BuildInstanceBufferPass.h"
+#include "RenderPass/BuildIndirectCommandPass.h"
+#include "RenderPass/ComputeCullingPass.h"
 #include "RenderPass/ShadowPass.h"
 #include "RenderPass/PostProcessPass.h"
 #include <RenderPass\SkyboxPass.h>
@@ -244,7 +248,17 @@ namespace {
             const uint8_t* row = bytes + static_cast<size_t>(y) * state.rowPitch;
             for (UINT x = 0; x < state.width; ++x) {
                 double r = 0.0, g = 0.0, b = 0.0, a = 1.0;
-                if (state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+                if (state.format == DXGI_FORMAT_R32G32B32A32_FLOAT) {
+                    const auto* pixel = reinterpret_cast<const float*>(row + x * 16);
+                    r = pixel[0];
+                    g = pixel[1];
+                    b = pixel[2];
+                    a = pixel[3];
+                } else if (state.format == DXGI_FORMAT_R32G32_FLOAT) {
+                    const auto* pixel = reinterpret_cast<const float*>(row + x * 8);
+                    r = pixel[0];
+                    g = pixel[1];
+                } else if (state.format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
                     const auto* pixel = reinterpret_cast<const uint16_t*>(row + x * 8);
                     r = HalfToFloat(pixel[0]);
                     g = HalfToFloat(pixel[1]);
@@ -379,6 +393,13 @@ void EngineKernel::Initialize()
     const bool isDX12 = (Graphics::Instance().GetAPI() == GraphicsAPI::DX12);
     auto* factory = Graphics::Instance().GetResourceFactory();
 
+    m_renderPipeline->AddPass(std::make_shared<ExtractVisibleInstancesPass>());
+    m_renderPipeline->AddPass(std::make_shared<BuildInstanceBufferPass>());
+    m_renderPipeline->AddPass(std::make_shared<BuildIndirectCommandPass>());
+    // ComputeCullingPass は仕様策定後に再有効化
+    // if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+    //     m_renderPipeline->AddPass(std::make_shared<ComputeCullingPass>());
+    // }
     m_renderPipeline->AddPass(std::make_shared<ShadowPass>());
     m_renderPipeline->AddPass(std::make_shared<GBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<GTAOPass>(factory));
@@ -460,7 +481,8 @@ void EngineKernel::Render()
         m_gameLayer->Render(rc, m_renderQueue);
     }
 
-    if (m_probeBaker && m_gameLayer) {
+    // ReflectionProbeBaker is DX11-only; skip in DX12 mode to avoid crash
+    if (m_probeBaker && m_gameLayer && Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
         m_probeBaker->BakeAllDirtyProbes(m_gameLayer->GetRegistry(), m_renderQueue, rc);
     }
     m_renderPipeline->Execute(m_renderQueue, rc);

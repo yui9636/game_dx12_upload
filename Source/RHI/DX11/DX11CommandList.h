@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RHI/ICommandList.h"
 #include <wrl.h>
 
@@ -14,24 +14,28 @@ public:
     DX11CommandList(ID3D11DeviceContext* dc);
     ~DX11CommandList() override;
 
-    // �`��E�o�b�t�@�֘A (�����ς�)
+    // ・ｽ`・ｽ・ｽE・ｽo・ｽb・ｽt・ｽ@・ｽﾖ連 (・ｽ・ｽ・ｽ・ｽ・ｽﾏゑｿｽ)
     void Draw(uint32_t vertexCount, uint32_t startVertexLocation) override;
     void DrawIndexed(uint32_t indexCount, uint32_t startIndexLocation, int32_t baseVertexLocation) override;
+    void DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
+    void DrawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) override;
+    void ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes) override;
+    void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
     void VSSetConstantBuffer(uint32_t slot, IBuffer* buffer) override;
     void PSSetConstantBuffer(uint32_t slot, IBuffer* buffer) override;
     void CSSetConstantBuffer(uint32_t slot, IBuffer* buffer) override;
 
-    // �e�N�X�`���֘A (�����ς�)
+    // ・ｽe・ｽN・ｽX・ｽ`・ｽ・ｽ・ｽﾖ連 (・ｽ・ｽ・ｽ・ｽ・ｽﾏゑｿｽ)
     void PSSetTexture(uint32_t slot, ITexture* texture) override;
     void PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) override;
 
     // =========================================================
-    // �� �ǉ��F�V�F�[�_�[�̃o�C���h
+    // ・ｽ・ｽ ・ｽﾇ会ｿｽ・ｽF・ｽV・ｽF・ｽ[・ｽ_・ｽ[・ｽﾌバ・ｽC・ｽ・ｽ・ｽh
     // =========================================================
     void VSSetShader(IShader* shader) override;
     void PSSetShader(IShader* shader) override;
-    void GSSetShader(IShader* shader) override; // �W�I���g���V�F�[�_�[
-    void CSSetShader(IShader* shader) override; // �R���s���[�g�V�F�[�_�[
+    void GSSetShader(IShader* shader) override; // ・ｽW・ｽI・ｽ・ｽ・ｽg・ｽ・ｽ・ｽV・ｽF・ｽ[・ｽ_・ｽ[
+    void CSSetShader(IShader* shader) override; // ・ｽR・ｽ・ｽ・ｽs・ｽ・ｽ・ｽ[・ｽg・ｽV・ｽF・ｽ[・ｽ_・ｽ[
 
     void PSSetSampler(uint32_t slot, ISampler* sampler) override;
     void PSSetSamplers(uint32_t startSlot, uint32_t numSamplers, ISampler* const* ppSamplers) override;

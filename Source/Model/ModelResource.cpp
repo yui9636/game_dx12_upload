@@ -4,6 +4,7 @@
 #include "RHI/ICommandList.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IBuffer.h"
+#include <DirectXMath.h>
 
 namespace
 {
@@ -14,6 +15,103 @@ namespace
             0.0f, 1.0f, 0.0f, 0.0f,
             0.0f, 0.0f, 1.0f, 0.0f,
             0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
+    DirectX::BoundingBox BuildLocalBounds(
+        const Model& model,
+        const std::vector<ModelResource::MeshResource>& meshResources)
+    {
+        using namespace DirectX;
+
+        bool hasBounds = false;
+        BoundingBox bounds{};
+        const auto& nodes = model.GetNodes();
+
+        auto IsFiniteMatrix = [](const XMFLOAT4X4& m) {
+            const float* f = &m._11;
+            for (int i = 0; i < 16; ++i) {
+                if (!std::isfinite(f[i])) {
+                    return false;
+                }
+            }
+            return true;
+            };
+
+        for (size_t meshIndex = 0; meshIndex < meshResources.size(); ++meshIndex)
+        {
+            const auto& meshResource = meshResources[meshIndex];
+
+            if (meshResource.localBounds.Extents.x == 0.0f &&
+                meshResource.localBounds.Extents.y == 0.0f &&
+                meshResource.localBounds.Extents.z == 0.0f)
+            {
+                continue;
+            }
+
+            XMMATRIX nodeWorld = XMMatrixIdentity();
+            if (meshResource.nodeIndex >= 0 &&
+                static_cast<size_t>(meshResource.nodeIndex) < nodes.size())
+            {
+                if (!IsFiniteMatrix(meshResource.nodeWorldTransform)) {
+                    __debugbreak();
+                    continue;
+                }
+
+                nodeWorld = XMLoadFloat4x4(&meshResource.nodeWorldTransform);
+            }
+
+            BoundingBox transformedBounds{};
+            meshResource.localBounds.Transform(transformedBounds, nodeWorld);
+
+            if (!std::isfinite(transformedBounds.Center.x) ||
+                !std::isfinite(transformedBounds.Center.y) ||
+                !std::isfinite(transformedBounds.Center.z) ||
+                !std::isfinite(transformedBounds.Extents.x) ||
+                !std::isfinite(transformedBounds.Extents.y) ||
+                !std::isfinite(transformedBounds.Extents.z))
+            {
+                __debugbreak();
+                continue;
+            }
+
+            if (!hasBounds) {
+                bounds = transformedBounds;
+                hasBounds = true;
+            }
+            else {
+                BoundingBox merged{};
+                BoundingBox::CreateMerged(merged, bounds, transformedBounds);
+                bounds = merged;
+            }
+        }
+
+        if (!hasBounds) {
+            bounds.Center = { 0.0f, 0.0f, 0.0f };
+            bounds.Extents = { 0.0f, 0.0f, 0.0f };
+        }
+
+        return bounds;
+    }
+
+    DirectX::BoundingBox BuildMeshLocalBounds(const Model::Mesh& mesh)
+    {
+        using namespace DirectX;
+
+        BoundingBox bounds{};
+        if (mesh.vertices.empty()) {
+            bounds.Center = { 0.0f, 0.0f, 0.0f };
+            bounds.Extents = { 0.0f, 0.0f, 0.0f };
+            return bounds;
+        }
+
+        std::vector<XMFLOAT3> points;
+        points.reserve(mesh.vertices.size());
+        for (const auto& vertex : mesh.vertices) {
+            points.push_back(vertex.position);
+        }
+
+        BoundingBox::CreateFromPoints(bounds, points.size(), points.data(), sizeof(XMFLOAT3));
+        return bounds;
     }
 }
 
@@ -45,10 +143,12 @@ void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* facto
         }
         resource.materialIndex = model.GetMeshMaterialIndex(static_cast<int>(meshIndex));
         resource.nodeIndex = model.GetMeshNodeIndex(static_cast<int>(meshIndex));
+        resource.localBounds = BuildMeshLocalBounds(mesh);
         m_meshResources.push_back(std::move(resource));
     }
 
     SyncSceneDataFromModel(model);
+    m_localBounds = BuildLocalBounds(model, m_meshResources);
 }
 
 void ModelResource::SyncSceneDataFromModel(const Model& model)
@@ -93,6 +193,8 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
             resource.bones.push_back(std::move(boneResource));
         }
     }
+
+    m_localBounds = BuildLocalBounds(model, m_meshResources);
 }
 
 void ModelResource::SyncMeshBuffers(int meshIndex,

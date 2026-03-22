@@ -18,6 +18,13 @@ public:
 	// 個々のメッシュごとに呼ばれる（DrawIndexed は呼ばない！）
 	virtual void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) = 0;
 
+	virtual void BeginInstanced(const RenderContext& rc) { Begin(rc); }
+	virtual bool SupportsInstancing(const ModelResource::MeshResource& mesh) const
+	{
+		(void)mesh;
+		return false;
+	}
+
 	//描画終了
 	virtual void End(const RenderContext& rc) = 0;
 };

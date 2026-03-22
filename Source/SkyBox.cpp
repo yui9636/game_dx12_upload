@@ -260,14 +260,9 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
     rc.commandList->VSSetConstantBuffer(0, m_cb.get());
     rc.commandList->PSSetConstantBuffer(0, m_cb.get());
 
-    bool usedDedicatedDx12Heap = false;
-    if (m_hasFaceTextures && m_dx12SrvHeap && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        ID3D12DescriptorHeap* heaps[] = { m_dx12SrvHeap.Get() };
-        dx12Cmd->GetNativeCommandList()->SetDescriptorHeaps(1, heaps);
-        dx12Cmd->GetNativeCommandList()->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, m_dx12SrvGpuBase);
-        usedDedicatedDx12Heap = true;
-    } else if (m_hasFaceTextures) {
+    // Use standard PSSetTextures path for all APIs.
+    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
+    if (m_hasFaceTextures) {
         ITexture* faces[6] = {
             m_faceTextures[0].get(), m_faceTextures[1].get(), m_faceTextures[2].get(),
             m_faceTextures[3].get(), m_faceTextures[4].get(), m_faceTextures[5].get()
@@ -283,11 +278,7 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
     rc.commandList->SetVertexBuffer(0, nullptr, 0, 0);
     rc.commandList->Draw(4, 0);
 
-    if (usedDedicatedDx12Heap) {
-        static_cast<DX12CommandList*>(rc.commandList)->RestoreFrameDescriptorHeap();
-    } else {
-        for (uint32_t slot = 0; slot < 6; ++slot) {
-            rc.commandList->PSSetTexture(slot, nullptr);
-        }
+    for (uint32_t slot = 0; slot < 6; ++slot) {
+        rc.commandList->PSSetTexture(slot, nullptr);
     }
 }

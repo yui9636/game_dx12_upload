@@ -41,6 +41,28 @@ void DX11CommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndexLocati
     if (m_dc) m_dc->DrawIndexed(indexCount, startIndexLocation, baseVertexLocation);
 }
 
+void DX11CommandList::DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation)
+{
+    if (m_dc) m_dc->DrawInstanced(vertexCountPerInstance, instanceCount, startVertexLocation, startInstanceLocation);
+}
+
+void DX11CommandList::DrawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation)
+{
+    if (m_dc) m_dc->DrawIndexedInstanced(indexCountPerInstance, instanceCount, startIndexLocation, baseVertexLocation, startInstanceLocation);
+}
+
+void DX11CommandList::ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes)
+{
+    auto dxBuffer = static_cast<DX11Buffer*>(argumentBuffer);
+    if (m_dc && dxBuffer) {
+        m_dc->DrawIndexedInstancedIndirect(dxBuffer->GetNative(), argumentOffsetBytes);
+    }
+}
+
+void DX11CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) {
+    if (m_dc) m_dc->Dispatch(x, y, z);
+}
+
 void DX11CommandList::UpdateBuffer(IBuffer* buffer, const void* data, uint32_t size) {
     auto dxBuffer = static_cast<DX11Buffer*>(buffer);
     if (dxBuffer && m_dc) {

@@ -2,18 +2,23 @@
 
 //#include "Camera/Camera.h"
 #include "RenderState.h"
+#include "RenderQueue.h"
 #include "Light/Light.h"
 #include <string>
 #include <functional>
+#include <memory>
 #include <DirectXMath.h>
 #include "RHI/ICommandList.h"
+#include "RHI/IBuffer.h"
 #include "RHI/ITexture.h"
+#include "IndirectDrawCommon.h"
 
 class ShadowMap;
 class Skybox;
+class ModelResource;
 
 
-// ƒuƒ‹[ƒ€İ’è
+// ï¿½uï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½İ’ï¿½
 struct BloomData {
     float luminanceLowerEdge = 0.6f;
     float luminanceHigherEdge = 0.8f;
@@ -21,7 +26,7 @@ struct BloomData {
     float gaussianSigma = 1.0f;
 };
 
-// ƒJƒ‰[ƒtƒBƒ‹ƒ^[İ’è
+// ï¿½Jï¿½ï¿½ï¿½[ï¿½tï¿½Bï¿½ï¿½ï¿½^ï¿½[ï¿½İ’ï¿½
 struct ColorFilterData {
     float exposure = 1.2f;
     float monoBlend = 0.0f;
@@ -31,13 +36,13 @@ struct ColorFilterData {
 };
 
 
-// DoFi”íÊŠE[“xjİ’è
+// DoFï¿½iï¿½ï¿½ÊŠEï¿½[ï¿½xï¿½jï¿½İ’ï¿½
 struct DepthOfFieldData
 {
-    bool  enable = false;         // —LŒø/–³Œø
-    float focusDistance = 10.0f;  // ƒsƒ“ƒg‚ª‡‚¤‹——£ (m)
-    float focusRange = 5.0f;      // ƒsƒ“ƒg‚ª‡‚¤”ÍˆÍ (m)
-    float bokehRadius = 4.0f;     // ƒ{ƒP‚Ì‹­‚³
+    bool  enable = false;         // ï¿½Lï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½
+    float focusDistance = 10.0f;  // ï¿½sï¿½ï¿½ï¿½gï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (m)
+    float focusRange = 5.0f;      // ï¿½sï¿½ï¿½ï¿½gï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Íˆï¿½ (m)
+    float bokehRadius = 4.0f;     // ï¿½{ï¿½Pï¿½Ì‹ï¿½ï¿½ï¿½
 };
 
 struct MotionBlurData
@@ -53,13 +58,13 @@ struct RenderEnvironment
     std::string specularIBLPath = "";
 };
 
-// UV ƒXƒNƒ[ƒ‹î•ñ
+// UV ï¿½Xï¿½Nï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½ï¿½ï¿½
 struct UVScrollData
 {
     DirectX::XMFLOAT2 uvScrollValue;
 };
 
-// ƒ}ƒXƒNƒf[ƒ^
+// ï¿½}ï¿½Xï¿½Nï¿½fï¿½[ï¿½^
 struct MaskData
 {
     ID3D11ShaderResourceView* maskTexture;
@@ -68,7 +73,7 @@ struct MaskData
     DirectX::XMFLOAT4 edgeColor;
 };
 
-// ƒ‰ƒWƒAƒ‹ƒuƒ‰[î•ñ
+// ï¿½ï¿½ï¿½Wï¿½Aï¿½ï¿½ï¿½uï¿½ï¿½ï¿½[ï¿½ï¿½ï¿½
 struct RadialBlurData
 {
     float radius = 10.0f;
@@ -77,7 +82,7 @@ struct RadialBlurData
     float mask_radius = 0;
 };
 
-// ƒKƒEƒXƒtƒBƒ‹ƒ^[ŒvZî•ñ
+// ï¿½Kï¿½Eï¿½Xï¿½tï¿½Bï¿½ï¿½ï¿½^ï¿½[ï¿½vï¿½Zï¿½ï¿½ï¿½
 struct GaussianFilterData {
     int kernelSize = 8;
     float deviation = 10.0f;
@@ -98,6 +103,39 @@ struct RenderPipelineSettings
 
 struct RenderContext
 {
+    struct PreparedInstanceBatch
+    {
+        DrawBatchKey key;
+        std::shared_ptr<ModelResource> modelResource;
+        uint32_t firstInstance = 0;
+        uint32_t instanceCount = 0;
+    };
+
+    struct PreparedIndirectCommand
+    {
+        DrawBatchKey key;
+        std::shared_ptr<ModelResource> modelResource;
+        uint32_t meshIndex = 0;
+        uint32_t firstInstance = 0;
+        uint32_t instanceCount = 0;
+        uint32_t argumentOffsetBytes = 0;
+        bool supportsInstancing = false;
+    };
+
+    struct GpuDrivenCommandMetadata
+    {
+        uint32_t meshIndex = 0;
+        uint32_t firstInstance = 0;
+        uint32_t instanceCount = 0;
+        uint32_t argumentOffsetBytes = 0;
+        uint32_t supportsInstancing = 0;
+    };
+
+    bool HasPreparedOpaqueCommands() const
+    {
+        return !activeDrawCommands.empty() || !activeSkinnedCommands.empty();
+    }
+
     //ID3D11DeviceContext* deviceContext;
     ICommandList* commandList;
     const RenderState* renderState;
@@ -123,10 +161,10 @@ struct RenderContext
     DirectX::XMFLOAT2 jitterOffset = { 0.0f, 0.0f };
     DirectX::XMFLOAT2 prevJitterOffset = { 0.0f, 0.0f };
 
-    // ‰e¶¬ƒNƒ‰ƒX‚Ö‚ÌƒAƒNƒZƒXi‰e•`‰æƒpƒX‚Åg—pj
+    // ï¿½eï¿½ï¿½ï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½Xï¿½Ö‚ÌƒAï¿½Nï¿½Zï¿½Xï¿½iï¿½eï¿½`ï¿½ï¿½pï¿½Xï¿½Ågï¿½pï¿½j
     const ShadowMap* shadowMap = nullptr;
 
-    // ‰e‚ÌFiŠÂ‹«İ’è‚©‚ç—ˆ‚éj
+    // ï¿½eï¿½ÌFï¿½iï¿½Â‹ï¿½ï¿½İ’è‚©ï¿½ç—ˆï¿½ï¿½j
     DirectX::XMFLOAT3 shadowColor = { 0.1f, 0.1f, 0.1f };
 
     ITexture* sceneColorTexture = nullptr;
@@ -140,18 +178,46 @@ struct RenderContext
 
     RenderEnvironment environment;
 
-    // ƒ|ƒXƒgƒvƒƒZƒX—pƒf[ƒ^
-    BloomData       bloomData;      // š’Ç‰Á
-    ColorFilterData colorFilterData; // š’Ç‰Á
+    std::vector<InstanceBatch> visibleOpaqueInstanceBatches;
+    std::vector<InstanceData> preparedInstanceData;
+    std::shared_ptr<IBuffer> preparedInstanceBuffer;
+    std::shared_ptr<IBuffer> preparedVisibleInstanceStructuredBuffer;
+    uint32_t preparedInstanceStride = 0;
+    uint32_t preparedInstanceCapacity = 0;
+    uint32_t preparedVisibleInstanceCount = 0;
+    std::shared_ptr<IBuffer> preparedIndirectArgumentBuffer;
+    std::shared_ptr<IBuffer> preparedIndirectCommandMetadataBuffer;
+    uint32_t preparedIndirectArgumentCapacity = 0;
+    uint32_t preparedIndirectCommandMetadataCapacity = 0;
+    std::vector<PreparedInstanceBatch> preparedOpaqueInstanceBatches;
+    std::vector<PreparedIndirectCommand> preparedIndirectCommands;
+    std::vector<PreparedIndirectCommand> preparedSkinnedCommands;
+
+    // Active draw state (set by BuildIndirectCommandPass, overridden by ComputeCullingPass)
+    IBuffer*  activeInstanceBuffer   = nullptr;   // VB slot1
+    uint32_t  activeInstanceStride   = INSTANCE_DATA_STRIDE;
+    IBuffer*  activeDrawArgsBuffer   = nullptr;   // ExecuteIndirect args
+    std::vector<IndirectDrawCommand> activeDrawCommands;
+    std::vector<IndirectDrawCommand> activeSkinnedCommands;
+
+    // GPU compute culling output (DX12 only, set by ComputeCullingPass)
+    bool useGpuCulling = false;
+    std::shared_ptr<IBuffer> gpuCulledInstanceBuffer;       // UAVStorage, VB state
+    std::shared_ptr<IBuffer> gpuCulledDrawArgsBuffer;        // UAVStorage, INDIRECT state
+    std::vector<PreparedIndirectCommand> gpuCulledIndirectCommands;
+
+    // ï¿½|ï¿½Xï¿½gï¿½vï¿½ï¿½ï¿½Zï¿½Xï¿½pï¿½fï¿½[ï¿½^
+    BloomData       bloomData;      // ï¿½ï¿½ï¿½Ç‰ï¿½
+    ColorFilterData colorFilterData; // ï¿½ï¿½ï¿½Ç‰ï¿½
     DepthOfFieldData dofData;       //
     MotionBlurData  motionBlurData;
 
     // ----------------------------------------------------
 
-    // Šù‘¶ƒƒ“ƒo
-    float time = 0.0f; // ƒAƒjƒ[ƒVƒ‡ƒ“—pƒ^ƒCƒ}[‚È‚Ç
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½o
+    float time = 0.0f; // ï¿½Aï¿½jï¿½ï¿½ï¿½[ï¿½Vï¿½ï¿½ï¿½ï¿½ï¿½pï¿½^ï¿½Cï¿½}ï¿½[ï¿½È‚ï¿½
 
-    // ˆÈ‰ºA•K—v‚Èİ’èƒf[ƒ^‚ğ•Û
+    // ï¿½È‰ï¿½ï¿½Aï¿½Kï¿½vï¿½Èİ’ï¿½fï¿½[ï¿½^ï¿½ï¿½Ûï¿½
     UVScrollData uvScrollData;
     MaskData maskData;
     RadialBlurData radialBlurData;

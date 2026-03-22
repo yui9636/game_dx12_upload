@@ -8,7 +8,6 @@
 #include "RenderContext/RenderQueue.h"
 
 class IBuffer;
-class IShader;
 class ITexture;
 class IResourceFactory;
 
@@ -41,6 +40,7 @@ public:
 
     void Render(const RenderContext& rc, const RenderQueue& queue);
     void RenderOpaque(const RenderContext& rc);
+    void RenderPreparedOpaque(const RenderContext& rc, bool forceShaderId = false, ShaderId forcedShaderId = ShaderId::PBR);
     void RenderTransparent(const RenderContext& rc);
 
     void SetIBL(const std::string& diffusePath, const std::string& specularPath);
@@ -72,7 +72,7 @@ private:
         ShaderId shaderId;
         std::shared_ptr<ModelResource> modelResource;
         int meshIndex = -1;
-        float distance;
+        float distance = 0.0f;
         DirectX::XMFLOAT4X4 worldMatrix;
         DirectX::XMFLOAT4X4 prevWorldMatrix;
         DirectX::XMFLOAT4 baseColor;
@@ -83,6 +83,17 @@ private:
         DepthState depthState;
         RasterizerState rasterizerState;
     };
+
+    void FillSkeletonConstantBuffer(const ModelResource::MeshResource& meshResource,
+        const DirectX::XMFLOAT4X4& worldMatrix,
+        const DirectX::XMFLOAT4X4& prevWorldMatrix,
+        CbSkeleton& cbSkeleton) const;
+    void ApplySkeletonConstantBuffer(const RenderContext& rc, const CbSkeleton& cbSkeleton) const;
+    void ApplyMaterialOverrides(ShaderId shaderId, Shader* shader,
+        const DirectX::XMFLOAT4& baseColor,
+        float metallic,
+        float roughness,
+        float emissive) const;
 
     std::unique_ptr<Shader> shaders[static_cast<int>(ShaderId::EnumCount)];
     std::vector<DrawInfo> drawInfos;

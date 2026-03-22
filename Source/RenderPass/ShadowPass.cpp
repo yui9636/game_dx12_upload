@@ -1,17 +1,16 @@
-﻿#include "ShadowPass.h"
+#include "ShadowPass.h"
 #include "Graphics.h"
 #include "ShadowMap.h"
 #include "Render/GlobalRootSignature.h"
-#include "Render/ShaderCommon.h"#include "RenderGraph/FrameGraphBuilder.h"
+#include "Render/ShaderCommon.h"
+#include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
+#include "RenderContext/IndirectDrawCommon.h"
 
 void ShadowPass::Setup(FrameGraphBuilder& builder)
 {
-    // 1. ・ｽy・ｽ・ｽ・ｽ・ｽ・ｽz・ｽ・ｽ・ｽ・ｽ1・ｽﾂゑｿｽ GetHandle ・ｽ・ｽ・ｽg・ｽp
-    // ・ｽ|・ｽX・ｽg・ｽv・ｽ・ｽ・ｽZ・ｽX・ｽ・ｽ・ｽﾆ難ｿｽ・ｽl・ｽﾉ、・ｽ・ｽ・ｽ・ｽ・ｽﾌ・ｿｽ・ｽ\・ｽ[・ｽX・ｽ`・ｽP・ｽb・ｽg・ｽ・ｽ・ｽ謫ｾ・ｽ・ｽ・ｽﾜゑｿｽ
     m_hShadowMap = builder.GetHandle("ShadowMap");
 
-    // 2. ・ｽO・ｽ・ｽ・ｽt・ｽﾉ「・ｽ・ｽ・ｽﾌパ・ｽX・ｽﾍ影・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽﾞ」・ｽﾆ宣言
     if (m_hShadowMap.IsValid()) {
         m_hShadowMap = builder.Write(m_hShadowMap);
     }
@@ -21,13 +20,13 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
     auto shadowMap = const_cast<ShadowMap*>(rc.shadowMap);
     if (!shadowMap) return;
 
-    // ・ｽ・ｽ ・ｽs・ｽ・ｽﾆカ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽﾌバ・ｽb・ｽN・ｽA・ｽb・ｽv (RenderContext ・ｽﾌ抵ｿｽ`・ｽﾉ搾ｿｽ・ｽ墲ｹ・ｽﾜゑｿｽ・ｽ・ｽ) ・ｽ・ｽ
+    // View/Proj のバックアップ (影描画はライトのView/Projを使うため)
     auto mainView = rc.viewMatrix;
     auto mainProj = rc.projectionMatrix;
     auto mainCamPos = rc.cameraPosition;
     auto mainCamDir = rc.cameraDirection;
 
-    // 1. ・ｽJ・ｽX・ｽP・ｽ[・ｽh・ｽs・ｽ・ｽﾌ更・ｽV
+    // 1. カスケード行列更新
     shadowMap->UpdateCascades(rc);
 
     {
@@ -46,13 +45,47 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         rc.commandList->UpdateBuffer(GlobalRootSignature::Instance().GetShadowBuffer(), &shadow, sizeof(shadow));
     }
 
-    // 2. ・ｽe・ｽJ・ｽX・ｽP・ｽ[・ｽh・ｽi・ｽﾟ景・ｽE・ｽ・ｽ・ｽi・ｽE・ｽ・ｽ・ｽi・ｽj・ｽﾖの描・ｽ・ｽ・ｽ・ｽs
+    // 2. 各カスケード描画
     for (int i = 0; i < ShadowMap::CASCADE_COUNT; ++i) {
-        shadowMap->BeginCascade(rc, i); // ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ rc ・ｽ・ｽ・ｽﾌ行・ｽｪ一時・ｽI・ｽﾉ・ｿｽ・ｽC・ｽg・ｽ・ｽ・ｽ_・ｽﾉなゑｿｽ
+        shadowMap->BeginCascade(rc, i);
 
-        for (const auto& packet : queue.opaquePackets) {
-            if (packet.modelResource && packet.castShadow) {
-                shadowMap->Draw(rc, packet.modelResource.get(), packet.worldMatrix);
+        if (!rc.activeDrawCommands.empty() || !rc.activeSkinnedCommands.empty()) {
+            for (const auto& cmd : rc.activeDrawCommands) {
+                if (!cmd.modelResource || !cmd.key.castShadow) {
+                    continue;
+                }
+                if (rc.activeInstanceBuffer && cmd.instanceCount > 0) {
+                    uint32_t offsetBytes = cmd.drawArgsIndex * DRAW_ARGS_STRIDE;
+                    shadowMap->DrawInstanced(
+                        rc,
+                        cmd.modelResource.get(),
+                        static_cast<int>(cmd.meshIndex),
+                        rc.activeInstanceBuffer,
+                        rc.activeInstanceStride,
+                        cmd.firstInstance,
+                        cmd.instanceCount,
+                        rc.activeDrawArgsBuffer,
+                        offsetBytes);
+                }
+            }
+            for (const auto& cmd : rc.activeSkinnedCommands) {
+                if (!cmd.modelResource || !cmd.key.castShadow) {
+                    continue;
+                }
+                const uint32_t begin = cmd.firstInstance;
+                const uint32_t end = cmd.firstInstance + cmd.instanceCount;
+                for (uint32_t j = begin; j < end && j < rc.preparedInstanceData.size(); ++j) {
+                    shadowMap->Draw(rc, cmd.modelResource.get(), rc.preparedInstanceData[j].worldMatrix);
+                }
+            }
+        } else {
+            for (const auto& batch : queue.opaqueInstanceBatches) {
+                if (!batch.modelResource || !batch.key.castShadow) {
+                    continue;
+                }
+                for (const auto& instance : batch.instances) {
+                    shadowMap->Draw(rc, batch.modelResource.get(), instance.worldMatrix);
+                }
             }
         }
     }
@@ -61,8 +94,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         rc.commandList->TransitionBarrier(shadowMap->GetTexture(), ResourceState::ShaderResource);
     }
 
-    // ・ｽ・ｽ ・ｽd・ｽv・ｽF・ｽ・ｽ・ｽC・ｽ・ｽ・ｽJ・ｽ・ｽ・ｽ・ｽ・ｽﾌ擾ｿｽﾔゑｿｽ・ｽ・ｽ・ｽS・ｽﾉ包ｿｽ・ｽ・ｽ ・ｽ・ｽ
-    // ・ｽ・ｽ・ｽ・ｽﾅ後続・ｽ・ｽ GBufferPass ・ｽ・ｽ LightingPass ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ_・ｽﾅ描・ｽ謔ｳ・ｽ・ｽﾜゑｿｽ
+    // View/Proj を復元 (後続の GBufferPass, LightingPass 用)
     rc.viewMatrix = mainView;
     rc.projectionMatrix = mainProj;
     rc.cameraPosition = mainCamPos;

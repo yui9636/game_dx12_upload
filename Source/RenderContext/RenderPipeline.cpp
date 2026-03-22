@@ -282,7 +282,14 @@ void RenderPipeline::SubmitFrame(RenderContext& rc)
 {
     Graphics& g = Graphics::Instance();
 
-    // DX12: バックバッファ→Present遷移 + コマンドリスト終了・送信
+    // Keep GPU buffers alive until GPU finishes (prevents use-after-free)
+    auto& slot = m_inFlightResources[m_inFlightIndex % kMaxInFlight];
+    slot.instanceBuffer = rc.preparedInstanceBuffer;
+    slot.instanceStructuredBuffer = rc.preparedVisibleInstanceStructuredBuffer;
+    slot.drawArgsBuffer = rc.preparedIndirectArgumentBuffer;
+    slot.metadataBuffer = rc.preparedIndirectCommandMetadataBuffer;
+    ++m_inFlightIndex;
+
     if (g.GetAPI() == GraphicsAPI::DX12) {
         ITexture* backBuffer = g.GetBackBufferTexture();
         if (backBuffer) {

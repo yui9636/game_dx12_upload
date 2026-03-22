@@ -701,6 +701,7 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
 {
     // 2. シェーダー & レイアウト生成 (RHI)
     vertexShader = factory->CreateShader(ShaderType::Vertex, "Data/Shader/ShadowMapVS.cso");
+    instancedVertexShader = factory->CreateShader(ShaderType::Vertex, "Data/Shader/ShadowMapInstancedVS.cso");
 
     InputLayoutElement layoutElements[] = {
         { "POSITION",     0, TextureFormat::R32G32B32_FLOAT,    0, kAppendAlignedElement },
@@ -712,6 +713,26 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
     };
     InputLayoutDesc layoutDesc{ layoutElements, _countof(layoutElements) };
     inputLayout = factory->CreateInputLayout(layoutDesc, vertexShader.get());
+
+    // インスタンシング用入力レイアウト (slot1 にインスタンスデータ)
+    InputLayoutElement instancedLayoutElements[] = {
+        { "POSITION",     0, TextureFormat::R32G32B32_FLOAT,    0, kAppendAlignedElement },
+        { "BONE_WEIGHTS", 0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement },
+        { "BONE_INDICES", 0, TextureFormat::R32G32B32A32_UINT,  0, kAppendAlignedElement },
+        { "TEXCOORD",     0, TextureFormat::R32G32_FLOAT,       0, kAppendAlignedElement },
+        { "NORMAL",       0, TextureFormat::R32G32B32_FLOAT,    0, kAppendAlignedElement },
+        { "TANGENT",      0, TextureFormat::R32G32B32_FLOAT,    0, kAppendAlignedElement },
+        { "INSTANCE_WORLD", 0, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_WORLD", 1, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_WORLD", 2, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_WORLD", 3, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_PREV_WORLD", 0, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_PREV_WORLD", 1, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_PREV_WORLD", 2, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+        { "INSTANCE_PREV_WORLD", 3, TextureFormat::R32G32B32A32_FLOAT, 1, kAppendAlignedElement, true, 1 },
+    };
+    InputLayoutDesc instancedLayoutDesc{ instancedLayoutElements, _countof(instancedLayoutElements) };
+    instancedInputLayout = factory->CreateInputLayout(instancedLayoutDesc, instancedVertexShader.get());
 
     // 3. 定数バッファ生成 (RHI)
     sceneConstantBuffer = factory->CreateBuffer(sizeof(CbScene), BufferType::Constant);
@@ -808,6 +829,11 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
     psoDesc.blendState = rs->GetBlendState(BlendState::Opaque);
 
     m_pso = factory->CreatePipelineState(psoDesc);
+
+    PipelineStateDesc instancedPsoDesc = psoDesc;
+    instancedPsoDesc.vertexShader = instancedVertexShader.get();
+    instancedPsoDesc.inputLayout = instancedInputLayout.get();
+    m_instancedPso = factory->CreatePipelineState(instancedPsoDesc);
 }
 
 void ShadowMap::UpdateCascades(const RenderContext& rc)
@@ -913,6 +939,32 @@ void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource
         rc.commandList->VSSetConstantBuffer(6, skeletonConstantBuffer.get());
         rc.commandList->UpdateBuffer(skeletonConstantBuffer.get(), &cbSkeleton, sizeof(cbSkeleton));
         rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
+    }
+}
+
+void ShadowMap::DrawInstanced(const RenderContext& rc, const ModelResource* modelResource,
+    int meshIndex,
+    IBuffer* instanceBuffer, uint32_t instanceStride, uint32_t firstInstance, uint32_t instanceCount,
+    IBuffer* argumentBuffer, uint32_t argumentOffsetBytes)
+{
+    if (!modelResource || !instanceBuffer || instanceCount == 0) return;
+
+    const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
+    if (!mesh || !mesh->bones.empty()) {
+        return;
+    }
+    if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) {
+        return;
+    }
+
+    rc.commandList->SetPipelineState(m_instancedPso ? m_instancedPso.get() : m_pso.get());
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    rc.commandList->SetVertexBuffer(1, instanceBuffer, instanceStride, 0);
+
+    if (argumentBuffer) {
+        rc.commandList->ExecuteIndexedIndirect(argumentBuffer, argumentOffsetBytes);
+    } else {
+        rc.commandList->DrawIndexedInstanced(modelResource->GetMeshIndexCount(meshIndex), instanceCount, 0, 0, firstInstance);
     }
 }
 

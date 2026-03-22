@@ -188,51 +188,9 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         ? nullptr
         : ResourceManager::Instance().GetTexture(rc.environment.specularIBLPath).get();
 
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd && m_dx12SrvHeap) {
-            auto* dx12Device = Graphics::Instance().GetDX12Device();
-            auto* d3dDevice = dx12Device ? dx12Device->GetDevice() : nullptr;
-            if (d3dDevice) {
-                struct SlotBinding {
-                    uint32_t slot;
-                    ITexture* texture;
-                };
-                const SlotBinding bindings[] = {
-                    { 0, gbuffer0 },
-                    { 1, gbuffer1 },
-                    { 2, gbuffer2 },
-                    { 3, ao },
-                    { 4, shadow },
-                    { 5, ssgi },
-                    { 6, fog },
-                    { 7, ssr },
-                    { 8, probe },
-                    { 9, depth },
-                    { 33, diffuseIBL },
-                    { 34, specularIBL },
-                    { 35, m_lutGGX.get() },
-                };
-
-                auto cpuBase = m_dx12SrvHeap->GetCPUDescriptorHandleForHeapStart();
-                for (const auto& binding : bindings) {
-                    auto dst = OffsetHandle(cpuBase, m_dx12SrvDescriptorSize, binding.slot);
-                    auto src = GetDeferredNullHandle(binding.slot, m_dx12NullSrv2D, m_dx12NullSrv2DArray, m_dx12NullSrvCube);
-                    if (binding.texture) {
-                        auto* dx12Tex = dynamic_cast<DX12Texture*>(binding.texture);
-                        if (dx12Tex && dx12Tex->HasSRV()) {
-                            src = dx12Tex->GetSRV();
-                        }
-                    }
-                    d3dDevice->CopyDescriptorsSimple(1, dst, src, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                }
-
-                ID3D12DescriptorHeap* heaps[] = { m_dx12SrvHeap.Get() };
-                dx12Cmd->GetNativeCommandList()->SetDescriptorHeaps(1, heaps);
-                dx12Cmd->GetNativeCommandList()->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, m_dx12SrvGpuBase);
-            }
-        }
-    } else {
+    // Use standard PSSetTextures path for all APIs.
+    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
+    {
         ITexture* gbuffers[] = { gbuffer0, gbuffer1, gbuffer2, ao };
         rc.commandList->PSSetTextures(0, 4, gbuffers);
         if (shadow) rc.commandList->PSSetTexture(4, shadow);
@@ -259,12 +217,7 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
 
     rc.commandList->Draw(3, 0);
 
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
-        if (dx12Cmd) {
-            dx12Cmd->RestoreFrameDescriptorHeap();
-        }
-    }
+    // PSSetTextures path uses the frame heap — no heap restore needed.
 
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
         rc.commandList->PSSetSampler(2, nullptr);

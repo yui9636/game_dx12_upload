@@ -3,6 +3,7 @@
 #include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "Console/Logger.h"
+#include <algorithm>
 
 void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
 {
@@ -37,14 +38,49 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         }
         else {
             queue.opaquePackets.push_back(packet);
+
+            DrawBatchKey batchKey{};
+            batchKey.modelResource = packet.modelResource.get();
+            batchKey.shaderId = packet.shaderId;
+            batchKey.castShadow = packet.castShadow;
+            batchKey.blendState = packet.blendState;
+            batchKey.depthState = packet.depthState;
+            batchKey.rasterizerState = packet.rasterizerState;
+            batchKey.baseColor = packet.baseColor;
+            batchKey.metallic = packet.metallic;
+            batchKey.roughness = packet.roughness;
+            batchKey.emissive = packet.emissive;
+
+            auto it = std::find_if(
+                queue.opaqueInstanceBatches.begin(),
+                queue.opaqueInstanceBatches.end(),
+                [&](const InstanceBatch& batch) { return batch.key == batchKey; });
+
+            if (it == queue.opaqueInstanceBatches.end()) {
+                InstanceBatch batch{};
+                batch.key = batchKey;
+                batch.modelResource = packet.modelResource;
+                queue.opaqueInstanceBatches.push_back(std::move(batch));
+                it = std::prev(queue.opaqueInstanceBatches.end());
+            }
+
+            InstanceData instance{};
+            instance.worldMatrix = packet.worldMatrix;
+            instance.prevWorldMatrix = packet.prevWorldMatrix;
+            it->instances.push_back(instance);
         }
     });
 
     static size_t s_lastOpaqueCount = static_cast<size_t>(-1);
     static size_t s_lastTransparentCount = static_cast<size_t>(-1);
-    if (s_lastOpaqueCount != queue.opaquePackets.size() || s_lastTransparentCount != queue.transparentPackets.size()) {
-        LOG_INFO("[MeshExtract] opaque=%zu transparent=%zu", queue.opaquePackets.size(), queue.transparentPackets.size());
+    static size_t s_lastBatchCount = static_cast<size_t>(-1);
+    if (s_lastOpaqueCount != queue.opaquePackets.size() ||
+        s_lastTransparentCount != queue.transparentPackets.size() ||
+        s_lastBatchCount != queue.opaqueInstanceBatches.size()) {
+        LOG_INFO("[MeshExtract] opaque=%zu transparent=%zu batches=%zu",
+            queue.opaquePackets.size(), queue.transparentPackets.size(), queue.opaqueInstanceBatches.size());
         s_lastOpaqueCount = queue.opaquePackets.size();
         s_lastTransparentCount = queue.transparentPackets.size();
+        s_lastBatchCount = queue.opaqueInstanceBatches.size();
     }
 }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <DirectXCollision.h>
 #include "Model.h"
 
 class IBuffer;
@@ -29,6 +30,7 @@ public:
         int nodeIndex = -1;
         Model::Material material;
         DirectX::XMFLOAT4X4 nodeWorldTransform = {};
+        DirectX::BoundingBox localBounds = {};
         std::vector<BoneResource> bones;
     };
 
@@ -52,7 +54,9 @@ public:
     int GetMeshCount() const { return static_cast<int>(m_meshResources.size()); }
 
     const std::vector<MeshResource>& GetMeshResources() const { return m_meshResources; }
+    const DirectX::BoundingBox& GetLocalBounds() const { return m_localBounds; }
 
 private:
     std::vector<MeshResource> m_meshResources;
+    DirectX::BoundingBox m_localBounds = {};
 };

@@ -152,19 +152,28 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
         return;
     }
 
-    static size_t s_lastOpaqueCount = static_cast<size_t>(-1);
-    if (s_lastOpaqueCount != queue.opaquePackets.size()) {
-        LOG_INFO("[GBufferPass] opaque=%zu size=%ux%u", queue.opaquePackets.size(), rtvs[0]->GetWidth(), rtvs[0]->GetHeight());
-        s_lastOpaqueCount = queue.opaquePackets.size();
+    static size_t s_lastBatchCount = static_cast<size_t>(-1);
+    const size_t batchCount = rc.preparedOpaqueInstanceBatches.empty()
+        ? queue.opaqueInstanceBatches.size()
+        : rc.preparedOpaqueInstanceBatches.size();
+    if (s_lastBatchCount != batchCount) {
+        LOG_INFO("[GBufferPass] opaque=%zu batches=%zu prepared=%zu size=%ux%u",
+            queue.opaquePackets.size(), queue.opaqueInstanceBatches.size(), rc.preparedOpaqueInstanceBatches.size(),
+            rtvs[0]->GetWidth(), rtvs[0]->GetHeight());
+        s_lastBatchCount = batchCount;
     }
 
-    for (const auto& packet : queue.opaquePackets) {
-        if (!packet.modelResource) continue;
-        renderer->Draw(
-            ShaderId::GBufferPBR, packet.modelResource, packet.worldMatrix, packet.prevWorldMatrix,
-            packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
-            packet.blendState, packet.depthState, packet.rasterizerState
-        );
+    if (rc.HasPreparedOpaqueCommands()) {
+        renderer->RenderPreparedOpaque(rc, true, ShaderId::GBufferPBR);
+    } else for (const auto& batch : queue.opaqueInstanceBatches) {
+        if (!batch.modelResource) continue;
+        for (const auto& instance : batch.instances) {
+            renderer->Draw(
+                ShaderId::GBufferPBR, batch.modelResource, instance.worldMatrix, instance.prevWorldMatrix,
+                batch.key.baseColor, batch.key.metallic, batch.key.roughness, batch.key.emissive,
+                batch.key.blendState, batch.key.depthState, batch.key.rasterizerState
+            );
+        }
     }
     renderer->RenderOpaque(rc);
 

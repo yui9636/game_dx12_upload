@@ -10,6 +10,12 @@
 
 class DX12CommandList : public ICommandList {
 public:
+    struct DynamicAllocation {
+        void* cpuPtr = nullptr;
+        D3D12_GPU_VIRTUAL_ADDRESS gpuVA = 0;
+        uint32_t size = 0;
+    };
+
     enum class NullSrvKind {
         Texture2D,
         Texture2DArray,
@@ -33,10 +39,26 @@ public:
     void RestoreFrameDescriptorHeap();
     void RestoreDescriptorHeap();  // ImGui 描画後にフレームヒープとルートシグネチャを復元
     void BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count);
+    DynamicAllocation AllocateDynamicConstantBuffer(const void* data, uint32_t size);
+    void VSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
+    void PSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
 
     // ICommandList implementation
     void Draw(uint32_t vertexCount, uint32_t startVertex) override;
     void DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex) override;
+    void DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
+    void DrawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) override;
+    void ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes) override;
+    void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
+
+    // Compute binding helpers (DX12-specific, used by ComputeCullingPass)
+    void SetComputeRootSignature(ID3D12RootSignature* rootSig);
+    void SetComputePipelineState(ID3D12PipelineState* pso);
+    void SetComputeRootCBV(uint32_t slot, D3D12_GPU_VIRTUAL_ADDRESS gpuVA);
+    void SetComputeRootSRV(uint32_t slot, D3D12_GPU_VIRTUAL_ADDRESS gpuVA);
+    void SetComputeRootUAV(uint32_t slot, D3D12_GPU_VIRTUAL_ADDRESS gpuVA);
+    void BufferBarrier(ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
+    void CopyBufferRegion(ID3D12Resource* dst, uint64_t dstOffset, ID3D12Resource* src, uint64_t srcOffset, uint64_t numBytes);
 
     void PSSetTexture(uint32_t slot, ITexture* texture) override;
     void PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) override;
@@ -90,6 +112,12 @@ private:
     ComPtr<ID3D12CommandAllocator> m_ownedAllocator;
     ComPtr<ID3D12GraphicsCommandList> m_commandList;
     ComPtr<ID3D12DescriptorHeap> m_nullSrvHeap;
+    ComPtr<ID3D12Resource> m_dynamicCbRing;
+    ComPtr<ID3D12CommandSignature> m_drawIndexedInstancedSignature;
+    uint8_t* m_dynamicCbRingCpuBase = nullptr;
+    uint32_t m_dynamicCbRingSize = 0;
+    uint32_t m_dynamicCbRingOffset = 0;
+    std::vector<ComPtr<ID3D12Resource>> m_dynamicCbSpills;
 
     // Frame-local descriptor allocator for SRV copies
     std::unique_ptr<DX12DescriptorAllocator> m_frameSrvAllocator;
@@ -114,3 +142,4 @@ private:
     bool m_srvBlockAllocated = false;
     void EnsureSrvBlock();
 };
+

@@ -5,13 +5,16 @@
 #include "Component/CameraComponent.h"
 #include "Component/TransformComponent.h"
 #include "Component/NameComponent.h"
+#include "Component/MeshComponent.h"
 #include "System/Query.h"
+#include "System/ResourceManager.h"
 #include <Camera\FreeCameraSystem.h>
 #include <Camera\CameraFinalizeSystem.h>
+#include "Model/ModelUpdateSystem.h"
 #include <Component\CameraBehaviorComponent.h>
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
-#include "Environment/EnvironmentExtractSystem.h" // すでに作成済みの抽出システム
+#include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
 #include "RHI/DX11/DX11Texture.h"
 void GameLayer::Initialize()
@@ -61,6 +64,22 @@ void GameLayer::Initialize()
 
     m_registry.AddComponent(probeEntity, probeComp);
 
+    // A5.gltfモデルを常時ロード
+    EntityID actorEntity = m_registry.CreateEntity();
+    m_registry.AddComponent(actorEntity, NameComponent{ "Actor (A5)" });
+
+    TransformComponent actorTrans;
+    actorTrans.localPosition = { 0.0f, 0.0f, 0.0f };
+    actorTrans.localScale = { 1.0f, 1.0f, 1.0f };
+    m_registry.AddComponent(actorEntity, actorTrans);
+    m_registry.AddComponent(actorEntity, HierarchyComponent{});
+
+    MeshComponent meshComp;
+    meshComp.modelFilePath = "Data/Model/Actor/A5.gltf";
+    meshComp.model = ResourceManager::Instance().GetModel(meshComp.modelFilePath);
+    meshComp.isVisible = true;
+    meshComp.castShadow = true;
+    m_registry.AddComponent(actorEntity, meshComp);
 }
 
 void GameLayer::Finalize()
@@ -75,6 +94,8 @@ void GameLayer::Update(const EngineTime& time)
 
     TransformSystem transformSys;
     transformSys.Update(m_registry);
+
+    ModelUpdateSystem::Update(m_registry);
 
     CameraFinalizeSystem::Update(m_registry);
 }
