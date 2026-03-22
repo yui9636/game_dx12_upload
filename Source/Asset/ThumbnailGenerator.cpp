@@ -151,9 +151,10 @@ RenderContext ThumbnailGenerator::BuildThumbnailRenderContext(FrameBuffer* targe
         break;
     }
 
-    // サムネイル用ライト（斜め上から白色光）
+    // サムネイル用ライト（斜め上から白色光）+ 影なし
     rc.directionalLight.direction = { -0.5f, -0.7f, 0.5f };
     rc.directionalLight.color = { 1.0f, 1.0f, 1.0f };
+    rc.shadowColor = { 1.0f, 1.0f, 1.0f }; // 影の減衰なし
 
     rc.aspect = 1.0f;
     float m22 = rc.projectionMatrix._22;
@@ -256,14 +257,15 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
     uploadSystem.Upload(rc, GlobalRootSignature::Instance());
     GlobalRootSignature::Instance().BindAll(rc.commandList, rc.renderState, rc.shadowMap);
 
-    // テクスチャなしメッシュのマテリアルカラーをマゼンタに一時変更
     auto modelRes = model->GetModelResource();
+
+    // テクスチャなしメッシュのマテリアルカラーをマゼンタに一時変更
     std::vector<XMFLOAT4> savedColors;
     for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
         auto* mesh = modelRes->GetMeshResource(i);
         savedColors.push_back(mesh->material.color);
         if (!mesh->material.diffuseMap) {
-            mesh->material.color = { 1.0f, 0.0f, 1.0f, 1.0f }; // マゼンタ
+            mesh->material.color = { 1.0f, 0.0f, 1.0f, 1.0f };
         }
     }
 
