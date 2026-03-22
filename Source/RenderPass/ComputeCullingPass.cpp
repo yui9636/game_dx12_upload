@@ -304,23 +304,30 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     // ─── Count buffer for multi-draw ───
     if (!m_countBuffer) {
         m_countBuffer = factory->CreateBuffer(256, BufferType::UAVStorage, nullptr);
+        m_countInIndirectState = false;
     }
-    // Write commandCount via staging copy
+    // Write commandCount via dedicated staging buffer (NOT m_stagingBuffer)
     {
-        // Use the staging buffer (already large enough for 4 bytes)
-        auto* countStaging = static_cast<DX12Buffer*>(m_stagingBuffer.get());
+        if (!m_countStagingBuffer) {
+            m_countStagingBuffer = factory->CreateBuffer(256, BufferType::Vertex, nullptr);
+        }
+        auto* countStaging = static_cast<DX12Buffer*>(m_countStagingBuffer.get());
         void* mapped = countStaging->Map();
         if (mapped) {
             memcpy(mapped, &commandCount, sizeof(uint32_t));
             countStaging->Unmap();
         }
         auto* countBuf = static_cast<DX12Buffer*>(m_countBuffer.get());
+        D3D12_RESOURCE_STATES fromState = m_countInIndirectState
+            ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT
+            : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         dx12Cmd->BufferBarrier(countBuf->GetNativeResource(),
-            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+            fromState, D3D12_RESOURCE_STATE_COPY_DEST);
         dx12Cmd->CopyBufferRegion(countBuf->GetNativeResource(), 0,
             countStaging->GetNativeResource(), 0, sizeof(uint32_t));
         dx12Cmd->BufferBarrier(countBuf->GetNativeResource(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+        m_countInIndirectState = true;
     }
 
     // ─── Overwrite rc.active* so renderers see culled data ───

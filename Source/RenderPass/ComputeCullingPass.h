@@ -45,8 +45,10 @@ private:
 
     // Count buffer for multi-draw ExecuteIndirect
     std::shared_ptr<IBuffer> m_countBuffer;     // UAVStorage, holds uint32_t commandCount
+    std::shared_ptr<IBuffer> m_countStagingBuffer; // UPLOAD, dedicated staging for count value
 
     // Track buffer states across frames
     bool m_instanceInVBState = false;
     bool m_drawArgsInIndirectState = false;
+    bool m_countInIndirectState = false;
 };
