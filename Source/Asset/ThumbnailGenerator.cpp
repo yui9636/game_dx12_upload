@@ -151,6 +151,10 @@ RenderContext ThumbnailGenerator::BuildThumbnailRenderContext(FrameBuffer* targe
         break;
     }
 
+    // サムネイル用ライト（斜め上から白色光）
+    rc.directionalLight.direction = { -0.5f, -0.7f, 0.5f };
+    rc.directionalLight.color = { 1.0f, 1.0f, 1.0f };
+
     rc.aspect = 1.0f;
     float m22 = rc.projectionMatrix._22;
     float m33 = rc.projectionMatrix._33;
