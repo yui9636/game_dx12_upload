@@ -49,6 +49,9 @@ public:
     void DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
     void DrawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) override;
     void ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes) override;
+    void ExecuteIndexedIndirectMulti(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes,
+        uint32_t maxCommandCount, uint32_t commandStride,
+        IBuffer* countBuffer = nullptr, uint32_t countBufferOffset = 0) override;
     void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
 
     // Compute binding helpers (DX12-specific, used by ComputeCullingPass)

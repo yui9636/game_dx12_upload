@@ -163,7 +163,14 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
             rc.commandList->SetVertexBuffer(1, instanceBuf, rc.activeInstanceStride, 0);
             shader->Update(rc, *meshResource);
             uint32_t offsetBytes = cmd.drawArgsIndex * DRAW_ARGS_STRIDE;
-            rc.commandList->ExecuteIndexedIndirect(drawArgsBuf, offsetBytes);
+            if (rc.useGpuCulling && rc.activeCountBuffer) {
+                rc.commandList->ExecuteIndexedIndirectMulti(
+                    drawArgsBuf, offsetBytes,
+                    1, DRAW_ARGS_STRIDE,
+                    rc.activeCountBuffer, rc.activeCountBufferOffset);
+            } else {
+                rc.commandList->ExecuteIndexedIndirect(drawArgsBuf, offsetBytes);
+            }
             shader->End(rc);
         } else {
             // CPU fallback

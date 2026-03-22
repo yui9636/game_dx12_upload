@@ -301,9 +301,35 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
     m_drawArgsInIndirectState = true;
 
+    // ─── Count buffer for multi-draw ───
+    if (!m_countBuffer) {
+        m_countBuffer = factory->CreateBuffer(256, BufferType::UAVStorage, nullptr);
+    }
+    // Write commandCount via staging copy
+    {
+        // Use the staging buffer (already large enough for 4 bytes)
+        auto* countStaging = static_cast<DX12Buffer*>(m_stagingBuffer.get());
+        void* mapped = countStaging->Map();
+        if (mapped) {
+            memcpy(mapped, &commandCount, sizeof(uint32_t));
+            countStaging->Unmap();
+        }
+        auto* countBuf = static_cast<DX12Buffer*>(m_countBuffer.get());
+        dx12Cmd->BufferBarrier(countBuf->GetNativeResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
+        dx12Cmd->CopyBufferRegion(countBuf->GetNativeResource(), 0,
+            countStaging->GetNativeResource(), 0, sizeof(uint32_t));
+        dx12Cmd->BufferBarrier(countBuf->GetNativeResource(),
+            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+    }
+
     // ─── Overwrite rc.active* so renderers see culled data ───
     rc.activeInstanceBuffer = m_culledInstanceBuffer.get();
     rc.activeDrawArgsBuffer = m_culledDrawArgsBuffer.get();
+    rc.activeCountBuffer = m_countBuffer.get();
+    rc.activeCountBufferOffset = 0;
+    rc.activeMaxDrawCount = commandCount;
+    rc.useGpuCulling = true;
 
     // Update drawArgsIndex in activeDrawCommands
     for (size_t i = 0; i < cmdIndices.size(); ++i) {

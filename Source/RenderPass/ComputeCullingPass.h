@@ -43,6 +43,9 @@ private:
     std::shared_ptr<IBuffer> m_cullMetaBuffer;
     uint32_t m_cullMetaCapacity = 0;
 
+    // Count buffer for multi-draw ExecuteIndirect
+    std::shared_ptr<IBuffer> m_countBuffer;     // UAVStorage, holds uint32_t commandCount
+
     // Track buffer states across frames
     bool m_instanceInVBState = false;
     bool m_drawArgsInIndirectState = false;

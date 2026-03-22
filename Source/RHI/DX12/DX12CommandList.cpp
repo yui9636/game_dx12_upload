@@ -301,6 +301,34 @@ void DX12CommandList::ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t a
     m_srvBlockAllocated = false;
 }
 
+void DX12CommandList::ExecuteIndexedIndirectMulti(
+    IBuffer* argumentBuffer, uint32_t argumentOffsetBytes,
+    uint32_t maxCommandCount, uint32_t commandStride,
+    IBuffer* countBuffer, uint32_t countBufferOffset) {
+    if (!argumentBuffer || !m_drawIndexedInstancedSignature || maxCommandCount == 0) return;
+
+    auto* dx12Args = static_cast<DX12Buffer*>(argumentBuffer);
+    if (!dx12Args || !dx12Args->GetNativeResource()) return;
+
+    FlushPSO();
+    FlushPendingBarriers();
+
+    ID3D12Resource* countRes = nullptr;
+    if (countBuffer) {
+        auto* dx12Count = static_cast<DX12Buffer*>(countBuffer);
+        countRes = dx12Count->GetNativeResource();
+    }
+
+    m_commandList->ExecuteIndirect(
+        m_drawIndexedInstancedSignature.Get(),
+        maxCommandCount,
+        dx12Args->GetNativeResource(),
+        argumentOffsetBytes,
+        countRes,
+        countBufferOffset);
+    m_srvBlockAllocated = false;
+}
+
 void DX12CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) {
     FlushPendingBarriers();
     m_commandList->Dispatch(x, y, z);

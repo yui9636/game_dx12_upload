@@ -200,8 +200,11 @@ struct RenderContext
     std::vector<IndirectDrawCommand> activeDrawCommands;
     std::vector<IndirectDrawCommand> activeSkinnedCommands;
 
-    // GPU culling active flag (set by ComputeCullingPass, read by no one currently)
+    // GPU culling state (set by ComputeCullingPass)
     bool useGpuCulling = false;
+    IBuffer* activeCountBuffer = nullptr;      // count buffer for multi-draw
+    uint32_t activeCountBufferOffset = 0;
+    uint32_t activeMaxDrawCount = 0;           // max commands for multi-draw
 
     // �|�X�g�v���Z�X�p�f�[�^
     BloomData       bloomData;      // ���ǉ�
