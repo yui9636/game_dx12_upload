@@ -187,37 +187,52 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     const uint32_t commandCount = static_cast<uint32_t>(metaEntries.size());
     const uint32_t totalOutputSlots = outputStart;
 
-    // ─── Transition buffers from previous frame ───
-    if (m_culledInstanceBuffer && m_instanceInVBState) {
+    // ─── Check if GPU buffers need to grow ───
+    // MoveToNextFrame only waits for frame N-2, so frame N-1's GPU may still
+    // reference the old buffers. Skip this frame WITHOUT destroying them;
+    // next frame the fence guarantees frame N-1 is complete, making grow safe.
+    const bool needGrowInstance = !m_culledInstanceBuffer || m_instanceCapacity < totalOutputSlots;
+    const bool needGrowDrawArgs = !m_culledDrawArgsBuffer || m_drawArgsCapacity < commandCount;
+
+    if (needGrowInstance || needGrowDrawArgs) {
+        m_needsGrow = true;
+        return; // non-culled path handles this frame; old buffers stay alive
+    }
+
+    // Deferred grow: now safe because an extra frame has passed
+    if (m_needsGrow) {
+        m_needsGrow = false;
+        if (m_instanceCapacity < totalOutputSlots) {
+            uint32_t cap = ((totalOutputSlots + 255) / 256) * 256;
+            m_culledInstanceBuffer = factory->CreateBuffer(
+                cap * INSTANCE_DATA_STRIDE, BufferType::UAVStorage, nullptr);
+            m_instanceCapacity = cap;
+            m_instanceInVBState = false;
+        }
+        if (m_drawArgsCapacity < commandCount) {
+            uint32_t cap = ((commandCount * DRAW_ARGS_STRIDE + 255) / 256) * 256;
+            m_culledDrawArgsBuffer = factory->CreateBuffer(
+                cap, BufferType::UAVStorage, nullptr);
+            m_drawArgsCapacity = commandCount;
+            m_drawArgsInIndirectState = false;
+        }
+    }
+
+    const uint32_t drawArgsBytes = commandCount * DRAW_ARGS_STRIDE;
+
+    // Transition surviving buffers from previous frame
+    if (m_instanceInVBState) {
         auto* buf = static_cast<DX12Buffer*>(m_culledInstanceBuffer.get());
         dx12Cmd->BufferBarrier(buf->GetNativeResource(),
             D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         m_instanceInVBState = false;
     }
-    if (m_culledDrawArgsBuffer && m_drawArgsInIndirectState) {
+    if (m_drawArgsInIndirectState) {
         auto* buf = static_cast<DX12Buffer*>(m_culledDrawArgsBuffer.get());
         dx12Cmd->BufferBarrier(buf->GetNativeResource(),
             D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        m_drawArgsInIndirectState = false;
-    }
-
-    // ─── Ensure GPU buffers (grow only) ───
-    if (!m_culledInstanceBuffer || m_instanceCapacity < totalOutputSlots) {
-        uint32_t cap = ((totalOutputSlots + 255) / 256) * 256;
-        m_culledInstanceBuffer = factory->CreateBuffer(
-            cap * INSTANCE_DATA_STRIDE, BufferType::UAVStorage, nullptr);
-        m_instanceCapacity = cap;
-        m_instanceInVBState = false;
-    }
-
-    const uint32_t drawArgsBytes = commandCount * DRAW_ARGS_STRIDE;
-    if (!m_culledDrawArgsBuffer || m_drawArgsCapacity < commandCount) {
-        uint32_t cap = ((drawArgsBytes + 255) / 256) * 256;
-        m_culledDrawArgsBuffer = factory->CreateBuffer(
-            cap, BufferType::UAVStorage, nullptr);
-        m_drawArgsCapacity = commandCount;
         m_drawArgsInIndirectState = false;
     }
 
@@ -349,8 +364,9 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
 
     static bool s_loggedOnce = false;
     if (!s_loggedOnce) {
+        uint32_t gx = (maxInstancesPerCmd + CULL_THREAD_GROUP_SIZE - 1) / CULL_THREAD_GROUP_SIZE;
         LOG_INFO("[ComputeCulling] 2D dispatch (%u x %u) for %u commands, maxInst=%u",
-            groupsX, groupsY, commandCount, maxInstancesPerCmd);
+            gx, commandCount, commandCount, maxInstancesPerCmd);
         s_loggedOnce = true;
     }
 }

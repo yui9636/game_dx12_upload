@@ -1,7 +1,6 @@
 // GPU Frustum Culling Compute Shader — 2D Dispatch
 // X axis: instance index within command
 // Y axis: command index (no linear search)
-#include "IndirectDrawCommon.hlsli"
 
 cbuffer CullingParams : register(b0) {
     float4 frustumPlanes[6];
@@ -27,10 +26,18 @@ struct CullCommandMeta {
     uint2 metaPad;
 };
 
+struct DrawArgs {
+    uint indexCountPerInstance;
+    uint instanceCount;
+    uint startIndexLocation;
+    int  baseVertexLocation;
+    uint startInstanceLocation;
+};
+
 StructuredBuffer<InstanceData>    inputInstances  : register(t0);
 StructuredBuffer<CullCommandMeta> commands        : register(t1);
 RWStructuredBuffer<InstanceData>  outputInstances : register(u0);
-RWByteAddressBuffer               drawArgsBuffer  : register(u1);
+RWStructuredBuffer<DrawArgs>      drawArgsBuffer  : register(u1);
 
 // Transform local-space bounds to world space
 void TransformBounds(
@@ -56,11 +63,11 @@ bool IsVisible(float3 worldCenter, float worldRadius)
     return true;
 }
 
-[numthreads(CULL_THREAD_GROUP_SIZE, 1, 1)]
+[numthreads(64, 1, 1)]
 void CSMain(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID)
 {
     uint cmdIdx   = groupId.y;
-    uint localIdx = groupId.x * CULL_THREAD_GROUP_SIZE + threadId.x;
+    uint localIdx = groupId.x * 64 + threadId.x;
 
     if (cmdIdx >= commandCount) return;
 
@@ -80,10 +87,8 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID)
     if (!IsVisible(worldCenter, worldRadius)) return;
 
     // Visible: atomic increment instanceCount in DrawArgs
-    uint drawArgsOffset = cmd.drawArgsIndex * DRAW_ARGS_STRIDE
-                        + DRAW_ARGS_INSTANCE_COUNT_OFFSET;
     uint outLocalIdx;
-    drawArgsBuffer.InterlockedAdd(drawArgsOffset, 1, outLocalIdx);
+    InterlockedAdd(drawArgsBuffer[cmd.drawArgsIndex].instanceCount, 1, outLocalIdx);
 
     // Write to output buffer
     uint writePos = cmd.outputInstanceStart + outLocalIdx;

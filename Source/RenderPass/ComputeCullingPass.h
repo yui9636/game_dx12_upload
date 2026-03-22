@@ -51,4 +51,5 @@ private:
     bool m_instanceInVBState = false;
     bool m_drawArgsInIndirectState = false;
     bool m_countInIndirectState = false;
+    bool m_needsGrow = false;
 };
