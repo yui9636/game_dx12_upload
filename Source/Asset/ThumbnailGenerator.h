@@ -6,8 +6,7 @@
 #include <deque>
 #include <DirectXMath.h>
 #include "Entity/Entity.h"
-#include "RenderGraph/FrameGraph.h"
-#include "RenderPass/DrawObjectsPass.h"
+#include "Model/ModelRenderer.h"
 
 class FrameBuffer;
 class Registry;
@@ -37,8 +36,7 @@ private:
     std::unique_ptr<ICommandList> m_commandList;
     std::unique_ptr<DX12RootSignature> m_dx12RootSignature;
 
-    FrameGraph m_frameGraph;
-    DrawObjectsPass m_drawPass;
+    std::unique_ptr<ModelRenderer> m_renderer;
 
     std::unique_ptr<Registry> m_thumbRegistry;
     EntityID m_thumbCamera = Entity::NULL_ID;

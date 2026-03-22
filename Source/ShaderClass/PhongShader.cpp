@@ -9,6 +9,7 @@
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
+#include <DirectXTex.h>
 
 PhongShader::PhongShader(IResourceFactory* factory)
 {
@@ -58,6 +59,16 @@ PhongShader::PhongShader(IResourceFactory* factory)
     instancedDesc.vertexShader = m_instancedVs.get();
     instancedDesc.inputLayout = m_instancedInputLayout.get();
     m_instancedPso = factory->CreatePipelineState(instancedDesc);
+
+    // 1x1 white fallback texture (テクスチャなしモデル用)
+    {
+        DirectX::ScratchImage img;
+        img.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);
+        uint8_t* pixels = img.GetPixels();
+        pixels[0] = 255; pixels[1] = 255; pixels[2] = 255; pixels[3] = 255;
+        auto tex = factory->CreateTextureFromMemory(img, img.GetMetadata());
+        if (tex) m_whiteTexture = std::shared_ptr<ITexture>(tex.release());
+    }
 }
 
 void PhongShader::Begin(const RenderContext& rc)
@@ -92,12 +103,10 @@ void PhongShader::Update(const RenderContext& rc, const ModelResource::MeshResou
         rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
     }
 
+    ITexture* diffuse = mesh.material.diffuseMap.get();
+    if (!diffuse) diffuse = m_whiteTexture.get(); // マゼンタ等のmaterialColorが表示される
     ITexture* shadowTex = rc.shadowMap ? rc.shadowMap->GetTexture() : nullptr;
-    ITexture* srvs[] = {
-        mesh.material.diffuseMap.get(),
-        mesh.material.normalMap.get(),
-        shadowTex
-    };
+    ITexture* srvs[] = { diffuse, mesh.material.normalMap.get(), shadowTex };
     rc.commandList->PSSetTextures(0, _countof(srvs), srvs);
 }
 

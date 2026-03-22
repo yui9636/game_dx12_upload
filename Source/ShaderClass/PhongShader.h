@@ -19,8 +19,7 @@ class IInputLayout;
 class IBuffer;
 
 class IPipelineState;
-
-
+class ITexture;
 
 class PhongShader : public Shader
 
@@ -67,6 +66,7 @@ private:
 
 
 	// RHI ���\�[�X
+	std::shared_ptr<ITexture>      m_whiteTexture; // 1x1 white fallback
 
 	std::unique_ptr<IShader>       m_vs;
 

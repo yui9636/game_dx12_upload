@@ -15,7 +15,6 @@
 #include "RHI/DX12/DX12RootSignature.h"
 #include "RHI/DX12/DX12Device.h"
 #include "RenderContext/RenderContext.h"
-#include "RenderContext/RenderQueue.h"
 #include "Scene/SceneDataUploadSystem.h"
 #include "Render/GlobalRootSignature.h"
 #include "Console/Logger.h"
@@ -39,12 +38,16 @@ void ThumbnailGenerator::Initialize()
     m_pendingSet.clear();
     m_commandList.reset();
     m_dx12RootSignature.reset();
+    m_renderer.reset();
 
     Graphics& graphics = Graphics::Instance();
-    if (!graphics.GetResourceFactory()) {
+    auto* factory = graphics.GetResourceFactory();
+    if (!factory) {
         LOG_ERROR("[ThumbnailGenerator] Resource factory is unavailable.");
         return;
     }
+
+    m_renderer = std::make_unique<ModelRenderer>(factory);
 
     if (!m_thumbRegistry) {
         m_thumbRegistry = std::make_unique<Registry>();
@@ -233,15 +236,6 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
     mats->worldPos = camPos;
     XMStoreFloat3(&mats->cameraFront, XMVector3Normalize(at - eye));
 
-    RenderQueue queue;
-    RenderPacket packet;
-    packet.modelResource = model->GetModelResource();
-    packet.worldMatrix = identity;
-    packet.shaderId = 0;
-    packet.castShadow = false;
-    packet.rasterizerState = RasterizerState::SolidCullNone;
-    queue.opaquePackets.push_back(packet);
-
     RenderContext rc = BuildThumbnailRenderContext(captureBuffer.get());
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
@@ -254,15 +248,33 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
     captureBuffer->SetRenderTargets(rc.commandList);
     rc.commandList->SetViewport(rc.mainViewport);
 
-    m_frameGraph.ImportTexture("SceneColor", captureBuffer->GetColorTexture(0));
-    m_frameGraph.ImportTexture("GBufferDepth", captureBuffer->GetDepthTexture());
-
     SceneDataUploadSystem uploadSystem;
     uploadSystem.Upload(rc, GlobalRootSignature::Instance());
     GlobalRootSignature::Instance().BindAll(rc.commandList, rc.renderState, rc.shadowMap);
 
-    m_frameGraph.AddPass(&m_drawPass);
-    m_frameGraph.Execute(queue, rc);
+    // テクスチャなしメッシュのマテリアルカラーをマゼンタに一時変更
+    auto modelRes = model->GetModelResource();
+    std::vector<XMFLOAT4> savedColors;
+    for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
+        auto* mesh = modelRes->GetMeshResource(i);
+        savedColors.push_back(mesh->material.color);
+        if (!mesh->material.diffuseMap) {
+            mesh->material.color = { 1.0f, 0.0f, 1.0f, 1.0f }; // マゼンタ
+        }
+    }
+
+    XMFLOAT4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
+    m_renderer->Draw(ShaderId::Phong, modelRes,
+        identity, identity, white, 0.0f, 1.0f, 0.0f,
+        BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
+
+    RenderQueue emptyQueue;
+    m_renderer->Render(rc, emptyQueue);
+
+    // マテリアルカラー復元
+    for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
+        modelRes->GetMeshResource(i)->material.color = savedColors[i];
+    }
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         rc.commandList->TransitionBarrier(captureBuffer->GetColorTexture(0), ResourceState::ShaderResource);
