@@ -38,7 +38,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
     m_frameSrvAllocator = std::make_unique<DX12DescriptorAllocator>(
         device->GetDevice(),
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        1024, true);
+        16384, true);
 
     m_dynamicCbRingSize = 4u * 1024u * 1024u;
     D3D12_HEAP_PROPERTIES uploadHeap = {};
