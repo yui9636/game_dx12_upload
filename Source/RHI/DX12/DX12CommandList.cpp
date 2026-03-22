@@ -38,7 +38,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
     m_frameSrvAllocator = std::make_unique<DX12DescriptorAllocator>(
         device->GetDevice(),
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        16384, true);
+        65536, true);
 
     m_dynamicCbRingSize = 4u * 1024u * 1024u;
     D3D12_HEAP_PROPERTIES uploadHeap = {};
@@ -259,28 +259,28 @@ void DX12CommandList::Draw(uint32_t vertexCount, uint32_t startVertex) {
     FlushPSO();
     FlushPendingBarriers();
     m_commandList->DrawInstanced(vertexCount, 1, startVertex, 0);
-    m_srvBlockAllocated = false; // 次のドローでフレッシュなディスクリプタブロックを確保
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex) {
     FlushPSO();
     FlushPendingBarriers();
     m_commandList->DrawIndexedInstanced(indexCount, 1, startIndex, baseVertex, 0);
-    m_srvBlockAllocated = false;
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) {
     FlushPSO();
     FlushPendingBarriers();
     m_commandList->DrawInstanced(vertexCountPerInstance, instanceCount, startVertexLocation, startInstanceLocation);
-    m_srvBlockAllocated = false;
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::DrawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, int32_t baseVertexLocation, uint32_t startInstanceLocation) {
     FlushPSO();
     FlushPendingBarriers();
     m_commandList->DrawIndexedInstanced(indexCountPerInstance, instanceCount, startIndexLocation, baseVertexLocation, startInstanceLocation);
-    m_srvBlockAllocated = false;
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes) {
@@ -298,7 +298,7 @@ void DX12CommandList::ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t a
         argumentOffsetBytes,
         nullptr,
         0);
-    m_srvBlockAllocated = false;
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::ExecuteIndexedIndirectMulti(
@@ -326,7 +326,7 @@ void DX12CommandList::ExecuteIndexedIndirectMulti(
         argumentOffsetBytes,
         countRes,
         countBufferOffset);
-    m_srvBlockAllocated = false;
+    m_srvDirtyAfterDraw = true;
 }
 
 void DX12CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z) {
@@ -464,6 +464,11 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12CommandList::GetNullSrvHandle(NullSrvKind kind) 
 
 void DX12CommandList::BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count) {
     if (!bindings || count == 0) return;
+    // Draw後の最初のテクスチャバインドで新ブロック確保
+    if (m_srvDirtyAfterDraw) {
+        m_srvBlockAllocated = false;
+        m_srvDirtyAfterDraw = false;
+    }
     EnsureSrvBlock();
 
     for (uint32_t i = 0; i < count; ++i) {
@@ -493,6 +498,11 @@ void DX12CommandList::PSSetTexture(uint32_t slot, ITexture* texture) {
 
 void DX12CommandList::PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) {
     if (numTextures == 0 || !ppTextures) return;
+    // Draw後の最初のテクスチャバインドで新ブロック確保
+    if (m_srvDirtyAfterDraw) {
+        m_srvBlockAllocated = false;
+        m_srvDirtyAfterDraw = false;
+    }
     EnsureSrvBlock();
 
     for (uint32_t i = 0; i < numTextures; ++i) {

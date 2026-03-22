@@ -143,6 +143,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrv2DArray = {};
     D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrvCube = {};
     bool m_srvBlockAllocated = false;
+    bool m_srvDirtyAfterDraw = false;  // Draw後にtrue → 次のテクスチャバインドで新ブロック確保
     void EnsureSrvBlock();
 };
 
