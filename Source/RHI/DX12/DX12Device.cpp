@@ -127,7 +127,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // RTV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = FRAME_COUNT + 64; // back buffers + render targets
+        desc.NumDescriptors = FRAME_COUNT + 256; // back buffers + render targets + thumbnails
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
@@ -136,7 +136,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // DSV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 32;
+        desc.NumDescriptors = 256;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));

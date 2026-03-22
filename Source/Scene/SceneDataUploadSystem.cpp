@@ -30,6 +30,7 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
     scene.renderW = (float)(uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
     scene.renderH = (float)(uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
     scene.shadowTexelSize = 1.0f / 2048.0f;
+    scene.shadowColor = { rc.shadowColor.x, rc.shadowColor.y, rc.shadowColor.z, 1.0f };
 
     int count = static_cast<int>(rc.pointLights.size());
     if (count > MAX_POINT_LIGHTS) count = MAX_POINT_LIGHTS;
