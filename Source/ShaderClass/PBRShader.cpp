@@ -2,6 +2,7 @@
 
 #include "Graphics.h"
 #include "ShadowMap.h"
+#include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/ICommandList.h"
@@ -121,13 +122,35 @@ void PBRShader::Update(const RenderContext& rc, const ModelResource::MeshResourc
         rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
     }
 
+    auto resolveTexture = [&](const std::string& path, std::shared_ptr<ITexture> fallback) -> ITexture* {
+        if (m_materialOverride && !path.empty()) {
+            if (auto texture = ResourceManager::Instance().GetTexture(path)) {
+                return texture.get();
+            }
+        }
+        return fallback.get();
+    };
+
     ITexture* shadowTex = rc.shadowMap ? rc.shadowMap->GetTexture() : nullptr;
+    ITexture* albedo = resolveTexture(
+        m_materialOverride ? m_materialOverride->diffuseTexturePath : std::string(),
+        mesh.material.albedoMap);
+    ITexture* normal = resolveTexture(
+        m_materialOverride ? m_materialOverride->normalTexturePath : std::string(),
+        mesh.material.normalMap);
+    ITexture* metallic = resolveTexture(
+        m_materialOverride ? m_materialOverride->metallicRoughnessTexturePath : std::string(),
+        mesh.material.metallicMap);
+    ITexture* roughness = resolveTexture(
+        m_materialOverride ? m_materialOverride->metallicRoughnessTexturePath : std::string(),
+        mesh.material.roughnessMap);
+    ITexture* occlusion = mesh.material.occlusionMap.get();
     ITexture* materialTextures[] = {
-        mesh.material.albedoMap.get(),
-        mesh.material.normalMap.get(),
-        mesh.material.metallicMap.get(),
-        mesh.material.roughnessMap.get(),
-        mesh.material.occlusionMap.get(),
+        albedo,
+        normal,
+        metallic,
+        roughness,
+        occlusion,
         shadowTex
     };
     rc.commandList->PSSetTextures(0, _countof(materialTextures), materialTextures);
@@ -143,6 +166,7 @@ void PBRShader::End(const RenderContext& rc)
     rc.commandList->PSSetTexture(33, nullptr);
     rc.commandList->PSSetTexture(34, nullptr);
     rc.commandList->PSSetTexture(35, nullptr);
+    m_materialOverride = nullptr;
 }
 
 void PBRShader::SetIBLTextures(ITexture* pDiffuseIEM, ITexture* pSpecularPMREM)

@@ -20,6 +20,7 @@ class IBuffer;
 
 class IPipelineState;
 class ITexture;
+class MaterialAsset;
 
 class PhongShader : public Shader
 
@@ -50,6 +51,8 @@ public:
 	// �I������
 
 	void End(const RenderContext& rc) override;
+
+	void SetMaterialAssetOverride(const MaterialAsset* material) { m_materialOverride = material; }
 
 
 
@@ -84,5 +87,6 @@ private:
 
 	std::unique_ptr<IPipelineState> m_pso;
 	std::unique_ptr<IPipelineState> m_instancedPso;
+	const MaterialAsset* m_materialOverride = nullptr;
 
 };

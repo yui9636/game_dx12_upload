@@ -19,7 +19,19 @@
 
 using namespace Microsoft::WRL;
 
-Graphics::~Graphics() = default;
+namespace {
+	bool g_graphicsShuttingDown = false;
+}
+
+Graphics::~Graphics()
+{
+	g_graphicsShuttingDown = true;
+}
+
+bool Graphics::IsShuttingDown()
+{
+	return g_graphicsShuttingDown;
+}
 
 void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 {

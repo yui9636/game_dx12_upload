@@ -54,6 +54,8 @@ public:
 		return instance;
 	}
 
+	static bool IsShuttingDown();
+
 	void Initialize(HWND hWnd, GraphicsAPI api = GraphicsAPI::DX11);
 	void Present(UINT syncInterval);
 

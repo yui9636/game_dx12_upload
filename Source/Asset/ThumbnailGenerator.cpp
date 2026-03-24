@@ -1,26 +1,24 @@
-﻿#include "ThumbnailGenerator.h"
+#include "ThumbnailGenerator.h"
+#include "Render/OffscreenRenderer.h"
 #include "Graphics.h"
-#include "FrameBuffer.h"
 #include "System/ResourceManager.h"
-#include "Registry/Registry.h"
-#include "Component/CameraComponent.h"
-#include "Archetype/Archetype.h"
-#include "Type/TypeInfo.h"
-#include "RHI/ICommandList.h"
+#include "Material/MaterialAsset.h"
+#include "Model/Model.h"
 #include "RHI/ITexture.h"
 #include "RHI/IResourceFactory.h"
-#include "RHI/GraphicsAPI.h"
-#include "RHI/DX11/DX11CommandList.h"
-#include "RHI/DX12/DX12CommandList.h"
-#include "RHI/DX12/DX12RootSignature.h"
-#include "RHI/DX12/DX12Device.h"
-#include "RenderContext/RenderContext.h"
-#include "Scene/SceneDataUploadSystem.h"
-#include "Render/GlobalRootSignature.h"
+#include "RHI/DX12/DX12Texture.h"
+#include "RenderGraph/FrameGraphTypes.h"
 #include "Console/Logger.h"
+#include "ImGuiRenderer.h"
 #include <cmath>
+#include <filesystem>
 
 using namespace DirectX;
+
+static constexpr float CLEAR_R = 0.2f;
+static constexpr float CLEAR_G = 0.2f;
+static constexpr float CLEAR_B = 0.22f;
+static constexpr float CLEAR_A = 1.0f;
 
 ThumbnailGenerator& ThumbnailGenerator::Instance() {
     static ThumbnailGenerator instance;
@@ -29,171 +27,183 @@ ThumbnailGenerator& ThumbnailGenerator::Instance() {
 
 ThumbnailGenerator::~ThumbnailGenerator() = default;
 
-void ThumbnailGenerator::Initialize()
-{
-    m_available = false;
-    m_loggedUnavailable = false;
-    m_cache.clear();
-    m_pendingQueue.clear();
-    m_pendingSet.clear();
-    m_commandList.reset();
-    m_dx12RootSignature.reset();
-    m_renderer.reset();
-
-    Graphics& graphics = Graphics::Instance();
-    auto* factory = graphics.GetResourceFactory();
-    if (!factory) {
-        LOG_ERROR("[ThumbnailGenerator] Resource factory is unavailable.");
-        return;
-    }
-
-    m_renderer = std::make_unique<ModelRenderer>(factory);
-
-    if (!m_thumbRegistry) {
-        m_thumbRegistry = std::make_unique<Registry>();
-        m_thumbCamera = m_thumbRegistry->CreateEntity();
-        m_thumbRegistry->AddComponent(m_thumbCamera, CameraLensComponent{});
-        m_thumbRegistry->AddComponent(m_thumbCamera, CameraMatricesComponent{});
-        m_thumbRegistry->AddComponent(m_thumbCamera, CameraMainTagComponent{});
-    }
-
-    if (graphics.GetAPI() == GraphicsAPI::DX12) {
-        auto* device = graphics.GetDX12Device();
-        if (!device) {
-            LOG_ERROR("[ThumbnailGenerator] DX12 device is unavailable.");
-            return;
-        }
-
-        m_dx12RootSignature = std::make_unique<DX12RootSignature>(device);
-        m_commandList = std::make_unique<DX12CommandList>(device, m_dx12RootSignature.get(), false);
-        m_available = true;
-        LOG_INFO("[ThumbnailGenerator] Initialized DX12 thumbnail renderer.");
-        return;
-    }
-
-    auto* context = graphics.GetDeviceContext();
-    if (!context) {
-        LOG_ERROR("[ThumbnailGenerator] DX11 device context is unavailable.");
-        return;
-    }
-
-    m_commandList = std::make_unique<DX11CommandList>(context);
-    m_available = true;
-    LOG_INFO("[ThumbnailGenerator] Initialized DX11 thumbnail renderer.");
+bool ThumbnailGenerator::IsAvailable() const {
+    return m_offscreen && m_offscreen->IsReady();
 }
 
-void ThumbnailGenerator::Request(const std::string& modelPath)
+bool ThumbnailGenerator::LazyInitialize()
 {
-    if (!m_available) {
-        if (!m_loggedUnavailable) {
-            LOG_WARN("[ThumbnailGenerator] Thumbnail generation is unavailable on the current renderer.");
-            m_loggedUnavailable = true;
-        }
-        return;
-    }
+    m_initialized = false;
+    m_texturePool = PreviewTexturePool{};
+    m_sphereModel.reset();
 
-    if (modelPath.empty() || m_cache.count(modelPath) || m_pendingSet.count(modelPath)) {
-        return;
-    }
-
-    m_pendingQueue.push_back(modelPath);
-    m_pendingSet.insert(modelPath);
-}
-
-std::shared_ptr<ITexture> ThumbnailGenerator::Get(const std::string& modelPath) const
-{
-    auto it = m_cache.find(modelPath);
-    return (it != m_cache.end()) ? it->second : nullptr;
-}
-
-void ThumbnailGenerator::PumpOne()
-{
-    if (!m_available || m_pendingQueue.empty()) {
-        return;
-    }
-
-    const std::string modelPath = m_pendingQueue.front();
-    m_pendingQueue.pop_front();
-    m_pendingSet.erase(modelPath);
-
-    auto texture = GenerateTexture(modelPath);
-    if (texture) {
-        m_cache[modelPath] = texture;
-        LOG_INFO("[ThumbnailGenerator] Generated thumbnail: %s", modelPath.c_str());
-    }
-    else {
-        LOG_WARN("[ThumbnailGenerator] Failed to generate thumbnail: %s", modelPath.c_str());
-    }
-}
-
-RenderContext ThumbnailGenerator::BuildThumbnailRenderContext(FrameBuffer* targetBuffer)
-{
-    RenderContext rc = {};
-    rc.commandList = m_commandList.get();
-    rc.renderState = Graphics::Instance().GetRenderState();
-    rc.shadowMap = nullptr;
-    rc.mainRenderTarget = targetBuffer->GetColorTexture(0);
-    rc.mainDepthStencil = targetBuffer->GetDepthTexture();
-    rc.mainViewport = RhiViewport(0.0f, 0.0f, 256.0f, 256.0f);
-
-    auto archetypes = m_thumbRegistry->GetAllArchetypes();
-    Signature camSig = CreateSignature<CameraMatricesComponent, CameraMainTagComponent>();
-
-    for (auto* arch : archetypes) {
-        if (!SignatureMatches(arch->GetSignature(), camSig) || arch->GetEntityCount() == 0) continue;
-
-        auto* col = arch->GetColumn(TypeManager::GetComponentTypeID<CameraMatricesComponent>());
-        auto& mats = *static_cast<CameraMatricesComponent*>(col->Get(0));
-        rc.viewMatrix = mats.view;
-        rc.projectionMatrix = mats.projection;
-        rc.cameraPosition = mats.worldPos;
-        rc.cameraDirection = mats.cameraFront;
-        break;
-    }
-
-    // サムネイル用ライト（斜め上から白色光）+ 影なし
-    rc.directionalLight.direction = { -0.5f, -0.7f, 0.5f };
-    rc.directionalLight.color = { 1.0f, 1.0f, 1.0f };
-    rc.shadowColor = { 1.0f, 1.0f, 1.0f }; // 影の減衰なし
-
-    rc.aspect = 1.0f;
-    float m22 = rc.projectionMatrix._22;
-    float m33 = rc.projectionMatrix._33;
-    float m43 = rc.projectionMatrix._43;
-
-    rc.fovY = (fabsf(m22) > 0.0001f) ? (2.0f * atanf(1.0f / m22)) : 0.785f;
-    rc.nearZ = (fabsf(m33) > 0.0001f && fabsf(1.0f - m33) > 0.0001f) ? -m43 / m33 : 0.01f;
-    rc.farZ = (fabsf(m33) > 0.0001f && fabsf(1.0f - m33) > 0.0001f) ? m43 / (1.0f - m33) : 1000.0f;
-
-    if (rc.nearZ <= 0.0f) rc.nearZ = 0.01f;
-    if (rc.farZ <= rc.nearZ) rc.farZ = rc.nearZ + 1000.0f;
-
-    return rc;
-}
-
-std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string& modelPath)
-{
-    auto model = ResourceManager::Instance().GetModel(modelPath);
-    if (!model) {
-        return nullptr;
+    if (!m_offscreen || !m_offscreen->IsReady()) {
+        LOG_ERROR("[ThumbnailGenerator] OffscreenRenderer unavailable.");
+        return false;
     }
 
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) {
-        return nullptr;
+        return false;
     }
 
-    auto captureBuffer = std::make_shared<FrameBuffer>(
-        factory,
-        256,
-        256,
-        std::vector<TextureFormat>{ TextureFormat::R16G16B16A16_FLOAT },
-        TextureFormat::D32_FLOAT);
+    const float clearColor[4] = { CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A };
+    m_texturePool.Initialize(factory, THUMB_SIZE, THUMB_SIZE,
+        TextureFormat::RGBA8_UNORM, TextureFormat::D24_UNORM_S8_UINT,
+        clearColor, static_cast<uint32_t>(MAX_CACHE));
 
-    XMFLOAT4X4 identity;
-    XMStoreFloat4x4(&identity, XMMatrixIdentity());
-    model->UpdateTransform(identity);
+    m_sphereModel = ResourceManager::Instance().GetModel("Data/Model/sphere/fbx_sphere_001.fbx");
+    m_initialized = (m_texturePool.GetSharedDepth() != nullptr);
+    if (m_initialized) {
+        LOG_INFO("[ThumbnailGenerator] Initialized.");
+    }
+    return m_initialized;
+}
 
+void ThumbnailGenerator::Initialize(OffscreenRenderer* offscreen)
+{
+    m_offscreen = offscreen;
+    m_loggedUnavailable = false;
+    m_cache.clear();
+    m_cacheOrder.clear();
+    m_pendingQueue.clear();
+    m_pendingSet.clear();
+    m_visiblePaths.clear();
+    m_initialized = false;
+    m_texturePool = PreviewTexturePool{};
+
+    if (!m_offscreen || !m_offscreen->IsReady()) {
+        LOG_ERROR("[ThumbnailGenerator] OffscreenRenderer unavailable.");
+    }
+}
+
+void ThumbnailGenerator::Request(const std::string& modelPath)
+{
+    if (!IsAvailable()) {
+        if (!m_loggedUnavailable) {
+            LOG_WARN("[ThumbnailGenerator] Thumbnail generation unavailable.");
+            m_loggedUnavailable = true;
+        }
+        return;
+    }
+    if (!m_initialized && !LazyInitialize()) return;
+    if (modelPath.empty() || m_cache.count(modelPath) || m_pendingSet.count(modelPath)) return;
+
+    m_pendingQueue.push_back({ modelPath, false });
+    m_pendingSet.insert(modelPath);
+}
+
+void ThumbnailGenerator::RequestMaterial(const std::string& matPath)
+{
+    if (!IsAvailable()) return;
+    if (!m_initialized && !LazyInitialize()) return;
+    if (matPath.empty() || m_cache.count(matPath) || m_pendingSet.count(matPath)) return;
+
+    m_pendingQueue.push_back({ matPath, true });
+    m_pendingSet.insert(matPath);
+}
+
+void ThumbnailGenerator::Invalidate(const std::string& path)
+{
+    auto it = m_cache.find(path);
+    if (it != m_cache.end()) {
+        uint64_t fenceValue = m_offscreen ? m_offscreen->GetCurrentFenceValue() : 0;
+        ImGuiRenderer::DeferUnregisterTexture(it->second.get(), fenceValue);
+        if (auto* dx12Texture = dynamic_cast<DX12Texture*>(it->second.get())) {
+            auto* device = Graphics::Instance().GetDX12Device();
+            dx12Texture->SetRetireFence(
+                device ? device->GetMainFence() : nullptr,
+                device ? device->GetMainFenceCurrentValue() : fenceValue);
+        }
+        m_texturePool.DeferRelease(std::move(it->second), fenceValue);
+        m_cache.erase(it);
+    }
+    for (auto it = m_cacheOrder.begin(); it != m_cacheOrder.end(); ++it) {
+        if (*it == path) { m_cacheOrder.erase(it); break; }
+    }
+    if (!m_pendingSet.count(path)) {
+        bool isMat = std::filesystem::path(path).extension().string() == ".mat";
+        m_pendingQueue.push_back({ path, isMat });
+        m_pendingSet.insert(path);
+    }
+}
+
+void ThumbnailGenerator::SetVisiblePaths(const std::unordered_set<std::string>& paths)
+{
+    m_visiblePaths = paths;
+}
+
+std::shared_ptr<ITexture> ThumbnailGenerator::Get(const std::string& path) const
+{
+    auto it = m_cache.find(path);
+    return (it != m_cache.end()) ? it->second : nullptr;
+}
+
+void ThumbnailGenerator::EvictOldest()
+{
+    while (m_cache.size() >= MAX_CACHE && !m_cacheOrder.empty()) {
+        const std::string victim = m_cacheOrder.front();
+        auto it = m_cache.find(victim);
+        if (it != m_cache.end()) {
+            uint64_t fenceValue = m_offscreen ? m_offscreen->GetCurrentFenceValue() : 0;
+            ImGuiRenderer::DeferUnregisterTexture(it->second.get(), fenceValue);
+            if (auto* dx12Texture = dynamic_cast<DX12Texture*>(it->second.get())) {
+                auto* device = Graphics::Instance().GetDX12Device();
+                dx12Texture->SetRetireFence(
+                    device ? device->GetMainFence() : nullptr,
+                    device ? device->GetMainFenceCurrentValue() : fenceValue);
+            }
+            m_texturePool.DeferRelease(std::move(it->second), fenceValue);
+            m_cache.erase(it);
+        }
+        m_cacheOrder.pop_front();
+    }
+}
+
+void ThumbnailGenerator::PumpOne()
+{
+    if (!IsAvailable() || m_pendingQueue.empty()) return;
+    if (!m_initialized && !LazyInitialize()) return;
+    if (!m_offscreen->IsGpuIdle()) return;
+
+    const uint64_t completedFenceValue = m_offscreen->GetCompletedFenceValue();
+    m_texturePool.ProcessDeferred(completedFenceValue);
+
+    auto selected = m_pendingQueue.end();
+    for (auto it = m_pendingQueue.begin(); it != m_pendingQueue.end(); ++it) {
+        if (m_visiblePaths.count(it->path) > 0) {
+            selected = it;
+            break;
+        }
+    }
+    if (selected == m_pendingQueue.end()) {
+        selected = m_pendingQueue.begin();
+    }
+
+    auto cacheTexture = m_texturePool.Acquire();
+    if (!cacheTexture) {
+        return;
+    }
+
+    ThumbnailRequest req = *selected;
+    m_pendingQueue.erase(selected);
+    m_pendingSet.erase(req.path);
+
+    auto texture = req.isMaterial
+        ? GenerateMaterialTexture(req.path, cacheTexture)
+        : GenerateTexture(req.path, cacheTexture);
+    if (texture) {
+        EvictOldest();
+        m_cache[req.path] = texture;
+        m_cacheOrder.push_back(req.path);
+    } else {
+        uint64_t fenceValue = m_offscreen->GetCurrentFenceValue();
+        m_texturePool.DeferRelease(std::move(cacheTexture), fenceValue);
+    }
+}
+
+void ThumbnailGenerator::SetupCamera(Model* model, XMFLOAT4X4& outViewProj, XMFLOAT3& outCamPos)
+{
     BoundingBox aabb = model->GetWorldBounds();
     XMFLOAT3 center = aabb.Center;
     XMFLOAT3 ex = aabb.Extents;
@@ -220,46 +230,50 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
     float nearZ = 0.01f;
     float farZ = distance * 10.0f;
 
-    XMFLOAT3 camPos = {
+    outCamPos = {
         center.x + distance * cosf(pitch) * sinf(yaw),
         center.y + distance * sinf(pitch),
         center.z - distance * cosf(pitch) * cosf(yaw)
     };
 
-    auto* lens = m_thumbRegistry->GetComponent<CameraLensComponent>(m_thumbCamera);
-    auto* mats = m_thumbRegistry->GetComponent<CameraMatricesComponent>(m_thumbCamera);
-    lens->fovY = fov;
-    lens->aspect = 1.0f;
-    lens->nearZ = nearZ;
-    lens->farZ = farZ;
-
-    XMVECTOR eye = XMLoadFloat3(&camPos);
-    XMVECTOR at = XMLoadFloat3(&center);
+    XMVECTOR eye = XMLoadFloat3(&outCamPos);
+    XMVECTOR at  = XMLoadFloat3(&center);
     XMVECTOR upV = XMVectorSet(0, 1, 0, 0);
-    XMStoreFloat4x4(&mats->view, XMMatrixLookAtLH(eye, at, upV));
-    XMStoreFloat4x4(&mats->projection, XMMatrixPerspectiveFovLH(fov, 1.0f, nearZ, farZ));
-    mats->worldPos = camPos;
-    XMStoreFloat3(&mats->cameraFront, XMVector3Normalize(at - eye));
+    XMStoreFloat4x4(&outViewProj, XMMatrixLookAtLH(eye, at, upV) * XMMatrixPerspectiveFovLH(fov, 1.0f, nearZ, farZ));
+}
 
-    RenderContext rc = BuildThumbnailRenderContext(captureBuffer.get());
+void ThumbnailGenerator::RenderThumbnail(ITexture* target, std::function<void()> setupAndDraw)
+{
+    m_offscreen->BeginJob();
+    m_offscreen->ClearExternalRT(target, m_texturePool.GetSharedDepth(), CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A);
+    m_offscreen->SetExternalRenderTarget(target, m_texturePool.GetSharedDepth());
+    m_offscreen->SetViewport((float)THUMB_SIZE, (float)THUMB_SIZE);
 
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
-        dx12Cmd->Begin();
-    }
+    setupAndDraw();
 
-    float clearColor[4] = { 0.2f, 0.2f, 0.22f, 1.0f };
-    captureBuffer->Clear(rc.commandList, clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
-    captureBuffer->SetRenderTargets(rc.commandList);
-    rc.commandList->SetViewport(rc.mainViewport);
+    m_offscreen->SubmitDirect(target);
+}
 
-    SceneDataUploadSystem uploadSystem;
-    uploadSystem.Upload(rc, GlobalRootSignature::Instance());
-    GlobalRootSignature::Instance().BindAll(rc.commandList, rc.renderState, rc.shadowMap);
+std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string& modelPath, std::shared_ptr<ITexture> cacheTex)
+{
+    auto model = ResourceManager::Instance().GetModel(modelPath);
+    if (!model) return nullptr;
+
+    if (!cacheTex) return nullptr;
+
+    XMFLOAT4X4 identity;
+    XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    model->UpdateTransform(identity);
+
+    XMFLOAT4X4 viewProj;
+    XMFLOAT3 camPos;
+    SetupCamera(model.get(), viewProj, camPos);
+
+    XMFLOAT3 lightDir   = { -0.5f, -0.7f, 0.5f };
+    XMFLOAT3 lightColor = { 1.0f, 1.0f, 1.0f };
 
     auto modelRes = model->GetModelResource();
 
-    // テクスチャなしメッシュのマテリアルカラーをマゼンタに一時変更
     std::vector<XMFLOAT4> savedColors;
     for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
         auto* mesh = modelRes->GetMeshResource(i);
@@ -269,26 +283,76 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
         }
     }
 
-    XMFLOAT4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
-    m_renderer->Draw(ShaderId::Phong, modelRes,
-        identity, identity, white, 0.0f, 1.0f, 0.0f,
-        BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
+    RenderThumbnail(cacheTex.get(), [&]() {
+        m_offscreen->UploadScene(viewProj, camPos, lightDir, lightColor,
+            (float)THUMB_SIZE, (float)THUMB_SIZE);
+        m_offscreen->BindScene();
+        m_offscreen->BindSampler();
 
-    RenderQueue emptyQueue;
-    m_renderer->Render(rc, emptyQueue);
+        XMFLOAT4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
+        m_offscreen->GetModelRenderer().Draw(
+            ShaderId::Phong, modelRes,
+            identity, identity, white, 0.0f, 1.0f, 0.0f,
+            nullptr, BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
+    });
 
-    // マテリアルカラー復元
     for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
         modelRes->GetMeshResource(i)->material.color = savedColors[i];
     }
 
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        rc.commandList->TransitionBarrier(captureBuffer->GetColorTexture(0), ResourceState::ShaderResource);
-        auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
-        dx12Cmd->End();
-        dx12Cmd->Submit();
-        Graphics::Instance().GetDX12Device()->WaitForGPU();
+    return cacheTex;
+}
+
+std::shared_ptr<ITexture> ThumbnailGenerator::GenerateMaterialTexture(const std::string& matPath, std::shared_ptr<ITexture> cacheTex)
+{
+    if (!m_sphereModel) return nullptr;
+
+    auto material = ResourceManager::Instance().GetMaterial(matPath);
+    if (!material) return nullptr;
+
+    if (!cacheTex) return nullptr;
+
+    XMFLOAT4X4 identity;
+    XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    m_sphereModel->UpdateTransform(identity);
+
+    auto& meshMaterials = m_sphereModel->GetMaterialss();
+    for (auto& mat : meshMaterials) {
+        mat.color = material->baseColor;
+        mat.metallicFactor = material->metallic;
+        mat.roughnessFactor = material->roughness;
+        mat.diffuseMap = ResourceManager::Instance().GetTexture(material->diffuseTexturePath);
+        mat.normalMap = ResourceManager::Instance().GetTexture(material->normalTexturePath);
+        if (!material->metallicRoughnessTexturePath.empty()) {
+            mat.metallicMap = ResourceManager::Instance().GetTexture(material->metallicRoughnessTexturePath);
+            mat.roughnessMap = mat.metallicMap;
+        } else {
+            mat.metallicMap = nullptr;
+            mat.roughnessMap = nullptr;
+        }
+        mat.emissiveMap = ResourceManager::Instance().GetTexture(material->emissiveTexturePath);
     }
 
-    return std::shared_ptr<ITexture>(captureBuffer, captureBuffer->GetColorTexture(0));
+    XMFLOAT4X4 viewProj;
+    XMFLOAT3 camPos;
+    SetupCamera(m_sphereModel.get(), viewProj, camPos);
+
+    XMFLOAT3 lightDir   = { -0.5f, -0.7f, 0.5f };
+    XMFLOAT3 lightColor = { 3.0f, 3.0f, 3.0f };
+
+    RenderThumbnail(cacheTex.get(), [&]() {
+        m_offscreen->UploadScene(viewProj, camPos, lightDir, lightColor,
+            (float)THUMB_SIZE, (float)THUMB_SIZE);
+        m_offscreen->BindScene();
+        m_offscreen->BindSampler();
+
+        auto modelRes = m_sphereModel->GetModelResource();
+        m_offscreen->GetModelRenderer().Draw(
+            ShaderId::Phong, modelRes,
+            identity, identity,
+            material->baseColor, material->metallic, material->roughness, material->emissive,
+            material.get(), BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
+    });
+
+    return cacheTex;
 }

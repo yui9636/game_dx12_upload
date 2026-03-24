@@ -2,6 +2,8 @@
 
 #include "Graphics.h"
 #include "Console/Logger.h"
+#include "Material/MaterialAsset.h"
+#include "System/ResourceManager.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
@@ -159,11 +161,20 @@ void GBufferPBRShader::Update(const RenderContext& rc, const ModelResource::Mesh
         rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
     }
 
+    auto resolveTexture = [&](const std::string& path, std::shared_ptr<ITexture> fallback) -> ITexture* {
+        if (m_materialOverride && !path.empty()) {
+            if (auto texture = ResourceManager::Instance().GetTexture(path)) {
+                return texture.get();
+            }
+        }
+        return fallback.get();
+    };
+
     ITexture* srvs[] = {
-        mesh.material.albedoMap.get(),
-        mesh.material.normalMap.get(),
-        mesh.material.metallicMap.get(),
-        mesh.material.roughnessMap.get()
+        resolveTexture(m_materialOverride ? m_materialOverride->diffuseTexturePath : std::string(), mesh.material.albedoMap),
+        resolveTexture(m_materialOverride ? m_materialOverride->normalTexturePath : std::string(), mesh.material.normalMap),
+        resolveTexture(m_materialOverride ? m_materialOverride->metallicRoughnessTexturePath : std::string(), mesh.material.metallicMap),
+        resolveTexture(m_materialOverride ? m_materialOverride->metallicRoughnessTexturePath : std::string(), mesh.material.roughnessMap)
     };
 
     // Use the standard frame-heap PSSetTextures path for all APIs.
@@ -175,4 +186,5 @@ void GBufferPBRShader::End(const RenderContext& rc)
 {
     ITexture* nullTextures[] = { nullptr, nullptr, nullptr, nullptr };
     rc.commandList->PSSetTextures(0, _countof(nullTextures), nullTextures);
+    m_materialOverride = nullptr;
 }

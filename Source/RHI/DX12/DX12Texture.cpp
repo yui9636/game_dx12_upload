@@ -1,4 +1,5 @@
 #include "DX12Texture.h"
+#include "Graphics.h"
 #include <cassert>
 
 DXGI_FORMAT DX12Texture::ToDXGIFormat(TextureFormat format) {
@@ -31,20 +32,35 @@ D3D12_RESOURCE_FLAGS DX12Texture::ToResourceFlags(TextureBindFlags flags) {
 }
 
 DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
-                         TextureFormat format, TextureBindFlags bindFlags)
-    : m_width(width), m_height(height), m_format(format)
+                         TextureFormat format, TextureBindFlags bindFlags,
+                         const float* optimizedClearColor)
+    : m_width(width), m_height(height), m_format(format), m_device(device)
 {
     auto* d3dDevice = device->GetDevice();
 
     // Determine DXGI format
     DXGI_FORMAT dxgiFormat = ToDXGIFormat(format);
-    DXGI_FORMAT typelessFormat = dxgiFormat;
+    DXGI_FORMAT resourceFormat = dxgiFormat;
+    DXGI_FORMAT dsvFormat = dxgiFormat;
+    DXGI_FORMAT srvFormat = dxgiFormat;
 
     // Use typeless for depth formats that also need SRV
     bool isDepth = (format == TextureFormat::D32_FLOAT || format == TextureFormat::D24_UNORM_S8_UINT
                     || format == TextureFormat::R32_TYPELESS);
-    if (isDepth && (bindFlags & TextureBindFlags::ShaderResource)) {
-        typelessFormat = DXGI_FORMAT_R32_TYPELESS;
+    if (isDepth) {
+        if (format == TextureFormat::D24_UNORM_S8_UINT) {
+            dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+            resourceFormat = (bindFlags & TextureBindFlags::ShaderResource)
+                ? DXGI_FORMAT_R24G8_TYPELESS
+                : DXGI_FORMAT_D24_UNORM_S8_UINT;
+        } else {
+            dsvFormat = DXGI_FORMAT_D32_FLOAT;
+            srvFormat = DXGI_FORMAT_R32_FLOAT;
+            resourceFormat = (bindFlags & TextureBindFlags::ShaderResource)
+                ? DXGI_FORMAT_R32_TYPELESS
+                : dxgiFormat;
+        }
     }
 
     D3D12_RESOURCE_DESC texDesc = {};
@@ -53,7 +69,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
     texDesc.Height = height;
     texDesc.DepthOrArraySize = 1;
     texDesc.MipLevels = 1;
-    texDesc.Format = typelessFormat;
+    texDesc.Format = resourceFormat;
     texDesc.SampleDesc.Count = 1;
     texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     texDesc.Flags = ToResourceFlags(bindFlags);
@@ -65,15 +81,22 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
     D3D12_CLEAR_VALUE* pClearValue = nullptr;
 
     if (isDepth) {
-        clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+        clearValue.Format = dsvFormat;
         clearValue.DepthStencil.Depth = 1.0f;
         clearValue.DepthStencil.Stencil = 0;
         pClearValue = &clearValue;
         m_currentState = ResourceState::DepthWrite;
     } else if (bindFlags & TextureBindFlags::RenderTarget) {
         clearValue.Format = dxgiFormat;
-        clearValue.Color[0] = 0.0f; clearValue.Color[1] = 0.0f;
-        clearValue.Color[2] = 0.0f; clearValue.Color[3] = 0.0f;
+        if (optimizedClearColor) {
+            clearValue.Color[0] = optimizedClearColor[0];
+            clearValue.Color[1] = optimizedClearColor[1];
+            clearValue.Color[2] = optimizedClearColor[2];
+            clearValue.Color[3] = optimizedClearColor[3];
+        } else {
+            clearValue.Color[0] = 0.0f; clearValue.Color[1] = 0.0f;
+            clearValue.Color[2] = 0.0f; clearValue.Color[3] = 0.0f;
+        }
         pClearValue = &clearValue;
         m_currentState = ResourceState::RenderTarget;
     }
@@ -102,7 +125,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
     // DSV
     if (bindFlags & TextureBindFlags::DepthStencil) {
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.Format = dsvFormat;
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
         m_dsvHandle = device->AllocateDSVDescriptor();
         d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
@@ -116,7 +139,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MipLevels = 1;
 
-        if (isDepth) srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+        if (isDepth) srvDesc.Format = srvFormat;
         else         srvDesc.Format = dxgiFormat;
 
         m_srvHandle = device->AllocateSRVDescriptor();
@@ -128,6 +151,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
 DX12Texture::DX12Texture(DX12Device* device, ID3D12Resource* backBuffer, uint32_t index)
     : m_format(TextureFormat::RGBA8_UNORM)
     , m_currentState(ResourceState::Present)
+    , m_device(device)
 {
     m_resource = backBuffer; // AddRef via ComPtr assignment
 
@@ -153,6 +177,7 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
     , m_width(width), m_height(height)
     , m_format(TextureFormat::RGBA8_UNORM) // approximate - actual format is srvFormat
     , m_currentState(ResourceState::ShaderResource)
+    , m_device(device)
 {
     auto* d3dDevice = device->GetDevice();
     auto resDesc = resource->GetDesc();
@@ -186,14 +211,31 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
 DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
                          TextureFormat format, uint32_t arraySize,
                          TextureBindFlags bindFlags)
-    : m_width(width), m_height(height), m_format(format)
+    : m_width(width), m_height(height), m_format(format), m_device(device)
 {
     auto* d3dDevice = device->GetDevice();
 
     DXGI_FORMAT dxgiFormat = ToDXGIFormat(format);
     bool isDepth = (format == TextureFormat::D32_FLOAT || format == TextureFormat::D24_UNORM_S8_UINT
                     || format == TextureFormat::R32_TYPELESS);
-    DXGI_FORMAT resourceFormat = isDepth ? DXGI_FORMAT_R32_TYPELESS : dxgiFormat;
+    DXGI_FORMAT resourceFormat = dxgiFormat;
+    DXGI_FORMAT dsvFormat = dxgiFormat;
+    DXGI_FORMAT srvFormat = dxgiFormat;
+    if (isDepth) {
+        if (format == TextureFormat::D24_UNORM_S8_UINT) {
+            dsvFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            srvFormat = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+            resourceFormat = (bindFlags & TextureBindFlags::ShaderResource)
+                ? DXGI_FORMAT_R24G8_TYPELESS
+                : DXGI_FORMAT_D24_UNORM_S8_UINT;
+        } else {
+            dsvFormat = DXGI_FORMAT_D32_FLOAT;
+            srvFormat = DXGI_FORMAT_R32_FLOAT;
+            resourceFormat = (bindFlags & TextureBindFlags::ShaderResource)
+                ? DXGI_FORMAT_R32_TYPELESS
+                : dxgiFormat;
+        }
+    }
 
     D3D12_RESOURCE_DESC texDesc = {};
     texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -214,7 +256,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
     D3D12_RESOURCE_STATES initialState = D3D12_RESOURCE_STATE_COMMON;
 
     if (isDepth) {
-        clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+        clearValue.Format = dsvFormat;
         clearValue.DepthStencil.Depth = 1.0f;
         clearValue.DepthStencil.Stencil = 0;
         pClearValue = &clearValue;
@@ -233,7 +275,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-        srvDesc.Format = isDepth ? DXGI_FORMAT_R32_FLOAT : dxgiFormat;
+        srvDesc.Format = isDepth ? srvFormat : dxgiFormat;
         srvDesc.Texture2DArray.MipLevels = 1;
         srvDesc.Texture2DArray.ArraySize = arraySize;
         srvDesc.Texture2DArray.FirstArraySlice = 0;
@@ -255,6 +297,7 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> sharedResour
     , m_width(width), m_height(height)
     , m_format(TextureFormat::R32_TYPELESS)
     , m_currentState(ResourceState::DepthWrite)
+    , m_device(device)
 {
     auto* d3dDevice = device->GetDevice();
 
@@ -268,4 +311,31 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> sharedResour
     m_dsvHandle = device->AllocateDSVDescriptor();
     d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
     m_hasDSV = true;
+}
+
+DX12Texture::~DX12Texture()
+{
+    if (Graphics::IsShuttingDown()) {
+        return;
+    }
+
+    if (!m_device || !m_retireFence || m_retireFenceValue == 0) {
+        return;
+    }
+
+    if (m_hasSRV && m_srvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_srvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::SRV);
+        m_srvHandle.ptr = 0;
+        m_hasSRV = false;
+    }
+    if (m_hasRTV && m_rtvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_rtvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::RTV);
+        m_rtvHandle.ptr = 0;
+        m_hasRTV = false;
+    }
+    if (m_hasDSV && m_dsvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_dsvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::DSV);
+        m_dsvHandle.ptr = 0;
+        m_hasDSV = false;
+    }
 }

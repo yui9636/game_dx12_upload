@@ -22,6 +22,8 @@ class IBuffer;
 
 class ITexture;
 
+class MaterialAsset;
+
 class IPipelineState;
 
 
@@ -61,6 +63,8 @@ public:
 	// IBL�̍X�V
 
 	void SetIBLTextures(ITexture* pDiffuseIEM, ITexture* pSpecularPMREM);
+
+	void SetMaterialAssetOverride(const MaterialAsset* material) { m_materialOverride = material; }
 
 
 
@@ -128,5 +132,8 @@ public:
 	float m_matRoughness = 1.0f;
 
 	float m_matEmissive = 0.0f;
+
+protected:
+	const MaterialAsset* m_materialOverride = nullptr;
 
 };

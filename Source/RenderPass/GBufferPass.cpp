@@ -168,11 +168,12 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
     } else for (const auto& batch : queue.opaqueInstanceBatches) {
         if (!batch.modelResource) continue;
         for (const auto& instance : batch.instances) {
-            renderer->Draw(
-                ShaderId::GBufferPBR, batch.modelResource, instance.worldMatrix, instance.prevWorldMatrix,
-                batch.key.baseColor, batch.key.metallic, batch.key.roughness, batch.key.emissive,
-                batch.key.blendState, batch.key.depthState, batch.key.rasterizerState
-            );
+                renderer->Draw(
+                    ShaderId::GBufferPBR, batch.modelResource, instance.worldMatrix, instance.prevWorldMatrix,
+                    batch.key.baseColor, batch.key.metallic, batch.key.roughness, batch.key.emissive,
+                    batch.key.materialAsset.get(),
+                    batch.key.blendState, batch.key.depthState, batch.key.rasterizerState
+                );
         }
     }
     renderer->RenderOpaque(rc);

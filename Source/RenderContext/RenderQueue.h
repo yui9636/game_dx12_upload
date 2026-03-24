@@ -6,6 +6,7 @@
 #include "RenderState.h"
 
 class ModelResource;
+class MaterialAsset;
 
 struct DrawBatchKey {
     ModelResource* modelResource = nullptr;
@@ -18,6 +19,7 @@ struct DrawBatchKey {
     float metallic = 0.0f;
     float roughness = 1.0f;
     float emissive = 0.0f;
+    std::shared_ptr<MaterialAsset> materialAsset;
 
     bool operator==(const DrawBatchKey& other) const {
         return modelResource == other.modelResource
@@ -32,7 +34,8 @@ struct DrawBatchKey {
             && baseColor.w == other.baseColor.w
             && metallic == other.metallic
             && roughness == other.roughness
-            && emissive == other.emissive;
+            && emissive == other.emissive
+            && materialAsset.get() == other.materialAsset.get();
     }
 };
 
@@ -64,6 +67,7 @@ struct RenderPacket {
     float metallic = 0.0f;
     float roughness = 1.0f;
     float emissive = 0.0f;
+    std::shared_ptr<MaterialAsset> materialAsset;
 };
 
 class RenderQueue {

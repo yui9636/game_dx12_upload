@@ -6,6 +6,7 @@
 #include "ShaderClass/PhongShader.h"
 #include "ShaderClass/PBRShader.h"
 #include "ShaderClass/GBufferPBRShader.h"
+#include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "ShadowMap.h"
 #include "Graphics.h"
@@ -29,6 +30,7 @@ ModelRenderer::ModelRenderer(IResourceFactory* factory)
 void ModelRenderer::Draw(ShaderId shaderId, std::shared_ptr<ModelResource> modelResource,
     const DirectX::XMFLOAT4X4& worldMatrix, const DirectX::XMFLOAT4X4& prevWorldMatrix,
     const DirectX::XMFLOAT4& baseColor, float metallic, float roughness, float emissive,
+    const MaterialAsset* materialAsset,
     BlendState blend, DepthState depth, RasterizerState raster)
 {
     DrawInfo& drawInfo = drawInfos.emplace_back();
@@ -40,6 +42,7 @@ void ModelRenderer::Draw(ShaderId shaderId, std::shared_ptr<ModelResource> model
     drawInfo.metallic = metallic;
     drawInfo.roughness = roughness;
     drawInfo.emissive = emissive;
+    drawInfo.materialAsset = materialAsset;
     drawInfo.blendState = blend;
     drawInfo.depthState = depth;
     drawInfo.rasterizerState = raster;
@@ -90,11 +93,16 @@ void ModelRenderer::ApplyMaterialOverrides(ShaderId shaderId, Shader* shader,
     const DirectX::XMFLOAT4& baseColor,
     float metallic,
     float roughness,
-    float emissive) const
+    float emissive,
+    const MaterialAsset* materialAsset) const
 {
     if (shaderId == ShaderId::PBR || shaderId == ShaderId::GBufferPBR) {
         auto* pbrShader = static_cast<PBRShader*>(shader);
+        pbrShader->SetMaterialAssetOverride(materialAsset);
         pbrShader->SetMaterialProperties(baseColor, metallic, roughness, emissive);
+    } else if (shaderId == ShaderId::Phong) {
+        auto* phongShader = static_cast<PhongShader*>(shader);
+        phongShader->SetMaterialAssetOverride(materialAsset);
     }
 }
 
@@ -147,7 +155,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
 
         if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
-        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive);
+        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset.get());
 
         if (useIndirect && cmd.supportsInstancing &&
             cmd.instanceCount > 0 && shader->SupportsInstancing(*meshResource)) {
@@ -207,7 +215,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
 
         if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
-        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive);
+        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset.get());
 
         shader->Begin(rc);
         const uint32_t begin = cmd.firstInstance;
@@ -264,6 +272,7 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
                 tInfo.metallic = drawInfo.metallic;
                 tInfo.roughness = drawInfo.roughness;
                 tInfo.emissive = drawInfo.emissive;
+                tInfo.materialAsset = drawInfo.materialAsset;
                 tInfo.blendState = drawInfo.blendState;
                 tInfo.depthState = drawInfo.depthState;
                 tInfo.rasterizerState = drawInfo.rasterizerState;
@@ -291,7 +300,7 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
             CbSkeleton cbSkeleton{};
             FillSkeletonConstantBuffer(*meshResource, drawInfo.worldMatrix, drawInfo.prevWorldMatrix, cbSkeleton);
             ApplySkeletonConstantBuffer(rc, cbSkeleton);
-            ApplyMaterialOverrides(drawInfo.shaderId, shader, drawInfo.baseColor, drawInfo.metallic, drawInfo.roughness, drawInfo.emissive);
+            ApplyMaterialOverrides(drawInfo.shaderId, shader, drawInfo.baseColor, drawInfo.metallic, drawInfo.roughness, drawInfo.emissive, drawInfo.materialAsset);
             shader->Update(rc, *meshResource);
             rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
         }
@@ -339,7 +348,7 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
         CbSkeleton cbSkeleton{};
         FillSkeletonConstantBuffer(*meshResource, info.worldMatrix, info.prevWorldMatrix, cbSkeleton);
         ApplySkeletonConstantBuffer(rc, cbSkeleton);
-        ApplyMaterialOverrides(info.shaderId, shader, info.baseColor, info.metallic, info.roughness, info.emissive);
+        ApplyMaterialOverrides(info.shaderId, shader, info.baseColor, info.metallic, info.roughness, info.emissive, info.materialAsset);
         shader->Update(rc, *meshResource);
         rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(info.meshIndex), 0, 0);
         shader->End(rc);

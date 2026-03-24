@@ -22,8 +22,13 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
 
         MaterialAsset* activeMat = defaultMat.get();
         auto* matComp = registry.GetComponent<MaterialComponent>(entity);
-        if (matComp && matComp->materialAsset) {
-            activeMat = matComp->materialAsset.get();
+        if (matComp) {
+            if (!matComp->materialAsset && !matComp->materialAssetPath.empty()) {
+                matComp->materialAsset = ResourceManager::Instance().GetMaterial(matComp->materialAssetPath);
+            }
+            if (matComp->materialAsset) {
+                activeMat = matComp->materialAsset.get();
+            }
         }
 
         packet.shaderId = activeMat->shaderId;
@@ -31,6 +36,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         packet.metallic = activeMat->metallic;
         packet.roughness = activeMat->roughness;
         packet.emissive = activeMat->emissive;
+        packet.materialAsset = matComp ? matComp->materialAsset : defaultMat;
 
         const bool isTransparent = (activeMat->alphaMode == 2);
         if (isTransparent) {
@@ -50,6 +56,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
             batchKey.metallic = packet.metallic;
             batchKey.roughness = packet.roughness;
             batchKey.emissive = packet.emissive;
+            batchKey.materialAsset = packet.materialAsset;
 
             auto it = std::find_if(
                 queue.opaqueInstanceBatches.begin(),

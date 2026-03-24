@@ -57,7 +57,7 @@ void ForwardTransparentPass::Execute(FrameGraphResources& resources, const Rende
 
         renderer->Draw(
             static_cast<ShaderId>(packet.shaderId), packet.modelResource, packet.worldMatrix, packet.prevWorldMatrix,
-            packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
+            packet.baseColor, packet.metallic, packet.roughness, packet.emissive, packet.materialAsset.get(),
             packet.blendState, packet.depthState, packet.rasterizerState
         );
     }

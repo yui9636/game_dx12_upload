@@ -2,6 +2,9 @@
 #include "Engine/EditorSelection.h"
 #include "System/ResourceManager.h"
 #include "Material/MaterialPreviewStudio.h"
+#include "Material/MaterialAsset.h"
+#include "Asset/ThumbnailGenerator.h"
+#include "Asset/AssetManager.h"
 #include "ImGuiRenderer.h"
 #include "Graphics.h"
 #include "Generated/ComponentMeta.generated.h"
@@ -154,6 +157,216 @@ namespace {
         ImGui::Text("Animations: %d", static_cast<int>(model->GetAnimations().size()));
     }
 
+    // Cached texture path list (filenames only, no GPU load)
+    struct TexturePathCache {
+        std::vector<std::string> paths;
+        std::vector<std::string> filenames;
+        bool initialized = false;
+
+        void EnsureBuilt() {
+            if (initialized) return;
+            initialized = true;
+            paths.clear();
+            filenames.clear();
+            CollectRecursive(AssetManager::Instance().GetRootDirectory());
+        }
+        void Invalidate() { initialized = false; }
+    private:
+        void CollectRecursive(const std::filesystem::path& dir) {
+            auto entries = AssetManager::Instance().GetAssetsInDirectory(dir);
+            for (auto& e : entries) {
+                if (e.type == AssetType::Texture) {
+                    paths.push_back(e.path.string());
+                    filenames.push_back(e.path.filename().string());
+                } else if (e.type == AssetType::Folder) {
+                    CollectRecursive(e.path);
+                }
+            }
+        }
+    };
+    static TexturePathCache s_texCache;
+
+    bool DrawTextureSlot(const char* label, std::string& texPath) {
+        ImGui::PushID(label);
+        bool changed = false;
+
+        ImGui::Text("%s", label);
+        ImGui::SameLine();
+
+        const float thumbSize = 48.0f;
+
+        // Thumbnail (show only the currently assigned texture, not all textures)
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton("##slot", ImVec2(thumbSize, thumbSize));
+        bool clicked = ImGui::IsItemClicked(0);
+        ImVec2 p0 = ImGui::GetItemRectMin();
+        ImVec2 p1 = ImGui::GetItemRectMax();
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        if (!texPath.empty()) {
+            auto tex = ResourceManager::Instance().GetTexture(texPath);
+            void* texId = tex ? ImGuiRenderer::GetTextureID(tex.get()) : nullptr;
+            if (texId) {
+                drawList->AddImage((ImTextureID)texId, p0, p1);
+            } else {
+                drawList->AddRectFilled(p0, p1, IM_COL32(60, 60, 60, 255));
+                drawList->AddText(ImVec2(p0.x + 4, p0.y + 16), IM_COL32(255, 255, 0, 255), "?");
+            }
+        } else {
+            drawList->AddRectFilled(p0, p1, IM_COL32(50, 50, 50, 255));
+            drawList->AddRect(p0, p1, IM_COL32(100, 100, 100, 255));
+        }
+        drawList->AddRect(p0, p1, IM_COL32(120, 120, 120, 255));
+
+        // D&D target
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+                std::string dropped((const char*)payload->Data);
+                std::string ext = std::filesystem::path(dropped).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".png" || ext == ".jpg" || ext == ".tga" || ext == ".dds" || ext == ".hdr") {
+                    texPath = dropped;
+                    changed = true;
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        // Click to open texture picker popup
+        if (clicked) {
+            s_texCache.EnsureBuilt();
+            ImGui::OpenPopup("##texPicker");
+        }
+
+        if (ImGui::BeginPopup("##texPicker")) {
+            static char filterBuf[128] = "";
+            ImGui::InputText("Filter", filterBuf, sizeof(filterBuf));
+
+            ImGui::BeginChild("##texList", ImVec2(300, 200), true);
+            for (size_t i = 0; i < s_texCache.paths.size(); ++i) {
+                auto& fn = s_texCache.filenames[i];
+                if (filterBuf[0] != '\0') {
+                    std::string lower = fn;
+                    std::string filterLower = filterBuf;
+                    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+                    std::transform(filterLower.begin(), filterLower.end(), filterLower.begin(), ::tolower);
+                    if (lower.find(filterLower) == std::string::npos) continue;
+                }
+                bool selected = (s_texCache.paths[i] == texPath);
+                auto previewTexture = ResourceManager::Instance().GetTexture(s_texCache.paths[i]);
+                void* previewId = previewTexture ? ImGuiRenderer::GetTextureID(previewTexture.get()) : nullptr;
+
+                ImGui::PushID(static_cast<int>(i));
+                if (previewId) {
+                    ImGui::Image((ImTextureID)previewId, ImVec2(36.0f, 36.0f));
+                } else {
+                    ImGui::Dummy(ImVec2(36.0f, 36.0f));
+                }
+                ImGui::SameLine();
+                if (ImGui::Selectable(fn.c_str(), selected, 0, ImVec2(0.0f, 36.0f))) {
+                    texPath = s_texCache.paths[i];
+                    changed = true;
+                    filterBuf[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                    ImGui::PopID();
+                    break;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+
+            if (ImGui::Button("None")) {
+                texPath.clear();
+                changed = true;
+                filterBuf[0] = '\0';
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
+        if (!texPath.empty()) {
+            std::string filename = std::filesystem::path(texPath).filename().string();
+            ImGui::TextWrapped("%s", filename.c_str());
+        } else {
+            ImGui::TextDisabled("(empty)");
+        }
+
+        if (!texPath.empty()) {
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X")) {
+                texPath.clear();
+                changed = true;
+            }
+        }
+
+        ImGui::PopID();
+        return changed;
+    }
+
+    void DrawMaterialEditor(MaterialAsset* material) {
+        if (!material) return;
+
+        bool changed = false;
+
+        const char* shaderNames[] = { "Phong", "PBR", "Toon" };
+        int shaderIdx = material->shaderId;
+        if (shaderIdx < 0 || shaderIdx > 2) shaderIdx = 1;
+        if (ImGui::Combo("Shader", &shaderIdx, shaderNames, IM_ARRAYSIZE(shaderNames))) {
+            material->shaderId = shaderIdx;
+            changed = true;
+        }
+
+        changed |= ImGui::ColorEdit4("Base Color", &material->baseColor.x);
+        changed |= ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
+        changed |= ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
+        changed |= ImGui::SliderFloat("Emissive", &material->emissive, 0.0f, 10.0f);
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Text("Textures");
+
+        changed |= DrawTextureSlot("Diffuse", material->diffuseTexturePath);
+        changed |= DrawTextureSlot("Normal", material->normalTexturePath);
+        changed |= DrawTextureSlot("MetallicRoughness", material->metallicRoughnessTexturePath);
+        changed |= DrawTextureSlot("Emissive", material->emissiveTexturePath);
+        ImGui::Separator();
+
+        const char* alphaModes[] = { "Opaque", "Mask", "Blend" };
+        changed |= ImGui::Combo("Alpha Mode", &material->alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));
+
+        ImGui::Spacing();
+
+        if (changed) {
+            MaterialPreviewStudio::Instance().RequestPreview(material);
+        }
+
+        if (ImGui::Button("Save Material")) {
+            material->Save();
+            ThumbnailGenerator::Instance().Invalidate(material->GetFilePath());
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Textures preview live, save manually.");
+
+        ImGui::Spacing();
+
+        auto& studio = MaterialPreviewStudio::Instance();
+        if (studio.IsReady()) {
+            static MaterialAsset* s_lastMaterial = nullptr;
+            if (changed || s_lastMaterial != material) {
+                studio.RequestPreview(material);
+                s_lastMaterial = material;
+            }
+            if (auto* tex = studio.GetPreviewTexture()) {
+                if (void* texId = ImGuiRenderer::GetTextureID(tex)) {
+                    float w = ImGui::GetContentRegionAvail().x;
+                    if (w > 256.0f) w = 256.0f;
+                    ImGui::Image((ImTextureID)texId, ImVec2(w, w));
+                }
+            }
+        }
+    }
+
     void DrawMaterialInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Material");
         ImGui::TextWrapped("%s", filename.c_str());
@@ -165,21 +378,7 @@ namespace {
             return;
         }
 
-        ImGui::ColorEdit4("Base Color", &material->baseColor.x);
-        ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
-        ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
-        ImGui::SliderFloat("Emissive", &material->emissive, 0.0f, 10.0f);
-
-        if (Graphics::Instance().GetAPI() == GraphicsAPI::DX11) {
-            auto previewSRV = MaterialPreviewStudio::Instance().GetPreviewSRV();
-            if (previewSRV) {
-                const float width = ImGui::GetContentRegionAvail().x;
-                const float aspect = Graphics::Instance().GetScreenHeight() / Graphics::Instance().GetScreenWidth();
-                ImGui::Image((ImTextureID)previewSRV, ImVec2(width, width * aspect));
-            }
-        } else {
-            ImGui::TextDisabled("DX12 preview is not available yet.");
-        }
+        DrawMaterialEditor(material.get());
     }
 
     void DrawAssetInspector(const std::string& assetPath) {
@@ -234,7 +433,25 @@ void InspectorECSUI::Render(Registry* registry) {
             DrawComponentIfPresent<NameComponent>(registry, entity);
             DrawComponentIfPresent<TransformComponent>(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
-            DrawComponentIfPresent<MaterialComponent>(registry, entity);
+            if (auto* matComp = registry->GetComponent<MaterialComponent>(entity)) {
+                if (ImGui::CollapsingHeader("MaterialComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    char matBuf[512];
+                    strcpy_s(matBuf, matComp->materialAssetPath.c_str());
+                    if (ImGui::InputText("Material Path", matBuf, sizeof(matBuf))) {
+                        matComp->materialAssetPath = matBuf;
+                        if (!matComp->materialAssetPath.empty()) {
+                            matComp->materialAsset = ResourceManager::Instance().GetMaterial(matComp->materialAssetPath);
+                        } else {
+                            matComp->materialAsset = nullptr;
+                        }
+                    }
+                    if (matComp->materialAsset) {
+                        ImGui::Indent();
+                        DrawMaterialEditor(matComp->materialAsset.get());
+                        ImGui::Unindent();
+                    }
+                }
+            }
             DrawComponentIfPresent<HierarchyComponent>(registry, entity);
             DrawComponentIfPresent<LightComponent>(registry, entity);
             DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);

@@ -10,6 +10,7 @@
 class IBuffer;
 class ITexture;
 class IResourceFactory;
+class MaterialAsset;
 
 enum class ShaderId
 {
@@ -34,6 +35,7 @@ public:
         float metallic,
         float roughness,
         float emissive,
+        const MaterialAsset* materialAsset = nullptr,
         BlendState blend = BlendState::Opaque,
         DepthState depth = DepthState::TestAndWrite,
         RasterizerState raster = RasterizerState::SolidCullBack);
@@ -62,6 +64,7 @@ private:
         float metallic;
         float roughness;
         float emissive;
+        const MaterialAsset* materialAsset = nullptr;
         BlendState blendState;
         DepthState depthState;
         RasterizerState rasterizerState;
@@ -79,6 +82,7 @@ private:
         float metallic;
         float roughness;
         float emissive;
+        const MaterialAsset* materialAsset = nullptr;
         BlendState blendState;
         DepthState depthState;
         RasterizerState rasterizerState;
@@ -93,7 +97,8 @@ private:
         const DirectX::XMFLOAT4& baseColor,
         float metallic,
         float roughness,
-        float emissive) const;
+        float emissive,
+        const MaterialAsset* materialAsset) const;
 
     std::unique_ptr<Shader> shaders[static_cast<int>(ShaderId::EnumCount)];
     std::vector<DrawInfo> drawInfos;

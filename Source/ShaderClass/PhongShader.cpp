@@ -2,6 +2,10 @@
 
 #include "Graphics.h"
 #include "ShadowMap.h"
+#include "Material/MaterialAsset.h"
+#include "System/ResourceManager.h"
+#include "Material/MaterialAsset.h"
+#include "System/ResourceManager.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
@@ -103,10 +107,24 @@ void PhongShader::Update(const RenderContext& rc, const ModelResource::MeshResou
         rc.commandList->UpdateBuffer(m_meshConstantBuffer.get(), &cbMesh, sizeof(cbMesh));
     }
 
-    ITexture* diffuse = mesh.material.diffuseMap.get();
-    if (!diffuse) diffuse = m_whiteTexture.get(); // マゼンタ等のmaterialColorが表示される
+    auto resolveTexture = [&](const std::string& path, std::shared_ptr<ITexture> fallback) -> ITexture* {
+        if (m_materialOverride && !path.empty()) {
+            if (auto texture = ResourceManager::Instance().GetTexture(path)) {
+                return texture.get();
+            }
+        }
+        return fallback.get();
+    };
+
+    ITexture* diffuse = resolveTexture(
+        m_materialOverride ? m_materialOverride->diffuseTexturePath : std::string(),
+        mesh.material.diffuseMap);
+    if (!diffuse) diffuse = m_whiteTexture.get();
+    ITexture* normal = resolveTexture(
+        m_materialOverride ? m_materialOverride->normalTexturePath : std::string(),
+        mesh.material.normalMap);
     ITexture* shadowTex = rc.shadowMap ? rc.shadowMap->GetTexture() : nullptr;
-    ITexture* srvs[] = { diffuse, mesh.material.normalMap.get(), shadowTex };
+    ITexture* srvs[] = { diffuse, normal, shadowTex };
     rc.commandList->PSSetTextures(0, _countof(srvs), srvs);
 }
 
@@ -114,4 +132,5 @@ void PhongShader::End(const RenderContext& rc)
 {
     ITexture* nullTextures[] = { nullptr, nullptr, nullptr };
     rc.commandList->PSSetTextures(0, _countof(nullTextures), nullTextures);
+    m_materialOverride = nullptr;
 }
