@@ -332,6 +332,7 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateMaterialTexture(const std:
         }
         mat.emissiveMap = ResourceManager::Instance().GetTexture(material->emissiveTexturePath);
     }
+    m_sphereModel->UpdateTransform(identity);
 
     XMFLOAT4X4 viewProj;
     XMFLOAT3 camPos;
