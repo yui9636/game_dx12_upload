@@ -74,14 +74,16 @@ DX12Buffer::DX12Buffer(
     // ----------------------------------------
     // 初期状態
     // UAVStorage:
-    //   UAV として使う前提なので UNORDERED_ACCESS
+    //   バッファは COMMON で作成し、実使用時に明示的に遷移する。
+    //   CreateCommittedResource で UAV 初期状態を指定しても
+    //   debug layer では COMMON 扱いになるため、ここでは COMMON を使う。
     //
     // それ以外:
     //   UPLOAD heap なので GENERIC_READ
     // ----------------------------------------
     D3D12_RESOURCE_STATES initialState =
         (type == BufferType::UAVStorage)
-        ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+        ? D3D12_RESOURCE_STATE_COMMON
         : D3D12_RESOURCE_STATE_GENERIC_READ;
 
     // 実際に D3D12 バッファ作成

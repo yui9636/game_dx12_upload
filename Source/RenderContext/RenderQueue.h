@@ -2,11 +2,26 @@
 
 #include <vector>
 #include <memory>
+#include <cstdint>
+#include <cstddef>
+#include <functional>
 #include <DirectXMath.h>
 #include "RenderState.h"
 
 class ModelResource;
 class MaterialAsset;
+
+struct RenderQueueMetrics {
+    double meshExtractMs = 0.0;
+    uint32_t materialResolveCount = 0;
+    uint32_t opaquePacketCount = 0;
+    uint32_t transparentPacketCount = 0;
+    uint32_t opaqueBatchCount = 0;
+    uint32_t maxInstancesPerBatch = 0;
+    uint32_t opaquePacketVectorGrowths = 0;
+    uint32_t transparentPacketVectorGrowths = 0;
+    uint32_t opaqueBatchVectorGrowths = 0;
+};
 
 struct DrawBatchKey {
     ModelResource* modelResource = nullptr;
@@ -36,6 +51,31 @@ struct DrawBatchKey {
             && roughness == other.roughness
             && emissive == other.emissive
             && materialAsset.get() == other.materialAsset.get();
+    }
+};
+
+struct DrawBatchKeyHash {
+    size_t operator()(const DrawBatchKey& key) const noexcept {
+        size_t seed = 0;
+        auto combine = [&](size_t value) {
+            seed ^= value + 0x9e3779b9u + (seed << 6) + (seed >> 2);
+        };
+
+        combine(std::hash<ModelResource*>()(key.modelResource));
+        combine(std::hash<int>()(key.shaderId));
+        combine(std::hash<bool>()(key.castShadow));
+        combine(std::hash<int>()(static_cast<int>(key.blendState)));
+        combine(std::hash<int>()(static_cast<int>(key.depthState)));
+        combine(std::hash<int>()(static_cast<int>(key.rasterizerState)));
+        combine(std::hash<float>()(key.baseColor.x));
+        combine(std::hash<float>()(key.baseColor.y));
+        combine(std::hash<float>()(key.baseColor.z));
+        combine(std::hash<float>()(key.baseColor.w));
+        combine(std::hash<float>()(key.metallic));
+        combine(std::hash<float>()(key.roughness));
+        combine(std::hash<float>()(key.emissive));
+        combine(std::hash<MaterialAsset*>()(key.materialAsset.get()));
+        return seed;
     }
 };
 
@@ -75,10 +115,12 @@ public:
     std::vector<RenderPacket> opaquePackets;
     std::vector<RenderPacket> transparentPackets;
     std::vector<InstanceBatch> opaqueInstanceBatches;
+    RenderQueueMetrics metrics;
 
     void Clear() {
         opaquePackets.clear();
         transparentPackets.clear();
         opaqueInstanceBatches.clear();
+        metrics = {};
     }
 };

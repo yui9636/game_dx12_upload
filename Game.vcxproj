@@ -301,6 +301,8 @@
     <ClInclude Include="Source\RenderPass\SSRPass.h" />
     <ClInclude Include="Source\RenderPass\VolumetricFogPass.h" />
     <ClInclude Include="Source\Render\GlobalRootSignature.h" />
+    <ClInclude Include="Source\Render\OffscreenRenderer.h" />
+    <ClInclude Include="Source\Render\PreviewTexturePool.h" />
     <ClInclude Include="Source\Render\ShaderCommon.h" />
     <ClInclude Include="Source\RHI\GraphicsAPI.h" />
     <ClInclude Include="Source\RHI\DX12\DX12Device.h" />
@@ -528,6 +530,8 @@
     <ClCompile Include="Source\RenderPass\SSRPass.cpp" />
     <ClCompile Include="Source\RenderPass\VolumetricFogPass.cpp" />
     <ClCompile Include="Source\Render\GlobalRootSignature.cpp" />
+    <ClCompile Include="Source\Render\OffscreenRenderer.cpp" />
+    <ClCompile Include="Source\Render\PreviewTexturePool.cpp" />
     <ClCompile Include="Source\RHI\DX12\DX12Device.cpp" />
     <ClCompile Include="Source\RHI\DX12\DX12CommandList.cpp" />
     <ClCompile Include="Source\RHI\DX12\DX12PSOCache.cpp" />

@@ -18,7 +18,13 @@
 #include <RenderGraph/FrameGraph.h>
 #include "RenderGraph/FrameGraphResources.h"
 #include "RenderPass/FinalBlitPass.h"
+#include "RenderPass/ExtractVisibleInstancesPass.h"
+#include "RenderPass/BuildInstanceBufferPass.h"
+#include "RenderPass/BuildIndirectCommandPass.h"
+#include "RenderPass/ComputeCullingPass.h"
 #include "Console/Logger.h"
+#include "System/TaskSystem.h"
+#include <chrono>
 
 
 RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* targetBuffer)
@@ -102,20 +108,13 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
     DirectX::XMMATRIX P = DirectX::XMLoadFloat4x4(&rc.projectionMatrix);
     DirectX::XMMATRIX currentVP = V * P;
 
-    if (m_isFirstFrame) {
-        DirectX::XMStoreFloat4x4(&m_prevViewProjection, currentVP);
-        m_isFirstFrame = false;
-    }
-
     DirectX::XMStoreFloat4x4(&rc.viewProjectionUnjittered, currentVP);
-    rc.prevViewProjectionMatrix = m_prevViewProjection;
-    DirectX::XMStoreFloat4x4(&m_prevViewProjection, currentVP);
-    rc.prevJitterOffset = m_prevJitterOffset;
+    rc.prevViewProjectionMatrix = rc.viewProjectionUnjittered;
+    rc.prevJitterOffset = { 0.0f, 0.0f };
 
     // DX12 はまだ FSR2/TAA resolve が未接続なので、jitter だけ残すと揺れます。
     if (g.GetAPI() == GraphicsAPI::DX12) {
         rc.jitterOffset = { 0.0f, 0.0f };
-        m_prevJitterOffset = rc.jitterOffset;
     }
     else {
         static int32_t jitterIndex = 0;
@@ -130,7 +129,6 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
 
         rc.jitterOffset.x = jitterX;
         rc.jitterOffset.y = jitterY;
-        m_prevJitterOffset = rc.jitterOffset;
 
         float shiftX = 2.0f * jitterX / renderW;
         float shiftY = 2.0f * jitterY / renderH;
@@ -182,25 +180,143 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
 
 void RenderPipeline::Execute(const RenderQueue& queue, RenderContext& rc)
 {
+    std::vector<RenderContext::ViewState> views;
+    views.push_back(BuildPrimaryViewState(rc));
+    ExecuteViews(queue, rc, views);
+}
+
+void RenderPipeline::ExecuteViews(const RenderQueue& queue, RenderContext& rc, const std::vector<RenderContext::ViewState>& views)
+{
     PROFILE_SCOPE("Total RenderPipeline");
 
-    SceneDataUploadSystem uploadSystem;
-    uploadSystem.Upload(rc, GlobalRootSignature::Instance());
+    if (views.empty()) {
+        return;
+    }
 
-    GlobalRootSignature::Instance().BindAll(
-        rc.commandList,
-        rc.renderState,
-        rc.shadowMap
-    );
+    for (const auto& viewState : views) {
+        ExecuteSingleView(queue, rc, viewState);
+    }
+}
 
-    // 1. パスを FrameGraph に登録
-    for (auto& pass : m_passes) {
-        if (pass) {
-            m_frameGraph.AddPass(pass.get());
+void RenderPipeline::ExecuteSingleView(const RenderQueue& queue, RenderContext& baseRc, const RenderContext::ViewState& viewState)
+{
+    using Clock = std::chrono::high_resolution_clock;
+
+    baseRc.mainViewport = viewState.viewport;
+    baseRc.mainRenderTarget = viewState.mainRenderTarget;
+    baseRc.mainDepthStencil = viewState.mainDepthStencil;
+    baseRc.sceneColorTexture = viewState.sceneColorTexture;
+    baseRc.sceneDepthTexture = viewState.sceneDepthTexture;
+    baseRc.viewMatrix = viewState.viewMatrix;
+    baseRc.projectionMatrix = viewState.projectionMatrix;
+    baseRc.viewProjectionUnjittered = viewState.viewProjectionUnjittered;
+    baseRc.prevViewProjectionMatrix = viewState.prevViewProjectionMatrix;
+    baseRc.cameraPosition = viewState.cameraPosition;
+    baseRc.cameraDirection = viewState.cameraDirection;
+    baseRc.fovY = viewState.fovY;
+    baseRc.aspect = viewState.aspect;
+    baseRc.nearZ = viewState.nearZ;
+    baseRc.farZ = viewState.farZ;
+    baseRc.jitterOffset = viewState.jitterOffset;
+    {
+        auto& history = m_viewHistory[viewState.historyKey];
+        if (!history.initialized) {
+            history.prevViewProjection = viewState.viewProjectionUnjittered;
+            history.prevJitterOffset = viewState.prevJitterOffset;
+            history.initialized = true;
+        }
+        baseRc.prevViewProjectionMatrix = history.prevViewProjection;
+        baseRc.prevJitterOffset = history.prevJitterOffset;
+        history.prevViewProjection = viewState.viewProjectionUnjittered;
+        history.prevJitterOffset = viewState.jitterOffset;
+    }
+
+    ExtractVisibleInstancesPass* visiblePass = nullptr;
+    BuildInstanceBufferPass* instancePass = nullptr;
+    BuildIndirectCommandPass* indirectPass = nullptr;
+    ComputeCullingPass* computePass = nullptr;
+    std::vector<IRenderPass*> graphPasses;
+    graphPasses.reserve(m_passes.size());
+    for (const auto& pass : m_passes) {
+        if (!pass) {
+            continue;
+        }
+        if (auto* typed = dynamic_cast<ExtractVisibleInstancesPass*>(pass.get())) {
+            visiblePass = typed;
+            continue;
+        }
+        if (auto* typed = dynamic_cast<BuildInstanceBufferPass*>(pass.get())) {
+            instancePass = typed;
+            continue;
+        }
+        if (auto* typed = dynamic_cast<BuildIndirectCommandPass*>(pass.get())) {
+            indirectPass = typed;
+            continue;
+        }
+        if (auto* typed = dynamic_cast<ComputeCullingPass*>(pass.get())) {
+            computePass = typed;
+            continue;
+        }
+        graphPasses.push_back(pass.get());
+    }
+
+    if (visiblePass || instancePass || indirectPass || computePass) {
+        FrameGraphResources prepResources(m_frameGraph);
+        std::vector<TaskSystem::TaskGraphNode> prepGraph;
+        auto addNode = [&](std::function<void()> task, std::vector<size_t> deps = {}) {
+            TaskSystem::TaskGraphNode node{};
+            node.task = std::move(task);
+            node.dependencies = std::move(deps);
+            prepGraph.push_back(std::move(node));
+            return prepGraph.size() - 1;
+        };
+
+        size_t visibleNode = static_cast<size_t>(-1);
+        size_t instanceNode = static_cast<size_t>(-1);
+        size_t indirectNode = static_cast<size_t>(-1);
+
+        if (visiblePass) {
+            visibleNode = addNode([&]() { visiblePass->Execute(prepResources, queue, baseRc); });
+        }
+        if (instancePass) {
+            std::vector<size_t> deps;
+            if (visibleNode != static_cast<size_t>(-1)) deps.push_back(visibleNode);
+            instanceNode = addNode([&]() { instancePass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+        }
+        if (indirectPass) {
+            std::vector<size_t> deps;
+            if (instanceNode != static_cast<size_t>(-1)) deps.push_back(instanceNode);
+            indirectNode = addNode([&]() { indirectPass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+        }
+        if (computePass) {
+            std::vector<size_t> deps;
+            if (indirectNode != static_cast<size_t>(-1)) deps.push_back(indirectNode);
+            addNode([&]() { computePass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+        }
+
+        if (!prepGraph.empty()) {
+            TaskSystem::Instance().RunTaskGraph(prepGraph);
         }
     }
 
-    // 2. 外部リソースのインポート
+    const auto uploadStart = Clock::now();
+    SceneDataUploadSystem uploadSystem;
+    uploadSystem.Upload(baseRc, GlobalRootSignature::Instance());
+    baseRc.prepMetrics.sceneUploadMs =
+        std::chrono::duration<double, std::milli>(Clock::now() - uploadStart).count();
+
+    GlobalRootSignature::Instance().BindAll(
+        baseRc.commandList,
+        baseRc.renderState,
+        baseRc.shadowMap
+    );
+
+    for (auto* pass : graphPasses) {
+        if (pass) {
+            m_frameGraph.AddPass(pass);
+        }
+    }
+
     Graphics& g = Graphics::Instance();
     FrameBuffer* sceneBuffer = g.GetFrameBuffer(FrameBufferId::Scene);
     FrameBuffer* prevSceneFB = g.GetFrameBuffer(FrameBufferId::PrevScene);
@@ -210,14 +326,36 @@ void RenderPipeline::Execute(const RenderQueue& queue, RenderContext& rc)
     if (prevSceneFB) m_frameGraph.ImportTexture("PrevScene", prevSceneFB->GetColorTexture(0));
     if (displayBuffer) m_frameGraph.ImportTexture("DisplayColor", displayBuffer->GetColorTexture(0));
 
-    // 3. FrameGraph 実行 (Setup → Compile → Execute)
-    m_frameGraph.Execute(queue, rc);
+    m_frameGraph.Execute(queue, baseRc);
 
-    // 前フレームの保存
     Graphics::Instance().CopyFrameBuffer(
         Graphics::Instance().GetFrameBuffer(FrameBufferId::Scene),
         Graphics::Instance().GetFrameBuffer(FrameBufferId::PrevScene)
     );
+}
+
+RenderContext::ViewState RenderPipeline::BuildPrimaryViewState(const RenderContext& rc) const
+{
+    RenderContext::ViewState view{};
+    view.historyKey = 0;
+    view.viewport = rc.mainViewport;
+    view.mainRenderTarget = rc.mainRenderTarget;
+    view.mainDepthStencil = rc.mainDepthStencil;
+    view.sceneColorTexture = rc.sceneColorTexture;
+    view.sceneDepthTexture = rc.sceneDepthTexture;
+    view.viewMatrix = rc.viewMatrix;
+    view.projectionMatrix = rc.projectionMatrix;
+    view.viewProjectionUnjittered = rc.viewProjectionUnjittered;
+    view.prevViewProjectionMatrix = rc.prevViewProjectionMatrix;
+    view.cameraPosition = rc.cameraPosition;
+    view.cameraDirection = rc.cameraDirection;
+    view.fovY = rc.fovY;
+    view.aspect = rc.aspect;
+    view.nearZ = rc.nearZ;
+    view.farZ = rc.farZ;
+    view.jitterOffset = rc.jitterOffset;
+    view.prevJitterOffset = rc.prevJitterOffset;
+    return view;
 }
 
 void RenderPipeline::BlitSceneToDisplay(RenderContext& rc)
@@ -280,6 +418,9 @@ void RenderPipeline::EndFrame(RenderContext& rc)
 
 void RenderPipeline::SubmitFrame(RenderContext& rc)
 {
+    using Clock = std::chrono::high_resolution_clock;
+    const auto submitStart = Clock::now();
+
     Graphics& g = Graphics::Instance();
 
     // Keep GPU buffers alive until GPU finishes (prevents use-after-free)
@@ -299,4 +440,7 @@ void RenderPipeline::SubmitFrame(RenderContext& rc)
         dx12Cmd->End();
         dx12Cmd->Submit();
     }
+
+    rc.prepMetrics.submitFrameMs =
+        std::chrono::duration<double, std::milli>(Clock::now() - submitStart).count();
 }

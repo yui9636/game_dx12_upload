@@ -14,6 +14,8 @@ public:
 
     ID3D12Device*               GetDevice()            const { return m_device.Get(); }
     ID3D12CommandQueue*         GetCommandQueue()      const { return m_commandQueue.Get(); }
+    ID3D12CommandQueue*         GetComputeQueue()      const { return m_computeQueue.Get(); }
+    ID3D12Fence*                GetComputeFence()      const { return m_computeFence.Get(); }
     IDXGISwapChain3*            GetSwapChain()         const { return m_swapChain.Get(); }
     ID3D12DescriptorHeap*       GetRTVHeap()           const { return m_rtvHeap.Get(); }
     ID3D12DescriptorHeap*       GetDSVHeap()           const { return m_dsvHeap.Get(); }
@@ -46,6 +48,8 @@ public:
     uint64_t GetMainFenceCurrentValue() const { return m_fenceValues[m_frameIndex]; }
 
     void FlushDebugMessages();
+    uint64_t ExecuteComputeCommandLists(ID3D12CommandList* const* lists, uint32_t count);
+    void QueueGraphicsWaitForCompute(uint64_t fenceValue);
 
     static constexpr uint32_t FRAME_COUNT = 2;
 
@@ -60,6 +64,7 @@ private:
     ComPtr<IDXGIFactory4>            m_dxgiFactory;
     ComPtr<ID3D12Device>             m_device;
     ComPtr<ID3D12CommandQueue>       m_commandQueue;
+    ComPtr<ID3D12CommandQueue>       m_computeQueue;
     ComPtr<IDXGISwapChain3>          m_swapChain;
 
     // Descriptor heaps
@@ -81,8 +86,11 @@ private:
 
     // Fence
     ComPtr<ID3D12Fence>              m_fence;
+    ComPtr<ID3D12Fence>              m_computeFence;
     HANDLE                           m_fenceEvent = nullptr;
+    HANDLE                           m_computeFenceEvent = nullptr;
     uint64_t                         m_fenceValues[FRAME_COUNT] = {};
+    uint64_t                         m_computeFenceValue = 1;
     uint32_t                         m_frameIndex = 0;
 
     // Deferred descriptor free

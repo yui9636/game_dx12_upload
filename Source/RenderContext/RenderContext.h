@@ -96,6 +96,57 @@ struct RenderPipelineSettings
 
 struct RenderContext
 {
+    struct ViewState
+    {
+        uint64_t historyKey = 0;
+        RhiViewport viewport;
+        ITexture* mainRenderTarget = nullptr;
+        ITexture* mainDepthStencil = nullptr;
+        ITexture* sceneColorTexture = nullptr;
+        ITexture* sceneDepthTexture = nullptr;
+
+        DirectX::XMFLOAT4X4 viewMatrix;
+        DirectX::XMFLOAT4X4 projectionMatrix;
+        DirectX::XMFLOAT4X4 viewProjectionUnjittered;
+        DirectX::XMFLOAT4X4 prevViewProjectionMatrix;
+        DirectX::XMFLOAT3 cameraPosition = { 0.0f, 0.0f, 0.0f };
+        DirectX::XMFLOAT3 cameraDirection = { 0.0f, 0.0f, 1.0f };
+        float fovY = 0.785f;
+        float aspect = 1.0f;
+        float nearZ = 0.1f;
+        float farZ = 1000.0f;
+        DirectX::XMFLOAT2 jitterOffset = { 0.0f, 0.0f };
+        DirectX::XMFLOAT2 prevJitterOffset = { 0.0f, 0.0f };
+    };
+
+    struct PreparationMetrics
+    {
+        double sceneUploadMs = 0.0;
+        double frameGraphSetupMs = 0.0;
+        double frameGraphCompileMs = 0.0;
+        double frameGraphExecuteMs = 0.0;
+        double submitFrameMs = 0.0;
+        double visibleExtractMs = 0.0;
+        double instanceBuildMs = 0.0;
+        double indirectBuildMs = 0.0;
+        uint32_t visibleBatchCount = 0;
+        uint32_t visibleInstanceCount = 0;
+        uint32_t preparedBatchCount = 0;
+        uint32_t preparedIndirectCount = 0;
+        uint32_t preparedSkinnedCount = 0;
+        uint32_t instanceBufferReallocs = 0;
+        uint32_t visibleStructuredBufferReallocs = 0;
+        uint32_t indirectBufferReallocs = 0;
+        uint32_t visibleScratchVectorGrowths = 0;
+        uint32_t preparedInstanceVectorGrowths = 0;
+        uint32_t preparedBatchVectorGrowths = 0;
+        uint32_t indirectScratchVectorGrowths = 0;
+        uint32_t drawArgsVectorGrowths = 0;
+        uint32_t metadataVectorGrowths = 0;
+        uint32_t skinnedCommandCount = 0;
+        uint32_t nonSkinnedCommandCount = 0;
+    };
+
     struct PreparedInstanceBatch
     {
         DrawBatchKey key;
@@ -210,6 +261,8 @@ struct RenderContext
     MaskData maskData;
     RadialBlurData radialBlurData;
     GaussianFilterData gaussianFilterData;
+
+    PreparationMetrics prepMetrics;
 
    
 };

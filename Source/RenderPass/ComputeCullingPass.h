@@ -3,6 +3,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <memory>
+#include <vector>
 
 class DX12Device;
 class IBuffer;
@@ -20,6 +21,13 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
+    struct InFlightComputeSubmission
+    {
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
+        uint64_t fenceValue = 0;
+    };
+
     void InitGpuResources(DX12Device* device);
     void ExtractFrustumPlanes(const DirectX::XMFLOAT4X4& viewProj, DirectX::XMFLOAT4 planesOut[6]);
 
@@ -42,6 +50,7 @@ private:
     // CullCommandMeta upload buffer (IBuffer, UPLOAD)
     std::shared_ptr<IBuffer> m_cullMetaBuffer;
     uint32_t m_cullMetaCapacity = 0;
+    std::shared_ptr<IBuffer> m_paramsBuffer;
 
     // Count buffer for multi-draw ExecuteIndirect
     std::shared_ptr<IBuffer> m_countBuffer;     // UAVStorage, holds uint32_t commandCount
@@ -52,4 +61,5 @@ private:
     bool m_drawArgsInIndirectState = false;
     bool m_countInIndirectState = false;
     bool m_needsGrow = false;
+    std::vector<InFlightComputeSubmission> m_inFlightSubmissions;
 };

@@ -1,7 +1,10 @@
-#include "BuildInstanceBufferPass.h"
+ï»¿#include "BuildInstanceBufferPass.h"
 #include "Graphics.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IBuffer.h"
+#include "System/TaskSystem.h"
+#include <algorithm>
+#include <chrono>
 
 void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder)
 {
@@ -10,7 +13,10 @@ void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder)
 
 void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
-    // ‰Â‹ instance ‚ğ˜A‘±‚µ‚½”z—ñ‚Ö‹l‚ß‘Ö‚¦Ainstance stream ‚Æ structured buffer ‚ğXV‚·‚éB
+    using Clock = std::chrono::high_resolution_clock;
+    const auto startTime = Clock::now();
+
+    // å¯è¦– instance ã‚’é€£ç¶šã—ãŸé…åˆ—ã¸è©°ã‚æ›¿ãˆã€instance stream ã¨ structured buffer ã‚’æ›´æ–°ã™ã‚‹ã€‚
     (void)resources;
     (void)queue;
 
@@ -19,29 +25,53 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     rc.preparedVisibleInstanceCount = 0;
     rc.useGpuCulling = false; // Reset; ComputeCullingPass will set if active
 
-    // BuildIndirectCommandPass ‚ª–„‚ß‚é active ƒtƒB[ƒ‹ƒh‚ğæ‚É‰Šú‰»‚·‚é
+    // BuildIndirectCommandPass ãŒåŸ‹ã‚ã‚‹ active ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã‚’å…ˆã«åˆæœŸåŒ–ã™ã‚‹
     rc.activeInstanceBuffer = nullptr;
     rc.activeDrawArgsBuffer = nullptr;
     rc.activeDrawCommands.clear();
     rc.activeSkinnedCommands.clear();
 
-    // batch ‚²‚Æ‚É instance ”ÍˆÍ‚ğ‹L˜^‚µ‚ÄAŒã’i‚Ì indirect command ‚©‚çQÆ‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+    // batch ã”ã¨ã« instance ç¯„å›²ã‚’è¨˜éŒ²ã—ã¦ã€å¾Œæ®µã® indirect command ã‹ã‚‰å‚ç…§ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
     uint32_t firstInstance = 0;
+    uint32_t totalInstanceCount = 0;
+    if (m_batchScratch.capacity() < rc.visibleOpaqueInstanceBatches.size()) {
+        ++rc.prepMetrics.preparedBatchVectorGrowths;
+    }
+    m_batchScratch.clear();
+    m_batchScratch.reserve(rc.visibleOpaqueInstanceBatches.size());
     for (const auto& batch : rc.visibleOpaqueInstanceBatches) {
         RenderContext::PreparedInstanceBatch prepared{};
         prepared.key = batch.key;
         prepared.modelResource = batch.modelResource;
         prepared.firstInstance = firstInstance;
         prepared.instanceCount = static_cast<uint32_t>(batch.instances.size());
-        rc.preparedOpaqueInstanceBatches.push_back(prepared);
-
-        rc.preparedInstanceData.insert(
-            rc.preparedInstanceData.end(),
-            batch.instances.begin(),
-            batch.instances.end());
-
+        m_batchScratch.push_back(prepared);
         firstInstance += prepared.instanceCount;
+        totalInstanceCount += prepared.instanceCount;
     }
+
+    if (m_instanceScratch.capacity() < totalInstanceCount) {
+        ++rc.prepMetrics.preparedInstanceVectorGrowths;
+    }
+    m_instanceScratch.resize(totalInstanceCount);
+    TaskSystem::Instance().ParallelFor(
+        rc.visibleOpaqueInstanceBatches.size(),
+        1,
+        [&](size_t batchIndex) {
+            const auto& batch = rc.visibleOpaqueInstanceBatches[batchIndex];
+            const auto& prepared = m_batchScratch[batchIndex];
+            if (batch.instances.empty()) {
+                return;
+            }
+
+            std::copy(
+                batch.instances.begin(),
+                batch.instances.end(),
+                m_instanceScratch.begin() + prepared.firstInstance);
+        });
+
+    rc.preparedOpaqueInstanceBatches = m_batchScratch;
+    rc.preparedInstanceData = m_instanceScratch;
 
     rc.preparedInstanceStride = sizeof(InstanceData);
     rc.preparedVisibleInstanceCount = static_cast<uint32_t>(rc.preparedInstanceData.size());
@@ -52,6 +82,9 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
         rc.preparedInstanceBuffer.reset();
         rc.preparedVisibleInstanceStructuredBuffer.reset();
         rc.preparedInstanceCapacity = 0;
+        rc.prepMetrics.preparedBatchCount = static_cast<uint32_t>(rc.preparedOpaqueInstanceBatches.size());
+        rc.prepMetrics.instanceBuildMs =
+            std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
         return;
     }
 
@@ -61,6 +94,8 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
         rc.preparedVisibleInstanceStructuredBuffer.reset();
         rc.preparedInstanceCapacity = 0;
         rc.preparedVisibleInstanceCount = 0;
+        rc.prepMetrics.instanceBuildMs =
+            std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
         return;
     }
 
@@ -72,9 +107,13 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
         rc.preparedVisibleInstanceStructuredBuffer = std::shared_ptr<IBuffer>(
             factory->CreateStructuredBuffer(sizeof(InstanceData), rc.preparedVisibleInstanceCount, nullptr).release());
         rc.preparedInstanceCapacity = rc.preparedInstanceBuffer ? capacity : 0;
-    } else if (!rc.preparedVisibleInstanceStructuredBuffer || rc.preparedVisibleInstanceStructuredBuffer->GetSize() < requiredBytes) {
+        ++rc.prepMetrics.instanceBufferReallocs;
+        ++rc.prepMetrics.visibleStructuredBufferReallocs;
+    }
+    else if (!rc.preparedVisibleInstanceStructuredBuffer || rc.preparedVisibleInstanceStructuredBuffer->GetSize() < requiredBytes) {
         rc.preparedVisibleInstanceStructuredBuffer = std::shared_ptr<IBuffer>(
             factory->CreateStructuredBuffer(sizeof(InstanceData), rc.preparedVisibleInstanceCount, nullptr).release());
+        ++rc.prepMetrics.visibleStructuredBufferReallocs;
     }
 
     if (rc.commandList) {
@@ -91,4 +130,8 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
                 requiredBytes);
         }
     }
+
+    rc.prepMetrics.preparedBatchCount = static_cast<uint32_t>(rc.preparedOpaqueInstanceBatches.size());
+    rc.prepMetrics.instanceBuildMs =
+        std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
 }

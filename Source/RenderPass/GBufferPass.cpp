@@ -126,6 +126,19 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
             s_loggedDepthResource = true;
         }
     }
+    static bool s_loggedColorResources = false;
+    if (!s_loggedColorResources && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* rt0 = dynamic_cast<DX12Texture*>(rtvs[0]);
+        auto* rt1 = dynamic_cast<DX12Texture*>(rtvs[1]);
+        auto* rt2 = dynamic_cast<DX12Texture*>(rtvs[2]);
+        auto* rt3 = dynamic_cast<DX12Texture*>(rtvs[3]);
+        LOG_INFO("[GBufferPass] rt0=%p rt1=%p rt2=%p rt3=%p",
+            rt0 ? rt0->GetNativeResource() : nullptr,
+            rt1 ? rt1->GetNativeResource() : nullptr,
+            rt2 ? rt2->GetNativeResource() : nullptr,
+            rt3 ? rt3->GetNativeResource() : nullptr);
+        s_loggedColorResources = true;
+    }
 
     // クリアとターゲット設定
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };

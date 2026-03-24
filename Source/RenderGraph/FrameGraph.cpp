@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <sstream>
 #include <cassert>
+#include <chrono>
 
 // ============================================================
 // ============================================================
@@ -111,9 +112,23 @@ ResourceHandle FrameGraph::ImportTexture(const std::string& name, ITexture* text
 }
 
 void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
+    using Clock = std::chrono::high_resolution_clock;
+
+    const auto setupStart = Clock::now();
     Setup();
+    const auto compileStart = Clock::now();
+    rc.prepMetrics.frameGraphSetupMs =
+        std::chrono::duration<double, std::milli>(compileStart - setupStart).count();
+
     Compile();
+    const auto executeStart = Clock::now();
+    rc.prepMetrics.frameGraphCompileMs =
+        std::chrono::duration<double, std::milli>(executeStart - compileStart).count();
+
     ExecutePasses(queue, rc);
+    const auto executeEnd = Clock::now();
+    rc.prepMetrics.frameGraphExecuteMs =
+        std::chrono::duration<double, std::milli>(executeEnd - executeStart).count();
 
     for (auto& node : m_resourceNodes) {
         if (!node.isImported && node.ownedTexture) {

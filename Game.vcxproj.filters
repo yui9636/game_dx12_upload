@@ -801,6 +801,12 @@
     <ClInclude Include="Source\Render\GlobalRootSignature.h">
       <Filter>Source\Render</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Render\OffscreenRenderer.h">
+      <Filter>Source\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Render\PreviewTexturePool.h">
+      <Filter>Source\Render</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Render\ShaderCommon.h">
       <Filter>Source\Render</Filter>
     </ClInclude>
@@ -1414,6 +1420,12 @@
       <Filter>Source\PostEffect</Filter>
     </ClCompile>
     <ClCompile Include="Source\Render\GlobalRootSignature.cpp">
+      <Filter>Source\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Render\OffscreenRenderer.cpp">
+      <Filter>Source\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Render\PreviewTexturePool.cpp">
       <Filter>Source\Render</Filter>
     </ClCompile>
     <ClCompile Include="Source\Scene\SceneDataUploadSystem.cpp">

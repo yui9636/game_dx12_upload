@@ -126,6 +126,9 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    DepthState lastDepthState = DepthState::EnumCount;
+    RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
     // Get active buffers
     IBuffer* instanceBuf = rc.activeInstanceBuffer;
@@ -149,9 +152,14 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
             continue;
         }
 
-        rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
-        rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
-        rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+        if (lastDepthState != cmd.key.depthState) {
+            rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
+            lastDepthState = cmd.key.depthState;
+        }
+        if (lastRasterizerState != cmd.key.rasterizerState) {
+            rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
+            lastRasterizerState = cmd.key.rasterizerState;
+        }
 
         if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
@@ -208,9 +216,14 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
         const ModelResource::MeshResource* meshResource = modelResource->GetMeshResource(meshIndex);
         if (!meshResource) continue;
 
-        rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
-        rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
-        rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+        if (lastDepthState != cmd.key.depthState) {
+            rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
+            lastDepthState = cmd.key.depthState;
+        }
+        if (lastRasterizerState != cmd.key.rasterizerState) {
+            rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
+            lastRasterizerState = cmd.key.rasterizerState;
+        }
 
         if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
@@ -243,6 +256,9 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    DepthState lastDepthState = DepthState::EnumCount;
+    RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
     for (DrawInfo& drawInfo : drawInfos)
     {
@@ -288,9 +304,14 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
                 continue;
             }
 
-            rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(drawInfo.depthState), 0);
-            rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(drawInfo.rasterizerState));
-            rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+            if (lastDepthState != drawInfo.depthState) {
+                rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(drawInfo.depthState), 0);
+                lastDepthState = drawInfo.depthState;
+            }
+            if (lastRasterizerState != drawInfo.rasterizerState) {
+                rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(drawInfo.rasterizerState));
+                lastRasterizerState = drawInfo.rasterizerState;
+            }
 
             if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) {
                 continue;
@@ -320,6 +341,9 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Transparency), blendFactor, 0xFFFFFFFF);
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    DepthState lastDepthState = DepthState::EnumCount;
+    RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
     std::sort(transparencyDrawInfos.begin(), transparencyDrawInfos.end(),
         [](const TransparencyDrawInfo& lhs, const TransparencyDrawInfo& rhs) { return lhs.distance > rhs.distance; });
@@ -335,9 +359,14 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
         if (!shader) continue;
         shader->Begin(rc);
 
-        rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(info.depthState), 0);
-        rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(info.rasterizerState));
-        rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+        if (lastDepthState != info.depthState) {
+            rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(info.depthState), 0);
+            lastDepthState = info.depthState;
+        }
+        if (lastRasterizerState != info.rasterizerState) {
+            rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(info.rasterizerState));
+            lastRasterizerState = info.rasterizerState;
+        }
 
         if (!modelResource->BindMeshBuffers(rc.commandList, info.meshIndex)) {
             shader->End(rc);

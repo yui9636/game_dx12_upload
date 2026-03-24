@@ -1,5 +1,6 @@
 #pragma once
 #include "RenderPass/IRenderPass.h"
+#include <vector>
 
 class BuildInstanceBufferPass : public IRenderPass {
 public:
@@ -8,4 +9,8 @@ public:
 
     void Setup(FrameGraphBuilder& builder) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
+
+private:
+    std::vector<RenderContext::PreparedInstanceBatch> m_batchScratch;
+    std::vector<InstanceData> m_instanceScratch;
 };

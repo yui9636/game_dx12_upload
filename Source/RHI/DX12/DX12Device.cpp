@@ -24,6 +24,10 @@ DX12Device::~DX12Device() {
         CloseHandle(m_fenceEvent);
         m_fenceEvent = nullptr;
     }
+    if (m_computeFenceEvent) {
+        CloseHandle(m_computeFenceEvent);
+        m_computeFenceEvent = nullptr;
+    }
 }
 
 void DX12Device::CreateDevice() {
@@ -98,6 +102,12 @@ void DX12Device::CreateCommandQueue() {
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     HRESULT hr = m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue));
+    assert(SUCCEEDED(hr));
+
+    D3D12_COMMAND_QUEUE_DESC computeQueueDesc = {};
+    computeQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    computeQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+    hr = m_device->CreateCommandQueue(&computeQueueDesc, IID_PPV_ARGS(&m_computeQueue));
     assert(SUCCEEDED(hr));
 }
 
@@ -176,9 +186,13 @@ void DX12Device::CreateFrameResources() {
 
 void DX12Device::CreateFence() {
     m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
+    m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_computeFence));
     m_fenceValues[m_frameIndex] = 1;
+    m_computeFenceValue = 1;
     m_fenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    m_computeFenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     assert(m_fenceEvent != nullptr);
+    assert(m_computeFenceEvent != nullptr);
 }
 
 void DX12Device::WaitForGPU() {
@@ -193,6 +207,16 @@ void DX12Device::WaitForGPU() {
     }
 
     m_fenceValues[m_frameIndex]++;
+
+    if (m_computeQueue && m_computeFence && m_computeFenceEvent) {
+        const uint64_t computeFenceValue = m_computeFenceValue;
+        m_computeQueue->Signal(m_computeFence.Get(), computeFenceValue);
+        if (m_computeFence->GetCompletedValue() < computeFenceValue) {
+            m_computeFence->SetEventOnCompletion(computeFenceValue, m_computeFenceEvent);
+            WaitForSingleObjectEx(m_computeFenceEvent, INFINITE, FALSE);
+        }
+        ++m_computeFenceValue;
+    }
 }
 
 void DX12Device::MoveToNextFrame() {
@@ -301,4 +325,24 @@ void DX12Device::FlushDebugMessages() {
 
     infoQueue->ClearStoredMessages();
 #endif
+}
+
+uint64_t DX12Device::ExecuteComputeCommandLists(ID3D12CommandList* const* lists, uint32_t count)
+{
+    if (!m_computeQueue || !m_computeFence || !lists || count == 0) {
+        return 0;
+    }
+
+    m_computeQueue->ExecuteCommandLists(count, lists);
+    const uint64_t fenceValue = m_computeFenceValue++;
+    m_computeQueue->Signal(m_computeFence.Get(), fenceValue);
+    return fenceValue;
+}
+
+void DX12Device::QueueGraphicsWaitForCompute(uint64_t fenceValue)
+{
+    if (!m_commandQueue || !m_computeFence || fenceValue == 0) {
+        return;
+    }
+    m_commandQueue->Wait(m_computeFence.Get(), fenceValue);
 }

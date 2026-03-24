@@ -31,6 +31,8 @@
 #include <wrl/client.h>
 
 namespace {
+    constexpr bool kEnableDx12RuntimeDiagnostics = false;
+
     struct TextureSnapshotState {
         Microsoft::WRL::ComPtr<ID3D12Resource> readbackBuffer;
         UINT64 bufferSize = 0;
@@ -512,6 +514,47 @@ void EngineKernel::Render()
     }
     m_renderPipeline->Execute(m_renderQueue, rc);
 
+    static uint64_t s_perfLogFrame = 0;
+    if ((s_perfLogFrame++ % 120ull) == 0ull) {
+        LOG_INFO(
+            "[DX12Perf] sceneUpload=%.3fms fg(setup=%.3f compile=%.3f execute=%.3f) submit=%.3fms "
+            "extract=%.3fms visible=%.3fms instance=%.3fms indirect=%.3fms "
+            "opaque=%u transparent=%u batches=%u visibleBatches=%u visibleInstances=%u "
+            "preparedDraw=%u preparedSkinned=%u matResolves=%u maxBatch=%u "
+            "packetGrow=(%u,%u) batchGrow=%u visibleScratchGrow=%u preparedGrow=(inst:%u,batch:%u) "
+            "indirectGrow=(gpu:%u,scratch:%u,args:%u,meta:%u) split=(nonSkin:%u,skin:%u)",
+            rc.prepMetrics.sceneUploadMs,
+            rc.prepMetrics.frameGraphSetupMs,
+            rc.prepMetrics.frameGraphCompileMs,
+            rc.prepMetrics.frameGraphExecuteMs,
+            rc.prepMetrics.submitFrameMs,
+            m_renderQueue.metrics.meshExtractMs,
+            rc.prepMetrics.visibleExtractMs,
+            rc.prepMetrics.instanceBuildMs,
+            rc.prepMetrics.indirectBuildMs,
+            m_renderQueue.metrics.opaquePacketCount,
+            m_renderQueue.metrics.transparentPacketCount,
+            m_renderQueue.metrics.opaqueBatchCount,
+            rc.prepMetrics.visibleBatchCount,
+            rc.prepMetrics.visibleInstanceCount,
+            rc.prepMetrics.preparedIndirectCount,
+            rc.prepMetrics.preparedSkinnedCount,
+            m_renderQueue.metrics.materialResolveCount,
+            m_renderQueue.metrics.maxInstancesPerBatch,
+            m_renderQueue.metrics.opaquePacketVectorGrowths,
+            m_renderQueue.metrics.transparentPacketVectorGrowths,
+            m_renderQueue.metrics.opaqueBatchVectorGrowths,
+            rc.prepMetrics.visibleScratchVectorGrowths,
+            rc.prepMetrics.preparedInstanceVectorGrowths,
+            rc.prepMetrics.preparedBatchVectorGrowths,
+            rc.prepMetrics.indirectBufferReallocs,
+            rc.prepMetrics.indirectScratchVectorGrowths,
+            rc.prepMetrics.drawArgsVectorGrowths,
+            rc.prepMetrics.metadataVectorGrowths,
+            rc.prepMetrics.nonSkinnedCommandCount,
+            rc.prepMetrics.skinnedCommandCount);
+    }
+
     // ★ DX12: FrameGraph 完了後に SceneColor → DisplayColor のトーンマップBlit
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         m_renderPipeline->BlitSceneToDisplay(rc);
@@ -552,17 +595,17 @@ void EngineKernel::Render()
     TextureSnapshotState& gbuffer0Snapshot = GetGBuffer0SnapshotState();
     TextureSnapshotState& gbuffer1Snapshot = GetGBuffer1SnapshotState();
     TextureSnapshotState& gbuffer2Snapshot = GetGBuffer2SnapshotState();
-    const bool shouldCaptureDisplay = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureDisplay = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !displaySnapshot.logged;
-    const bool shouldCaptureScene = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureScene = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !sceneSnapshot.logged;
-    const bool shouldCaptureSceneOpaque = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureSceneOpaque = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !sceneOpaqueSnapshot.logged && !m_renderQueue.opaquePackets.empty();
-    const bool shouldCaptureGBuffer0 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureGBuffer0 = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !gbuffer0Snapshot.logged && !m_renderQueue.opaquePackets.empty() && rc.debugGBuffer0;
-    const bool shouldCaptureGBuffer1 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureGBuffer1 = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !gbuffer1Snapshot.logged && !m_renderQueue.opaquePackets.empty() && rc.debugGBuffer1;
-    const bool shouldCaptureGBuffer2 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+    const bool shouldCaptureGBuffer2 = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && !gbuffer2Snapshot.logged && !m_renderQueue.opaquePackets.empty() && rc.debugGBuffer2;
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
@@ -602,7 +645,7 @@ void EngineKernel::Render()
     m_renderPipeline->SubmitFrame(rc);
 
     // D3D12 デバッグメッセージをログに出力（初回フレームのみ）
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+    if (kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         Graphics::Instance().GetDX12Device()->FlushDebugMessages();
     }
 
