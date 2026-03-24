@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 #include <DirectXMath.h>
-#include <map> // mapが抜けていたので追加
+#include <map>
 #include "Model/Model.h" 
 
 class IAnimationDriver;
@@ -19,10 +19,8 @@ public:
     void OnGUI() override;
 
     // -------------------------------------------------------
-    // 再生制御 API
     // -------------------------------------------------------
     void PlayBase(int animIndex, bool loop = true, float blendTime = 0.2f, float speed = 1.0f);
-    // アクションレイヤー (攻撃用)
     void PlayAction(int animIndex, bool loop = false, float blendTime = 0.1f, bool isFullBody = true);
     void StopAction(float blendTime = 0.2f);
     void SetActionTime(float time);
@@ -51,7 +49,6 @@ private:
 
     void UpdateLayer(AnimLayer& layer, float dt, bool autoAdvance);
 
-    // ★修正: ::Model::NodePose に統一して曖昧さを回避
     void ComputeLayerPose(AnimLayer& layer, std::vector<::Model::NodePose>& outPoses);
 
     void CaptureTransitionOffsets(const std::vector<::Model::NodePose>& currentFinalPose, int nextAnimIndex);
@@ -62,24 +59,21 @@ private:
     void ComputeRootMotion(const AnimLayer& layer, float prevT, float currentT);
     void ForceRootResetXZ(std::vector<::Model::NodePose>& poses);
 
-    // ★修正: 引数すべてに ::Model::NodePose を適用
     void BlendPoses(const std::vector<::Model::NodePose>& src, const std::vector<::Model::NodePose>& dst, float t, std::vector<::Model::NodePose>& out);
 
     DirectX::XMFLOAT3 SampleRootPos(int animIndex, float time);
 
 private:
-    // ★修正: ここも ::Model に
     ::Model* modelRef = nullptr;
 
-    AnimLayer baseLayer;   // 下半身 (移動)
-    AnimLayer actionLayer; // 上半身 (攻撃)
+    AnimLayer baseLayer;
+    AnimLayer actionLayer;
 
     std::vector<bool> isUpperBody;
     int rootNodeIndex = -1;
     int pelvisNodeIndex = -1;
     int spineNodeIndex = -1;
 
-    // ★修正: std::vector<::Model::NodePose> に統一
     std::vector<::Model::NodePose> basePoses;
     std::vector<::Model::NodePose> actionPoses;
     std::vector<::Model::NodePose> tempPoses;
@@ -99,7 +93,6 @@ private:
     DirectX::XMFLOAT3 rootMotionDelta{ 0,0,0 };
 
 public:
-    // ■ シーケンサー連携用 API
     std::vector<std::string> GetAnimationNameList() const;
     int GetAnimationIndexByName(const std::string& name) const;
 

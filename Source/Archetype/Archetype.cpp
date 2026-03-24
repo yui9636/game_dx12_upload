@@ -10,7 +10,6 @@ void Archetype::AddColumn(ComponentTypeID typeId, size_t elementSize,
     m_typeToIndex[typeId] = m_columns.size();
     m_columns.emplace_back(elementSize, c, mc, ma, d);
 
-    // スキーマを記憶
     m_schemas[typeId] = { elementSize, c, mc, ma, d };
 }
 
@@ -32,8 +31,6 @@ size_t Archetype::AddEntity(EntityID entity) {
     size_t newIndex = m_entityIDs.size();
     m_entityIDs.push_back(entity);
 
-    // 実際のデータは Registry 側から Add() で各列に流し込まれます。
-    // ここでは「何行目に書き込むべきか」の確保だけを行います。
 
     return newIndex;
 }
@@ -41,12 +38,10 @@ size_t Archetype::AddEntity(EntityID entity) {
 EntityID Archetype::RemoveEntity(size_t index) {
     if (index >= m_entityIDs.size()) return Entity::NULL_ID;
 
-    // 全ての列に対して Swap And Pop を実行
     for (auto& column : m_columns) {
         column.Remove(index);
     }
 
-    // EntityIDリスト自体も Swap And Pop する
     size_t lastIndex = m_entityIDs.size() - 1;
     EntityID movedEntity = m_entityIDs[lastIndex];
 

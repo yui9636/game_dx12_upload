@@ -84,7 +84,6 @@ XMFLOAT3 ParticleUtils::SampleEmissionPosition(const ParticleSetting& e, std::mt
         if (!e.surfaceOnly) r *= std::sqrt(Random01(rng));
         return XMFLOAT3(std::cos(angle) * r, std::sin(angle) * r, 0.0f);
     }
-                          // ... 他の形状も同様に移植 (長くなるので省略形ですが、Ring/Arc/Lineなども必要なら追記します)
     default: return XMFLOAT3(0, 0, 0);
     }
 }

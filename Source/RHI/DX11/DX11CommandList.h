@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include "RHI/ICommandList.h"
 #include <wrl.h>
 
@@ -14,7 +14,6 @@ public:
     DX11CommandList(ID3D11DeviceContext* dc);
     ~DX11CommandList() override;
 
-    // ・ｽ`・ｽ・ｽE・ｽo・ｽb・ｽt・ｽ@・ｽﾖ連 (・ｽ・ｽ・ｽ・ｽ・ｽﾏゑｿｽ)
     void Draw(uint32_t vertexCount, uint32_t startVertexLocation) override;
     void DrawIndexed(uint32_t indexCount, uint32_t startIndexLocation, int32_t baseVertexLocation) override;
     void DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
@@ -25,17 +24,15 @@ public:
     void PSSetConstantBuffer(uint32_t slot, IBuffer* buffer) override;
     void CSSetConstantBuffer(uint32_t slot, IBuffer* buffer) override;
 
-    // ・ｽe・ｽN・ｽX・ｽ`・ｽ・ｽ・ｽﾖ連 (・ｽ・ｽ・ｽ・ｽ・ｽﾏゑｿｽ)
     void PSSetTexture(uint32_t slot, ITexture* texture) override;
     void PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) override;
 
     // =========================================================
-    // ・ｽ・ｽ ・ｽﾇ会ｿｽ・ｽF・ｽV・ｽF・ｽ[・ｽ_・ｽ[・ｽﾌバ・ｽC・ｽ・ｽ・ｽh
     // =========================================================
     void VSSetShader(IShader* shader) override;
     void PSSetShader(IShader* shader) override;
-    void GSSetShader(IShader* shader) override; // ・ｽW・ｽI・ｽ・ｽ・ｽg・ｽ・ｽ・ｽV・ｽF・ｽ[・ｽ_・ｽ[
-    void CSSetShader(IShader* shader) override; // ・ｽR・ｽ・ｽ・ｽs・ｽ・ｽ・ｽ[・ｽg・ｽV・ｽF・ｽ[・ｽ_・ｽ[
+    void GSSetShader(IShader* shader) override;
+    void CSSetShader(IShader* shader) override;
 
     void PSSetSampler(uint32_t slot, ISampler* sampler) override;
     void PSSetSamplers(uint32_t startSlot, uint32_t numSamplers, ISampler* const* ppSamplers) override;

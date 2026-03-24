@@ -425,7 +425,15 @@ void EngineKernel::Initialize()
         { IconFontSize::Extra,  64.0f }
     };
     IconFontManager::Instance().Setup(configs);
-    ThumbnailGenerator::Instance().Initialize();
+    m_sharedOffscreen = std::make_unique<OffscreenRenderer>();
+    if (m_sharedOffscreen->Initialize()) {
+        ThumbnailGenerator::Instance().Initialize(m_sharedOffscreen.get());
+        MaterialPreviewStudio::Instance().Initialize(m_sharedOffscreen.get());
+    } else {
+        LOG_ERROR("[EngineKernel] Failed to initialize shared OffscreenRenderer.");
+        ThumbnailGenerator::Instance().Initialize(nullptr);
+        MaterialPreviewStudio::Instance().Initialize(nullptr);
+    }
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
@@ -438,7 +446,6 @@ void EngineKernel::Initialize()
     ID3D11Device* dx11Dev = Graphics::Instance().GetDevice();
 
     m_probeBaker = std::make_unique<ReflectionProbeBaker>(dx11Dev);
-    MaterialPreviewStudio::Instance().Initialize(dx11Dev);
     GlobalRootSignature::Instance().Initialize(dx11Dev);
 
     m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
@@ -470,7 +477,26 @@ void EngineKernel::Update(float rawDt)
 
 void EngineKernel::Render()
 {
-    ThumbnailGenerator::Instance().PumpOne();
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
+            dx12Device->ProcessDeferredFrees();
+        }
+    }
+    if (m_sharedOffscreen) {
+        ImGuiRenderer::ProcessDeferredUnregisters(m_sharedOffscreen->GetCompletedFenceValue());
+    }
+
+    // Priority dispatch: MaterialPreview (active editing) > Thumbnails (background)
+    // 1 job per frame on shared OffscreenRenderer to avoid GPU contention
+    static int s_thumbnailSkipCounter = 0;
+    if (m_sharedOffscreen && m_sharedOffscreen->IsGpuIdle()) {
+        if (MaterialPreviewStudio::Instance().IsDirty())
+            MaterialPreviewStudio::Instance().PumpPreview();
+        else if (ThumbnailGenerator::Instance().HasPending() && ++s_thumbnailSkipCounter >= 2) {
+            s_thumbnailSkipCounter = 0;
+            ThumbnailGenerator::Instance().PumpOne();
+        }
+    }
 
     Registry& reg = m_gameLayer ? m_gameLayer->GetRegistry() : m_emptyRegistry;
     RenderContext rc = m_renderPipeline->BeginFrame(reg);

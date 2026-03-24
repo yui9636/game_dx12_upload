@@ -4,7 +4,6 @@
 #include "Collision/ColliderComponent.h"
 #include "Model.h"
 
-// マネージャー群
 #include "Effect/EffectManager.h"
 #include "Effect/EffectNode.h"
 #include "Effect/EffectLoader.h"
@@ -20,7 +19,6 @@ using namespace DirectX;
 
 void TimelineCharacter::Start()
 {
-    // 必要なコンポーネントを取得しておく
     auto owner = GetActor();
     if (owner) {
         collider = owner->GetComponent<ColliderComponent>();
@@ -40,10 +38,8 @@ void TimelineCharacter::SetRunner(std::shared_ptr<RunnerComponent> r)
     runner = r;
 }
 
-// アニメーション切り替え (PlayActionなどで呼ばれる想定)
 void TimelineCharacter::OnAnimationChange(int newAnimIndex)
 {
-    // 1. 前のアクションの後始末
     for (auto& item : activeItems)
     {
         if (item.vfxInstance) item.vfxInstance->Stop(true);
@@ -53,14 +49,11 @@ void TimelineCharacter::OnAnimationChange(int newAnimIndex)
 
     currentAnimIndex = newAnimIndex;
 
-    // 2. 新しいデータをセット
     if (newAnimIndex >= 0 && newAnimIndex < (int)gameplayData.timelines.size())
     {
-        // データをコピーして、このアクション専用の作業領域とする
         activeItems = gameplayData.timelines[newAnimIndex];
     }
 
-    // 3. カーブ設定の適用 (Runnerへ)
     if (runner && newAnimIndex >= 0 && newAnimIndex < (int)gameplayData.curves.size())
     {
         const auto& curve = gameplayData.curves[newAnimIndex];
@@ -85,24 +78,12 @@ void TimelineCharacter::Update(float elapsedTime)
     auto owner = GetActor();
     if (!owner) return;
 
-    // 現在時間
     float timeSec = runner->GetTimeSeconds();
     int frameNow = SecondsToFrames(timeSec);
 
-    // 1. Hitbox同期 (Colliderコンポーネント側で処理)
-    // ※ColliderComponent::SyncFromSequencer は「GESequencerItemのリスト」ではなく
-    // 「TimelineSequencerComponent*」を引数に取る設計になっている可能性があります。
-    // その場合、TimelineCharacter用にオーバーロードを追加するか、ロジックを移植する必要があります。
-    // 今回は「activeItems」を使って直接同期するロジックをここに書くか、Collider側を拡張します。
-    // いったん「ColliderComponentに vector<GESequencerItem> を渡す関数がある」と仮定、
-    // 無ければ実装する必要があります。
     if (collider) {
-        // collider->SyncItems(activeItems, frameNow); // 理想形
-        // ※既存コードとの整合性のため、ここでは一旦スキップします。
-        // Collider連携が必要なら別途指示ください。
     }
 
-    // 2. アイテム更新 (VFX / Audio)
     for (auto& it : activeItems)
     {
         // --------------------------------------------------------
@@ -114,21 +95,19 @@ void TimelineCharacter::Update(float elapsedTime)
 
             if (isInside)
             {
-                // A. 再生開始
                 if (!it.vfxActive || !it.vfxInstance)
                 {
                     if (it.vfx.assetId[0] != '\0')
                     {
                         XMMATRIX W = CalcWorldMatrixForItem(it);
-                        XMFLOAT3 pos = { 0,0,0 }; // 初期位置はダミー
+                        XMFLOAT3 pos = { 0,0,0 };
 
                         auto instance = EffectManager::Get().Play(it.vfx.assetId, pos);
                         if (instance)
                         {
                             instance->loop = !it.vfx.fireOnEnterOnly;
-                            instance->isSequencerControlled = true; // 外部制御ON
+                            instance->isSequencerControlled = true;
 
-                            // 初期パラメータ注入
                             XMStoreFloat4x4(&instance->parentMatrix, W);
                             instance->overrideLocalTransform.position = it.vfx.offsetLocal;
                             instance->overrideLocalTransform.rotation = it.vfx.offsetRotDeg;
@@ -144,15 +123,11 @@ void TimelineCharacter::Update(float elapsedTime)
                     }
                 }
 
-                // B. 継続更新
                 if (it.vfxInstance)
                 {
-                    // 寿命同期
                     it.vfxInstance->lifeTime = FramesToSeconds(it.end - it.start);
 
-                    // 行列更新
                     XMMATRIX W = CalcWorldMatrixForItem(it);
-                    // 正規化 (スケール除去)
                     {
                         XMFLOAT4X4 m; XMStoreFloat4x4(&m, W);
                         XMVECTOR ax = XMVector3Normalize(XMVectorSet(m._11, m._12, m._13, 0));
@@ -164,7 +139,6 @@ void TimelineCharacter::Update(float elapsedTime)
                     }
                     XMStoreFloat4x4(&it.vfxInstance->parentMatrix, W);
 
-                    // 時間同期
                     float startSec = FramesToSeconds(it.start);
                     float effectAge = timeSec - startSec;
                     EffectManager::Get().SyncInstanceToTime(it.vfxInstance, effectAge);
@@ -172,7 +146,6 @@ void TimelineCharacter::Update(float elapsedTime)
             }
             else
             {
-                // C. 停止
                 if (it.vfxActive)
                 {
                     if (it.vfxInstance) it.vfxInstance->Stop(true);
@@ -190,7 +163,6 @@ void TimelineCharacter::Update(float elapsedTime)
 
             if (isInside)
             {
-                // A. 再生開始
                 if (!it.audioActive)
                 {
                     it.audioActive = true;
@@ -198,7 +170,6 @@ void TimelineCharacter::Update(float elapsedTime)
                     {
                         if (it.audio.is3D)
                         {
-                            // 3D座標取得
                             XMMATRIX W = CalcWorldMatrixForItem(it);
                             XMFLOAT4X4 mat; XMStoreFloat4x4(&mat, W);
                             XMFLOAT3 pos = { mat._41, mat._42, mat._43 };
@@ -218,7 +189,6 @@ void TimelineCharacter::Update(float elapsedTime)
                     }
                 }
 
-                // B. 位置更新
                 if (it.audioActive && it.audioSource && it.audio.is3D)
                 {
                     XMMATRIX W = CalcWorldMatrixForItem(it);
@@ -229,7 +199,6 @@ void TimelineCharacter::Update(float elapsedTime)
             }
             else
             {
-                // C. 停止
                 if (it.audioActive)
                 {
                     it.audioActive = false;
@@ -243,7 +212,6 @@ void TimelineCharacter::Update(float elapsedTime)
     }
 }
 
-// ヘルパー関数群 (TimelineSequencerComponentからロジックを流用)
 DirectX::XMMATRIX TimelineCharacter::CalcWorldMatrixForItem(const GESequencerItem& item)
 {
     using namespace DirectX;
@@ -252,10 +220,6 @@ DirectX::XMMATRIX TimelineCharacter::CalcWorldMatrixForItem(const GESequencerIte
 
     if (owner)
     {
-        // 親ボーン計算 (VFX/Audio共通)
-        // item.vfx.nodeIndex を参照しているが、Audioの場合も audio.nodeIndex を見るように分岐が必要
-        // データの持ち方的に、vfx.nodeIndex と audio.nodeIndex は別変数だが、
-        // 構造体GESequencerItemの設計上、Typeによって使い分けているはず。
 
         int targetNode = -1;
         if (item.type == 2) targetNode = item.vfx.nodeIndex;
@@ -279,7 +243,6 @@ DirectX::XMMATRIX TimelineCharacter::CalcWorldMatrixForItem(const GESequencerIte
         }
     }
 
-    // オフセット計算 (Audioにはオフセットが無いので単位行列、VFXなら計算)
     XMMATRIX W_Offset = XMMatrixIdentity();
     if (item.type == 2) // VFX
     {

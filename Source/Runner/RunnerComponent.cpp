@@ -3,7 +3,6 @@
 #include <cmath>
 
 //========================================================
-// 範囲正規化：start<=end、かつ 0..clipLength に丸める
 //========================================================
 void RunnerComponent::NormalizeRangeToClipLength()
 {
@@ -32,7 +31,6 @@ void RunnerComponent::NormalizeRangeToClipLength()
 }
 
 //========================================================
-// 再生範囲の設定/解除
 //========================================================
 void RunnerComponent::SetPlayRange(float startSeconds, float endSeconds, bool loopWithin)
 {
@@ -43,7 +41,6 @@ void RunnerComponent::SetPlayRange(float startSeconds, float endSeconds, bool lo
 
     NormalizeRangeToClipLength();
 
-    // 現在時刻が外なら範囲内へ寄せる
     if (clipLength > 0.0f)
     {
         if (currentSeconds < rangeStartSeconds) currentSeconds = rangeStartSeconds;
@@ -64,7 +61,6 @@ void RunnerComponent::ClearPlayRange()
 }
 
 //========================================================
-// 範囲端取得
 //========================================================
 float RunnerComponent::GetRangeStartSeconds() const
 {
@@ -78,7 +74,6 @@ float RunnerComponent::GetRangeEndSeconds() const
 }
 
 //========================================================
-// 範囲適用：Clamp/Wrap と “終端到達”の検知
 //========================================================
 void RunnerComponent::ApplyRangeAdvance(float previousSeconds, float& nowSeconds,
     bool& reachedTerminalForward, bool& reachedTerminalBackward)
@@ -140,12 +135,10 @@ void RunnerComponent::ApplyRangeAdvance(float previousSeconds, float& nowSeconds
 }
 
 //========================================================
-// Speedカーブ：点列整列（x昇順）
 //========================================================
 void RunnerComponent::SortSpeedCurvePointsByT()
 {
     if (speedCurvePoints.empty()) return;
-    // 単純バブルで十分（点数は少ない前提）
     for (int i = 0; i < (int)speedCurvePoints.size(); ++i)
     {
         for (int j = 1; j < (int)speedCurvePoints.size(); ++j)
@@ -161,19 +154,16 @@ void RunnerComponent::SortSpeedCurvePointsByT()
 }
 
 //========================================================
-// Speedカーブ：設定・消去
 //========================================================
 void RunnerComponent::SetSpeedCurvePoints(const std::vector<CurvePoint>& points)
 {
     speedCurvePoints = points;
 
-    // xのClamp（0..1）と yの最低0制限（負倍率は0に丸める）
     for (auto& p : speedCurvePoints)
     {
         if (p.t01 < 0.0f) p.t01 = 0.0f;
         if (p.t01 > 1.0f) p.t01 = 1.0f;
         if (p.value < 0.0f) p.value = 0.0f;
-        // 上限は用途次第だが、安全のため過剰値は切る（100倍上限）
         if (p.value > 100.0f) p.value = 100.0f;
     }
 
@@ -186,7 +176,6 @@ void RunnerComponent::ClearSpeedCurvePoints()
 }
 
 //========================================================
-// Speedカーブ：評価（折れ線補間）。点が無いときは 1.0。
 //========================================================
 float RunnerComponent::EvaluateSpeedCurve01(float t01) const
 {
@@ -197,11 +186,9 @@ float RunnerComponent::EvaluateSpeedCurve01(float t01) const
     if (t01 < 0.0f) t01 = 0.0f;
     if (t01 > 1.0f) t01 = 1.0f;
 
-    // 端の外挿：先頭・末尾の値を返す
     if (t01 <= speedCurvePoints.front().t01) return speedCurvePoints.front().value;
     if (t01 >= speedCurvePoints.back().t01)  return speedCurvePoints.back().value;
 
-    // 2点を見つけて線形補間
     for (int i = 1; i < (int)speedCurvePoints.size(); ++i)
     {
         const CurvePoint& a = speedCurvePoints[i - 1];
@@ -217,26 +204,19 @@ float RunnerComponent::EvaluateSpeedCurve01(float t01) const
             }
             float v = a.value + (b.value - a.value) * w;
 
-            // 安全上限（念のため）
             if (v < 0.0f) v = 0.0f;
             if (v > 100.0f) v = 100.0f;
             return v;
         }
     }
-    // 到達しないことは無いが、保険
     return speedCurvePoints.back().value;
 }
 
 //========================================================
-// 毎フレーム更新（拡張版）
-//  - 既存挙動を尊重：playSpeed を基礎に、必要ならSpeedカーブ倍率を掛ける
-//  - 範囲／逆再生／終端停止／完了コールバック対応
 //========================================================
 
 void RunnerComponent::RequestHitStop(float duration, float speedScale)
 {
-    // 既にヒットストップ中なら、より長い時間で上書きするなどの調整も可能
-    // ここではシンプルに常に上書き
     if (duration > 0.0f)
     {
         hitStopTimer = duration;
@@ -251,7 +231,6 @@ void RunnerComponent::RequestHitStop(float duration, float speedScale)
 //    if (!playing) return;
 //    if (clipLength <= 0.0f) return;
 //
-//    // t01 の基準（全体 or 範囲）
 //    float t01 = 0.0f;
 //    if (playRangeEnabled && speedCurveUseRangeSpace)
 //    {
@@ -279,11 +258,9 @@ void RunnerComponent::RequestHitStop(float duration, float speedScale)
 //        }
 //    }
 //
-//    // 再生速度＝基礎速度 × カーブ倍率
 //    float speedMultiplier = EvaluateSpeedCurve01(t01);
 //    float effectivePlaySpeed = playSpeed * speedMultiplier;
 //
-//    // 逆再生禁止なら負値は0に丸める
 //    if (!allowReversePlay && effectivePlaySpeed < 0.0f) effectivePlaySpeed = 0.0f;
 //
 //    float deltaSeconds = dt * effectivePlaySpeed;
@@ -291,14 +268,12 @@ void RunnerComponent::RequestHitStop(float duration, float speedScale)
 //    float previousSeconds = currentSeconds;
 //    float nowSeconds = currentSeconds + deltaSeconds;
 //
-//    // 範囲適用（Clamp/Wrapと終端検知）
 //    bool reachedForward = false;
 //    bool reachedBackward = false;
 //    ApplyRangeAdvance(previousSeconds, nowSeconds, reachedForward, reachedBackward);
 //
 //    currentSeconds = nowSeconds;
 //
-//    // 非ループ終端で自動停止＆完了通知
 //    bool nonLoopingNow = (!playRangeEnabled && !looping) || (playRangeEnabled && !loopWithinRange);
 //    if (stopAtEnd && nonLoopingNow)
 //    {
@@ -321,25 +296,19 @@ void RunnerComponent::Update(float dt)
     if (clipLength <= 0.0f) return;
 
     // ----------------------------------------------------
-    // ★追加: ヒットストップ処理
     // ----------------------------------------------------
     float finalTimeScale = 1.0f;
 
     if (hitStopTimer > 0.0f)
     {
-        // ヒットストップ中は指定された速度倍率 (hitStopSpeedScale) を強制適用
-        // (speedCurveなどは無視する)
         finalTimeScale = hitStopSpeedScale;
 
-        // タイマー減算 (実時間 dt で減らす)
         hitStopTimer -= dt;
         if (hitStopTimer < 0.0f) hitStopTimer = 0.0f;
     }
     else
     {
-        // ヒットストップ中でなければ、通常通りスピードカーブを計算
 
-        // t01 の基準（全体 or 範囲）
         float t01 = 0.0f;
         if (playRangeEnabled && speedCurveUseRangeSpace)
         {
@@ -367,18 +336,14 @@ void RunnerComponent::Update(float dt)
             }
         }
 
-        // カーブ倍率を取得
         finalTimeScale = EvaluateSpeedCurve01(t01);
     }
 
     // ----------------------------------------------------
-    // 最終的な速度決定と時間進行
     // ----------------------------------------------------
 
-    // 基礎速度(playSpeed) × (カーブ倍率 or ヒットストップ倍率)
     float effectivePlaySpeed = playSpeed * finalTimeScale;
 
-    // 逆再生禁止なら負値は0に丸める
     if (!allowReversePlay && effectivePlaySpeed < 0.0f) effectivePlaySpeed = 0.0f;
 
     float deltaSeconds = dt * effectivePlaySpeed;
@@ -386,14 +351,12 @@ void RunnerComponent::Update(float dt)
     float previousSeconds = currentSeconds;
     float nowSeconds = currentSeconds + deltaSeconds;
 
-    // 範囲適用（Clamp/Wrapと終端検知）
     bool reachedForward = false;
     bool reachedBackward = false;
     ApplyRangeAdvance(previousSeconds, nowSeconds, reachedForward, reachedBackward);
 
     currentSeconds = nowSeconds;
 
-    // 非ループ終端で自動停止＆完了通知
     bool nonLoopingNow = (!playRangeEnabled && !looping) || (playRangeEnabled && !loopWithinRange);
     if (stopAtEnd && nonLoopingNow)
     {
@@ -411,14 +374,12 @@ void RunnerComponent::Update(float dt)
 
 
 //========================================================
-// クリップ長(秒)を設定：既存挙動＋範囲正規化追従
 //========================================================
 void RunnerComponent::SetClipLength(float seconds)
 {
     if (seconds <= 0.0f) seconds = 0.0f;
     clipLength = seconds;
 
-    // 既存ロジック（はみ出しクランプ）
     if (clipLength <= 0.0f)
     {
         currentSeconds = 0.0f;
@@ -434,7 +395,6 @@ void RunnerComponent::SetClipLength(float seconds)
         }
     }
 
-    // 追加：範囲が有効なら新しい長さへ合わせて正規化
     if (playRangeEnabled)
     {
         NormalizeRangeToClipLength();
@@ -451,7 +411,6 @@ void RunnerComponent::SetClipLength(float seconds)
 }
 
 //========================================================
-// 時刻を直接設定（スクラブ用）：0..clipLength にクランプ
 //========================================================
 void RunnerComponent::SetTimeSeconds(float seconds)
 {
@@ -465,7 +424,6 @@ void RunnerComponent::SetTimeSeconds(float seconds)
 }
 
 //========================================================
-// 正規化時間（0..1）
 //========================================================
 float RunnerComponent::GetTimeNormalized() const
 {
@@ -477,7 +435,6 @@ float RunnerComponent::GetTimeNormalized() const
 }
 
 //========================================================
-// 停止（再生フラグOFF & 時刻0）
 //========================================================
 void RunnerComponent::Stop()
 {
@@ -486,7 +443,6 @@ void RunnerComponent::Stop()
 }
 
 //========================================================
-// サンプリング安全時刻：末尾-ε（範囲対応・スケール適用）
 //========================================================
 float RunnerComponent::GetTimeSecondsForSampling() const
 {
@@ -518,7 +474,6 @@ float RunnerComponent::GetTimeSecondsForSampling() const
 }
 
 //========================================================
-// 残り時間（範囲終端 or 全体終端まで）
 //========================================================
 float RunnerComponent::GetRemainingSeconds() const
 {

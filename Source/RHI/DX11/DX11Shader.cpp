@@ -1,11 +1,10 @@
 #include "DX11Shader.h"
-#include "System/Misc.h" // HRTrace などのため
+#include "System/Misc.h"
 #include <vector>
 
 DX11Shader::DX11Shader(ID3D11Device* device, ShaderType type, const std::string& fileName)
     : m_type(type)
 {
-    // 唯百様の GpuResourceUtils の作法でロード
     FILE* fp = nullptr;
     fopen_s(&fp, fileName.c_str(), "rb");
     _ASSERT_EXPR_A(fp, (std::string("Shader File not found: ") + fileName).c_str());

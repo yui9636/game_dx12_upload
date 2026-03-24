@@ -25,11 +25,9 @@ void ThirdPersonCameraSystem::Update(Registry& registry, float dt) {
 
             if (Entity::IsNull(ctrl.target)) continue; //
 
-            // 1. ターゲット（アクター）のTransformを取得
             auto* targetTrans = registry.GetComponent<TransformComponent>(ctrl.target); //
             if (!targetTrans) continue;
 
-            // 2. マウス入力で視点（カメラ単体のピッチ・ヨー）を回す
             ImGuiIO& io = ImGui::GetIO();
             if (io.MouseDown[ImGuiMouseButton_Right]) {
                 ctrl.yaw += io.MouseDelta.x * 0.005f;
@@ -37,26 +35,20 @@ void ThirdPersonCameraSystem::Update(Registry& registry, float dt) {
             }
             ctrl.pitch = std::clamp(ctrl.pitch, -1.5f, 1.5f);
 
-            // 3. 理想のカメラ位置（スプリングアーム）を計算
             XMVECTOR targetPos = XMLoadFloat3(&targetTrans->worldPosition);
             XMMATRIX rot = XMMatrixRotationRollPitchYaw(ctrl.pitch, ctrl.yaw, 0.0f);
 
-            // ターゲットから「後ろにdistance、上にheightOffset」ずらす
             XMVECTOR offset = XMVectorSet(0, ctrl.heightOffset, -ctrl.distance, 0);
             XMVECTOR idealPos = targetPos + XMVector3TransformNormal(offset, rot);
 
-            // 4. 現在位置から理想位置へ滑らかに移動 (Lerp)
             XMVECTOR currentPos = XMLoadFloat3(&trans.localPosition);
-            float t = 1.0f - expf(-ctrl.smoothness * dt); // フレームレート非依存のLerp
+            float t = 1.0f - expf(-ctrl.smoothness * dt);
             currentPos = XMVectorLerp(currentPos, idealPos, t);
             XMStoreFloat3(&trans.localPosition, currentPos);
 
-            // 5. 注視点（LookAt）の計算と、Transform.rotationへの変換
-            // ターゲットの少し上を常に見つめる
             XMVECTOR lookTarget = targetPos + XMVectorSet(0, ctrl.heightOffset, 0, 0);
             XMMATRIX lookAtMatrix = XMMatrixLookAtLH(currentPos, lookTarget, XMVectorSet(0, 1, 0, 0));
 
-            // View行列の逆行列から回転クォータニオンを抽出して保存
             XMVECTOR outScale, outRot, outTrans;
             XMMatrixDecompose(&outScale, &outRot, &outTrans, XMMatrixInverse(nullptr, lookAtMatrix));
             XMStoreFloat4(&trans.localRotation, outRot);

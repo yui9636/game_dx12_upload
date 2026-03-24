@@ -10,7 +10,6 @@ class EffectInstance;
 class AudioSource;
 
 // ============================================================================
-// データ構造定義
 // ============================================================================
 
 struct GEHitboxPayload
@@ -83,16 +82,15 @@ inline void from_json(const nlohmann::json& j, GEAudioPayload& p) {
     p.loop = j.value("loop", false);
 }
 
-// シェイク & ヒットストップ用 (ワンショットイベント)
 struct GECameraShakePayload
 {
-    float duration = 0.2f;      // シェイク時間
-    float amplitude = 0.5f;     // 強さ
-    float frequency = 20.0f;    // 振動数
-    float decay = 0.9f;         // 減衰率
+    float duration = 0.2f;
+    float amplitude = 0.5f;
+    float frequency = 20.0f;
+    float decay = 0.9f;
 
-    float hitStopDuration = 0.0f; // ヒットストップ時間
-    float timeScale = 0.0f;       // ストップ中の速度
+    float hitStopDuration = 0.0f;
+    float timeScale = 0.0f;
 };
 
 inline void to_json(nlohmann::json& j, const GECameraShakePayload& p) {
@@ -111,7 +109,6 @@ inline void from_json(const nlohmann::json& j, GECameraShakePayload& p) {
     p.timeScale = j.value("timeScale", 0.0f);
 }
 
-// シーケンサーアイテム
 struct GESequencerItem
 {
     int          type = 0;
@@ -125,7 +122,6 @@ struct GESequencerItem
     GEAudioPayload  audio;
     GECameraShakePayload shake;
 
-    // ランタイム変数
     bool               vfxActive = false;
     std::shared_ptr<EffectInstance> vfxInstance;
     bool                         audioActive = false;
@@ -143,7 +139,6 @@ inline void to_json(nlohmann::json& j, const GESequencerItem& p) {
         {"label", p.label},
         {"hb", p.hb},
         {"vfx", p.vfx},
-        // "cam" は削除
         {"audio", p.audio},
         {"shake", p.shake}
     };

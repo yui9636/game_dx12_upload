@@ -13,10 +13,8 @@ namespace Cinematic
         float duration = 10.0f;
         float frameRate = 60.0f;
 
-        // トラックリスト
         std::vector<std::shared_ptr<Track>> tracks;
 
-        // 全トラックを評価
         void Evaluate(float time)
         {
             for (auto& track : tracks)
@@ -25,7 +23,6 @@ namespace Cinematic
             }
         }
 
-        // トラック追加ヘルパー
         template<typename T>
         std::shared_ptr<T> AddTrack(const std::string& trackName)
         {
@@ -35,8 +32,6 @@ namespace Cinematic
             return newTrack;
         }
 
-        // JSON保存
-        // (Track::Serialize が EffectTrack にも対応しているため変更不要)
         void SaveToFile(const std::string& filePath) const
         {
             JSONManager manager(filePath);
@@ -56,7 +51,6 @@ namespace Cinematic
             manager.Save();
         }
 
-        // JSON読み込み
         void LoadFromFile(const std::string& filePath)
         {
             JSONManager manager(filePath);
@@ -67,7 +61,6 @@ namespace Cinematic
             tracks.clear();
 
             try {
-                // トラックリストの復元
                 std::vector<json> tracksJson = manager.Get<std::vector<json>>("tracks");
 
                 for (const auto& j : tracksJson)
@@ -84,7 +77,7 @@ namespace Cinematic
                     {
                         newTrack = std::make_shared<AnimationTrack>();
                     }
-                    else if (type == (int)TrackType::Effect) // ★追加
+                    else if (type == (int)TrackType::Effect)
                     {
                         newTrack = std::make_shared<EffectTrack>();
                     }
@@ -97,7 +90,6 @@ namespace Cinematic
                 }
             }
             catch (...) {
-                // ファイルが空、または形式が古い場合は無視
             }
         }
     };

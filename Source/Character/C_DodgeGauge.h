@@ -25,7 +25,6 @@ private:
     void UpdateState();
 
 private:
-    // --- スタミナパラメータ ---
     float currentStamina = 1000.0f;
     const float MAX_STAMINA = 1000.0f;
     const float COST_PER_DODGE = 250.0f;
@@ -34,25 +33,20 @@ private:
     const float RECOVERY_DELAY = 0.8f;
     float recoveryTimer = 0.0f;
 
-    // --- UIパーツ ---
     std::shared_ptr<UIScreen> centerIcon;
     std::shared_ptr<UIScreen> segments[4];
 
-    // --- リソース ---
     std::shared_ptr<Sprite> iconSprite;
     std::shared_ptr<Sprite> gaugeSprite;
 
-    // --- 調整用パラメータ ---
-    DirectX::XMFLOAT2 uiPosition;   // 全体の基準位置
+    DirectX::XMFLOAT2 uiPosition;
 
-    DirectX::XMFLOAT2 iconSize;     // アイコンサイズ
+    DirectX::XMFLOAT2 iconSize;
 
-    DirectX::XMFLOAT2 gaugeSize;    // ゲージサイズ
-    DirectX::XMFLOAT2 gaugePivot;   // ゲージの回転軸
+    DirectX::XMFLOAT2 gaugeSize;
+    DirectX::XMFLOAT2 gaugePivot;
 
-    // ★追加: ゲージ全体の表示位置オフセット
-    // (アイコンの中心からどれだけズラすか)
     DirectX::XMFLOAT2 gaugeOffset;
 
-    float gap = 0.0f;               // 対角線上の広がり距離
+    float gap = 0.0f;
 };

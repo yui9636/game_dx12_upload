@@ -36,12 +36,10 @@ private:
     float ComputeApproxActorRadiusByNodes(const ::Model* model) const;
     void AutoScaleActorForPreview();
 
-    // タイムラインデータ管理
     void SaveTimelineToCache(int animIndex);
     void LoadTimelineFromCache(int animIndex);
     void ResizeCache(int size);
 
-    // ★追加: ダイアログ付きの保存・読み込み
     void SaveGameplayDataAs();
     void LoadGameplayDataOpen();
 

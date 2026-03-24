@@ -4,7 +4,6 @@
 #include <memory>
 #include <UI\UIHPNumber.h>
 
-// 前方宣言
 class UIProgressBar3D;
 class Sprite3D;
 class UIScreen; 
@@ -13,17 +12,14 @@ class Sprite;
 class C_PlayerHUD : public Component
 {
 public:
-    // コンポーネント名
     const char* GetName() const override { return "PlayerHUD"; }
 
     void Start() override;
     void Update(float dt) override;
 
 private:
-    // 3D版のHPバーを使用
     std::shared_ptr<UIProgressBar3D> hpBar;
 
-    // 3Dスプライトリソース
     std::shared_ptr<Sprite3D> barSprite;
 
     std::shared_ptr<UIHPNumber> hpNumber;

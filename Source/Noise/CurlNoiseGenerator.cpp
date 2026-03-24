@@ -18,7 +18,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     if (!device) return E_INVALIDARG;
 
     // -------------------------------------------------------------
-    // 1. ノイズ生成器のセットアップ (C++ Class API)
     // -------------------------------------------------------------
     FastNoiseLite noise;
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
@@ -28,22 +27,17 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     noise.SetFractalOctaves(3);
 
     // -------------------------------------------------------------
-    // 2. データの準備
     // -------------------------------------------------------------
     size_t totalPixels = (size_t)config.width * config.height * config.depth;
 
-    // RGBA32F形式 (float * 4チャンネル)
     std::vector<float> data(totalPixels * 4);
 
-    // 微分計算用の微小値 (Epsilon)
     const float e = 1.0f;
 
-    // 3つの異なるポテンシャル場を作るための座標オフセット
     const float offset_y = 1000.0f;
     const float offset_z = 2000.0f;
 
     // -------------------------------------------------------------
-    // 3. カールノイズ計算ループ
     // -------------------------------------------------------------
     for (int z = 0; z < config.depth; ++z)
     {
@@ -55,15 +49,13 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
                 float fy = (float)y;
                 float fz = (float)z;
 
-                // --- ポテンシャル場ベクトル取得 (ラムダ) ---
                 auto samplePotential = [&](float _x, float _y, float _z) {
                     float p1 = noise.GetNoise(_x, _y, _z);            // Psi_x
                     float p2 = noise.GetNoise(_x, _y + offset_y, _z); // Psi_y
                     float p3 = noise.GetNoise(_x, _y, _z + offset_z); // Psi_z
-                    return XMFLOAT3(p1, p2, p3); // DirectX:: は不要
+                    return XMFLOAT3(p1, p2, p3);
                     };
 
-                // --- 中心差分法による偏微分の計算 ---
                 XMFLOAT3 p_y0 = samplePotential(fx, fy - e, fz);
                 XMFLOAT3 p_y1 = samplePotential(fx, fy + e, fz);
 
@@ -84,12 +76,10 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
                 float dP2_dx = (p_x1.y - p_x0.y) * div; // d(Psi_y)/dx
                 float dP1_dy = (p_y1.x - p_y0.x) * div; // d(Psi_x)/dy
 
-                // --- カール(回転)の定義 ---
                 float vx = dP3_dy - dP2_dz;
                 float vy = dP1_dz - dP3_dx;
                 float vz = dP2_dx - dP1_dy;
 
-                // --- 配列への書き込み ---
                 size_t index = ((size_t)z * config.height * config.width + (size_t)y * config.width + x) * 4;
                 data[index + 0] = vx; // R
                 data[index + 1] = vy; // G
@@ -100,7 +90,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     }
 
     // -------------------------------------------------------------
-    // 4. Texture3D の作成
     // -------------------------------------------------------------
     D3D11_TEXTURE3D_DESC desc = {};
     desc.Width = config.width;
@@ -123,7 +112,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     if (FAILED(hr)) return hr;
 
     // -------------------------------------------------------------
-    // 5. ShaderResourceView の作成
     // -------------------------------------------------------------
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = desc.Format;

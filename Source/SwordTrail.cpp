@@ -113,7 +113,6 @@ void SwordTrail::Update(float dt)
   
     for (auto& p : usedPosArray) p.life -= dt;      
 
-    // 後ろ側（古い方）から寿命切れを除去
     while (!usedPosArray.empty() && usedPosArray.back().life <= 0.0f)
         usedPosArray.pop_back();
 }
@@ -128,7 +127,7 @@ void SwordTrail::Reset()
 bool SwordTrail::GetTailPos(DirectX::XMFLOAT3& outPos) const
 {
     if (usedPosArray.empty()) return false;
-    outPos = usedPosArray.back().tail; // ← U=1 側
+    outPos = usedPosArray.back().tail;
     return true;
 }
 
@@ -148,7 +147,6 @@ void SwordTrail::Render(ID3D11DeviceContext* dc,
     Microsoft::WRL::ComPtr<ID3D11Device> device;
     dc->GetDevice(device.GetAddressOf());
 
-    // 2) シェーダ・定数バッファ・テクスチャ
     dc->VSSetShader(vertexShader.Get(), nullptr, 0);
     dc->PSSetShader(pixelShader.Get(), nullptr, 0);
     dc->IASetInputLayout(inputLayout.Get());
@@ -200,11 +198,9 @@ void SwordTrail::Render(ID3D11DeviceContext* dc,
     float v = 0.0f;
     float vStep = 1.0f / float(sampleCount - 1);
 
-    // 先頭
-    vertices.push_back({ catHead(0, 0.0f), XMFLOAT2(/*★*/0.0f, v) }); // head = U0
-    vertices.push_back({ catTail(0, 0.0f), XMFLOAT2(/*★*/1.0f, v) }); // tail = U1
+    vertices.push_back({ catHead(0, 0.0f), XMFLOAT2(/* 頭側 */0.0f, v) });
+    vertices.push_back({ catTail(0, 0.0f), XMFLOAT2(/* 尻尾側 */1.0f, v) });
 
-    // 各区間
     for (int seg = 0; seg < segCount; ++seg)
     {
         for (int s = 1; s <= Subdiv; ++s)
@@ -212,7 +208,6 @@ void SwordTrail::Render(ID3D11DeviceContext* dc,
             v += vStep;
             float tLoc = float(s) / float(Subdiv);
 
-            // head 側 U = 0、tail 側 U = 1 に統一
             vertices.push_back({ catHead(seg, tLoc), XMFLOAT2(0.0f, v) });
             vertices.push_back({ catTail(seg, tLoc), XMFLOAT2(1.0f, v) });
         }

@@ -5,7 +5,6 @@
 
 class FrameGraphResources;
 
-// すべての描画パスの共通インターフェース
 class IRenderPass {
 public:
     virtual ~IRenderPass() = default;
@@ -16,6 +15,5 @@ public:
 
     virtual void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) = 0;
 
-    // カリング: true を返すパスは依存がなくても必ず実行される
     virtual bool HasSideEffects() const { return false; }
 };

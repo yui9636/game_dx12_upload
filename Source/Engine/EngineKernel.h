@@ -4,6 +4,7 @@
 #include "RenderContext/RenderPipeline.h"
 #include "RenderContext/RenderQueue.h"
 #include "ReflectionProbe/ReflectionProbeBaker.h"
+#include "Render/OffscreenRenderer.h"
 #include "Registry/Registry.h"
 #include <memory>
 
@@ -41,12 +42,13 @@ private:
 
     std::unique_ptr<RenderPipeline> m_renderPipeline;
     std::unique_ptr<ReflectionProbeBaker> m_probeBaker;
-    RenderQueue m_renderQueue; // �p�C�v���C���ɓn���`�[�̑�
+    RenderQueue m_renderQueue;
 
-    // ���ɂ�2�w�A�[�L�e�N�`��
     std::unique_ptr<GameLayer> m_gameLayer;
     std::unique_ptr<EditorLayer> m_editorLayer;
 
-    // DX12テスト用: GameLayerが存在しない場合の空Registry
+    // Shared offscreen renderer for thumbnails / material preview
+    std::unique_ptr<OffscreenRenderer> m_sharedOffscreen;
+
     Registry m_emptyRegistry;
 };

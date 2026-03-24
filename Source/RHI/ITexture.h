@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 
-// RHI�ň����e�N�X�`���t�H�[�}�b�g
 enum class TextureFormat {
     Unknown,
     RGBA8_UNORM,
@@ -10,26 +9,27 @@ enum class TextureFormat {
     R32G32B32A32_UINT,
     R32G32B32_FLOAT,
     R32G32_FLOAT,
-    R16G16_FLOAT,        // �� �ǉ��F���[�V�����x�N�g���iVelocity�j�p
+    R16G16_FLOAT,
     R8_UNORM,
     D32_FLOAT,
     D24_UNORM_S8_UINT,
-    R32_TYPELESS // DoF�̐[�x�ǂݍ��݂Ȃǂ̓���p�r
+    R32_TYPELESS
 };
 
 
 enum class ResourceState {
-    Common,            // �ėp�iDX12�̏�����ԂȂǁj
-    RenderTarget,      // �����_�[�^�[�Q�b�g�Ƃ��ď������ݒ�
-    DepthWrite,        // �[�x�o�b�t�@�Ƃ��ď������ݒ�
-    DepthRead,         // �[�x�o�b�t�@�Ƃ��ēǂݎ�蒆
-    ShaderResource,    // �V�F�[�_�[����ǂݎ�蒆�iSRV�j
-    UnorderedAccess,   // UAV�Ƃ��ēǂݏ�����
-    Present            // ��ʕ\���p
+    Common,
+    RenderTarget,
+    DepthWrite,
+    DepthRead,
+    ShaderResource,
+    UnorderedAccess,
+    CopySource,
+    CopyDest,
+    Present
 };
 
 
-// �e�N�X�`���̎g�����i�r�b�g�t���O�j
 enum class TextureBindFlags : uint32_t {
     None = 0,
     ShaderResource = 1 << 0,
@@ -45,7 +45,6 @@ inline bool operator&(TextureBindFlags a, TextureBindFlags b) {
 }
 
 // =========================================================
-// �����ȃe�N�X�`���C���^�[�t�F�[�X
 // =========================================================
 class ITexture {
 public:

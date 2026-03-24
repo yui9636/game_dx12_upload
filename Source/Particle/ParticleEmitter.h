@@ -4,7 +4,6 @@
 #include "Particle/compute_particle_system.h" 
 #include <random>
 
-// 前方宣言
 namespace ImGG { class Gradient; }
 class RenderContext;
 
@@ -28,16 +27,13 @@ public:
     void SyncGradientToSettings(const ImGG::Gradient& inGradient);
     void LoadTexture(const std::string& path);
 
-    // ★追加: マスターアルファの設定
     void SetMasterAlpha(float alpha) { m_masterAlpha = alpha; }
 public:
-    // データ (EmitSettings -> ParticleSetting)
     ParticleSetting settings;
     ParticleRendererSettings renderSettings;
 
     Model* GetParentModel() const;
 
-    // 実体
     std::shared_ptr<compute_particle_system> particleSystem;
     std::string texturePath;
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> textureSRV;
@@ -55,18 +51,14 @@ private:
     float m_currentRootAge = 0.0f;
     float m_rootLifeTime = 0.0f;
 
-    // ★追加: 乱数シード保存用
     unsigned int m_seed = 0;
 
-    // ★追加: マスター不透明度
     float m_masterAlpha = 1.0f;
 
 
-    // メッシュパーティクル用シェーダーリソース
     Microsoft::WRL::ComPtr<ID3D11VertexShader> m_meshVS;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>  m_meshInputLayout;
 
-    // シェーダーロード用ヘルパー
     void LoadMeshShader();
 
 };

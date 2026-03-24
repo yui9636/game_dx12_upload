@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 
 
@@ -10,7 +10,6 @@
 
 
 
-// RHI �O���錾
 
 class IResourceFactory;
 
@@ -40,13 +39,11 @@ public:
 
 
 
-	// �J�n����
 
 	void Begin(const RenderContext& rc) override;
 
 
 
-	// �X�V����
 
 	void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) override;
 	void BeginInstanced(const RenderContext& rc) override;
@@ -54,13 +51,11 @@ public:
 
 
 
-	// �I������
 
 	void End(const RenderContext& rc) override;
 
 
 
-	// IBL�̍X�V
 
 	void SetIBLTextures(ITexture* pDiffuseIEM, ITexture* pSpecularPMREM);
 
@@ -92,7 +87,6 @@ private:
 
 
 
-	// RHI ���\�[�X
 
 	std::unique_ptr<IShader>       m_vs;
 
@@ -106,14 +100,12 @@ private:
 
 
 
-	// �p�C�v���C���X�e�[�g
 
 	std::unique_ptr<IPipelineState> m_pso;
 	std::unique_ptr<IPipelineState> m_instancedPso;
 
 
 
-	// IBL ���\�[�X (�O������X�V�����\�������邽�� shared_ptr)
 
 	std::shared_ptr<ITexture> m_diffuseIem;
 

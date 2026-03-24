@@ -3,13 +3,11 @@
 #include "Engine/EditorSelection.h"
 #include "Icon/IconFontManager.h"
 
-// 必要なコンポーネント群
 #include "Component/NameComponent.h"
 #include "Component/TransformComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
 
-// リソースマネージャー
 #include "System/ResourceManager.h"
 #include "Model/Model.h"
 
@@ -29,15 +27,12 @@ void HierarchyECSUI::Render(Registry* registry) {
     }
 
     // ==========================================
-    // 1. ツリーの描画 (ルート直下のエンティティを探す)
     // ==========================================
-    // ※今回は簡易的に全エンティティを回し、親がNULL_IDのものだけを描画の起点にします
     auto archetypes = registry->GetAllArchetypes();
     for (auto* archetype : archetypes) {
         const auto& entities = archetype->GetEntities();
         for (EntityID entity : entities) {
             HierarchyComponent* hier = registry->GetComponent<HierarchyComponent>(entity);
-            // HierarchyComponent が無い、または親が無い（ルート）場合のみ描画起点とする
             if (!hier || Entity::IsNull(hier->parent)) {
                 DrawEntityNode(registry, entity);
             }
@@ -45,18 +40,15 @@ void HierarchyECSUI::Render(Registry* registry) {
     }
 
     // ==========================================
-    // 2. ウィンドウ全体の空きスペースに対するD&D受け皿 (ルート直下への追加)
     // ==========================================
     ImVec2 availSize = ImGui::GetContentRegionAvail();
 
-    // std::maxを使わず、単純なif文で最低サイズを保証する
     if (availSize.x <= 0.0f) { availSize.x = 1.0f; }
-    if (availSize.y < 50.0f) { availSize.y = 50.0f; } // ★最低50px確保
+    if (availSize.y < 50.0f) { availSize.y = 50.0f; }
 
     ImGui::Dummy(availSize);
     HandleDragDropTarget(registry, Entity::NULL_ID);
 
-    // 空きスペースでの右クリックメニュー
     if (ImGui::BeginPopupContextItem("HierarchyContextMenu")) {
         if (ImGui::MenuItem("Create Empty Entity")) {
             EntityID newEntity = registry->CreateEntity();
@@ -78,7 +70,6 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     std::string entityName = nameComp ? nameComp->name : "Entity_" + std::to_string(Entity::GetIndex(entity));
     std::string idStr = "##" + std::to_string(Entity::GetIndex(entity));
 
-    // 子を持っているか判定
     bool hasChildren = (hierComp && !Entity::IsNull(hierComp->firstChild));
 
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -86,24 +77,19 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
 
-    // 選択状態の反映
     if (EditorSelection::Instance().GetType() == SelectionType::Entity &&
         EditorSelection::Instance().GetEntity() == entity) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
-    // ツリーノードの描画
     bool isOpen = ImGui::TreeNodeEx((entityName + idStr).c_str(), flags, "%s %s", ICON_FA_CUBE, entityName.c_str());
 
-    // クリックで選択
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         EditorSelection::Instance().SelectEntity(entity);
     }
 
-    // 特定のエンティティへのD&D受け皿 (子として追加)
     HandleDragDropTarget(registry, entity);
 
-    // 子を展開
     if (isOpen && hasChildren) {
         EntityID currentChild = hierComp->firstChild;
         while (!Entity::IsNull(currentChild)) {
@@ -125,31 +111,39 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
             // ==========================================
-            // ★ アセットの種類に応じてエンティティを生成
             // ==========================================
-            if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf") {
-                // 新しいエンティティの作成
+            if (ext == ".mat") {
+                if (!Entity::IsNull(parentEntity)) {
+                    auto* matComp = registry->GetComponent<MaterialComponent>(parentEntity);
+                    if (!matComp) {
+                        MaterialComponent newMatComp;
+                        newMatComp.materialAssetPath = sourcePathStr;
+                        newMatComp.materialAsset = ResourceManager::Instance().GetMaterial(sourcePathStr);
+                        registry->AddComponent(parentEntity, newMatComp);
+                    } else {
+                        matComp->materialAssetPath = sourcePathStr;
+                        matComp->materialAsset = ResourceManager::Instance().GetMaterial(sourcePathStr);
+                    }
+                    EditorSelection::Instance().SelectEntity(parentEntity);
+                }
+            }
+            else if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf") {
                 EntityID newEntity = registry->CreateEntity();
 
-                // 基本コンポーネント
                 registry->AddComponent(newEntity, NameComponent{ path.stem().string() });
                 registry->AddComponent(newEntity, TransformComponent{});
 
-                // 親子関係の構築
                 HierarchyComponent newHier;
                 newHier.parent = parentEntity;
                 registry->AddComponent(newEntity, newHier);
 
-                // 親がいる場合はリンクを繋ぐ（簡易実装）
                 if (!Entity::IsNull(parentEntity)) {
                     auto* parentHier = registry->GetComponent<HierarchyComponent>(parentEntity);
                     if (parentHier) {
-                        // ※本当は最後尾の兄弟の nextSibling に繋ぐ処理が必要です
                         parentHier->firstChild = newEntity;
                     }
                 }
 
-                // ★ メッシュコンポーネントの付与！
                 MeshComponent meshComp;
                 meshComp.modelFilePath = sourcePathStr;
                 meshComp.model = ResourceManager::Instance().GetModel(sourcePathStr);
@@ -157,7 +151,6 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
 
            
 
-                // 生成したものを即座に選択
                 EditorSelection::Instance().SelectEntity(newEntity);
             }
         }

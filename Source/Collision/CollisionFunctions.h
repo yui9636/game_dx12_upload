@@ -24,14 +24,11 @@ namespace CollisionFunctions
         const DirectX::XMFLOAT3& boxCenter, const DirectX::XMFLOAT3& boxSize,
         HitResult& hitResult);
 
-    // ★追加: Box vs Box (AABB)
     bool IntersectBoxVsBox(
         const DirectX::XMFLOAT3& boxACenter, const DirectX::XMFLOAT3& boxASize,
         const DirectX::XMFLOAT3& boxBCenter, const DirectX::XMFLOAT3& boxBSize,
         HitResult& hitResult);
 
-    // レイ vs 球
-    // t: 衝突までの距離（出力）
     bool IntersectRayVsSphere(
         const Ray& ray,
         const DirectX::XMFLOAT3& sphereCenter,
@@ -39,20 +36,18 @@ namespace CollisionFunctions
         float& t,
         DirectX::XMFLOAT3& outNormal);
 
-    // レイ vs AABB (軸平行ボックス)
     bool IntersectRayVsBox(
         const Ray& ray,
         const DirectX::XMFLOAT3& boxCenter,
-        const DirectX::XMFLOAT3& boxSize, // Full Size (幅・高さ・奥行き)
+        const DirectX::XMFLOAT3& boxSize,
         float& t,
         DirectX::XMFLOAT3& outNormal);
 
-    // レイ vs カプセル (Y軸平行)
     bool IntersectRayVsCapsule(
         const Ray& ray,
         const DirectX::XMFLOAT3& capsuleBase,
         float capsuleRadius,
-        float capsuleHeight, // 円柱部分の高さ
+        float capsuleHeight,
         float& t,
         DirectX::XMFLOAT3& outNormal);
 

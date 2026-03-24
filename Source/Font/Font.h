@@ -10,46 +10,35 @@
 class Font
 {
 public:
-    // コンストラクタ (maxSpriteCountはデフォルト2048に設定)
     Font(ID3D11Device* device, const char* filename, int maxSpriteCount = 2048);
     virtual ~Font() = default;
 
-    // 描画開始
     void Begin(ID3D11DeviceContext* context);
 
-    // 文字列描画
     void Draw(float x, float y, const wchar_t* string);
 
     void Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CXMMATRIX projection, const wchar_t* string);
 
     float GetTextWidth(const wchar_t* string);
 
-    // 描画終了
     void End(ID3D11DeviceContext* context);
 
-    // --- 設定系 ---
     void SetScale(float x, float y) { scaleX = x; scaleY = y; }
     void SetColor(const DirectX::XMFLOAT4& color) { fontColor = color; }
 
-    // ★SDFパラメータ設定
-    // threshold: 輪郭の閾値 (0.5が標準。小さくすると太く、大きくすると細くなる)
-    // softness:  輪郭の柔らかさ (0に近いほどシャープ。拡大時は小さく、縮小時は大きくすると良い)
     void SetSDFParams(float threshold = 0.5f, float softness = 0.5f);
 
 private:
-    // DirectXリソース
     Microsoft::WRL::ComPtr<ID3D11VertexShader>       vertexShader;
     Microsoft::WRL::ComPtr<ID3D11PixelShader>        pixelShader;
     Microsoft::WRL::ComPtr<ID3D11InputLayout>        inputLayout;
     Microsoft::WRL::ComPtr<ID3D11Buffer>             vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D11Buffer>             indexBuffer;
 
-    // SDF用定数バッファ
     Microsoft::WRL::ComPtr<ID3D11Buffer>             sdfConstantBuffer;
 
     Microsoft::WRL::ComPtr<ID3D11Buffer>             matrixBuffer;
 
-    // レンダーステート
     Microsoft::WRL::ComPtr<ID3D11BlendState>         blendState;
     Microsoft::WRL::ComPtr<ID3D11RasterizerState>    rasterizerState;
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState>  depthStencilState;
@@ -64,13 +53,12 @@ private:
         DirectX::XMFLOAT2 texcoord;
     };
 
-    // ★SDF用定数バッファ構造体 (16バイトアライメント)
     struct SDFData
     {
-        DirectX::XMFLOAT4 Color;    // 文字色
+        DirectX::XMFLOAT4 Color;
         float Threshold;            // 閾値
-        float Softness;             // 柔らかさ
-        float Padding[2];           // パディング
+        float Softness;
+        float Padding[2];
     };
 
     struct CBMatrix
@@ -123,11 +111,10 @@ private:
     float scaleY = 1.0f;
     DirectX::XMFLOAT4 fontColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-    // SDFパラメータ保持用
     float sdfThreshold = 0.5f;
     float sdfSoftness = 0.5f;
 
-    bool is3DMode = false;           // trueならNDC変換をスキップ
+    bool is3DMode = false;
     
     DirectX::XMFLOAT4X4 currentWorld;
     DirectX::XMFLOAT4X4 currentView;

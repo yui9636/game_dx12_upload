@@ -38,7 +38,6 @@ SSRPass::SSRPass(IResourceFactory* factory)
 
 void SSRPass::Setup(FrameGraphBuilder& builder)
 {
-    // 1. ���̗͂v��
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -50,20 +49,17 @@ void SSRPass::Setup(FrameGraphBuilder& builder)
     if (m_hPrevScene.IsValid()) builder.Read(m_hPrevScene);
 
     // =========================================================
-    // �� �C���F�^�̃����_�����O�𑜓x(857x482����)���甼�����v�Z����
     // =========================================================
     float renderScale = Graphics::Instance().GetRenderScale();
     uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
     uint32_t renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
 
-    // 2. �n�[�t�𑜓x�̐݌v�}
     TextureDesc ssrDesc{};
     ssrDesc.width = renderW / 2;
     ssrDesc.height = renderH / 2;
     ssrDesc.format = TextureFormat::R16G16B16A16_FLOAT;
     ssrDesc.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
 
-    // 3. ���ԁE�ŏI�o�͂̐���
     m_hSSR = builder.CreateTexture("SSRRaw", ssrDesc);
     m_hSSR = builder.Write(m_hSSR);
 
@@ -85,13 +81,11 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     // =========================================================
-    // �� �C���F�r���[�|�[�g�� 857x482 �̔���(428x241)�ɍ��킹��
     // =========================================================
     float halfWidth = (float)ssrTex->GetWidth();
     float halfHeight = (float)ssrTex->GetHeight();
 
     // ==========================================
-    // �p�X1: ���C�}�[�`���O (��SSR����)
     // ==========================================
     rc.commandList->ClearColor(ssrTex, clearColor);
     rc.commandList->SetRenderTarget(ssrTex, nullptr);
@@ -128,7 +122,6 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     rc.commandList->Draw(3, 0);
 
     // ==========================================
-    // �p�X2: ��ԃu���[
     // ==========================================
     rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTarget(blurTex, nullptr);

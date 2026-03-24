@@ -18,7 +18,6 @@ class Skybox;
 class ModelResource;
 
 
-// �u���[���ݒ�
 struct BloomData {
     float luminanceLowerEdge = 0.6f;
     float luminanceHigherEdge = 0.8f;
@@ -26,7 +25,6 @@ struct BloomData {
     float gaussianSigma = 1.0f;
 };
 
-// �J���[�t�B���^�[�ݒ�
 struct ColorFilterData {
     float exposure = 1.2f;
     float monoBlend = 0.0f;
@@ -36,13 +34,12 @@ struct ColorFilterData {
 };
 
 
-// DoF�i��ʊE�[�x�j�ݒ�
 struct DepthOfFieldData
 {
-    bool  enable = false;         // �L��/����
-    float focusDistance = 10.0f;  // �s���g���������� (m)
-    float focusRange = 5.0f;      // �s���g�������͈� (m)
-    float bokehRadius = 4.0f;     // �{�P�̋���
+    bool  enable = false;
+    float focusDistance = 10.0f;
+    float focusRange = 5.0f;
+    float bokehRadius = 4.0f;
 };
 
 struct MotionBlurData
@@ -58,13 +55,11 @@ struct RenderEnvironment
     std::string specularIBLPath = "";
 };
 
-// UV �X�N���[�����
 struct UVScrollData
 {
     DirectX::XMFLOAT2 uvScrollValue;
 };
 
-// �}�X�N�f�[�^
 struct MaskData
 {
     ID3D11ShaderResourceView* maskTexture;
@@ -73,7 +68,6 @@ struct MaskData
     DirectX::XMFLOAT4 edgeColor;
 };
 
-// ���W�A���u���[���
 struct RadialBlurData
 {
     float radius = 10.0f;
@@ -82,7 +76,6 @@ struct RadialBlurData
     float mask_radius = 0;
 };
 
-// �K�E�X�t�B���^�[�v�Z���
 struct GaussianFilterData {
     int kernelSize = 8;
     float deviation = 10.0f;
@@ -161,10 +154,8 @@ struct RenderContext
     DirectX::XMFLOAT2 jitterOffset = { 0.0f, 0.0f };
     DirectX::XMFLOAT2 prevJitterOffset = { 0.0f, 0.0f };
 
-    // �e�����N���X�ւ̃A�N�Z�X�i�e�`��p�X�Ŏg�p�j
     const ShadowMap* shadowMap = nullptr;
 
-    // �e�̐F�i���ݒ肩�痈��j
     DirectX::XMFLOAT3 shadowColor = { 0.1f, 0.1f, 0.1f };
 
     ITexture* sceneColorTexture = nullptr;
@@ -206,18 +197,15 @@ struct RenderContext
     uint32_t activeCountBufferOffset = 0;
     uint32_t activeMaxDrawCount = 0;           // max commands for multi-draw
 
-    // �|�X�g�v���Z�X�p�f�[�^
-    BloomData       bloomData;      // ���ǉ�
-    ColorFilterData colorFilterData; // ���ǉ�
+    BloomData       bloomData;
+    ColorFilterData colorFilterData;
     DepthOfFieldData dofData;       //
     MotionBlurData  motionBlurData;
 
     // ----------------------------------------------------
 
-    // ���������o
-    float time = 0.0f; // �A�j���[�V�����p�^�C�}�[�Ȃ�
+    float time = 0.0f;
 
-    // �ȉ��A�K�v�Ȑݒ�f�[�^��ێ�
     UVScrollData uvScrollData;
     MaskData maskData;
     RadialBlurData radialBlurData;

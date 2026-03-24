@@ -36,19 +36,15 @@ std::string JSONManager::ToRelativePath(const std::string& fullPath)
     try {
         std::filesystem::path p(fullPath);
 
-        // すでに相対パス（"Data/"で始まる等）ならそのまま返す
         if (p.is_relative()) {
             return p.generic_string();
         }
 
-        // 絶対パスの場合、現在の作業ディレクトリ(g_RootPath)からの相対パスを計算する
-        // ※std::filesystem::relative はC++17の標準機能です
         std::filesystem::path relativePath = std::filesystem::relative(p, std::filesystem::current_path());
 
-        return relativePath.generic_string(); // スラッシュを / に統一して返す
+        return relativePath.generic_string();
     }
     catch (...) {
-        // エラー（ドライブを跨ぐ場合など）は元のパスを返す
         return fullPath;
     }
 }

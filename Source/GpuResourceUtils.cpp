@@ -4,7 +4,6 @@
 #include "System/Misc.h"
 #include "GpuResourceUtils.h"
 
-// ���_�V�F�[�_�[�ǂݍ���
 HRESULT GpuResourceUtils::LoadVertexShader(
 	ID3D11Device* device,
 	const char* filename,
@@ -13,26 +12,21 @@ HRESULT GpuResourceUtils::LoadVertexShader(
 	ID3D11InputLayout** inputLayout,
 	ID3D11VertexShader** vertexShader)
 {
-	// �t�@�C�����J��
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Vertex Shader File not found");
 
-	// �t�@�C���̃T�C�Y�����߂�
 	fseek(fp, 0, SEEK_END);
 	long size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	// ��������ɒ��_�V�F�[�_�[�f�[�^���i�[����̈��p�ӂ���
 	std::unique_ptr<u_char[]> data = std::make_unique<u_char[]>(size);
 	fread(data.get(), size, 1, fp);
 	fclose(fp);
 
-	// ���_�V�F�[�_�[����
 	HRESULT hr = device->CreateVertexShader(data.get(), size, nullptr, vertexShader);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
-	// ���̓��C�A�E�g
 	if (inputLayout != nullptr)
 	{
 		hr = device->CreateInputLayout(inputElementDescs, inputElementCount, data.get(), size, inputLayout);
@@ -42,56 +36,46 @@ HRESULT GpuResourceUtils::LoadVertexShader(
 	return hr;
 }
 
-// �s�N�Z���V�F�[�_�[�ǂݍ���
 HRESULT GpuResourceUtils::LoadPixelShader(
 	ID3D11Device* device,
 	const char* filename,
 	ID3D11PixelShader** pixelShader)
 {
-	// �t�@�C�����J��
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Pixel Shader File not found");
 
-	// �t�@�C���̃T�C�Y�����߂�
 	fseek(fp, 0, SEEK_END);
 	long size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	// ��������ɒ��_�V�F�[�_�[�f�[�^���i�[����̈��p�ӂ���
 	std::unique_ptr<u_char[]> data = std::make_unique<u_char[]>(size);
 	fread(data.get(), size, 1, fp);
 	fclose(fp);
 
-	// �s�N�Z���V�F�[�_�[����
 	HRESULT hr = device->CreatePixelShader(data.get(), size, nullptr, pixelShader);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
 	return hr;
 }
 
-// �W�I���g���V�F�[�_�[�ǂݍ���
 HRESULT GpuResourceUtils::LoadGeometryShader(
 	ID3D11Device* device, 
 	const char* filename, 
 	ID3D11GeometryShader** geometryShader)
 {
-	// �t�@�C�����J��
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Geometr Shader File not found");
 
-	// �t�@�C���̃T�C�Y�����߂�
 	fseek(fp, 0, SEEK_END);
 	long size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
 
-	// ��������ɒ��_�V�F�[�_�[�f�[�^���i�[����̈��p�ӂ���
 	std::unique_ptr<u_char[]> data = std::make_unique<u_char[]>(size);
 	fread(data.get(), size, 1, fp);
 	fclose(fp);
 
-	// �W�I���g���V�F�[�_�[����
 	HRESULT hr = device->CreateGeometryShader(data.get(), size, nullptr, geometryShader);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
@@ -99,28 +83,23 @@ HRESULT GpuResourceUtils::LoadGeometryShader(
 
 }
 
-// �R���s���[�g�V�F�[�_�[�ǂݍ���
 HRESULT GpuResourceUtils::LoadComputeShader(
 	ID3D11Device* device,
 	const char* filename,
 	ID3D11ComputeShader** computeShader)
 {
-	// �t�@�C�����J��
 	FILE* filePointer = nullptr;
 	fopen_s(&filePointer, filename, "rb");
 	_ASSERT_EXPR_A(filePointer, "Compute Shader File not found");
 
-	// �t�@�C���T�C�Y�擾
 	fseek(filePointer, 0, SEEK_END);
 	long fileSize = ftell(filePointer);
 	fseek(filePointer, 0, SEEK_SET);
 
-	// �o�C�i����ǂݍ���
 	std::unique_ptr<u_char[]> shaderData = std::make_unique<u_char[]>(fileSize);
 	fread(shaderData.get(), fileSize, 1, filePointer);
 	fclose(filePointer);
 
-	// �R���s���[�g�V�F�[�_�[����
 	HRESULT hr = device->CreateComputeShader(shaderData.get(), fileSize, nullptr, computeShader);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
@@ -138,7 +117,6 @@ HRESULT GpuResourceUtils::LoadComputeShader(
 
 
 // ========================================================
-// API非依存: ファイルからScratchImageを読み込む
 // ========================================================
 HRESULT GpuResourceUtils::LoadImageFromFile(
 	const char* filename,
@@ -180,7 +158,6 @@ HRESULT GpuResourceUtils::LoadImageFromFile(
 }
 
 // ========================================================
-// DX11 テクスチャ読み込み（LoadImageFromFile + CreateShaderResourceView）
 // ========================================================
 HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11Device* device,
@@ -193,11 +170,9 @@ HRESULT GpuResourceUtils::LoadTexture(
 	HRESULT hr = LoadImageFromFile(filename, scratch_image, metadata);
 	if (FAILED(hr)) return hr;
 
-	// シェーダーリソースビュー作成
 	hr = DirectX::CreateShaderResourceView(device, scratch_image.GetImages(), scratch_image.GetImageCount(),
 		metadata, shaderResourceView);
 
-	// テクスチャ情報取得
 	if (SUCCEEDED(hr) && texture2dDesc != nullptr)
 	{
 		Microsoft::WRL::ComPtr<ID3D11Resource> resource;
@@ -211,7 +186,6 @@ HRESULT GpuResourceUtils::LoadTexture(
 	return hr;
 }
 
-// �e�N�X�`���ǂݍ���
 HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11Device* device,
 	const void* data,
@@ -219,7 +193,6 @@ HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11ShaderResourceView** shaderResourceView,
 	D3D11_TEXTURE2D_DESC* texture2dDesc)
 {
-	// �t�H�[�}�b�g���ɉ摜�ǂݍ��ݏ���
 	HRESULT hr = E_FAIL;
 	DirectX::TexMetadata metadata;
 	DirectX::ScratchImage scratch_image;
@@ -263,12 +236,10 @@ HRESULT GpuResourceUtils::LoadTexture(
 		return hr;
 	}
 
-	// �V�F�[�_�[���\�[�X�r���[�쐬
 	hr = DirectX::CreateShaderResourceView(device, scratch_image.GetImages(), scratch_image.GetImageCount(),
 		metadata, shaderResourceView);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
-	// �e�N�X�`�����擾
 	if (texture2dDesc != nullptr)
 	{
 		Microsoft::WRL::ComPtr<ID3D11Resource> resource;
@@ -282,7 +253,6 @@ HRESULT GpuResourceUtils::LoadTexture(
 	return hr;
 }
 
-// �_�~�[�e�N�X�`���쐬
 HRESULT GpuResourceUtils::CreateDummyTexture(
 	ID3D11Device* device,
 	UINT color,
@@ -312,7 +282,6 @@ HRESULT GpuResourceUtils::CreateDummyTexture(
 	hr = device->CreateShaderResourceView(texture.Get(), nullptr, shaderResourceView);
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
-	// �e�N�X�`�����擾
 	if (texture2dDesc != nullptr)
 	{
 		Microsoft::WRL::ComPtr<ID3D11Resource> resource;
@@ -327,7 +296,6 @@ HRESULT GpuResourceUtils::CreateDummyTexture(
 	return hr;
 }
 
-// �萔�o�b�t�@�쐬
 HRESULT GpuResourceUtils::CreateConstantBuffer(
 	ID3D11Device* device,
 	UINT bufferSize,

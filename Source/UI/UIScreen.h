@@ -1,9 +1,8 @@
 #pragma once
 #include "UIElement.h"
-#include "Sprite/Sprite.h" // 既存の2Dスプライト
+#include "Sprite/Sprite.h"
 #include <memory>
 
-// 画面固定の2D UI (ボタン、メニュー、従来のバーなど)
 class UIScreen : public UIElement
 {
 public:
@@ -12,22 +11,17 @@ public:
 
     void Render(const RenderContext& rc) override;
 
-    // 2Dスプライト設定
     void SetSprite(std::shared_ptr<Sprite> sprite);
 
     DirectX::XMFLOAT2 GetGlobalPosition() const;
 
-    // --- 2D専用プロパティ ---
-    // 座標 (ピクセル単位)
     void SetPosition(float x, float y) { position = { x, y }; }
     const DirectX::XMFLOAT2& GetPosition() const { return position; }
 
-    // サイズ (ピクセル単位)
     void SetSize(float w, float h) { size = { w, h }; }
 
     const DirectX::XMFLOAT2& GetSize() const { return size; }
 
-    // 基準点 (0.0=左上, 0.5=中心)
     void SetPivot(float x, float y) { pivot = { x, y }; }
 
 

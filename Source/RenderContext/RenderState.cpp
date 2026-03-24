@@ -10,11 +10,9 @@
 RenderState::~RenderState() = default;
 
 // ============================================================
-// DX12 コンストラクタ
 // ============================================================
 RenderState::RenderState(DX12Device* /*device*/)
 {
-	// サンプラー: DX12ではスタティックサンプラーで代替 → nullptr
 
 	// DepthStencilState
 	{ D3D12_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = TRUE; d.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; d.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
@@ -54,7 +52,6 @@ RenderState::RenderState(DX12Device* /*device*/)
 RenderState::RenderState(ID3D11Device* device)
 {
     // ==========================================
-    // �T���v���X�e�[�g
     // ==========================================
     {
         D3D11_SAMPLER_DESC desc = {};
@@ -94,7 +91,6 @@ RenderState::RenderState(ID3D11Device* device)
     }
 
     // ==========================================
-    // �f�v�X�X�e�[�g
     // ==========================================
     auto createDepth = [&](D3D11_DEPTH_STENCIL_DESC desc, DepthState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11DepthStencilState> state;
@@ -109,7 +105,6 @@ RenderState::RenderState(ID3D11Device* device)
     { D3D11_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = false; d.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; d.DepthFunc = D3D11_COMPARISON_ALWAYS; createDepth(d, DepthState::NoTestNoWrite); }
 
     // ==========================================
-    // �u�����h�X�e�[�g
     // ==========================================
     auto createBlend = [&](D3D11_BLEND_DESC desc, BlendState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11BlendState> state;
@@ -126,7 +121,6 @@ RenderState::RenderState(ID3D11Device* device)
     { D3D11_BLEND_DESC d{}; d.RenderTarget[0].BlendEnable = true; d.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA; d.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA; d.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; d.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; d.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA; d.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD; d.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL; createBlend(d, BlendState::Alpha); }
 
     // ==========================================
-    // ���X�^���C�U�X�e�[�g
     // ==========================================
     auto createRasterizer = [&](D3D11_RASTERIZER_DESC desc, RasterizerState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11RasterizerState> state;

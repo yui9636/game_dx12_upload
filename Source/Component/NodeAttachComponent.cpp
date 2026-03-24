@@ -1,14 +1,13 @@
 #include "Component/NodeAttachComponent.h"
 #include "Actor/Actor.h"
 #include "Model.h" 
-#include "Graphics.h" // デバッグ描画が必要ならインクルード
+#include "Graphics.h"
 #include <imgui.h>
 #include <algorithm>
 
 using namespace DirectX;
 
 // =========================================================
-// ライフサイクル
 // =========================================================
 
 void NodeAttachComponent::Start()
@@ -18,18 +17,15 @@ void NodeAttachComponent::Start()
 
 void NodeAttachComponent::Update(float /*dt*/)
 {
-    // 自分自身のアタッチ処理（isAttached == true の時のみ動く）
     if (!isAttached) return;
 
     std::shared_ptr<Actor> owner = GetActor();
     if (!owner) return;
 
-    // ターゲットがいなければ自分（Owner）をターゲットと見なす（自己参照ボーン追従）
     std::shared_ptr<Actor> parent = targetActor ? targetActor : owner;
     const ::Model* model = parent->GetModelRaw();
     if (!model) return;
 
-    // モデルが変わっていたらキャッシュリセット
     if (model != lastModelPtr) {
         lastModelPtr = model;
         for (auto& pair : sockets) pair.second.cachedBoneIndex = -1;
@@ -41,12 +37,10 @@ void NodeAttachComponent::Update(float /*dt*/)
 
     if (useSocketForSelf)
     {
-        // ソケットを使って追従
         calcSuccess = GetSocketWorldTransform(currentAttachName, finalWorld);
     }
     else
     {
-        // ボーン名直接指定
         int boneIdx = -1;
         int dummyCache = -1;
         boneIdx = ResolveBoneIndex(model, currentAttachName, dummyCache);
@@ -58,7 +52,6 @@ void NodeAttachComponent::Update(float /*dt*/)
         }
     }
 
-    // 適用
     if (calcSuccess)
     {
         XMMATRIX W = XMLoadFloat4x4(&finalWorld);
@@ -80,7 +73,6 @@ void NodeAttachComponent::Update(float /*dt*/)
 }
 
 // =========================================================
-// ソケット管理
 // =========================================================
 
 void NodeAttachComponent::RegisterSocket(const std::string& socketName, const std::string& boneName,
@@ -141,7 +133,6 @@ bool NodeAttachComponent::GetBoneWorldTransform(const std::string& boneName, Dir
 }
 
 // =========================================================
-// アタッチ制御
 // =========================================================
 
 void NodeAttachComponent::BindTargetActor(std::shared_ptr<Actor> actor)
@@ -170,15 +161,12 @@ void NodeAttachComponent::Detach()
 }
 
 // =========================================================
-// 内部ロジック
 // =========================================================
 
 int NodeAttachComponent::ResolveBoneIndex(const ::Model* model, const std::string& name, int& cacheIndex)
 {
     if (!model) return -1;
 
-    // キャッシュが有効なら即リターン
-    // (モデルポインタが変わった時は呼び出し元でリセットされている前提)
     if (cacheIndex >= 0 && cacheIndex < (int)model->GetNodes().size()) {
         return cacheIndex;
     }
@@ -206,7 +194,6 @@ DirectX::XMFLOAT4X4 NodeAttachComponent::CalcWorldMatrix(int boneIndex, const ::
         W_Bone = XMLoadFloat4x4(&model->GetNodes()[boneIndex].worldTransform);
     }
 
-    // オフセットSRT
     XMMATRIX M_Scale = XMMatrixScaling(s.x, s.y, s.z);
     XMMATRIX M_Rot = XMMatrixRotationRollPitchYaw(
         XMConvertToRadians(r.x), XMConvertToRadians(r.y), XMConvertToRadians(r.z));
@@ -218,7 +205,6 @@ DirectX::XMFLOAT4X4 NodeAttachComponent::CalcWorldMatrix(int boneIndex, const ::
         Result = W_Offset * W_Bone * W_Actor;
     }
     else {
-        // ModelLocal: ボーン位置には移動するが、ボーン回転は無視
         XMVECTOR boneScale, boneRot, bonePos;
         XMMatrixDecompose(&boneScale, &boneRot, &bonePos, W_Bone);
         XMMATRIX W_BonePosOnly = XMMatrixTranslationFromVector(bonePos);
@@ -240,7 +226,6 @@ void NodeAttachComponent::UpdateBoneListCache(const ::Model* model)
     }
 }
 
-// 静的ユーティリティ
 DirectX::XMFLOAT3 NodeAttachComponent::GetWorldPosition_NodeLocal(
     const ::Model* model, int nodeIndex, const DirectX::XMFLOAT3& offsetLocal)
 {
@@ -250,7 +235,6 @@ DirectX::XMFLOAT3 NodeAttachComponent::GetWorldPosition_NodeLocal(
 
     XMMATRIX W_Bone = XMLoadFloat4x4(&nodes[nodeIndex].worldTransform);
     XMMATRIX T = XMMatrixTranslation(offsetLocal.x, offsetLocal.y, offsetLocal.z);
-    // Actor行列がないのでモデル空間座標になる点に注意
     XMMATRIX Result = T * W_Bone;
 
     XMFLOAT4X4 out;
@@ -259,7 +243,6 @@ DirectX::XMFLOAT3 NodeAttachComponent::GetWorldPosition_NodeLocal(
 }
 
 // =========================================================
-// GUI (ここが最強のUIじゃ！)
 // =========================================================
 
 void NodeAttachComponent::OnGUI()
@@ -278,7 +261,6 @@ void NodeAttachComponent::OnGUI()
         return;
     }
 
-    // モデルが変わっていたらボーンリスト更新
     if (model != lastModelPtr) {
         lastModelPtr = model;
         UpdateBoneListCache(model);
@@ -287,13 +269,11 @@ void NodeAttachComponent::OnGUI()
     ImGui::Text("Target: %s", parent->GetName());
     ImGui::Separator();
 
-    // --- 新規ソケット登録 ---
     ImGui::Text("Create New Socket");
 
     static char newSocketName[64] = "NewSocket";
     ImGui::InputText("Socket Name", newSocketName, 64);
 
-    // ボーン選択（コンボボックス）
     if (!guiBoneNameCache.empty()) {
         if (guiSelectedBoneIndex >= (int)guiBoneNameCache.size()) guiSelectedBoneIndex = 0;
         if (ImGui::BeginCombo("Parent Bone", guiBoneNameCache[guiSelectedBoneIndex].c_str())) {
@@ -311,7 +291,6 @@ void NodeAttachComponent::OnGUI()
         ImGui::TextDisabled("No bones found in model.");
     }
 
-    // オフセット調整
     static float newPos[3] = { 0,0,0 };
     static float newRot[3] = { 0,0,0 };
     ImGui::DragFloat3("Offset Pos", newPos, 0.01f);
@@ -326,7 +305,6 @@ void NodeAttachComponent::OnGUI()
 
     ImGui::Separator();
 
-    // --- 登録済みソケット一覧と編集 ---
     ImGui::Text("Managed Sockets (%d)", (int)sockets.size());
 
     if (ImGui::BeginTable("SocketTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable)) {
@@ -336,7 +314,6 @@ void NodeAttachComponent::OnGUI()
         ImGui::TableSetupColumn("Action");
         ImGui::TableHeadersRow();
 
-        // 削除用の一時リスト
         std::string toDelete = "";
 
         for (auto& kv : sockets) {
@@ -352,7 +329,6 @@ void NodeAttachComponent::OnGUI()
             ImGui::Text("%s", s.parentBoneName.c_str());
 
             ImGui::TableNextColumn();
-            // 簡易編集 (位置のみ)
             ImGui::DragFloat3("##pos", &s.offsetPos.x, 0.01f);
 
             ImGui::TableNextColumn();
@@ -373,7 +349,6 @@ void NodeAttachComponent::OnGUI()
         }
     }
 
-    // --- 自身のステータス ---
     ImGui::Separator();
     ImGui::Text("Self Status:");
     if (isAttached) {

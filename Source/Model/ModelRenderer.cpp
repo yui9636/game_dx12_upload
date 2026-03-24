@@ -159,7 +159,6 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
 
         if (useIndirect && cmd.supportsInstancing &&
             cmd.instanceCount > 0 && shader->SupportsInstancing(*meshResource)) {
-            // nodeWorldTransform をスケルトン定数バッファ経由で適用
             {
                 CbSkeleton cbSkeleton{};
                 DirectX::XMFLOAT4X4 identity;

@@ -36,7 +36,6 @@ void DamageTextManager::Spawn(const DirectX::XMFLOAT3& position, int damage)
     {
         if (!popup->IsActive())
         {
-            // SetupŒÄ‚Ño‚µ‚àˆø”‚ðŒ¸‚ç‚·
             popup->Setup(position, damage);
             return;
         }

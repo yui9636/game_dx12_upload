@@ -12,14 +12,12 @@
 #include <cassert>
 
 // ============================================================
-// FrameGraphResources 実装
 // ============================================================
 ITexture* FrameGraphResources::GetTexture(ResourceHandle handle) {
     return m_graph.GetPhysicalTexture(handle);
 }
 
 // ============================================================
-// BuilderImpl: 各パスの Setup() 中に使用されるビルダー
 // ============================================================
 class FrameGraph::BuilderImpl : public FrameGraphBuilder {
 public:
@@ -54,7 +52,6 @@ public:
         if (!input.IsValid()) return input;
         if (input.index >= m_graph.m_resourceNodes.size()) return input;
 
-        // バージョンをインクリメント
         ResourceNode& node = m_graph.m_resourceNodes[input.index];
         node.version++;
         node.producerPassIndex = m_passNode.passIndex;
@@ -83,7 +80,6 @@ private:
 };
 
 // ============================================================
-// FrameGraph 実装
 // ============================================================
 
 void FrameGraph::AddPass(IRenderPass* pass) {
@@ -107,7 +103,6 @@ ResourceHandle FrameGraph::ImportTexture(const std::string& name, ITexture* text
     node.isImported = true;
     node.externalTexture = texture;
     node.version = 0;
-    // imported リソースは初めから producer がいる扱い
     node.producerPassIndex = UINT16_MAX;
     m_resourceNodes.push_back(std::move(node));
 
@@ -120,7 +115,6 @@ void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
     Compile();
     ExecutePasses(queue, rc);
 
-    // トランジェントリソースをプールに返却
     for (auto& node : m_resourceNodes) {
         if (!node.isImported && node.ownedTexture) {
             m_resourcePool.ReleaseTexture(node.desc, std::move(node.ownedTexture), m_frameCount);
@@ -129,7 +123,6 @@ void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
     m_resourcePool.Tick(m_frameCount);
     m_frameCount++;
 
-    // フレームごとにクリア
     m_passNodes.clear();
     m_resourceNodes.clear();
     m_blackboard.clear();
@@ -160,14 +153,13 @@ void FrameGraph::Compile() {
     CalculateLifetimes();
 }
 
-// Step 2a: DAG 構築
+// Step 2a: DAG 構篁E
 void FrameGraph::BuildDAG() {
     const size_t passCount = m_passNodes.size();
     m_adjacency.resize(passCount);
     m_inDegree.resize(passCount, 0);
 
-    // 各リソースの各バージョンについて、producer パスを見つけるマップ
-    // key: (resourceIndex, version) → producerPassIndex
+    // key: (resourceIndex, version) ↁEproducerPassIndex
     std::unordered_map<uint32_t, uint16_t> producerMap;
 
     for (auto& pass : m_passNodes) {
@@ -177,15 +169,12 @@ void FrameGraph::BuildDAG() {
         }
     }
 
-    // imported リソース (version=0) は外部 producer 扱い
     for (size_t i = 0; i < m_resourceNodes.size(); ++i) {
         if (m_resourceNodes[i].isImported) {
             uint32_t key = (static_cast<uint32_t>(i) << 16) | 0;
-            // 外部なので producerMap には登録しない (エッジ不要)
         }
     }
 
-    // Read エッジ: reads のハンドルを見て、そのバージョンの producer → この pass
     for (auto& pass : m_passNodes) {
         for (const auto& r : pass.reads) {
             uint32_t key = (static_cast<uint32_t>(r.index) << 16) | r.version;
@@ -200,11 +189,9 @@ void FrameGraph::BuildDAG() {
         }
     }
 
-    // Write-on-existing (同一リソースの前バージョンの producer → この pass)
     for (auto& pass : m_passNodes) {
         for (const auto& w : pass.writes) {
             if (w.version > 1) {
-                // 前バージョンの producer への暗黙の依存
                 uint32_t prevKey = (static_cast<uint32_t>(w.index) << 16) | (w.version - 1);
                 auto it = producerMap.find(prevKey);
                 if (it != producerMap.end()) {
@@ -219,9 +206,7 @@ void FrameGraph::BuildDAG() {
     }
 }
 
-// Step 2b: パスカリング (逆方向 refCount 伝播)
 void FrameGraph::CullPasses() {
-    // シード: hasSideEffects を持つパスを参照済みにする
     std::queue<uint16_t> workQueue;
 
     for (auto& pass : m_passNodes) {
@@ -231,8 +216,6 @@ void FrameGraph::CullPasses() {
         }
     }
 
-    // 逆方向に伝播: 参照されたパスの reads の producer も参照する
-    // producer マップを再構築
     std::unordered_map<uint32_t, uint16_t> producerMap;
     for (auto& pass : m_passNodes) {
         for (const auto& w : pass.writes) {
@@ -258,7 +241,6 @@ void FrameGraph::CullPasses() {
             }
         }
 
-        // Write-on-existing の暗黙依存も伝播
         for (const auto& w : pass.writes) {
             if (w.version > 1) {
                 uint32_t prevKey = (static_cast<uint32_t>(w.index) << 16) | (w.version - 1);
@@ -274,7 +256,6 @@ void FrameGraph::CullPasses() {
         }
     }
 
-    // refCount == 0 のパスをカリング
     for (auto& pass : m_passNodes) {
         pass.culled = (pass.refCount == 0);
         if (pass.culled) {
@@ -283,16 +264,12 @@ void FrameGraph::CullPasses() {
     }
 }
 
-// Step 2c: リソース寿命計算
-// Step 2c: リソース寿命計算
 void FrameGraph::CalculateLifetimes() {
-    // 全てのリソースの寿命を初期化（first は最大値、last は最小値へ）
     for (auto& res : m_resourceNodes) {
         res.firstPassIndex = UINT16_MAX;
         res.lastPassIndex = 0;
     }
 
-    // executionOrder（ソート済み）に基づいてリソースの first/last を計算
     for (uint16_t execIdx : m_executionOrder) {
         PassNode& pass = m_passNodes[execIdx];
         if (pass.culled) continue;
@@ -301,9 +278,7 @@ void FrameGraph::CalculateLifetimes() {
             if (resourceIndex >= m_resourceNodes.size()) return;
             ResourceNode& res = m_resourceNodes[resourceIndex];
 
-            // std::min(a, b) の代わり
             res.firstPassIndex = (pass.passIndex < res.firstPassIndex) ? pass.passIndex : res.firstPassIndex;
-            // std::max(a, b) の代わり
             res.lastPassIndex = (pass.passIndex > res.lastPassIndex) ? pass.passIndex : res.lastPassIndex;
             };
 
@@ -312,11 +287,9 @@ void FrameGraph::CalculateLifetimes() {
     }
 }
 
-// Step 2d: トポロジカルソート (Kahn's algorithm)
 void FrameGraph::TopologicalSort() {
     const size_t passCount = m_passNodes.size();
 
-    // カリングされたパスの inDegree を計算し直す (カリング済みパスを除外)
     std::vector<uint16_t> sortInDegree(passCount, 0);
     std::vector<std::vector<uint16_t>> sortAdjacency(passCount);
 
@@ -352,7 +325,6 @@ void FrameGraph::TopologicalSort() {
         }
     }
 
-    // サイクル検出
     size_t nonCulledCount = 0;
     for (auto& p : m_passNodes) {
         if (!p.culled) nonCulledCount++;
@@ -374,12 +346,11 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
         PassNode& pass = m_passNodes[execIdx];
         PROFILE_SCOPE(pass.name.c_str());
 
-        // リソース取得: このパスで初めて使うリソースを Acquire
         auto acquireForPass = [&](uint16_t resourceIndex) {
             if (resourceIndex >= m_resourceNodes.size()) return;
             ResourceNode& res = m_resourceNodes[resourceIndex];
             if (res.isImported) return;
-            if (res.ownedTexture) return; // 既に取得済み
+            if (res.ownedTexture) return;
             if (res.firstPassIndex == pass.passIndex) {
                 res.ownedTexture = m_resourcePool.AcquireTexture(
                     res.name, res.desc, factory, m_frameCount);
@@ -389,7 +360,6 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
         for (const auto& r : pass.reads)  acquireForPass(r.index);
         for (const auto& w : pass.writes) acquireForPass(w.index);
 
-        // ステート遷移
         for (const auto& r : pass.reads) {
             if (r.index >= m_resourceNodes.size()) continue;
             ITexture* tex = m_resourceNodes[r.index].GetPhysical();
@@ -403,7 +373,6 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
             ITexture* tex = res.GetPhysical();
             if (!tex) continue;
 
-            // Depth フォーマットは DepthWrite、それ以外は RenderTarget
             ResourceState targetState = ResourceState::RenderTarget;
             if (res.desc.format == TextureFormat::D32_FLOAT ||
                 res.desc.format == TextureFormat::D24_UNORM_S8_UINT) {
@@ -414,7 +383,6 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
             }
         }
 
-        // パス実行
         pass.renderPass->Execute(resources, queue, rc);
     }
 }
@@ -426,7 +394,6 @@ ITexture* FrameGraph::GetPhysicalTexture(ResourceHandle handle) const {
 }
 
 // ============================================================
-// デバッグ: Graphviz DOT 出力
 // ============================================================
 std::string FrameGraph::DumpGraphviz() const {
     std::ostringstream ss;
@@ -434,14 +401,12 @@ std::string FrameGraph::DumpGraphviz() const {
     ss << "  rankdir=LR;\n";
     ss << "  node [shape=box, style=filled];\n\n";
 
-    // パスノード
     for (const auto& pass : m_passNodes) {
         const char* color = pass.culled ? "gray90" : (pass.hasSideEffects ? "lightcoral" : "lightblue");
         ss << "  pass_" << pass.passIndex << " [label=\"" << pass.name << "\"";
         ss << ", fillcolor=" << color << "];\n";
     }
 
-    // リソースノード
     ss << "\n  node [shape=ellipse, style=filled, fillcolor=lightyellow];\n";
     for (size_t i = 0; i < m_resourceNodes.size(); ++i) {
         const auto& res = m_resourceNodes[i];
@@ -450,7 +415,6 @@ std::string FrameGraph::DumpGraphviz() const {
         ss << "\\nv" << res.version << "\"];\n";
     }
 
-    // エッジ
     ss << "\n";
     for (const auto& pass : m_passNodes) {
         for (const auto& w : pass.writes) {

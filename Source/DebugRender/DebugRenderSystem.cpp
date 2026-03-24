@@ -15,7 +15,6 @@ void DebugRenderSystem::Render(Registry& registry)
     auto gizmo = Graphics::Instance().GetGizmos();
     if (!gizmo) return;
 
-    // --- 1. コライダーの可視化 ---
     Query<ColliderComponent, TransformComponent> colQuery(registry);
     colQuery.ForEachWithEntity([&](EntityID entity, ColliderComponent& col, const TransformComponent& trans) {
         if (!col.drawGizmo || !col.enabled) return;
@@ -42,11 +41,9 @@ void DebugRenderSystem::Render(Registry& registry)
                 vWorldPos = XMVector3TransformCoord(XMLoadFloat3((XMFLOAT3*)&e.offsetLocal), matWorld);
             }
 
-            // （描画ロジックは元のまま）
         }
         });
 
-    // --- 2. ライトのアイコン表示 ---
     Query<LightComponent, TransformComponent> lightQuery(registry);
     lightQuery.ForEach([&](const LightComponent& light, const TransformComponent& trans) {
         XMFLOAT4 iconCol = { light.color.x, light.color.y, light.color.z, 1.0f };

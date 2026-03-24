@@ -2,23 +2,19 @@
 #include <string>
 #include <memory>
 
-// Modelクラスの前方宣言 (Model.hをインクルードしないことでビルド時間を短縮)
 class Model;
 
 /**
- * @brief 描画リソースと表示フラグを管理するコンポーネント
+ * @brief ・ｽ`・ｽ諠奇ｿｽ\・ｽ[・ｽX・ｽﾆ表・ｽ・ｽ・ｽt・ｽ・ｽ・ｽO・ｽ・ｽﾇ暦ｿｽ・ｽ・ｽ・ｽ・ｽR・ｽ・ｽ・ｽ|・ｽ[・ｽl・ｽ・ｽ・ｽg
  */
 struct MeshComponent {
-    // モデルデータへの共有ポインタ
     std::shared_ptr<Model> model;
 
-    // ファイルパス（シリアライズ/保存用）
     std::string modelFilePath;
 
-    // 各種フラグ
-    bool isVisible = true;      // 描画するか
-    bool castShadow = true;     // 影を落とすか
-    bool isDebugModel = false;  // デバッグ表示用か
+    bool isVisible = true;
+    bool castShadow = true;
+    bool isDebugModel = false;
 
  
 };

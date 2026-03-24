@@ -15,7 +15,6 @@ public:
     void Update(const EngineTime& time) override;
     void Render(RenderContext& rc, RenderQueue& queue) override;
 
-    // EditorLayerに中身を覗かせるためのアクセス権
     Registry& GetRegistry() { return m_registry; }
 
     EnvironmentComponent& GetEnvironment() { return m_environment; }

@@ -17,14 +17,12 @@
 #include <Input/InputActionComponent.h>
 #include "Effect/EffectManager.h"
 #include <filesystem> 
-#include <algorithm> // replace�p�ɕK�v
+#include <algorithm>
 
-// ���ǉ�: Windows API �p (�t�@�C���_�C�A���O)
 #include <Windows.h>
 #include <commdlg.h> 
 
 namespace {
-    // �_�̃A�t�B���ϊ��iActor ���[���h�s��j
     inline DirectX::XMFLOAT3 TransformPoint(const DirectX::XMFLOAT3& p, const DirectX::XMFLOAT4X4& m)
     {
         using namespace DirectX;
@@ -33,7 +31,6 @@ namespace {
         XMVECTOR t = XMVector4Transform(v, M);
         DirectX::XMFLOAT3 out; XMStoreFloat3(&out, t); return out;
     }
-    // �N�H�[�^�j�I���Ńx�N�g�����񂷁i�m�[�h�̉�]�Ƀ��[�J���I�t�Z�b�g��K�p�j
     inline DirectX::XMFLOAT3 RotateByQuat(const DirectX::XMFLOAT3& v, const DirectX::XMFLOAT4& q)
     {
         using namespace DirectX;
@@ -42,7 +39,6 @@ namespace {
         XMVECTOR R = XMVector3Rotate(V, Q);
         DirectX::XMFLOAT3 out; XMStoreFloat3(&out, R); return out;
     }
-    // RGBA32 �� float4
     inline DirectX::XMFLOAT4 RgbaU32ToFloat4(unsigned rgba)
     {
         float a = ((rgba >> 24) & 0xFF) / 255.0f;
@@ -52,7 +48,6 @@ namespace {
         return DirectX::XMFLOAT4{ r,g,b,a };
     }
 
-    // ���ǉ�: �ۑ��_�C�A���O�w���p�[
     bool SaveJsonDialog(char* outPath, int len, HWND owner)
     {
         OPENFILENAMEA ofn{};
@@ -70,7 +65,6 @@ namespace {
 }
 
 //---------------------------------------------
-// GetName : �G�f�B�^���ʖ���Ԃ�
 //---------------------------------------------
 const char* PlayerEditorComponent::GetName() const
 {
@@ -98,7 +92,6 @@ void PlayerEditorComponent::Update(float dt)
         {
             clipLength = runner->GetClipLength();
 
-            // ���C��: ��~���� TimelineSequencer �ŃV�[�N�����\�������邽�߁A��Ɏp����K�p����
             ApplyScrubToModel();
         }
     }
@@ -120,12 +113,10 @@ void PlayerEditorComponent::OnGUI()
     DrawEventsWindow();
 }
 
-// DrawMainMenu ���C��
 void PlayerEditorComponent::DrawMainMenu()
 {
     if (ImGui::BeginMainMenuBar())
     {
-        // 1. File ���j���[
         if (ImGui::BeginMenu("File"))
         {
             if (ImGui::MenuItem("Open Model..."))
@@ -152,9 +143,7 @@ void PlayerEditorComponent::DrawMainMenu()
                                     cachedTimelines.clear();
                                     ResizeCache((int)anims.size());
 
-                                    // �������[�h (Recent����J�����ꍇ���f�[�^������΃��[�h)
                                     if (auto compiler = owner->GetComponent<GEStorageCompilerComponent>()) {
-                                        // GameplayAsset�S�̂��擾���ĕ���
                                         GameplayAsset data = compiler->LoadGameplayData(currentModelName);
                                         cachedTimelines = data.timelines;
                                         cachedCurves = data.curves;
@@ -186,10 +175,9 @@ void PlayerEditorComponent::DrawMainMenu()
                 }
                 ImGui::EndMenu();
             }
-            ImGui::EndMenu(); // File���j���[�I��
+            ImGui::EndMenu();
         }
 
-        // 2. Save / Load �{�^�� (File���j���[�̊O�ɔz�u)
         bool hasModel = !currentModelName.empty();
 
         // Save
@@ -216,20 +204,17 @@ void PlayerEditorComponent::DrawMainMenu()
     }
 }
 
-// ���ǉ�: ���O��t���ĕۑ� (HWND=nullptr)
 void PlayerEditorComponent::SaveGameplayDataAs()
 {
     std::shared_ptr<Actor> owner = GetActor();
     if (!owner) return;
 
-    // ���݂̃A�j���[�V�����̏�Ԃ��L���b�V���Ɋm��
     SaveTimelineToCache(selectedAnimation);
 
     char path[MAX_PATH] = {};
     std::string defaultName = currentModelName.empty() ? "GameplayData" : (currentModelName + "_Gameplay.json");
     strcpy_s(path, defaultName.c_str());
 
-    // �ȈՓI��HWND�擾 (�{���̓A�v���̃��C���E�B���h�E�n���h����n���ׂ�)
     HWND hwnd = GetActiveWindow();
 
     if (SaveJsonDialog(path, MAX_PATH, hwnd))
@@ -241,7 +226,6 @@ void PlayerEditorComponent::SaveGameplayDataAs()
     }
 }
 
-// ���ǉ�: �t�@�C�����J�� (HWND=nullptr)
 void PlayerEditorComponent::LoadGameplayDataOpen()
 {
     std::shared_ptr<Actor> owner = GetActor();
@@ -250,7 +234,6 @@ void PlayerEditorComponent::LoadGameplayDataOpen()
     char path[MAX_PATH] = {};
     const char* filter = "Gameplay Data (*.json)\0*.json\0All Files (*.*)\0*.*\0\0";
 
-    // �ȈՓI��HWND�擾
     HWND hwnd = GetActiveWindow();
 
     if (Dialog::OpenFileName(path, MAX_PATH, filter, "Load Gameplay Data", hwnd) == DialogResult::OK)
@@ -323,14 +306,11 @@ void PlayerEditorComponent::DrawAnimationsWindow()
 
         if (ImGui::Selectable(a.name.c_str(), isSelected))
         {
-            // �A�j���[�V�����؂�ւ����̃f�[�^�X���b�v����
 
-            // 1. �؂�ւ��O�̃f�[�^���L���b�V���ɕۑ�
             if (selectedAnimation >= 0) {
                 SaveTimelineToCache(selectedAnimation);
             }
 
-            // 2. �C���f�b�N�X�؂�ւ�
             selectedAnimation = i;
             clipLength = a.secondsLength;
 
@@ -348,7 +328,6 @@ void PlayerEditorComponent::DrawAnimationsWindow()
                 }
             }
 
-            // 3. �؂�ւ���̃f�[�^���L���b�V�����畜��
             LoadTimelineFromCache(selectedAnimation);
 
             ApplyScrubToModel();
@@ -417,7 +396,6 @@ void PlayerEditorComponent::LoadModelFromDialog()
         ResizeCache((int)anims.size());
 
         if (auto compiler = owner->GetComponent<GEStorageCompilerComponent>()) {
-            // �������[�h�� GameplayAsset �ōs��
             GameplayAsset data = compiler->LoadGameplayData(currentModelName);
             cachedTimelines = data.timelines;
             cachedCurves = data.curves;
@@ -523,7 +501,6 @@ void PlayerEditorComponent::AutoScaleActorForPreview()
 }
 
 // ========================================================================
-// �^�C�����C���f�[�^�Ǘ��w���p�[
 // ========================================================================
 
 void PlayerEditorComponent::ResizeCache(int size)
@@ -531,7 +508,7 @@ void PlayerEditorComponent::ResizeCache(int size)
     if (size < 0) size = 0;
     if ((int)cachedTimelines.size() < size) {
         cachedTimelines.resize(size);
-        cachedCurves.resize(size); // �J�[�u�����T�C�Y
+        cachedCurves.resize(size);
     }
 }
 
@@ -543,7 +520,6 @@ void PlayerEditorComponent::SaveTimelineToCache(int animIndex)
     if (auto owner = GetActor()) {
         if (auto seq = owner->GetComponent<TimelineSequencerComponent>()) {
             cachedTimelines[animIndex] = seq->GetItems();
-            // �J�[�u�ݒ���ۑ�
             cachedCurves[animIndex] = seq->GetCurveSettings();
         }
     }
@@ -555,7 +531,6 @@ void PlayerEditorComponent::LoadTimelineFromCache(int animIndex)
         if (auto seq = owner->GetComponent<TimelineSequencerComponent>()) {
             if (animIndex >= 0 && animIndex < (int)cachedTimelines.size()) {
                 seq->GetItemsMutable() = cachedTimelines[animIndex];
-                // �J�[�u�ݒ������
                 if (animIndex < (int)cachedCurves.size()) {
                     seq->SetCurveSettings(cachedCurves[animIndex]);
                 }

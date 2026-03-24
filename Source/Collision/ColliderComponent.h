@@ -43,7 +43,6 @@ public:
 
         uint32_t registeredId = 0;
 
-        // ★追加: このコライダーの属性 (デフォルトは体)
         ColliderAttribute attribute = ColliderAttribute::Body;
     };
 
@@ -65,7 +64,6 @@ public:
     std::vector<Element>& GetElements() { return elements; }
     const std::vector<Element>& GetElements() const { return elements; }
 
-    // ★変更: attribute 引数を追加 (デフォルトは Body)
     void AddSphere(const DirectX::SimpleMath::Vector3& offset, float radius, ColliderAttribute attr = ColliderAttribute::Body);
     void AddCapsule(const DirectX::SimpleMath::Vector3& offset, float radius, float height, ColliderAttribute attr = ColliderAttribute::Body);
     void AddBox(const DirectX::SimpleMath::Vector3& offset, const DirectX::SimpleMath::Vector3& size, ColliderAttribute attr = ColliderAttribute::Body);

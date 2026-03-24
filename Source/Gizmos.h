@@ -13,14 +13,12 @@
 //	Gizmos(ID3D11Device* device);
 //	~Gizmos() {}
 //
-//	//���`��
 //	void DrawBox(
 //		const DirectX::XMFLOAT3& position,
 //		const DirectX::XMFLOAT3& angle,
 //		const DirectX::XMFLOAT3& size,
 //		const DirectX::XMFLOAT4& color);
 //
-//	//���`��
 //	void DrawSphere(
 //		const DirectX::XMFLOAT3& position,
 //		float radius,
@@ -38,7 +36,6 @@
 //		const DirectX::XMFLOAT4& color);
 //
 //
-//	//�`����s
 //	void Render(const RenderContext& rc);
 //
 //
@@ -65,16 +62,12 @@
 //		DirectX::XMFLOAT4 color;
 //	};
 //
-//	//���b�V������
 //	void CreateMesh(ID3D11Device* device, const std::vector<DirectX::XMFLOAT3>& vertices, Mesh& mesh);
 //
-//	//�����b�V������
 //	void CreateBoxMesh(ID3D11Device* device, float width, float height, float depth);
 //
-//	//�����b�V������
 //	void CreateSphereMesh(ID3D11Device* device, float radius, int subdivisions);
 //
-//	//�~�����b�V������
 //	void CreateCylinderMesh(ID3D11Device* device, float radius, float height, int subdivision);
 //
 //	void CreateCapsuleMesh(ID3D11Device* device, float radius, float height, int subdivision);
@@ -97,10 +90,9 @@
 
 #include <vector>
 #include <DirectXMath.h>
-#include <memory> // �� �ǉ�
+#include <memory>
 #include "RenderContext/RenderContext.h"
 
-// �� �ǉ�: �O���錾
 class IShader;
 class IBuffer;
 class IInputLayout;
@@ -111,7 +103,6 @@ class Gizmos
 public:
     Gizmos(IResourceFactory* factory);
 
-    // �� �C���F= default; �������Đ錾�݂̂ɂ���I(unique_ptr�̕s���S�Ȍ^�G���[���)
     ~Gizmos();
 
     void DrawBox(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& angle, const DirectX::XMFLOAT3& size, const DirectX::XMFLOAT4& color);
@@ -124,7 +115,6 @@ public:
 private:
     struct Mesh
     {
-        // �� �ύX�FIBuffer��unique_ptr�ɕύX
         std::unique_ptr<IBuffer> vertexBuffer;
         UINT                     vertexCount;
     };
@@ -155,7 +145,6 @@ private:
     Mesh                  capsuleMesh;
     std::vector<Instance> instances;
 
-    // �� �ύX�F�S�� RHI �̃C���^�[�t�F�[�X�ɕύX�I
     std::unique_ptr<IShader>       vertexShader;
     std::unique_ptr<IShader>       pixelShader;
     std::unique_ptr<IInputLayout>  inputLayout;

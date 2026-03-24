@@ -12,7 +12,6 @@ using namespace DirectX;
 EffectVariantShader::EffectVariantShader(ID3D11Device* device)
 {
     // ---------------------------------------------------------
-    // 1. 入力レイアウト (SlashEffectShaderと完全に一致)
     // ---------------------------------------------------------
     D3D11_INPUT_ELEMENT_DESC inputElementDesc[] =
     {
@@ -26,7 +25,6 @@ EffectVariantShader::EffectVariantShader(ID3D11Device* device)
     };
 
     // ---------------------------------------------------------
-    // 2. 頂点シェーダーロード
     // ---------------------------------------------------------
     HRESULT hr = GpuResourceUtils::LoadVertexShader(
         device,
@@ -37,25 +35,20 @@ EffectVariantShader::EffectVariantShader(ID3D11Device* device)
         vertexShader.GetAddressOf());
 
     // ---------------------------------------------------------
-    // 3. 定数バッファ作成 (b0, b6)
     // ---------------------------------------------------------
     GpuResourceUtils::CreateConstantBuffer(device, sizeof(CbScene), sceneConstantBuffer.GetAddressOf());
     GpuResourceUtils::CreateConstantBuffer(device, sizeof(CbSkeleton), skeletonConstantBuffer.GetAddressOf());
 
-    // ※ b1 (Material) は EffectMaterial クラスが管理するためここでは作成しません
 }
 
 void EffectVariantShader::Begin(const RenderContext& rc)
 {
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 
-    // シェーダー設定 (VSのみ)
     dc->IASetInputLayout(inputLayout.Get());
     dc->VSSetShader(vertexShader.Get(), nullptr, 0);
-    // PSはMeshEmitter側でSetShaderするため、ここでは触らないかnullptrにする
     // dc->PSSetShader(nullptr, nullptr, 0); 
 
-        // 定数バッファ設定
     ID3D11Buffer* constantBuffers[] =
     {
         sceneConstantBuffer.Get(),
@@ -72,20 +65,17 @@ void EffectVariantShader::Begin(const RenderContext& rc)
 
 
 
-    // サンプラーステート
     //ID3D11SamplerState* sampleStates[] = {
     //    rc.renderState->GetSamplerState(SamplerState::LinearWrap),
     //    rc.renderState->GetSamplerState(SamplerState::LinearClamp)
     //};
     //dc->PSSetSamplers(0, _countof(sampleStates), sampleStates);
 
-    // レンダーステート設定 (デフォルトは加算にしておく)
     //const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     //dc->OMSetBlendState(rc.renderState->GetBlendState(BlendState::Additive), blendFactor, 0xFFFFFFFF);
     //dc->OMSetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestOnly), 0);
     //dc->RSSetState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));
 
-    // シーン定数バッファ更新 (b0)
     CbScene cbScene{};
     DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&rc.viewMatrix);
     DirectX::XMMATRIX P = DirectX::XMLoadFloat4x4(&rc.projectionMatrix);

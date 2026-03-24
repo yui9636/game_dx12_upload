@@ -4,7 +4,6 @@
 
 class ComponentColumn {
 public:
-    // 型安全な操作のための関数ポインタ定義
     using ConstructFn = void(*)(void*, const void*);
     using MoveConstructFn = void(*)(void*, void*);
     using MoveAssignFn = void(*)(void*, void*);
@@ -20,7 +19,7 @@ public:
     ComponentColumn& operator=(ComponentColumn&& other) noexcept;
 
     void Add(const void* pData);
-    void MoveAdd(void* pData); // ★追加: ムーブで追加
+    void MoveAdd(void* pData);
     void Remove(size_t index);
     void* Get(size_t index) const;
     size_t GetSize() const { return m_count; }
@@ -32,7 +31,6 @@ private:
     size_t m_count = 0;
     size_t m_capacity = 0;
 
-    // 型ごとの処理を記憶
     ConstructFn m_constructFn = nullptr;
     MoveConstructFn m_moveConstructFn = nullptr;
     MoveAssignFn m_moveAssignFn = nullptr;

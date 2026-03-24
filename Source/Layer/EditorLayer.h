@@ -24,11 +24,10 @@ private:
     bool m_showLightingWindow = false;
     bool m_showGBufferDebug = false;
     // ==========================================
-    // GUI•`‰æŠÖ”ŒQiƒJ[ƒlƒ‹‚©‚çˆÚAj
     // ==========================================
     void DrawDockSpace();
-    void DrawMenuBar();       // šˆÚA
-    void DrawMainToolbar();   // šˆÚA
+    void DrawMenuBar();
+    void DrawMainToolbar();
     void DrawSceneView();
     void DrawHierarchy();
     void DrawInspector();

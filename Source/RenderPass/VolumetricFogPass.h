@@ -26,9 +26,8 @@ private:
     std::unique_ptr<IPipelineState> m_psoBlur;
 
     // ====================================================
-    // �� �O���t�ł���肷��`�P�b�g
     // ====================================================
-    ResourceHandle m_hGBuffer2;          // ���́FWorldPos & Depth
-    ResourceHandle m_hVolumetricFog;     // ���ԁF���t�H�O�i�n�[�t�𑜓x�j
-    ResourceHandle m_hVolumetricFogBlur; // �o�́F�u���[��t�H�O�i�n�[�t�𑜓x�j
+    ResourceHandle m_hGBuffer2;
+    ResourceHandle m_hVolumetricFog;
+    ResourceHandle m_hVolumetricFogBlur;
 };

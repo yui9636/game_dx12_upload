@@ -1,5 +1,5 @@
 #pragma once
-#include "IBind.h" // ★ 基底クラスのインクルード
+#include "IBind.h"
 #include <cstdint>
 #include <vector>
 
@@ -30,7 +30,6 @@ struct BindGroupEntry {
     ISampler* sampler = nullptr;
 };
 
-// ★ IBind を継承
 class IBindGroup : public IBind {
 public:
     virtual ~IBindGroup() override = default;

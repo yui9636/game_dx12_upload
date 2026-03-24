@@ -5,7 +5,6 @@
 
 namespace ed = ax::NodeEditor;
 
-// リンク追加コマンド
 class CmdBTAddLink : public ICommand {
 public:
     CmdBTAddLink(BTGraph* graph, const BTNodeLink& link) : m_Graph(graph), m_Link(link) {}
@@ -20,7 +19,6 @@ private:
     BTGraph* m_Graph; BTNodeLink m_Link;
 };
 
-// ノード移動コマンド
 class CmdBTMoveNode : public ICommand {
 public:
     CmdBTMoveNode(unsigned int nodeId, ImVec2 oldPos, ImVec2 newPos)
@@ -33,7 +31,6 @@ private:
     unsigned int m_NodeId; ImVec2 m_OldPos, m_NewPos;
 };
 
-// 重み変更コマンド
 class CmdBTChangeWeight : public ICommand {
 public:
     CmdBTChangeWeight(BTGraph* graph, unsigned int linkId, float oldW, float newW)
@@ -63,7 +60,6 @@ private:
     BTGraph* m_Graph; BTNodeLink m_Link;
 };
 
-// ノード削除コマンド（関連リンクも一括保持）
 class CmdBTDeleteNode : public ICommand {
 public:
     CmdBTDeleteNode(BTGraph* graph, const BTNodeEditorData& node, const std::vector<BTNodeLink>& attachedLinks)
@@ -71,11 +67,9 @@ public:
     }
 
     void Execute() override {
-        // ノード削除
         unsigned int nid = m_Node.id;
         m_Graph->nodes.erase(std::remove_if(m_Graph->nodes.begin(), m_Graph->nodes.end(),
             [nid](auto& n) { return n.id == nid; }), m_Graph->nodes.end());
-        // 関連リンク削除
         for (const auto& al : m_Links) {
             unsigned int lid = al.id;
             m_Graph->links.erase(std::remove_if(m_Graph->links.begin(), m_Graph->links.end(),

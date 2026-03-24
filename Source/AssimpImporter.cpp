@@ -3,44 +3,37 @@
 #include <stb_image_write.h>
 #include "System/Misc.h"
 #include "AssimpImporter.h"
-// コンストラクタ
 AssimpImporter::AssimpImporter(const char* filename)
 	:filepath(filename)
 {
-	//拡張子取得
 	std::string extension = filepath.extension().string();
-	std::transform(extension.begin(), extension.end(), extension.begin(), tolower);//小文字化
+	std::transform(extension.begin(), extension.end(), extension.begin(), tolower);
 
-	//FBXファイルの場合は特殊なインポートオプション設定をする
 	if (extension == ".fbx")
 	{
-		// $AssimpFBX$が付加された余計なノードを作成してしまうのを抑制する
 		aImporter.SetPropertyInteger(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
 	}
 
 
 
-	//インポート時のオプションフラグ
-	uint32_t aFlags = aiProcess_Triangulate //多角形を三角形化する
-		| aiProcess_JoinIdenticalVertices//	重複頂点をマージする
-		| aiProcess_LimitBoneWeights	//1頂点の最大ボーン影響数を制限する
-		| aiProcess_PopulateArmatureData //ボーンの参照データを取得できるようにする
+	uint32_t aFlags = aiProcess_Triangulate
+		| aiProcess_JoinIdenticalVertices
+		| aiProcess_LimitBoneWeights
+		| aiProcess_PopulateArmatureData
 		| aiProcess_CalcTangentSpace;
 
-	//ファイルを読み込み
 	aScene = aImporter.ReadFile(filename, aFlags);
 	_ASSERT_EXPR_A(aScene, "3D Model File not found");
 
 }
 
-//メッシュデータを読み込み
 void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes)
 {
+	if (!aScene || !aScene->mRootNode) return;
 	LoadMeshes(meshes, nodes, aScene->mRootNode);
 }
 
 
-//メッシュデータを読み込み
 void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const aiNode* aNode)
 {
 	for (uint32_t aMeshIndex = 0; aMeshIndex < aNode->mNumMeshes; ++aMeshIndex)
@@ -48,41 +41,34 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 
 		const aiMesh* aMesh = aScene->mMeshes[aNode->mMeshes[aMeshIndex]];
 
-		//メッシュデータ格納
 		Model::Mesh& mesh = meshes.emplace_back();
 		mesh.nodeIndex = nodeIndexMap[aNode];
 		mesh.vertices.resize(aMesh->mNumVertices);
 		mesh.indices.resize(aMesh->mNumFaces * 3);
 		mesh.materialIndex = static_cast<int>(aMesh->mMaterialIndex);
 
-		//頂点データ
 		for (uint32_t aVertexIndex = 0; aVertexIndex < aMesh->mNumVertices; ++aVertexIndex)
 		{
 			Model::Vertex& vertex = mesh.vertices.at(aVertexIndex);
-			//位置
 			if (aMesh->HasPositions())
 			{
 				vertex.position = aiVector3DToXMFLOAT3(aMesh->mVertices[aVertexIndex]);
 			}
-			//テクスチャ座標
 			if (aMesh->HasTextureCoords(0))
 			{
 				vertex.texcoord = aiVector3DToXMFLOAT2(aMesh->mTextureCoords[0][aVertexIndex]);
 				vertex.texcoord.y = 1.0f - vertex.texcoord.y;
 			}
-			//法線
 			if (aMesh->HasNormals())
 			{
 				vertex.normal = aiVector3DToXMFLOAT3(aMesh->mNormals[aVertexIndex]);
 			}
-			//接線
 			if (aMesh->HasTangentsAndBitangents())
 			{
 				vertex.tangent = aiVector3DToXMFLOAT3(aMesh->mTangents[aVertexIndex]);
 			}
 		}
 
-		//インデックスデータ
 		for (uint32_t aFaceIndex = 0; aFaceIndex < aMesh->mNumFaces; ++aFaceIndex)
 		{
 			const aiFace& aFace = aMesh->mFaces[aFaceIndex];
@@ -92,10 +78,8 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 			mesh.indices[index + 2] = aFace.mIndices[0];
 		}
 
-		// スキニングデータ
 		if (aMesh->mNumBones > 0)
 		{
-			// ボーン影響力データ
 			struct BoneInfluence
 			{
 				uint32_t	indices[4] = { 0, 0, 0, 0 };
@@ -120,12 +104,10 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 			std::vector<BoneInfluence> boneInfluences;
 			boneInfluences.resize(aMesh->mNumVertices);
 
-			// メッシュに影響するボーンデータを収集する
 			for (uint32_t aBoneIndex = 0; aBoneIndex < aMesh->mNumBones; ++aBoneIndex)
 			{
 				const aiBone* aBone = aMesh->mBones[aBoneIndex];
 
-				// 頂点影響力データを抽出
 				for (uint32_t aWightIndex = 0; aWightIndex < aBone->mNumWeights; ++aWightIndex)
 				{
 					const aiVertexWeight& aWeight = aBone->mWeights[aWightIndex];
@@ -133,14 +115,12 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 					boneInfluence.Add(aBoneIndex, aWeight.mWeight);
 				}
 
-				// ボーンデータ取得
 				Model::Bone& bone = mesh.bones.emplace_back();
 				bone.nodeIndex = nodeIndexMap[aBone->mNode];
 				bone.offsetTransform = aiMatrix4x4ToXMFLOAT4X4(aBone->mOffsetMatrix);
 
 			}
 
-			// 頂点影響力データを格納
 			for (size_t vertexIndex = 0; vertexIndex < mesh.vertices.size(); ++vertexIndex)
 			{
 				Model::Vertex& vertex = mesh.vertices.at(vertexIndex);
@@ -158,7 +138,6 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 
 
 	}
-	// 再帰的に子ノードを処理する
 	for (uint32_t aNodeIndex = 0; aNodeIndex < aNode->mNumChildren; ++aNodeIndex)
 	{
 		LoadMeshes(meshes, nodes, aNode->mChildren[aNodeIndex]);
@@ -166,10 +145,10 @@ void AssimpImporter::LoadMeshes(MeshList& meshes, const NodeList& nodes, const a
 
 }
 
-// マテリアルデータを読み込み
 void AssimpImporter::LoadMaterials(MaterialList& materials)
 {
-	// ディレクトリパス取得
+	if (!aScene) return;
+
 	std::filesystem::path dirpath(filepath.parent_path());
 
 	materials.resize(aScene->mNumMaterials);
@@ -178,50 +157,39 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 		const aiMaterial* aMaterial = aScene->mMaterials[aMaterialIndex];
 		Model::Material& material = materials.at(aMaterialIndex);
 
-		// マテリアル名
 		aiString aMaterialName;
 		aMaterial->Get(AI_MATKEY_NAME, aMaterialName);
 		material.name = aMaterialName.C_Str();
 
-		// ディフューズ色
 		aiColor3D aDiffuseColor;
 		if (AI_SUCCESS == aMaterial->Get(AI_MATKEY_COLOR_DIFFUSE, aDiffuseColor))
 		{
 			material.color = aiColor3DToXMFLOAT4(aDiffuseColor);
 		}
 
-		// テクスチャ読み込み関数
 		auto loadTexture = [&](aiTextureType aTextureType, std::string& textureFilename)
 			{
-				// テクスチャファイルパス取得
 				aiString aTextureFilePath;
 				if (AI_SUCCESS == aMaterial->GetTexture(aTextureType, 0, &aTextureFilePath))
 				{
-					// 埋め込みテクスチャか確認
 					const aiTexture* aTexture = aScene->GetEmbeddedTexture(aTextureFilePath.C_Str());
 					if (aTexture != nullptr)
 					{
-						// テクスチャファイルパス作成
 						std::filesystem::path textureFilePath(aTextureFilePath.C_Str());
 						if (textureFilePath == "*0")
 						{
-							// テクスチャファイル名がなかった場合はマテリアル名とテクスチャタイプから作成
 							textureFilePath = material.name + "_" + aiTextureTypeToString(aTextureType) + "." + aTexture->achFormatHint;
 						}
 						textureFilePath = "Textures" / textureFilePath.filename();
 
-						// 埋め込みテクスチャを出力するディレクトリを確認
 						std::filesystem::path outputDirPath(dirpath / textureFilePath.parent_path());
 						if (!std::filesystem::exists(outputDirPath))
 						{
-							// なかったらディレクトリ作成
 							std::filesystem::create_directories(outputDirPath);
 						}
-						// 出力ディレクトリに画像ファイルを保存
 						std::filesystem::path outputFilePath(dirpath / textureFilePath);
 						if (!std::filesystem::exists(outputFilePath))
 						{
-							// mHeightが0の場合は画像の生データなのでそのままバイナリ出力
 							if (aTexture->mHeight == 0)
 							{
 								std::ofstream os(outputFilePath.string().c_str(), std::ios::binary);
@@ -229,7 +197,6 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 							}
 							else
 							{
-								// リニアな画像データは.pngで出力
 								outputFilePath.replace_extension(".png");
 								stbi_write_png(
 									outputFilePath.string().c_str(),
@@ -239,31 +206,25 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 									aTexture->pcData, 0);
 							}
 						}
-						// テクスチャファイルパスを格納
 						textureFilename = textureFilePath.string();
 					}
 					else
 					{
-						// テクスチャファイルパスをそのまま格納
 						textureFilename = aTextureFilePath.C_Str();
 					}
 				}
 			};
 
-		// ディフューズマップ
 		loadTexture(aiTextureType_DIFFUSE, material.diffuseTextureFileName);
-		//ノーマルマップ
 		loadTexture(aiTextureType_NORMALS, material.normalTextureFileName);
 
 
-		//メタリックマップ
 		loadTexture(aiTextureType_METALNESS, material.metallicTextureFileName);
 		float metallic = 0.0f;
 		if (AI_SUCCESS == aMaterial->Get(AI_MATKEY_METALLIC_FACTOR, metallic)) {
 			material.metallicFactor = metallic;
 		}
 
-		//ラフネスマップ
 		loadTexture(aiTextureType_DIFFUSE_ROUGHNESS, material.roughnessTextureFileName);
 		float roughness = 0.0f;
 		if (AI_SUCCESS == aMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness)) {
@@ -272,7 +233,6 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 
 	
 
-		//アルベドマップ
 		loadTexture(aiTextureType_BASE_COLOR, material.albedoTextureFileName);
 		if (material.albedoTextureFileName.empty()) {
 			loadTexture(aiTextureType_DIFFUSE, material.albedoTextureFileName);
@@ -283,18 +243,15 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 		}
 
 
-		//オクルージョンマップ
 		loadTexture(aiTextureType_LIGHTMAP, material.occlusionTextureFileName);
 
 		float occlusionStrength;
 		if (aMaterial->Get(AI_MATKEY_OPACITY, occlusionStrength) == AI_SUCCESS)
 		{
-			// 取得した強度を使用
 			material.occlusionStrength = occlusionStrength;
 		}
 
 
-		// エミッシブマップ
 		loadTexture(aiTextureType_EMISSIVE, material.emissiveTextureFileName);
 
 
@@ -303,29 +260,25 @@ void AssimpImporter::LoadMaterials(MaterialList& materials)
 	}
 }
 
-//ノードデータを読み込む
 void AssimpImporter::LoadNodes(NodeList& nodes)
 {
+	if (!aScene || !aScene->mRootNode) return;
 	LoadNodes(nodes, aScene->mRootNode, -1);
 }
 
 
-// ノードデータを再帰読み込み
 void AssimpImporter::LoadNodes(NodeList& nodes, const aiNode* aNode, int parentIndex)
 {
-	// aiNode*からModel::Nodeのインデックスを取得できるようにする
 	std::map<const aiNode*, int>::iterator it = nodeIndexMap.find(aNode);
 	if (it == nodeIndexMap.end())
 	{
 		nodeIndexMap[aNode] = static_cast<int>(nodes.size());
 	}
 
-	// トランスフォームデータ取り出し
 	aiVector3D aScale, aPosition;
 	aiQuaternion aRotation;
 	aNode->mTransformation.Decompose(aScale, aRotation, aPosition);
 
-	// ノードデータ格納
 	Model::Node& node = nodes.emplace_back();
 	node.name = aNode->mName.C_Str();
 	node.parentIndex = parentIndex;
@@ -335,14 +288,12 @@ void AssimpImporter::LoadNodes(NodeList& nodes, const aiNode* aNode, int parentI
 
 	parentIndex = static_cast<int>(nodes.size() - 1);
 
-	// 再帰的に子ノードを処理する
 	for (uint32_t aNodeIndex = 0; aNodeIndex < aNode->mNumChildren; ++aNodeIndex)
 	{
 		LoadNodes(nodes, aNode->mChildren[aNodeIndex], parentIndex);
 	}
 }
 
-// ノードインデックス取得
 int AssimpImporter::GetNodeIndex(const NodeList& nodes, const char* name)
 {
 	int index = 0;
@@ -357,19 +308,17 @@ int AssimpImporter::GetNodeIndex(const NodeList& nodes, const char* name)
 	return -1;
 }
 
-// アニメーションデータを読み込み
 void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& nodes)
 {
+	if (!aScene) return;
 	for (uint32_t aAnimationIndex = 0; aAnimationIndex < aScene->mNumAnimations; ++aAnimationIndex)
 	{
 		const aiAnimation* aAnimation = aScene->mAnimations[aAnimationIndex];
 		Model::Animation& animation = animations.emplace_back();
 
-		// アニメーション情報
 		animation.name = aAnimation->mName.C_Str();
 		animation.secondsLength = static_cast<float>(aAnimation->mDuration / aAnimation->mTicksPerSecond);
 
-		// ノード毎のアニメーション
 		animation.nodeAnims.resize(nodes.size());
 		for (uint32_t aChannelIndex = 0; aChannelIndex < aAnimation->mNumChannels; ++aChannelIndex)
 		{
@@ -380,43 +329,32 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 			const Model::Node& node = nodes.at(nodeIndex);
 			Model::NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
 
-			// 位置
 			for (uint32_t aPositionIndex = 0; aPositionIndex < aNodeAnim->mNumPositionKeys; ++aPositionIndex)
 			{
 				const aiVectorKey& aKey = aNodeAnim->mPositionKeys[aPositionIndex];
-				// なぜかUnityで出力したアニメーションデータにはゴミと思われるキーフレームが存在している場合がある。
-				// 小数点が存在するフレーム（時間）がゴミデータっぽいので除外する。
 				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::VectorKeyframe& keyframe = nodeAnim.positionKeyframes.emplace_back();
 				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
 				keyframe.value = aiVector3DToXMFLOAT3(aKey.mValue);
 			}
-			// 回転
 			for (uint32_t aRotationIndex = 0; aRotationIndex < aNodeAnim->mNumRotationKeys; ++aRotationIndex)
 			{
 				const aiQuatKey& aKey = aNodeAnim->mRotationKeys[aRotationIndex];
-				// なぜかUnityで出力したアニメーションデータにはゴミと思われるキーフレームが存在している場合がある。
-				// 小数点が存在するフレーム（時間）がゴミデータっぽいので除外する。
 				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::QuaternionKeyframe& keyframe = nodeAnim.rotationKeyframes.emplace_back();
 				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
 				keyframe.value = aiQuaternionToXMFLOAT4(aKey.mValue);
 			}
-			// スケール
 			for (uint32_t aScalingIndex = 0; aScalingIndex < aNodeAnim->mNumScalingKeys; ++aScalingIndex)
 			{
 				const aiVectorKey& aKey = aNodeAnim->mScalingKeys[aScalingIndex];
-				// なぜかUnityで出力したアニメーションデータにはゴミと思われるキーフレームが存在している場合がある。
-				// 小数点が存在するフレーム（時間）がゴミデータっぽいので除外する。
 				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::VectorKeyframe& keyframe = nodeAnim.scaleKeyframes.emplace_back();
 				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
 				keyframe.value = aiVector3DToXMFLOAT3(aKey.mValue);
 			}
 
-			// 全てのキーの値がほぼ同じ内容だった場合は削る
 			DirectX::XMVECTOR Epsilon = DirectX::XMVectorReplicate(0.00001f);
-			// 位置
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat3(&nodeAnim.positionKeyframes.at(0).value);
@@ -434,7 +372,6 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 					nodeAnim.positionKeyframes.resize(1);
 				}
 			}
-			// 回転
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat4(&nodeAnim.rotationKeyframes.at(0).value);
@@ -452,7 +389,6 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 					nodeAnim.rotationKeyframes.resize(1);
 				}
 			}
-			// スケール
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat3(&nodeAnim.scaleKeyframes.at(0).value);
@@ -471,12 +407,10 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 				}
 			}
 		}
-		// アニメーションがなかったノードに対して初期姿勢のキーフレームを追加する
 		for (size_t nodeIndex = 0; nodeIndex < animation.nodeAnims.size(); ++nodeIndex)
 		{
 			const Model::Node& node = nodes.at(nodeIndex);
 			Model::NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
-			// 移動
 			if (nodeAnim.positionKeyframes.size() == 0)
 			{
 				Model::VectorKeyframe& keyframe = nodeAnim.positionKeyframes.emplace_back();
@@ -489,7 +423,6 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 				keyframe.seconds = animation.secondsLength;
 				keyframe.value = nodeAnim.positionKeyframes.at(0).value;
 			}
-			// 回転
 			if (nodeAnim.rotationKeyframes.size() == 0)
 			{
 				Model::QuaternionKeyframe& keyframe = nodeAnim.rotationKeyframes.emplace_back();
@@ -502,7 +435,6 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 				keyframe.seconds = animation.secondsLength;
 				keyframe.value = nodeAnim.rotationKeyframes.at(0).value;
 			}
-			// スケール
 			if (nodeAnim.scaleKeyframes.size() == 0)
 			{
 				Model::VectorKeyframe& keyframe = nodeAnim.scaleKeyframes.emplace_back();
@@ -525,7 +457,6 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 
 
 
-// aiVector3D → XMFLOAT3
 DirectX::XMFLOAT3 AssimpImporter::aiVector3DToXMFLOAT3(const aiVector3D& aValue)
 {
 	return DirectX::XMFLOAT3(
@@ -555,7 +486,6 @@ DirectX::XMFLOAT2 AssimpImporter::aiVector3DToXMFLOAT2(const aiVector3D& aValue)
 	);
 }
 
-// aiQuaternion → XMFLOAT4
 DirectX::XMFLOAT4 AssimpImporter::aiQuaternionToXMFLOAT4(const aiQuaternion& aValue)
 {
 	return DirectX::XMFLOAT4(
@@ -568,7 +498,6 @@ DirectX::XMFLOAT4 AssimpImporter::aiQuaternionToXMFLOAT4(const aiQuaternion& aVa
 
 
 
-//aiMatrix4x4→ XMFLOAT4x4
 DirectX::XMFLOAT4X4 AssimpImporter::aiMatrix4x4ToXMFLOAT4X4(const aiMatrix4x4& aValue)
 {
 	return DirectX::XMFLOAT4X4(

@@ -1,5 +1,5 @@
 #include "UIManager.h"
-#include "RenderContext/RenderContext.h" // RenderState��RenderContext�̒�`���K�v
+#include "RenderContext/RenderContext.h"
 #include "RHI/ICommandList.h"
 
 void UIManager::RemoveElement(std::shared_ptr<UIElement> element)
@@ -29,14 +29,11 @@ void UIManager::Render(const RenderContext& rc)
 {
     if (elements.empty()) return;
 
-    // RenderContext から必要な情報を取得
     const RenderState* rs = rc.renderState;
 
     // --------------------------------------------------------
-    // UI�p�̃����_�[�X�e�[�g�ݒ� (RenderContext�o�R)
     // --------------------------------------------------------
 
-    // 1. �u�����h: �������� (Transparency)
     float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     //dc->OMSetBlendState(rs->GetBlendState(BlendState::Transparency), blendFactor, 0xFFFFFFFF);
     //dc->OMSetDepthStencilState(rs->GetDepthStencilState(DepthState::NoTestNoWrite), 0);

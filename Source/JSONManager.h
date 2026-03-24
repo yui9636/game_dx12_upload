@@ -4,11 +4,10 @@
 #include <nlohmann/json.hpp>
 #include <DirectXMath.h>
 #include <iostream>
-#include "Particle/compute_particle_system.h" // emit_particle_data 用
+#include "Particle/compute_particle_system.h"
 
 using json = nlohmann::json;
 
-// DirectXMath 型のシリアライズ定義
 namespace nlohmann {
     template<> struct adl_serializer<DirectX::XMFLOAT2> {
         static void to_json(json& j, const DirectX::XMFLOAT2& v) { j = { {"x", v.x}, {"y", v.y} }; }
@@ -32,7 +31,6 @@ namespace nlohmann {
         }
     };
 
-    // compute_particle_system::emit_particle_data のシリアライズ対応
     template<> struct adl_serializer<compute_particle_system::emit_particle_data> {
         static void to_json(json& j, const compute_particle_system::emit_particle_data& p) {
             j = {
@@ -77,7 +75,6 @@ private:
     json jsonData;
 };
 
-// テンプレート関数の実装
 template<typename T>
 void JSONManager::Set(const std::string& key, const T& value) {
     try { jsonData[key] = value; }

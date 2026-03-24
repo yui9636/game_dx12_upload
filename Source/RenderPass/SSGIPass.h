@@ -26,12 +26,11 @@ private:
     std::unique_ptr<IPipelineState> m_psoBlur;
 
     // ====================================================
-    // �� �O���t�ŊǗ�����`�P�b�g
     // ====================================================
     ResourceHandle m_hGBuffer1;  // Normal
     ResourceHandle m_hGBuffer2;  // WorldPos
-    ResourceHandle m_hPrevScene; // ���ˁE�o�E���X��
+    ResourceHandle m_hPrevScene;
 
-    ResourceHandle m_hSSGI;      // ���ԁF��SSGI�i�n�[�t�𑜓x�j
-    ResourceHandle m_hSSGIBlur;  // �o�́F�u���[��SSGI�i�n�[�t�𑜓x�j
+    ResourceHandle m_hSSGI;
+    ResourceHandle m_hSSGIBlur;
 };

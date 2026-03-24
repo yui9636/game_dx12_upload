@@ -29,7 +29,6 @@ public:
     void EndFrame(RenderContext& rc);
     void SubmitFrame(RenderContext& rc);
 
-    // DX12: FrameGraph外で SceneColor → DisplayColor をトーンマップBlit
     void BlitSceneToDisplay(RenderContext& rc);
 
 private:

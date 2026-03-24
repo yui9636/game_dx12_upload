@@ -7,7 +7,6 @@ void Messenger::Clear()
 
 void Messenger::SendData(const std::string& identifier, void* data)
 {
-	// 指定のキーの開始ノード終了ノードを取得
 	auto itRange = receivers.equal_range(identifier);
 	for(decltype(itRange.first) it = itRange.first; it != itRange.second; ++it )
 	{

@@ -1,6 +1,6 @@
 #include "System/Misc.h"
 #include "Font.h"
-#include "GpuResourceUtils.h" // ★これが必要です
+#include "GpuResourceUtils.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -76,7 +76,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         hr = device->CreateBuffer(&desc, nullptr, matrixBuffer.GetAddressOf());
     }
 
-    // バッファ作成
     {
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * maxSpriteCount * 4);
@@ -102,7 +101,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
     }
 
     // ---------------------------------------------------
-    // 5. FNTファイル解析 (★ここを完全修正)
     // ---------------------------------------------------
     {
         FILE* fp = nullptr;
@@ -121,12 +119,10 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         char dirname[256];
         _splitpath_s(filename, nullptr, 0, dirname, 256, nullptr, 0, nullptr, 0);
 
-        // コンテナ初期化
         characterInfos.resize(0xFFFF);
         characterIndices.resize(0xFFFF);
         memset(characterIndices.data(), 0, sizeof(WORD) * characterIndices.size());
 
-        // 行単位で分割するためのループ
         char* lineContext = nullptr;
         char* line = strtok_s(fntData.get(), "\r\n", &lineContext);
 
@@ -136,10 +132,8 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
 
         while (line)
         {
-            // 行の先頭キーワード判定
             if (strncmp(line, "common", 6) == 0)
             {
-                // トークン分割ループ
                 char* tokenCtx = nullptr;
                 char* token = strtok_s(line, " ", &tokenCtx);
                 int pages = 0;
@@ -163,15 +157,13 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                 int id = 0;
                 char fname[256] = {};
 
-                // file="xxx" のようなスペースを含むトークンを処理するため、単純なstrtokは使いにくい
-                // ここだけは strstr で特定する
                 char* pId = strstr(line, "id=");
                 if (pId) id = atoi(pId + 3);
 
                 char* pFile = strstr(line, "file=\"");
                 if (pFile)
                 {
-                    pFile += 6; // file=" まで進める
+                    pFile += 6;
                     char* pQuote = strchr(pFile, '\"');
                     if (pQuote)
                     {
@@ -180,7 +172,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                         _makepath_s(fullpath, 256, nullptr, dirname, pFile, nullptr);
 
                         hr = GpuResourceUtils::LoadTexture(device, fullpath, shaderResourceViews.at(id).GetAddressOf());
-                        // テクスチャロード失敗ならここで止まる
                         _ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
                     }
                 }
@@ -197,9 +188,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
             }
             else if (strncmp(line, "char", 4) == 0)
             {
-                // ★ここが修正の肝！
-                // スペース区切りでトークン化し、完全一致でパラメータを探す
-                // これなら "x=" が "xoffset=" に誤爆しません。
 
                 int id = 0, x = 0, y = 0, width = 0, height = 0;
                 int xoffset = 0, yoffset = 0, xadvance = 0, page = 0;
@@ -209,7 +197,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
 
                 while (token)
                 {
-                    // "key=val" 形式をチェック
                     if (strncmp(token, "id=", 3) == 0)       id = atoi(token + 3);
                     else if (strncmp(token, "x=", 2) == 0)   x = atoi(token + 2);
                     else if (strncmp(token, "y=", 2) == 0)   y = atoi(token + 2);
@@ -223,7 +210,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                     token = strtok_s(nullptr, " ", &tokenCtx);
                 }
 
-                // 登録処理
                 if (id > 0 && id < 0x10000 && charInfoIndex < characterInfos.size())
                 {
                     characterIndices.at(id) = static_cast<WORD>(charInfoIndex);
@@ -241,7 +227,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                     info.page = page;
                     info.ascii = (id < 0x100);
 
-                    // デバッグ出力 (正しく読めたか確認用)
                     // char buf[256];
                     // sprintf_s(buf, "ID:%d x:%d y:%d w:%d h:%d\n", id, x, y, width, height);
                     // OutputDebugStringA(buf);
@@ -250,11 +235,9 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                 }
             }
 
-            // 次の行へ
             line = strtok_s(nullptr, "\r\n", &lineContext);
         }
 
-        // 特殊文字のインデックス設定
         characterIndices.at(0x00) = CharacterInfo::EndCode;
         characterIndices.at(0x0a) = CharacterInfo::ReturnCode;
         characterIndices.at(0x09) = CharacterInfo::TabCode;
@@ -270,14 +253,12 @@ void Font::SetSDFParams(float threshold, float softness)
 
 void Font::Begin(ID3D11DeviceContext* context)
 {
-    // ビューポート取得
     D3D11_VIEWPORT viewport;
     UINT num_viewports = 1;
     context->RSGetViewports(&num_viewports, &viewport);
     screenWidth = viewport.Width;
     screenHeight = viewport.Height;
 
-    // ★SDF用定数バッファの更新
     D3D11_MAPPED_SUBRESOURCE ms;
     if (SUCCEEDED(context->Map(sdfConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
     {
@@ -288,7 +269,6 @@ void Font::Begin(ID3D11DeviceContext* context)
         context->Unmap(sdfConstantBuffer.Get(), 0);
     }
 
-    // 頂点バッファのマッピング
     context->Map(vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
     currentVertex = reinterpret_cast<Vertex*>(ms.pData);
     currentIndexCount = 0;
@@ -303,14 +283,12 @@ void Font::Draw(float x, float y, const wchar_t* string)
     size_t length = wcslen(string);
     float start_x = x;
 
-    // float space = fontWidth * scaleX; // fontWidthは全体の画像サイズを指すことがあるため、xadvance基準にするのが安全です
-    // 一旦スペースは固定値か特定の文字幅にするのが一般的ですが、元のロジックを尊重します
     float space = 20.0f * scaleX;
 
     for (size_t i = 0; i < length; ++i)
     {
         WORD word = static_cast<WORD>(string[i]);
-        if (word >= characterIndices.size()) continue; // 範囲外ガード
+        if (word >= characterIndices.size()) continue;
         WORD code = characterIndices.at(word);
 
         if (code == CharacterInfo::EndCode) break;
@@ -318,7 +296,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
         else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
         else if (code == CharacterInfo::SpaceCode) { x += space; continue; }
 
-        if (code == 0) continue; // 登録されていない文字
+        if (code == 0) continue;
 
         const CharacterInfo& info = characterInfos.at(code);
 
@@ -327,7 +305,6 @@ void Font::Draw(float x, float y, const wchar_t* string)
         float width = info.width * scaleX;
         float height = info.height * scaleY;
 
-        // 頂点設定
         currentVertex[0].position = { positionX,         positionY,          0.0f };
         currentVertex[1].position = { positionX + width, positionY,          0.0f };
         currentVertex[2].position = { positionX,         positionY + height, 0.0f };
@@ -338,13 +315,10 @@ void Font::Draw(float x, float y, const wchar_t* string)
         currentVertex[2].texcoord = { info.left,  info.bottom };
         currentVertex[3].texcoord = { info.right, info.bottom };
 
-        // 色はSDF定数バッファで制御するため、頂点カラーは白(1,1,1,1)固定にする
-        // もし文字ごとに色を変えたい場合はここに入れますが、SDFと乗算されるので注意
         for (int j = 0; j < 4; ++j)
         {
             currentVertex[j].color = DirectX::XMFLOAT4(1, 1, 1, 1);
 
-            // NDC変換 (0~Width -> -1~1)
             currentVertex[j].position.x = 2.0f * currentVertex[j].position.x / screenWidth - 1.0f;
             currentVertex[j].position.y = 1.0f - 2.0f * currentVertex[j].position.y / screenHeight;
         }
@@ -352,7 +326,6 @@ void Font::Draw(float x, float y, const wchar_t* string)
         currentVertex += 4;
         x += info.xadvance * scaleX;
 
-        // ページ切り替え
         if (currentPage != info.page)
         {
             currentPage = info.page;
@@ -370,7 +343,6 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
 {
     is3DMode = true;
 
-    // 行列を転置して保存
     XMStoreFloat4x4(&currentWorld, XMMatrixTranspose(world));
     XMStoreFloat4x4(&currentView, XMMatrixTranspose(view));
     XMStoreFloat4x4(&currentProj, XMMatrixTranspose(projection));
@@ -388,7 +360,6 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
         WORD code = characterIndices.at(word);
 
         if (code == CharacterInfo::EndCode) break;
-        // ★修正1: 改行は「下」に行くので、3D座標では Y を「減らす」
         else if (code == CharacterInfo::ReturnCode) { x = start_x; y -= fontHeight * scaleY; continue; }
         else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
         else if (code == CharacterInfo::SpaceCode) { x += space; continue; }
@@ -397,19 +368,16 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
 
         const CharacterInfo& info = characterInfos.at(code);
 
-        // ★修正2: 文字のオフセット（yoffset）も「下」方向なので、Y から「引く」
         float positionX = x + info.xoffset * scaleX;
         float positionY = y - info.yoffset * scaleY;
 
         float width = info.width * scaleX;
         float height = info.height * scaleY;
 
-        // ★修正3: 「下」の頂点は Y座標が「低い」ので、height を「引く」
-        // これでテクスチャの「上」が3D空間の「上(High Y)」に、「下」が「下(Low Y)」に来ます
-        currentVertex[0].position = { positionX,         positionY,          0.0f }; // 左上 (Y)
-        currentVertex[1].position = { positionX + width, positionY,          0.0f }; // 右上 (Y)
-        currentVertex[2].position = { positionX,         positionY - height, 0.0f }; // 左下 (Y - h)
-        currentVertex[3].position = { positionX + width, positionY - height, 0.0f }; // 右下 (Y - h)
+        currentVertex[0].position = { positionX,         positionY,          0.0f };
+        currentVertex[1].position = { positionX + width, positionY,          0.0f };
+        currentVertex[2].position = { positionX,         positionY - height, 0.0f };
+        currentVertex[3].position = { positionX + width, positionY - height, 0.0f };
 
         currentVertex[0].texcoord = { info.left,  info.top };
         currentVertex[1].texcoord = { info.right, info.top };
@@ -442,15 +410,12 @@ float Font::GetTextWidth(const wchar_t* string)
     float width = 0.0f;
     size_t length = wcslen(string);
 
-    // ※Font::Drawと同じ計算ロジック
-    // scaleX ではなく、基準サイズ(1.0)での幅を返します
     for (size_t i = 0; i < length; ++i)
     {
         WORD word = static_cast<WORD>(string[i]);
         if (word >= characterIndices.size()) continue;
         WORD code = characterIndices.at(word);
 
-        // 特殊文字の幅加算
         if (code == CharacterInfo::SpaceCode) { width += 20.0f; continue; } // Space
         if (code == CharacterInfo::TabCode) { width += 80.0f; continue; } // Tab
         if (code == 0 || code >= CharacterInfo::ReturnCode) continue;
@@ -465,7 +430,6 @@ void Font::End(ID3D11DeviceContext* context)
 {
     context->Unmap(vertexBuffer.Get(), 0);
 
-    // インデックス数計算
     if (!subsets.empty())
     {
         size_t size = subsets.size();
@@ -476,12 +440,10 @@ void Font::End(ID3D11DeviceContext* context)
         subsets.back().indexCount = currentIndexCount - subsets.back().startIndex;
     }
 
-    // パイプライン設定
     context->VSSetShader(vertexShader.Get(), nullptr, 0);
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
     context->IASetInputLayout(inputLayout.Get());
 
-    // ★SDF定数バッファ設定 (Slot 0)
     context->PSSetConstantBuffers(0, 1, sdfConstantBuffer.GetAddressOf());
 
     D3D11_MAPPED_SUBRESOURCE ms;
@@ -491,14 +453,12 @@ void Font::End(ID3D11DeviceContext* context)
 
         if (is3DMode)
         {
-            // Draw3Dで保存しておいた転置済み行列を入れる
             data->World = currentWorld;
             data->View = currentView;
             data->Projection = currentProj;
         }
         else
         {
-            // 2Dモード: 単位行列を入れる
             XMMATRIX I = XMMatrixIdentity();
             XMFLOAT4X4 identity;
             XMStoreFloat4x4(&identity, XMMatrixTranspose(I));
@@ -509,25 +469,21 @@ void Font::End(ID3D11DeviceContext* context)
         }
         context->Unmap(matrixBuffer.Get(), 0);
     }
-    // スロット1に設定 (Sprite3D_VS.hlslのb1に対応)
     context->VSSetConstantBuffers(1, 1, matrixBuffer.GetAddressOf());
 
 
-    // レンダーステート設定
     const float blend_factor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     context->OMSetBlendState(blendState.Get(), blend_factor, 0xFFFFFFFF);
     context->OMSetDepthStencilState(depthStencilState.Get(), 0);
     context->RSSetState(rasterizerState.Get());
     context->PSSetSamplers(0, 1, samplerState.GetAddressOf());
 
-    // バッファ設定
     UINT stride = sizeof(Vertex);
     UINT offset = 0;
     context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
     context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    // 描画
     for (const auto& subset : subsets)
     {
         if (subset.shaderResourceView)

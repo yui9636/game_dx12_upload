@@ -15,11 +15,11 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     (void)resources;
     (void)queue;
 
-    // Clear active fields
+    // このフレームで使う prepared draw 状態を作り直す
     rc.activeDrawCommands.clear();
     rc.activeSkinnedCommands.clear();
 
-    // Clear legacy fields (backward compatibility)
+    // 旧 prepared フィールドも同じ内容で維持して後方互換を保つ
     rc.preparedIndirectCommands.clear();
     rc.preparedSkinnedCommands.clear();
 
@@ -42,9 +42,10 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
                 continue;
             }
 
+            // skinned mesh はまだ instancing 経路に乗せず、通常 draw fallback へ分ける。
             const bool isInstancable = meshResource->bones.empty();
 
-            // New active* command
+            // 新しい prepared draw コマンド
             IndirectDrawCommand cmd{};
             cmd.key = batch.key;
             cmd.modelResource = batch.modelResource;
@@ -66,7 +67,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
 
                 rc.activeDrawCommands.push_back(cmd);
 
-                // Legacy field (backward compat)
+                // 旧経路向けの互換データ
                 RenderContext::PreparedIndirectCommand oldCmd{};
                 oldCmd.key = batch.key;
                 oldCmd.modelResource = batch.modelResource;
@@ -79,7 +80,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
             } else {
                 rc.activeSkinnedCommands.push_back(cmd);
 
-                // Legacy field (backward compat)
+                // 旧経路向けの互換データ
                 RenderContext::PreparedIndirectCommand oldCmd{};
                 oldCmd.key = batch.key;
                 oldCmd.modelResource = batch.modelResource;
@@ -126,7 +127,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
             requiredBytes);
     }
 
-    // Set active fields for downstream passes
+    // 後段パスは active* フィールドだけ見れば prepared draw を実行できる。
     rc.activeInstanceBuffer = rc.preparedInstanceBuffer.get();
     rc.activeInstanceStride = rc.preparedInstanceStride;
     rc.activeDrawArgsBuffer = rc.preparedIndirectArgumentBuffer.get();

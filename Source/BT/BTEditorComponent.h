@@ -8,9 +8,9 @@ namespace ed = ax::NodeEditor;
 
 
 struct BTAgentInfo {
-    std::string name;                                // 個体名（"Mutant Boss" など）
-    std::map<unsigned int, BTNodeReport> reports;    // その個体のノード実行状態
-    float lastUpdateTime;                            // 最終更新時間（死んだやつをリストから消す用）
+    std::string name;
+    std::map<unsigned int, BTNodeReport> reports;
+    float lastUpdateTime;
 };
 
 
@@ -28,8 +28,8 @@ public:
 
     static void PushLiveDebugData(const std::map<unsigned int, BTNodeReport>& data);
 
-    static std::map<void*, BTAgentInfo> s_AgentRegistry; // AI個体ごとのデータ台帳
-    static void* s_SelectedAgentPtr;                     // 現在エディタでロックしている個体
+    static std::map<void*, BTAgentInfo> s_AgentRegistry;
+    static void* s_SelectedAgentPtr;
 private:
     void DrawNodes();
     void DrawLinks();

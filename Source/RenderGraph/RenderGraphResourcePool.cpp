@@ -13,16 +13,14 @@ namespace {
 }
 
 std::unique_ptr<ITexture> RenderGraphResourcePool::AcquireTexture(const std::string& name, const TextureDesc& desc, IResourceFactory* factory, uint64_t currentFrame) {
-    // 1. 倉庫（プール）から探す
     for (auto& pooled : m_pool) {
         if (pooled.texture && IsSameDesc(pooled.desc, desc)) {
             pooled.lastUsedFrame = currentFrame;
             // LOG_INFO("  [Pool] Reused Resource: %s", name.c_str());
-            return std::move(pooled.texture); // 中古品を貸し出す
+            return std::move(pooled.texture);
         }
     }
 
-    // 2. 無ければ工場で新品を作る
     if (factory) {
         LOG_INFO("  [New] Created Resource: %s", name.c_str());
         return factory->CreateTexture(name, desc);
@@ -38,7 +36,6 @@ void RenderGraphResourcePool::ReleaseTexture(const TextureDesc& desc, std::uniqu
 }
 
 void RenderGraphResourcePool::Tick(uint64_t currentFrame) {
-    // 10フレーム以上使われなかったテクスチャを消去
     m_pool.erase(
         std::remove_if(m_pool.begin(), m_pool.end(),
             [currentFrame](const PooledTexture& p) {

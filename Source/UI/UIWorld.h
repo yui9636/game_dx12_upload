@@ -10,12 +10,10 @@ public:
     UIWorld();
     virtual ~UIWorld() = default;
 
-    // 既存の機能: スプライト描画 (UIDamagePopupではオーバーライドして無視する)
     void Render(const RenderContext& rc) override;
 
     void SetSprite(std::shared_ptr<Sprite3D> sprite);
 
-    // --- 3D専用プロパティ ---
     void SetPosition(const DirectX::XMFLOAT3& pos) { position = pos; }
     void SetPosition(float x, float y, float z) { position = { x, y, z }; }
     const DirectX::XMFLOAT3& GetPosition() const { return position; }
@@ -30,8 +28,6 @@ public:
     void SetProgress(float v) { progress = v; }
 
 protected:
-    // ★追加: 派生クラス用の便利関数 (3D座標 -> 2Dスクリーン座標)
-    // 戻り値: true=画面内, false=画面外
     bool WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScreenPos) const;
 
 protected:

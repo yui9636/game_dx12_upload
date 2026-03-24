@@ -3,7 +3,6 @@
 #include <Xinput.h>
 #include "Input/GamePad.h"
 
-// 更新
 void GamePad::Update()
 {
 	axisLx = axisLy = 0.0f;
@@ -12,7 +11,6 @@ void GamePad::Update()
 
 	GamePadButton newButtonState = 0;
 
-	// ボタン情報取得
 	XINPUT_STATE xinputState;
 	if (XInputGetState(slot, &xinputState) == ERROR_SUCCESS)
 	{
@@ -82,32 +80,29 @@ void GamePad::Update()
 	else
 	{
 #if 1
-		// XInputで入力情報が取得出来なかった場合はWindowsAPIで取得する
 		JOYINFOEX joyInfo;
 		joyInfo.dwSize = sizeof(JOYINFOEX);
-		joyInfo.dwFlags = JOY_RETURNALL;	// 全ての情報を取得
+		joyInfo.dwFlags = JOY_RETURNALL;
 
 		if (joyGetPosEx(slot, &joyInfo) == JOYERR_NOERROR)
 		{
-			// 製品IDをチェックしてPS4コントローラーだけ対応する
 			static const WORD PS4_PID = 1476;
 
 			JOYCAPS joy_caps;
 			if (joyGetDevCaps(slot, &joy_caps, sizeof(JOYCAPS)) == JOYERR_NOERROR)
 			{
-				// 十字キー
 				if (joyInfo.dwPOV != 0xFFFF)
 				{
 					static const int povBit[8] =
 					{
-						BTN_UP,					// 上
-						BTN_RIGHT | BTN_UP,		// 右上
-						BTN_RIGHT,				// 右
-						BTN_RIGHT | BTN_DOWN,	// 右下
-						BTN_DOWN,				// 下
-						BTN_LEFT | BTN_DOWN,	// 左下
-						BTN_LEFT,				// 左
-						BTN_LEFT | BTN_UP		// 左上
+						BTN_UP,
+						BTN_RIGHT | BTN_UP,
+						BTN_RIGHT,
+						BTN_RIGHT | BTN_DOWN,
+						BTN_DOWN,
+						BTN_LEFT | BTN_DOWN,
+						BTN_LEFT,
+						BTN_LEFT | BTN_UP
 					};
 					int angle = joyInfo.dwPOV / 4500;
 					newButtonState |= povBit[angle];
@@ -115,7 +110,6 @@ void GamePad::Update()
 
 				if (joyInfo.dwButtons)
 				{
-					// ボタン情報
 					if (joyInfo.dwButtons & JOY_BUTTON1)  newButtonState |= BTN_X;
 					if (joyInfo.dwButtons & JOY_BUTTON2)  newButtonState |= BTN_A;
 					if (joyInfo.dwButtons & JOY_BUTTON3)  newButtonState |= BTN_B;
@@ -131,15 +125,12 @@ void GamePad::Update()
 					//if (joyInfo.dwButtons & JOY_BUTTON13) newButtonState |= BTN_?;	// PS
 					//if (joyInfo.dwButtons & JOY_BUTTON14) newButtonState |= BTN_?;	// Touch
 
-					//// 左スティック
 					//axisLx = static_cast<int>(joyInfo.dwXpos - 0x7FFF) / static_cast<float>(0x8000);
 					//axisLy = -static_cast<int>(joyInfo.dwYpos - 0x7FFF) / static_cast<float>(0x8000);
 
-					//// 右スティック
 					//axisRx = static_cast<int>(joyInfo.dwZpos - 0x7FFF) / static_cast<float>(0x8000);
 					//axisRy = -static_cast<int>(joyInfo.dwRpos - 0x7FFF) / static_cast<float>(0x8000);
 
-					//// LRトリガー
 					//triggerL = static_cast<float>(joyInfo.dwVpos) / static_cast<float>(0xFFFF);
 					//triggerR = static_cast<float>(joyInfo.dwUpos) / static_cast<float>(0xFFFF);
 
@@ -151,7 +142,6 @@ void GamePad::Update()
 #endif
 	}
 
-	// キーボードでエミュレーション
 	{
 		float lx = 0.0f;
 		float ly = 0.0f;
@@ -204,12 +194,11 @@ void GamePad::Update()
 
 
 
-	// ボタン情報の更新
 	{
-		buttonState[1] = buttonState[0];	// スイッチ履歴
+		buttonState[1] = buttonState[0];
 		buttonState[0] = newButtonState;
 
-		buttonDown = ~buttonState[1] & newButtonState;	// 押した瞬間
-		buttonUp = ~newButtonState & buttonState[1];	// 離した瞬間
+		buttonDown = ~buttonState[1] & newButtonState;
+		buttonUp = ~newButtonState & buttonState[1];
 	}
 }

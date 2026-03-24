@@ -1,8 +1,10 @@
 #include "AssetBrowser.h"
 #include "AssetManager.h"
-#include "Engine/EditorSelection.h" // ★追加: 選択状態の共有
+#include "ThumbnailGenerator.h"
+#include "Engine/EditorSelection.h"
 #include "Graphics.h"
 #include "ImGuiRenderer.h"
+#include <unordered_set>
 #include <imgui.h>
 
 
@@ -12,7 +14,6 @@ void AssetBrowser::Initialize() {
 }
 
 void AssetBrowser::RenderUI() {
-    // 1. タイトルとメニューバー
     ImGui::Begin(ICON_FA_FOLDER_OPEN " Asset Browser", nullptr, ImGuiWindowFlags_MenuBar);
 
     if (ImGui::BeginMenuBar()) {
@@ -20,16 +21,13 @@ void AssetBrowser::RenderUI() {
         ImGui::EndMenuBar();
     }
 
-    // 2. 検索バーとツールアイコン
     RenderTopBar();
 
     ImGui::Separator();
 
-    // 3. メインエリアの分割 (左:ツリー, 右:グリッド)
     ImGui::Columns(2, "AssetBrowserSplitter", true);
     if (ImGui::GetColumnWidth() == 0) ImGui::SetColumnWidth(0, 200.0f);
 
-    // --- 左側：フォルダツリー ---
     ImGui::BeginChild("FolderTreeChild", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
     std::filesystem::path parentDir = std::filesystem::path(AssetManager::Instance().GetRootDirectory()).parent_path();
 
@@ -41,7 +39,6 @@ void AssetBrowser::RenderUI() {
 
     ImGui::NextColumn();
 
-    // --- 右側：コンテンツグリッド ---
     ImGui::BeginChild("ContentGridChild");
     RenderContentGrid();
     ImGui::EndChild();
@@ -50,13 +47,10 @@ void AssetBrowser::RenderUI() {
     ImGui::End();
 }
 
-// AssetBrowser.cpp の RenderTopBar 内を以下にまるごと差し替え
 
 void AssetBrowser::RenderTopBar() {
-    // プロジェクトのルート（Data/Source/Shaderの親）を取得
     std::filesystem::path rootDir = std::filesystem::path(AssetManager::Instance().GetRootDirectory()).parent_path();
 
-    // 戻るボタン
     if (IconFontManager::Instance().IconButton(ICON_FA_ARROW_UP)) {
         if (m_currentDirectory != rootDir && m_currentDirectory.has_parent_path()) {
             m_currentDirectory = m_currentDirectory.parent_path();
@@ -65,30 +59,25 @@ void AssetBrowser::RenderTopBar() {
     ImGui::SameLine();
 
     // ==========================================
-    // ★ パンくずリスト (Breadcrumb) の生成
     // ==========================================
     std::vector<std::filesystem::path> pathParts;
     std::filesystem::path tempPath = m_currentDirectory;
 
-    // 現在の場所からルートにたどり着くまで遡ってリスト化
     while (tempPath != rootDir && tempPath.has_parent_path()) {
         pathParts.push_back(tempPath);
         tempPath = tempPath.parent_path();
     }
 
-    // ボタンの背景を透明にして文字だけっぽくする
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.2f));
 
-    // 親階層から順番にボタンを描画（リストが逆順に入っているので後ろから）
     for (int i = (int)pathParts.size() - 1; i >= 0; --i) {
         std::string folderName = pathParts[i].filename().string();
 
         if (ImGui::Button(folderName.c_str())) {
-            m_currentDirectory = pathParts[i]; // クリックでその階層へワープ！
+            m_currentDirectory = pathParts[i];
         }
 
-        // 最後の階層以外は「>」で繋ぐ
         if (i > 0) {
             ImGui::SameLine();
             ImGui::TextDisabled(">");
@@ -99,7 +88,6 @@ void AssetBrowser::RenderTopBar() {
     ImGui::PopStyleColor(2);
 
     // ==========================================
-    // 検索バー
     // ==========================================
     ImGui::SameLine(ImGui::GetWindowWidth() - 250);
     ImGui::Text("Search");
@@ -128,10 +116,9 @@ void AssetBrowser::RenderFolderTree(const std::filesystem::path& currentDir) {
     std::string pathString = currentDir.string();
 
     // ==========================================
-    // ★ 修正: TreeNodeEx の「直後」でクリック判定を記憶する！
     // ==========================================
     bool isOpen = ImGui::TreeNodeEx(pathString.c_str(), flags, "");
-    bool isNodeClicked = ImGui::IsItemClicked(); // ← ここで記憶しておく
+    bool isNodeClicked = ImGui::IsItemClicked();
 
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
@@ -146,20 +133,17 @@ void AssetBrowser::RenderFolderTree(const std::filesystem::path& currentDir) {
         ImGui::EndDragDropTarget();
     }
 
-    // 2. 同じ行にアイコンを描く (Miniサイズを使用)
     ImGui::SameLine();
     ImGui::PushFont(IconFontManager::Instance().GetFontInternal(IconFontSize::Mini));
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.7f, 0.2f, 1.0f)); // フォルダの色
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.7f, 0.2f, 1.0f));
     ImGui::Text(ICON_FA_FOLDER);
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    // 3. その横にフォルダ名を書く
     ImGui::SameLine();
     ImGui::Text("%s", folderName.c_str());
 
     // ==========================================
-    // ★ 修正: さっき記憶しておいた判定を使う
     // ==========================================
     if (isNodeClicked) {
         m_currentDirectory = currentDir;
@@ -186,24 +170,25 @@ void AssetBrowser::RenderContentGrid() {
     float cellSize = 100.0f;
     float windowWidth = ImGui::GetContentRegionAvail().x;
     int columnCount = ((int)(windowWidth / cellSize) > 1) ? (int)(windowWidth / cellSize) : 1;
+    std::unordered_set<std::string> visiblePaths;
 
     ImGui::Columns(columnCount, 0, false);
 
     auto assets = AssetManager::Instance().GetAssetsInDirectory(m_currentDirectory);
 
-    // AssetBrowser.cpp の RenderContentGrid 内
 
-    for (const auto& asset : assets) {
+    for (auto& asset : assets) {
         if (!m_searchFilter.empty() && asset.fileName.find(m_searchFilter) == std::string::npos) continue;
+        if (asset.type == AssetType::Model || asset.type == AssetType::Material) {
+            visiblePaths.insert(asset.path.string());
+        }
 
         ImGui::PushID(asset.path.string().c_str());
 
         // ==========================================
-        // 1. 描画の開始位置を記録する
         // ==========================================
         ImVec2 startCursorPos = ImGui::GetCursorPos();
 
-        // --- ビジュアルの描画開始 ---
         ImGui::BeginGroup();
 
         auto& selection = EditorSelection::Instance();
@@ -215,6 +200,9 @@ void AssetBrowser::RenderContentGrid() {
         }
 
         void* thumbnailId = nullptr;
+        if (!asset.thumbnailTexture && (asset.type == AssetType::Model || asset.type == AssetType::Material)) {
+            asset.thumbnailTexture = ThumbnailGenerator::Instance().Get(asset.path.string());
+        }
         if (asset.thumbnailTexture) {
             thumbnailId = ImGuiRenderer::GetTextureID(asset.thumbnailTexture.get());
         }
@@ -235,24 +223,19 @@ void AssetBrowser::RenderContentGrid() {
         ImGui::TextWrapped("%s", asset.fileName.c_str());
 
         ImGui::EndGroup();
-        // --- ビジュアルの描画終了 ---
 
 
         // ==========================================
-        // ★ 2. 完璧な当たり判定（透明ボタン）を上から被せる
         // ==========================================
-        ImVec2 itemSize = ImGui::GetItemRectSize(); // 今描いたアイコン＋文字の大きさを取得
+        ImVec2 itemSize = ImGui::GetItemRectSize();
 
-        // カーソルを最初の位置に戻し、同じサイズの「透明なボタン」を配置する
         ImGui::SetCursorPos(startCursorPos);
         ImGui::InvisibleButton("##Interact", itemSize);
 
 
         // ==========================================
-        // ★ 3. すべての判定はこの透明ボタンに対して行う（絶対にクラッシュしない）
         // ==========================================
 
-        // ① 右クリックメニュー (削除・リネーム)
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::MenuItem(ICON_FA_SCISSORS " Cut", "Ctrl+X")) {
                 m_clipboardPath = asset.path;
@@ -276,7 +259,6 @@ void AssetBrowser::RenderContentGrid() {
             ImGui::EndPopup();
         }
 
-        // ② ドラッグ＆ドロップ
         if (asset.type != AssetType::Folder && ImGui::BeginDragDropSource()) {
             std::string pathStr = asset.path.string();
             ImGui::SetDragDropPayload("ENGINE_ASSET", pathStr.c_str(), pathStr.size() + 1);
@@ -284,31 +266,28 @@ void AssetBrowser::RenderContentGrid() {
             ImGui::EndDragDropSource();
         }
 
-        // ③ 左クリック ＆ ダブルクリック
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             if (asset.type == AssetType::Folder) {
-                m_currentDirectory = asset.path; // フォルダなら中に入る
+                m_currentDirectory = asset.path;
             }
             else {
                 AssetManager::Instance().OpenInExternalEditor(asset.path);
             }
         }
         else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-            selection.SelectAsset(asset.path.string()); // アセットを選択
+            selection.SelectAsset(asset.path.string());
         }
 
         if (asset.type == AssetType::Folder) {
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
 
-                    // ペイロードから元のパスを復元
                     std::string sourcePathStr((const char*)payload->Data);
                     std::filesystem::path sourcePath(sourcePathStr);
 
-                    // 自身へのドロップや、同じフォルダへのドロップを防止して移動
                     if (sourcePath.parent_path() != asset.path && sourcePath != asset.path) {
                         AssetManager::Instance().MoveAsset(sourcePath, asset.path);
-                        EditorSelection::Instance().Clear(); // 移動したアセットの選択を解除
+                        EditorSelection::Instance().Clear();
                     }
                 }
                 ImGui::EndDragDropTarget();
@@ -322,6 +301,7 @@ void AssetBrowser::RenderContentGrid() {
 
 
     ImGui::Columns(1);
+    ThumbnailGenerator::Instance().SetVisiblePaths(visiblePaths);
 
     if (ImGui::BeginPopupContextWindow("BrowserEmptySpace", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS " New Folder")) {
@@ -343,7 +323,7 @@ void AssetBrowser::RenderContentGrid() {
         if (ImGui::MenuItem(ICON_FA_PASTE " Paste", "Ctrl+V", false, canPaste)) {
             if (m_isCut) {
                 AssetManager::Instance().MoveAsset(m_clipboardPath, m_currentDirectory);
-                m_clipboardPath.clear(); // 切り取りの場合は1回貼ったら記憶を消す
+                m_clipboardPath.clear();
             }
             else {
                 AssetManager::Instance().CopyAsset(m_clipboardPath, m_currentDirectory);
@@ -353,7 +333,6 @@ void AssetBrowser::RenderContentGrid() {
     }
 
     // ==========================================
-    // ★ 追加3: ダイアログの処理 (Rename & Delete)
     // ==========================================
     if (m_openRenamePopup) {
         ImGui::OpenPopup("Rename Asset");
@@ -381,7 +360,7 @@ void AssetBrowser::RenderContentGrid() {
         ImGui::Separator();
         if (ImGui::Button("Yes, Delete", ImVec2(120, 0))) {
             AssetManager::Instance().DeleteAsset(m_deleteTarget);
-            EditorSelection::Instance().Clear(); // 消したアセットの選択状態を解除
+            EditorSelection::Instance().Clear();
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();

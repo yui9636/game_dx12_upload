@@ -1,4 +1,4 @@
-﻿#include "System/Misc.h"
+#include "System/Misc.h"
 #include "Graphics.h"
 #include "ShaderClass/PhongShader.h"
 #include "ShaderClass/PBRShader.h"
@@ -44,7 +44,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	screenHeight = static_cast<float>(h);
 
 	// ============================================================
-	// DX12 蛻晄悄蛹悶ヱ繧ｹ
 	// ============================================================
 	if (api == GraphicsAPI::DX12) {
 		m_dx12Device = std::make_unique<DX12Device>(hWnd, w, h);
@@ -84,24 +83,18 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		frameBuffers[static_cast<int>(FrameBufferId::VolumetricFogBlur)]= std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::SSR)]              = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::SSRBlur)]          = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
-		// GlobalRootSignature DX12蛻晄悄蛹・
 		GlobalRootSignature::Instance().Initialize(m_dx12Device.get());
 
-		// DX12蟇ｾ蠢懊し繝悶す繧ｹ繝・Β (IResourceFactory邨檎罰)
 		gizmos = std::make_unique<Gizmos>(factory);
 		shadowMap = std::make_unique<ShadowMap>(factory);
 		modelRenderer = std::make_unique<ModelRenderer>(factory);
-		// postEffect = nullptr (FSR2 DX11縺ｮ縺ｿ)
-		// primitiveRenderer = nullptr (DX11逶ｴ謗･萓晏ｭ・
 		return;
 	}
 
 	// ============================================================
-	// DX11 蛻晄悄蛹悶ヱ繧ｹ (譌｢蟄・
 	// ============================================================
 	HRESULT hr = S_OK;
 
-	// 1. ・ｽf・ｽo・ｽC・ｽX・ｽ・ｽ・ｽX・ｽ・ｽ・ｽb・ｽv・ｽ`・ｽF・ｽ[・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ
 	{
 		UINT createDeviceFlags = 0;
 #if defined(DEBUG) || defined(_DEBUG)
@@ -127,7 +120,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 			swapchain.GetAddressOf(), device.GetAddressOf(), nullptr, immediateContext.GetAddressOf());
 	}
 
-	// 2. ・ｽ・ｽ・ｽ・ｽ・ｽ_・ｽ[・ｽ^・ｽ[・ｽQ・ｽb・ｽg・ｽr・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽ・ｽ
 	{
 		ComPtr<ID3D11Texture2D> backBuffer;
 		swapchain->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf()));
@@ -136,19 +128,16 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		backBufferTexture = std::make_shared<DX11Texture>(renderTargetView.Get(), w, h);
 	}
 
-	// 3. ・ｽ・ｽ・ｽ[・ｽx・ｽX・ｽe・ｽ・ｽ・ｽV・ｽ・ｽ・ｽr・ｽ・ｽ・ｽ[・ｽ・ｽSRV・ｽﾌ撰ｿｽ・ｽ・ｽ (DoF・ｽﾎ会ｿｽ・ｽ・ｽ)
 	{
 		D3D11_TEXTURE2D_DESC desc{};
 		desc.Width = w;
 		desc.Height = h;
 		desc.MipLevels = 1;
 		desc.ArraySize = 1;
-		// ・ｽ・ｽ・ｽd・ｽv: R24G8_TYPELESS ・ｽﾉゑｿｽ・ｽ・ｽi・ｽ[・ｽx・ｽﾆゑｿｽ・ｽﾄゑｿｽ・ｽASRV・ｽﾆゑｿｽ・ｽﾄゑｿｽ・ｽﾇめゑｿｽ謔､・ｽﾉ）
 		desc.Format = DXGI_FORMAT_R32_TYPELESS;
 		desc.SampleDesc.Count = 1;
 		desc.SampleDesc.Quality = 0;
 		desc.Usage = D3D11_USAGE_DEFAULT;
-		// ・ｽ・ｽ・ｽd・ｽv: BIND_SHADER_RESOURCE ・ｽ・ｽﾇ会ｿｽ
 		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 		desc.CPUAccessFlags = 0;
 		desc.MiscFlags = 0;
@@ -156,13 +145,11 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		ComPtr<ID3D11Texture2D> depthStencil;
 		device->CreateTexture2D(&desc, nullptr, depthStencil.GetAddressOf());
 
-		// DSV・ｽ・ｬ (D24_S8)
 		D3D11_DEPTH_STENCIL_VIEW_DESC dsvDesc{};
 		dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
 		dsvDesc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
 		device->CreateDepthStencilView(depthStencil.Get(), &dsvDesc, depthStencilView.GetAddressOf());
 
-		// ・ｽ・ｽSRV・ｽ・ｬ (R24_UNORM_X8) -> DoF・ｽV・ｽF・ｽ[・ｽ_・ｽ[・ｽﾅ深・ｽx・ｽ・ｽﾇむゑｿｽ・ｽ・ｽ
 		D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 		srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
 		srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -170,7 +157,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		device->CreateShaderResourceView(depthStencil.Get(), &srvDesc, depthStencilSRV.GetAddressOf());
 	}
 
-	// 4. ・ｽr・ｽ・ｽ・ｽ[・ｽ|・ｽ[・ｽg・ｽﾝ抵ｿｽ
 	{
 		D3D11_VIEWPORT vp{};
 		vp.Width = static_cast<float>(w);
@@ -180,7 +166,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		immediateContext->RSSetViewports(1, &vp);
 	}
 
-	// 5. ・ｽe・ｽ・ｽ}・ｽl・ｽ[・ｽW・ｽ・ｽ・ｽE・ｽ・ｽ・ｽ・ｽ・ｽ_・ｽ・ｽ・ｽﾌ撰ｿｽ・ｽ・ｽ
 	renderState = std::make_unique<RenderState>(device.Get());
 	primitiveRenderer = std::make_unique<PrimitiveRenderer>(device.Get());
 	swordTrail = std::make_unique<SwordTrail>(device.Get());
@@ -190,7 +175,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	shadowMap = std::make_unique<ShadowMap>(resourceFactory.get());
 	modelRenderer = std::make_unique<ModelRenderer>(resourceFactory.get());
 
-	// ・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽo・ｽb・ｽt・ｽ@・ｽ・ｽ・ｽ・ｽ
 	//frameBuffers[static_cast<int>(FrameBufferId::Display)] = std::make_unique<FrameBuffer>(device.Get(), screenWidth, screenHeight);
 	//frameBuffers[static_cast<int>(FrameBufferId::Scene)] = std::make_unique<FrameBuffer>(device.Get(), w, h);
 	frameBuffers[static_cast<int>(FrameBufferId::Luminance)] = std::make_unique<FrameBuffer>(device.Get(), w, h);
@@ -214,17 +198,17 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	std::vector<DXGI_FORMAT> aoFormat = { DXGI_FORMAT_R8_UNORM };
     frameBuffers[static_cast<int>(FrameBufferId::GTAO)] = std::make_unique<FrameBuffer>(
         device.Get(),
-        renderW, renderH, // FSR2・ｽp・ｽﾌ抵ｿｽ恣x・ｽT・ｽC・ｽY
-        aoFormat          // ・ｽ・ｽ・ｽ・ｽ4・ｽ・ｽ・ｽ・ｽ・ｽﾜででス・ｽg・ｽb・ｽv・ｽI
+        renderW, renderH,
+        aoFormat
     );
 
 
 	std::vector<DXGI_FORMAT> ssgiFormat = { DXGI_FORMAT_R16G16B16A16_FLOAT };
 	frameBuffers[static_cast<int>(FrameBufferId::SSGI)] = std::make_unique<FrameBuffer>(
-		device.Get(), halfW, halfH, ssgiFormat // ・ｽ・ｽ halfW, halfH ・ｽﾉ変更・ｽI
+		device.Get(), halfW, halfH, ssgiFormat
 	);
 	frameBuffers[static_cast<int>(FrameBufferId::SSGIBlur)] = std::make_unique<FrameBuffer>(
-		device.Get(), halfW, halfH, ssgiFormat // ・ｽ・ｽ ・ｽﾇ会ｿｽ・ｽF・ｽu・ｽ・ｽ・ｽ[・ｽp
+		device.Get(), halfW, halfH, ssgiFormat
 	);
 
 	std::vector<DXGI_FORMAT> fogFormat = { DXGI_FORMAT_R16G16B16A16_FLOAT };
@@ -319,7 +303,6 @@ void Graphics::CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination)
 	if (!source || !destination) return;
 
 	if (m_api == GraphicsAPI::DX12) {
-		// 證ｫ螳・ DX12縺ｧ縺ｯ繧ｹ繧ｭ繝・・ (蜑阪ヵ繝ｬ繝ｼ繝菫晏ｭ倥・蟆・擂蟇ｾ蠢・
 		return;
 	}
 
@@ -337,7 +320,6 @@ void Graphics::CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination)
 
 std::unique_ptr<IPipelineState> Graphics::CreatePipelineState(const PipelineStateDesc& desc)
 {
-	// DX11・ｽﾂ具ｿｽ・ｽﾅは、・ｽｯ趣ｿｽ・ｽ・ｽ・ｽDesc・ｽ・ｽ・ｽ・ｽ・ｽﾌまま保趣ｿｽ・ｽ・ｽ・ｽ・ｽDX11PipelineState・ｽｶ撰ｿｽ・ｽ・ｽ・ｽﾄ返ゑｿｽ
 	return std::make_unique<DX11PipelineState>(desc);
 }
 

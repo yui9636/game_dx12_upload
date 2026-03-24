@@ -15,7 +15,6 @@ public:
     virtual void Update(float dt);
     virtual void Render(const RenderContext& rc) = 0;
 
-    // --- 親子関係 ---
     void AddChild(std::shared_ptr<UIElement> child) {
         if (child) {
             child->parent = shared_from_this();
@@ -27,10 +26,8 @@ public:
         children.erase(std::remove(children.begin(), children.end(), child), children.end());
     }
 
-    // --- 表示制御 ---
     void SetVisible(bool v) { visible = v; }
 
-    // ★重要: 自分だけでなく親の状態も考慮して「本当に表示すべきか」を返す
     bool IsActive() const {
         if (!visible) return false;
         if (auto p = parent.lock()) {

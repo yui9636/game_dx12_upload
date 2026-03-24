@@ -38,9 +38,8 @@ struct AssetEntry {
 
 
 
-    // UI•\Ž¦—p
 
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> thumbnail; // ‰æ‘œ‚È‚ç‚±‚±‚ÉSRV‚ª“ü‚é
+    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> thumbnail;
 
     std::shared_ptr<ITexture> thumbnailTexture;
 

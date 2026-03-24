@@ -3,7 +3,6 @@
 #include <memory>
 #include <string>
 
-// 前方宣言
 class UIProgressBar2D;
 class Sprite;
 
@@ -13,16 +12,13 @@ public:
     C_EnemyHUD();
     ~C_EnemyHUD() override;
 
-    // ★必須: Componentの純粋仮想関数を実装
     const char* GetName() const override { return "EnemyHUD"; }
 
     void Start() override;
     void Update(float dt) override;
 
-    // ★修正: Component.h に合わせて引数なしに変更
     void Render() override;
 
-    // ボス名設定
     void SetBossName(const std::string& name) { bossName = name; }
 
 

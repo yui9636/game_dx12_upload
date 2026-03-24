@@ -10,17 +10,14 @@
 #include <algorithm> 
 
 
-// 前方宣言
 class Actor;
 
-// 実行結果ステータス
 enum class BTStatus {
     Success,
     Failure,
     Running
 };
 
-// 共有メモリ（ブラックボード）
 struct BTContext {
     std::shared_ptr<Actor> owner;
     std::weak_ptr<Actor> target;
@@ -35,7 +32,6 @@ struct BTNodeReport {
 };
 
 // ----------------------------------------------------------------------------
-// ノード基底クラス
 // ----------------------------------------------------------------------------
 class BTNode {
 public:
@@ -58,11 +54,9 @@ public:
     void Reset() { status = BTStatus::Failure; }
     BTStatus GetStatus() const { return status; }
 
-    // デバッグ・識別用
     unsigned int nodeId = 0;
     std::string nodeName;
 
-    // 動的パラメータ（エディタのプロパティを受け取る）
     std::map<std::string, float> paramsFloat;
     std::map<std::string, int> paramsInt;
     std::map<std::string, std::string> paramsString;
@@ -76,7 +70,6 @@ protected:
 };
 
 // ----------------------------------------------------------------------------
-// コンポジット (Composite): 子を持つノード
 // ----------------------------------------------------------------------------
 class BTComposite : public BTNode {
 public:
@@ -99,7 +92,6 @@ protected:
 };
 
 
-// Selector: どれか成功すればOK (OR)
 class BTSelector : public BTComposite {
 protected:
     void OnEnter(BTContext& ctx) override { currentChildIndex = 0; }
@@ -114,7 +106,6 @@ protected:
     }
 };
 
-// Sequence: 全員成功でOK (AND)
 class BTSequence : public BTComposite {
 protected:
     void OnEnter(BTContext& ctx) override { currentChildIndex = 0; }
@@ -130,32 +121,26 @@ protected:
 };
 
 // ----------------------------------------------------------------------------
-// アクション (Action): 実際の行動
 // ----------------------------------------------------------------------------
-// 汎用アクションノード：具体的な処理は派生させるか、パラメータで分岐する
 class BTAction : public BTNode {
 protected:
     BTStatus OnUpdate(BTContext& ctx) override {
-        // デフォルトでは即成功 (継承して使う前提)
         return BTStatus::Success;
     }
 };
 
 // ----------------------------------------------------------------------------
-// ブレイン (Brain): AIの頭脳全体を管理するクラス
 // ----------------------------------------------------------------------------
 class BTBrain {
 public:
-    // フェーズごとのルートノードを登録
     void AddPhase(const std::string& phaseName, std::shared_ptr<BTNode> root) {
         roots[phaseName] = root;
-        if (activeRoot == nullptr) activeRoot = root; // 最初に追加されたものをデフォルトに
+        if (activeRoot == nullptr) activeRoot = root;
     }
 
     void SetActivePhase(const std::string& phaseName) {
         if (roots.count(phaseName)) {
             activeRoot = roots[phaseName];
-            // フェーズ切り替え時にリセット等の処理が必要ならここ
         }
     }
 
@@ -173,7 +158,7 @@ public:
 private:
     void CollectStatusRecursive(std::shared_ptr<BTNode> node, std::map<unsigned int, BTNodeReport>& outMap) const {
         if (!node) return;
-        outMap[node->nodeId] = { node->GetStatus(), 0.0f /* 時間は任意 */ };
+        outMap[node->nodeId] = { node->GetStatus(), 0.0f /* 時刻は未使用 */ };
 
         if (auto comp = std::dynamic_pointer_cast<BTComposite>(node)) {
             for (auto& child : comp->GetChildren()) {
@@ -199,19 +184,16 @@ protected:
         selectedIndex = -1;
         if (children.empty()) return;
 
-        // 1. 合計値を計算
         float totalWeight = std::accumulate(weights.begin(), weights.end(), 0.0f);
         if (totalWeight <= 0.0f) {
-            selectedIndex = 0; // 重みが設定されていなければ一番最初
+            selectedIndex = 0;
             return;
         }
 
-        // 2. 乱数生成
         static std::mt19937 gen(std::random_device{}());
         std::uniform_real_distribution<float> dis(0.0f, totalWeight);
         float randomValue = dis(gen);
 
-        // 3. ルーレット選択
         float currentSum = 0.0f;
         for (size_t i = 0; i < weights.size(); ++i) {
             currentSum += weights[i];
@@ -227,13 +209,10 @@ protected:
             return BTStatus::Failure;
         }
 
-        // 選ばれた行動を Tick する
         BTStatus result = children[selectedIndex]->Tick(ctx);
 
-        // 実行中ならそのまま返す
         if (result == BTStatus::Running) return BTStatus::Running;
 
-        // 成功または失敗したら完了
         return result;
     }
 };

@@ -7,12 +7,11 @@
 #include "Font.h"
 
 
-// 整列設定
 enum class FontAlign
 {
-    Left,   // 左揃え (通常)
-    Center, // 中央揃え (座標を中心に描画)
-    Right   // 右揃え (座標を右端として描画)
+    Left,
+    Center,
+    Right
 };
 
 class FontManager
@@ -33,11 +32,8 @@ public:
     std::shared_ptr<Font> Get(const std::string& key);
 
     // --------------------------------------------------------------------------
-    // 高機能描画メソッド
     // --------------------------------------------------------------------------
 
-    // 書式指定 + アライメント + 色 + スケール
-    // 例: DrawFormat(dc, "Main", x, y, {1,0,0,1}, 1.5f, FontAlign::Center, L"%d DMG", damage);
     void DrawFormat(
         ID3D11DeviceContext* dc,
         const std::string& key,
@@ -49,7 +45,6 @@ public:
         ...
     );
 
-    // シンプル版 (色は白、スケール1.0、左揃え)
     void DrawFormat(
         ID3D11DeviceContext* dc,
         const std::string& key,
@@ -59,12 +54,12 @@ public:
     );
 
     void DrawFormat3D(
-        ID3D11DeviceContext* dc,            // RenderContext ではなく DC を直接受ける
-        const DirectX::XMMATRIX& view,       // ★追加
-        const DirectX::XMMATRIX& projection, // ★追加
+        ID3D11DeviceContext* dc,
+        const DirectX::XMMATRIX& view,
+        const DirectX::XMMATRIX& projection,
         const std::string& key,
         const DirectX::XMFLOAT3& position,
-        const DirectX::XMFLOAT3& rotation,   // 回転を指定
+        const DirectX::XMFLOAT3& rotation,
         float scale,
         const DirectX::XMFLOAT4& color,
         FontAlign align,

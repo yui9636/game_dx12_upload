@@ -33,6 +33,7 @@ bool ThumbnailGenerator::IsAvailable() const {
 
 bool ThumbnailGenerator::LazyInitialize()
 {
+    // 初回リクエスト時にだけプールと共通球モデルを用意して、起動コストを抑える。
     m_initialized = false;
     m_texturePool = PreviewTexturePool{};
     m_sphereModel.reset();
@@ -105,6 +106,7 @@ void ThumbnailGenerator::RequestMaterial(const std::string& matPath)
 
 void ThumbnailGenerator::Invalidate(const std::string& path)
 {
+    // 既存サムネを捨てるときは、ImGui スロットと texture を即時再利用せず deferred 返却する。
     auto it = m_cache.find(path);
     if (it != m_cache.end()) {
         uint64_t fenceValue = m_offscreen ? m_offscreen->GetCurrentFenceValue() : 0;
@@ -162,6 +164,7 @@ void ThumbnailGenerator::EvictOldest()
 
 void ThumbnailGenerator::PumpOne()
 {
+    // サムネ生成は 1 フレームに 1 件だけ進め、可視項目を優先する。
     if (!IsAvailable() || m_pendingQueue.empty()) return;
     if (!m_initialized && !LazyInitialize()) return;
     if (!m_offscreen->IsGpuIdle()) return;
@@ -204,6 +207,7 @@ void ThumbnailGenerator::PumpOne()
 
 void ThumbnailGenerator::SetupCamera(Model* model, XMFLOAT4X4& outViewProj, XMFLOAT3& outCamPos)
 {
+    // モデル全体が収まる距離を計算し、細長いエフェクト形状は見やすい角度へ補正する。
     BoundingBox aabb = model->GetWorldBounds();
     XMFLOAT3 center = aabb.Center;
     XMFLOAT3 ex = aabb.Extents;
@@ -244,6 +248,7 @@ void ThumbnailGenerator::SetupCamera(Model* model, XMFLOAT4X4& outViewProj, XMFL
 
 void ThumbnailGenerator::RenderThumbnail(ITexture* target, std::function<void()> setupAndDraw)
 {
+    // OffscreenRenderer は毎ジョブ BeginJob から始め、前回状態を持ち越さない。
     m_offscreen->BeginJob();
     m_offscreen->ClearExternalRT(target, m_texturePool.GetSharedDepth(), CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A);
     m_offscreen->SetExternalRenderTarget(target, m_texturePool.GetSharedDepth());

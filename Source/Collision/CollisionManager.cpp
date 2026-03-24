@@ -3,7 +3,6 @@
 #include "CollisionFunctions.h"
 #include <algorithm>
 
-// ★追加: シングルトンインスタンスの実装
 CollisionManager& CollisionManager::Instance()
 {
     static CollisionManager instance;
@@ -16,7 +15,7 @@ uint32_t CollisionManager::AddSphere(const SphereDesc& desc, void* userPtr, Coll
     c.id = issueId_++;
     c.shape = ColliderShape::Sphere;
     c.userPtr = userPtr;
-    c.attribute = attr; // ★セット
+    c.attribute = attr;
     c.enabled = true;
     c.sphere = desc;
     if (c.sphere.radius < 0.0f) c.sphere.radius = 0.0f;
@@ -24,14 +23,13 @@ uint32_t CollisionManager::AddSphere(const SphereDesc& desc, void* userPtr, Coll
     return c.id;
 }
 
-// ★変更: attr 引数を受け取り、c.attribute にセットする
 uint32_t CollisionManager::AddCapsule(const CapsuleDesc& desc, void* userPtr, ColliderAttribute attr)
 {
     Collider c;
     c.id = issueId_++;
     c.shape = ColliderShape::Capsule;
     c.userPtr = userPtr;
-    c.attribute = attr; // ★セット
+    c.attribute = attr;
     c.enabled = true;
     c.capsule = desc;
     if (c.capsule.radius < 0.0f) c.capsule.radius = 0.0f;
@@ -49,7 +47,6 @@ uint32_t CollisionManager::AddBox(const BoxDesc& desc, void* userPtr, ColliderAt
     c.attribute = attr;
     c.enabled = true;
     c.box = desc;
-    // 負のサイズ防止
     c.box.size.x = std::abs(c.box.size.x);
     c.box.size.y = std::abs(c.box.size.y);
     c.box.size.z = std::abs(c.box.size.z);
@@ -143,16 +140,13 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
             else if (A.shape == ColliderShape::Capsule && B.shape == ColliderShape::Capsule) {
                 ok = CollisionFunctions::IntersectCapsuleVCapsule(A.capsule.base, A.capsule.radius, A.capsule.height, B.capsule.base, B.capsule.radius, B.capsule.height, hit);
             }
-            // 5. Sphere vs Box (★追加)
             else if (A.shape == ColliderShape::Sphere && B.shape == ColliderShape::Box) {
                 ok = CollisionFunctions::IntersectSphereVsBox(A.sphere.center, A.sphere.radius, B.box.center, B.box.size, hit);
             }
-            // 6. Box vs Sphere (★追加)
             else if (A.shape == ColliderShape::Box && B.shape == ColliderShape::Sphere) {
                 ok = CollisionFunctions::IntersectSphereVsBox(B.sphere.center, B.sphere.radius, A.box.center, A.box.size, hit);
                 if (ok) std::swap(hit.selfOutPosition, hit.otherOutPosition);
             }
-            // 7. Box vs Box (★追加)
             else if (A.shape == ColliderShape::Box && B.shape == ColliderShape::Box) {
                 ok = CollisionFunctions::IntersectBoxVsBox(A.box.center, A.box.size, B.box.center, B.box.size, hit);
             }
@@ -171,19 +165,14 @@ bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDist
     bool hasHit = false;
     float closestDist = maxDistance;
 
-    // 登録されている全コライダーを走査
-    // colliders_ は std::vector<Collider> と想定
     for (const auto& c : colliders_)
     {
-        // 無効なものはスキップ
         if (!c.enabled) continue;
 
-        // ヒット情報の一時変数
         float t = FLT_MAX;
         DirectX::XMFLOAT3 normal;
         bool hit = false;
 
-        // 形状ごとの判定
         switch (c.shape)
         {
         case ColliderShape::Sphere:
@@ -202,22 +191,19 @@ bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDist
             break;
         }
 
-        // ヒットしており、かつ既存のヒットより手前なら更新
         if (hit && t >= 0.0f && t < closestDist)
         {
             closestDist = t;
             hasHit = true;
 
-            // 結果を格納
             outHit.distance = t;
             outHit.normal = normal;
-            outHit.userPtr = c.userPtr; // これがアクター(Actor*)になる
+            outHit.userPtr = c.userPtr;
 
-            // 衝突座標の計算: Origin + Dir * t
             DirectX::XMVECTOR Dir = DirectX::XMLoadFloat3(&ray.direction);
             DirectX::XMVECTOR HitPoint = DirectX::XMVectorAdd(
                 DirectX::XMLoadFloat3(&ray.origin),
-                DirectX::XMVectorScale(Dir, t) // ここで t を掛ける
+                DirectX::XMVectorScale(Dir, t)
             );
 
 

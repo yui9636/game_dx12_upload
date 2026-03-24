@@ -14,14 +14,11 @@
 //
 //    void Initialize(ID3D11Device* device);
 //
-//    // �t���[���`��O�ɑS���ʃ��\�[�X����ăo�C���h����I
 //    void BindAll(ID3D11DeviceContext* dc, const RenderState* renderState, const ShadowMap* shadowMap);
 //
-//    // UploadSystem ���f�[�^���������ނ��߂̃A�N�Z�X��
 //    ID3D11Buffer* GetSceneBuffer() const { return m_cbScene.Get(); }
 //    ID3D11Buffer* GetShadowBuffer() const { return m_cbShadow.Get(); }
 //
-//    // IBL�e�N�X�`���̃Z�b�g
 //    void SetIBL(ID3D11ShaderResourceView* diff, ID3D11ShaderResourceView* spec) {
 //        m_diffIBL = diff;
 //        m_specIBL = spec;
@@ -50,19 +47,17 @@ class DX12Device;
 
 class GlobalRootSignature {
 public:
-    // �� Instance() �̒��g�������āA�錾�����ɂ��܂�
     static GlobalRootSignature& Instance();
 
     void Initialize(ID3D11Device* device);
     void Initialize(DX12Device* device);
 
-    //�� �f�X�g���N�^���錾�̂݁i���ɂ����Ȃ��Ă��܂����A�O�̂��߁j
     ~GlobalRootSignature();
 
     void BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap);
 
-    IBuffer* GetSceneBuffer() const;  // �� get() ���O�̂��� .cpp ��
-    IBuffer* GetShadowBuffer() const; // �� get() ���O�̂��� .cpp ��
+    IBuffer* GetSceneBuffer() const;
+    IBuffer* GetShadowBuffer() const;
 
     void SetIBL(ITexture* diff, ITexture* spec) {
         m_diffIBL = diff;

@@ -13,7 +13,6 @@ public:
         auto* comp = registry.GetComponent<T>(m_target);
         if (comp) {
             *comp = m_oldState;
-            // 必要なら Dirty フラグを立てる（Transform 等の場合）
             SetDirtyIfPossible(comp);
         }
     }
@@ -27,9 +26,6 @@ public:
     }
 
 private:
-    // TransformComponent などの Dirty フラグを自動で立てるヘルパー
     void SetDirtyIfPossible(void* comp) {
-        // コンパイル時に TransformComponent かどうか判定して処理
-        // （実際にはオーバーロード等で実装）
     }
 };

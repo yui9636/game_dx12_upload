@@ -1,4 +1,4 @@
-﻿#include "GlobalRootSignature.h"
+#include "GlobalRootSignature.h"
 #include "RHI/ICommandList.h"
 #include "RHI/IBuffer.h"
 #include "RHI/DX11/DX11Buffer.h"
@@ -35,7 +35,6 @@ void GlobalRootSignature::Initialize(DX12Device* device)
 
 void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap)
 {
-    // 1. 螳壽焚繝舌ャ繝輔ぃ縺ｮ繝舌う繝ｳ繝・(Slot 7: Scene, Slot 4: Shadow)
     commandList->VSSetConstantBuffer(7, m_cbScene.get());
     commandList->PSSetConstantBuffer(7, m_cbScene.get());
     if (!m_isDX12) commandList->CSSetConstantBuffer(7, m_cbScene.get());
@@ -53,7 +52,6 @@ void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* 
     commandList->PSSetTextures(33, 2, ibls);
 
     // ---------------------------------------------------------
-    // 3. 蜈ｱ騾壹し繝ｳ繝励Λ繝ｼ縺ｮ荳諡ｬ繝舌う繝ｳ繝会ｼ・X11 RHI迚茨ｼ・
     // ---------------------------------------------------------
 
     // Slot 0: LinearWrap

@@ -17,7 +17,6 @@ using namespace Cinematic;
 using namespace DirectX;
 
 // ==================================================================================
-// �R���X�g���N�^ / �f�X�g���N�^
 // ==================================================================================
 
 CinematicSequencerComponent::CinematicSequencerComponent()
@@ -49,56 +48,45 @@ void CinematicSequencerComponent::Update(float dt)
             currentTime += dt;
         }
 
-        // �V�[�P���X�I�����̏���
         if (currentTime >= sequence->duration)
         {
             currentTime = sequence->duration;
             Stop();
         }
 
-        // �J�[�u�]���i�J�������͂����OK�j
         sequence->Evaluate(currentTime);
 
         // =========================================================================
-        // ���������C���ӏ��F�A�j���[�V�����̔��胍�W�b�N�������ɂ���
         // =========================================================================
-        int overrideAnim = -1;      // �f�t�H���g�́u�Ȃ�(-1)�v
-        float animLocalTime = 0.0f; // �A�j���[�V�����̍Đ��ʒu
+        int overrideAnim = -1;
+        float animLocalTime = 0.0f;
 
         for (auto& track : sequence->tracks)
         {
             if (track->GetType() == TrackType::Animation && !track->isMuted)
             {
-                // AnimationTrack�̃L�[���𒼐ڌ���
                 auto animTrack = static_cast<AnimationTrack*>(track.get());
 
-                // ���ׂẴL�[�i�o�[�j�𑖍����āA���ݎ��Ԃ��u�o�[�̒��v�ɂ��邩�m�F
                 for (const auto& key : animTrack->keys)
                 {
                     float startTime = key.time;
-                    float endTime = key.time + key.duration; // �o�[�̏I��莞��
+                    float endTime = key.time + key.duration;
 
-                    // ���d�v����: �J�[�\�����o�[�͈͓̔��ɂ��邩�H
                     if (currentTime >= startTime && currentTime < endTime)
                     {
-                        overrideAnim = key.animIndex; // ���̃A�j���[�V�������Đ�
+                        overrideAnim = key.animIndex;
 
-                        // �����łɏC��: 
-                        // �A�j���[�V�����̊J�n���Ԃ� 0�b�n�_ �ɍ��킹��i���Ύ��ԁj
-                        // ��������Ȃ��ƁA5�b�ڂɒu�����A�j����5�b�ڂ���Đ��J�n����Ă��܂��܂�
                         animLocalTime = currentTime - startTime;
 
-                        break; // �d�Ȃ�o�[������������I���i�㏟���ɂ���Ȃ�t���T���j
+                        break;
                     }
                 }
             }
         }
 
-        // �h���C�o�[�ɓK�p
-        driver.SetOverrideAnimation(overrideAnim); // �͈͊O�Ȃ� -1 ������̂Ŏ~�܂�
-        driver.SetLoop(true); // �o�[�͈͓̔��ł̓��[�v�����Ă����i�o�[�̒����Ő؂��̂�OK�j
+        driver.SetOverrideAnimation(overrideAnim);
+        driver.SetLoop(true);
 
-        // �����͈͊O(-1)�Ȃ�A���Ԃ͉��ł��������A�͈͓��Ȃ�u���Ύ��ԁv��n���̂�����
         if (overrideAnim != -1) {
             driver.SetTime(animLocalTime);
         }
@@ -107,7 +95,6 @@ void CinematicSequencerComponent::Update(float dt)
         }
 
         // =========================================================================
-        // �J�����X�V�����i�����͕ύX�Ȃ��j
         // =========================================================================
      /*   if (Camera* renderCam = Graphics::Instance().GetCamera())
         {
@@ -150,7 +137,6 @@ void CinematicSequencerComponent::UpdateGhostCamera()
             CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
             if (!camTrack->eyeCurve.keys.empty())
             {
-                // �S�[�X�g����
                 if (!editorGhost)
                 {
                     editorGhost = ActorManager::Instance().Create();
@@ -159,7 +145,6 @@ void CinematicSequencerComponent::UpdateGhostCamera()
                     editorGhost->isDebugModel = true;
                 }
 
-                // �ʒu�E��]����
                 const auto& keyEye = camTrack->eyeCurve.keys[selection.keyIndex];
                 editorGhost->SetPosition(keyEye.value);
 
@@ -183,7 +168,6 @@ void CinematicSequencerComponent::UpdateGhostCamera()
         }
     }
 
-    // ��\��
     if (editorGhost)
     {
         ActorManager::Instance().Remove(editorGhost);
@@ -233,7 +217,6 @@ void CinematicSequencerComponent::SetTargetActor(std::shared_ptr<Actor> actor)
     targetActor = actor;
     if (auto act = targetActor.lock())
     {
-        // �A�N�^�[��Animator�Ƀh���C�o�[��ڑ�(�߈�)
         if (auto animator = act->GetComponent<AnimatorComponent>())
         {
             driver.Connect(animator.get());
@@ -260,7 +243,6 @@ void CinematicSequencerComponent::OnGUI()
     ImGui::SetNextWindowSize(ImVec2(800, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Cinematic Sequencer"))
     {
-        // 1. �^�[�Q�b�g�I��
         std::string targetName = "None";
         if (auto act = targetActor.lock()) targetName = act->GetName();
 
@@ -284,7 +266,6 @@ void CinematicSequencerComponent::OnGUI()
         }
         ImGui::Separator();
 
-        // 2. �c�[���o�[
         if (ImGui::Button("Save")) {
             char path[MAX_PATH] = "";
             if (Dialog::SaveFileName(path, MAX_PATH, "JSON Files\0*.json\0All Files\0*.*\0") == DialogResult::OK)
@@ -312,14 +293,12 @@ void CinematicSequencerComponent::OnGUI()
         ImGui::PopItemWidth();
         ImGui::Separator();
 
-        // 3. �C���X�y�N�^�[
         if (selection.trackIndex >= 0 && selection.trackIndex < (int)sequence->tracks.size())
         {
             auto track = sequence->tracks[selection.trackIndex];
             ImGui::Text("Selected Track: %s", track->name.c_str());
             ImGui::SameLine();
 
-            // --- A. �J���� ---
             if (track->GetType() == TrackType::Camera) {
                 if (ImGui::Button("Add Camera Key")) {
                     //Camera* cam = Graphics::Instance().GetCamera();
@@ -332,7 +311,6 @@ void CinematicSequencerComponent::OnGUI()
                     }*/
                 }
             }
-            // --- B. �A�j���[�V���� ---
             else if (track->GetType() == TrackType::Animation) {
                 if (ImGui::Button("Add Animation Key")) ImGui::OpenPopup("SelectAnimPopup");
                 if (ImGui::BeginPopup("SelectAnimPopup")) {
@@ -367,7 +345,6 @@ void CinematicSequencerComponent::OnGUI()
                     ImGui::EndPopup();
                 }
             }
-            // --- C. �G�t�F�N�g (�ڍאݒ����) ---
             else if (track->GetType() == TrackType::Effect)
             {
                 EffectTrack* effTrack = static_cast<EffectTrack*>(track.get());
@@ -387,7 +364,6 @@ void CinematicSequencerComponent::OnGUI()
                     ImGui::DragFloat("Start Time", &key.time, 0.01f);
                     ImGui::DragFloat("Duration", &key.duration, 0.01f, 0.1f, 100.0f);
 
-                    // �p�X����
                     char buf[128]; strcpy_s(buf, key.effectName.c_str());
                     if (ImGui::InputText("Effect Path", buf, sizeof(buf))) key.effectName = buf;
                     ImGui::SameLine();
@@ -401,7 +377,6 @@ void CinematicSequencerComponent::OnGUI()
                         }
                     }
 
-                    // ���d�v: �{�[�����I�� (�R���{�{�b�N�X)
                     if (auto actor = targetActor.lock())
                     {
                         if (auto model = actor->GetModelRaw())
@@ -409,12 +384,10 @@ void CinematicSequencerComponent::OnGUI()
                             std::string currentBone = key.boneName.empty() ? "(Root)" : key.boneName;
                             if (ImGui::BeginCombo("Bone Name", currentBone.c_str()))
                             {
-                                // Root�I����
                                 if (ImGui::Selectable("(Root) / None", key.boneName.empty())) {
                                     key.boneName = "";
                                 }
 
-                                // ���f���̃m�[�h�ꗗ��\��
                                 const auto& nodes = model->GetNodes();
                                 for (const auto& node : nodes)
                                 {
@@ -439,7 +412,6 @@ void CinematicSequencerComponent::OnGUI()
                         ImGui::TextDisabled("No Target Actor");
                     }
 
-                    // �I�t�Z�b�g
                     ImGui::DragFloat3("Pos Offset", &key.offsetPos.x, 0.01f);
                     ImGui::DragFloat3("Rot Offset", &key.offsetRot.x, 1.0f);
                     ImGui::DragFloat3("Scale", &key.offsetScale.x, 0.01f);
@@ -510,7 +482,6 @@ void CinematicSequencerComponent::DrawTrackList()
     if (ImGui::Button("+ Add Track")) ImGui::OpenPopup("AddTrackPopup");
     if (ImGui::BeginPopup("AddTrackPopup"))
     {
-        // �w���p�[�����_: �g���b�N�ǉ����ɑ��o�C���h����
         auto AddAndBind = [&](auto track) {
             if (auto act = targetActor.lock()) track->Bind(act.get());
             };
@@ -525,7 +496,7 @@ void CinematicSequencerComponent::DrawTrackList()
         }
         if (ImGui::MenuItem("Effect Track")) {
             auto t = sequence->AddTrack<EffectTrack>("Effect Track");
-            AddAndBind(t); // ��������Bind�����
+            AddAndBind(t);
         }
 
         ImGui::EndPopup();
@@ -557,7 +528,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
     float scale = 100.0f;
     float rowHeight = ImGui::GetTextLineHeightWithSpacing();
 
-    // �w�i�O���b�h�Ǝ��ԃo�[�`��i�����̂܂܁j
     for (float t = 0; t <= sequence->duration + 1; t += 1.0f) {
         float x = p.x + t * scale;
         drawList->AddLine(ImVec2(x, p.y), ImVec2(x, p.y + 1000), 0x40FFFFFF);
@@ -567,7 +537,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
     float cx = p.x + currentTime * scale;
     drawList->AddLine(ImVec2(cx, p.y), ImVec2(cx, p.y + 1000), 0xFFFF0000, 2.0f);
 
-    // �]���N���b�N�ŃV�[�N
     if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) {
         float t = (ImGui::GetMousePos().x - p.x) / scale;
         SetTime(t);
@@ -575,13 +544,11 @@ void CinematicSequencerComponent::DrawTimelineWindow()
         UpdateGhostCamera();
     }
 
-    // �g���b�N�`�惋�[�v
     for (int i = 0; i < (int)sequence->tracks.size(); ++i) {
         float y = p.y + i * rowHeight + 25.0f;
         auto track = sequence->tracks[i];
 
         // -----------------------------------------------------------
-        // A. �J�����g���b�N (�H�`�L�[)
         // -----------------------------------------------------------
         if (track->GetType() == TrackType::Camera) {
             CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
@@ -593,7 +560,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(ImVec2(x - 6, y - 6));
                 ImGui::PushID(i * 1000 + k);
 
-                // �L�[����
                 if (ImGui::InvisibleButton("##Key", ImVec2(12, 12))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
@@ -602,19 +568,16 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                     keys[k].time += ImGui::GetIO().MouseDelta.x / scale;
                     if (keys[k].time < 0.0f) keys[k].time = 0.0f;
-                    // Focus�J�[�u������
                     if (k < (int)camTrack->focusCurve.keys.size()) camTrack->focusCurve.keys[k].time = keys[k].time;
                     SetTime(keys[k].time);
                 }
                 ImGui::PopID();
 
-                // �`�� (�H�`)
                 drawList->AddQuadFilled(ImVec2(x, y - 5), ImVec2(x + 5, y), ImVec2(x, y + 5), ImVec2(x - 5, y), col);
                 drawList->AddQuad(ImVec2(x, y - 5), ImVec2(x + 5, y), ImVec2(x, y + 5), ImVec2(x - 5, y), 0xFF000000);
             }
         }
         // -----------------------------------------------------------
-        // B. �A�j���[�V�����g���b�N (�o�[�\��)
         // -----------------------------------------------------------
         else if (track->GetType() == TrackType::Animation)
         {
@@ -625,7 +588,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 float startX = p.x + keys[k].time * scale;
                 float endX = p.x + (keys[k].time + keys[k].duration) * scale;
                 float width = endX - startX;
-                if (width < 5.0f) width = 5.0f; // �ŏ����ۏ�
+                if (width < 5.0f) width = 5.0f;
 
                 float barY = y - 9.0f;
                 float barH = 18.0f;
@@ -636,7 +599,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(rectMin);
                 ImGui::PushID(i * 1000 + k);
 
-                // �o�[����
                 if (ImGui::InvisibleButton("##Bar", ImVec2(width, barH))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
@@ -647,26 +609,22 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                     SetTime(keys[k].time);
                 }
 
-                // �c�[���`�b�v
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s (%.2fs)", keys[k].animName.c_str(), keys[k].duration);
                 }
 
                 ImGui::PopID();
 
-                // �`�� (��`)
                 ImU32 col = selection.IsSelected(i, k) ? 0xFF55AAFF : 0xFF3366AA;
                 drawList->AddRectFilled(rectMin, rectMax, col, 4.0f);
                 drawList->AddRect(rectMin, rectMax, 0xFF000000, 4.0f);
 
-                // �e�L�X�g�N���b�s���O�\��
                 drawList->PushClipRect(rectMin, rectMax, true);
                 drawList->AddText(ImVec2(rectMin.x + 4, rectMin.y + 2), 0xFFFFFFFF, keys[k].animName.c_str());
                 drawList->PopClipRect();
             }
         }
         // -----------------------------------------------------------
-        // ���ǉ� C. �G�t�F�N�g�g���b�N (�o�[�\���E���F)
         // -----------------------------------------------------------
         else if (track->GetType() == TrackType::Effect)
         {
@@ -688,7 +646,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(rectMin);
                 ImGui::PushID(i * 1000 + k);
 
-                // �o�[����
                 if (ImGui::InvisibleButton("##EffBar", ImVec2(width, barH))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
@@ -705,7 +662,6 @@ void CinematicSequencerComponent::DrawTimelineWindow()
 
                 ImGui::PopID();
 
-                // �`�� (��`: ���F�n)
                 ImU32 col = selection.IsSelected(i, k) ? 0xFFFFAAFF : 0xFFAA55AA;
                 drawList->AddRectFilled(rectMin, rectMax, col, 4.0f);
                 drawList->AddRect(rectMin, rectMax, 0xFF000000, 4.0f);

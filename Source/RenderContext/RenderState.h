@@ -10,7 +10,6 @@ class IBlendState;
 class IRasterizerState;
 
 
-// �T���v���X�e�[�g
 enum class SamplerState
 {
 	PointWrap,
@@ -21,7 +20,6 @@ enum class SamplerState
 	EnumCount
 };
 
-// �f�v�X�X�e�[�g
 enum class DepthState
 {
 	TestAndWrite,
@@ -32,7 +30,6 @@ enum class DepthState
 	EnumCount
 };
 
-// �u�����h�X�e�[�g
 enum class BlendState
 {
 	Opaque,
@@ -45,7 +42,6 @@ enum class BlendState
 	EnumCount
 };
 
-// ���X�^���C�U�X�e�[�g
 enum class RasterizerState
 {
 	SolidCullNone,
@@ -56,7 +52,6 @@ enum class RasterizerState
 	EnumCount
 };
 
-// �����_�[�X�e�[�g
 class DX12Device;
 
 class RenderState

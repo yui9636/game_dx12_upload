@@ -9,20 +9,18 @@ using namespace DirectX;
 
 namespace Cinematic
 {
-    // 補間モード
     enum class InterpolationMode
     {
-        Step,       // パッ切り替わる
-        Linear,     // 直線
-        CatmullRom, // スプライン曲線（滑らか）
-        Bezier      // ハンドル制御（高度）
+        Step,
+        Linear,
+        CatmullRom,
+        Bezier
     };
 
-    // 汎用キーフレーム構造体
     template<typename T>
     struct Keyframe
     {
-        float time; // 秒単位
+        float time;
         T value;
         InterpolationMode mode = InterpolationMode::CatmullRom;
         T tangentIn{};
@@ -34,7 +32,7 @@ namespace Cinematic
     inline void to_json(json& j, const Keyframe<T>& k) {
         j = json{
             {"t", k.time},
-            {"v", k.value},     // TがXMFLOAT3ならJSONManager側で自動変換される
+            {"v", k.value},
             {"m", (int)k.mode}
         };
     }
@@ -47,8 +45,6 @@ namespace Cinematic
     }
 
 
-    // 数学ヘルパー: Catmull-Rom補間
-    // (float, XMFLOAT3 などに対応させるためのオーバーロード)
     inline float MathLerp(float a, float b, float t) { return a + (b - a) * t; }
 
     inline float MathCatmullRom(float v0, float v1, float v2, float v3, float t)
@@ -58,7 +54,6 @@ namespace Cinematic
         return 0.5f * ((2.0f * v1) + (-v0 + v2) * t + (2.0f * v0 - 5.0f * v1 + 4.0f * v2 - v3) * t2 + (-v0 + 3.0f * v1 - 3.0f * v2 + v3) * t3);
     }
 
-    // XMFLOAT3用も用意
     inline DirectX::XMFLOAT3 MathLerp(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b, float t)
     {
         XMVECTOR V1 = XMLoadFloat3(&a);

@@ -25,6 +25,8 @@ Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ImGuiRenderer::s_imguiSrvHeap;
 uint32_t ImGuiRenderer::s_descriptorSize = 0;
 uint32_t ImGuiRenderer::s_nextTextureSlot = 1;
 std::unordered_map<const ITexture*, uint32_t> ImGuiRenderer::s_textureSlots;
+std::vector<ImGuiRenderer::DeferredTextureSlot> ImGuiRenderer::s_deferredUnregisters;
+std::vector<uint32_t> ImGuiRenderer::s_freeSlots;
 
 void ImGuiRenderer::Initialize(HWND hWnd, ID3D11Device* device, ID3D11DeviceContext* dc)
 {
@@ -84,7 +86,7 @@ void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
 
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    heapDesc.NumDescriptors = 128;
+    heapDesc.NumDescriptors = 1024;
     heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     dx12Device->GetDevice()->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&s_imguiSrvHeap));
     s_descriptorSize = dx12Device->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -197,12 +199,20 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
         slot = found->second;
     }
     else {
-        const uint32_t maxSlots = 128;
-        if (s_nextTextureSlot >= maxSlots) {
-            return nullptr;
+        const uint32_t maxSlots = 1024;
+        if (!s_freeSlots.empty()) {
+            slot = s_freeSlots.back();
+            s_freeSlots.pop_back();
+        } else {
+            if (s_nextTextureSlot >= maxSlots) {
+                return nullptr;
+            }
+            slot = s_nextTextureSlot++;
         }
 
-        slot = s_nextTextureSlot++;
+        if (slot >= maxSlots) {
+            return nullptr;
+        }
         s_textureSlots.emplace(texture, slot);
 
         D3D12_CPU_DESCRIPTOR_HANDLE dstCpu = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
@@ -219,8 +229,38 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
     return reinterpret_cast<void*>(static_cast<uintptr_t>(gpuHandle.ptr));
 }
 
+void ImGuiRenderer::DeferUnregisterTexture(ITexture* texture, uint64_t fenceValue)
+{
+    if (!texture || !s_isDX12) {
+        return;
+    }
+
+    auto it = s_textureSlots.find(texture);
+    if (it == s_textureSlots.end()) {
+        return;
+    }
+
+    s_deferredUnregisters.push_back({ it->first, it->second, fenceValue });
+    s_textureSlots.erase(it);
+}
+
+void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
+{
+    auto it = s_deferredUnregisters.begin();
+    while (it != s_deferredUnregisters.end()) {
+        if (it->fenceValue <= completedFenceValue) {
+            s_freeSlots.push_back(it->slot);
+            it = s_deferredUnregisters.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 void ImGuiRenderer::ResetTextureCache()
 {
     s_textureSlots.clear();
+    s_deferredUnregisters.clear();
+    s_freeSlots.clear();
     s_nextTextureSlot = 1;
 }

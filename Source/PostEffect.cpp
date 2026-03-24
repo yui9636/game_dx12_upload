@@ -8,34 +8,28 @@
 //
 //PostEffect::PostEffect(ID3D11Device* device)
 //{
-//	//フルスクリーンアッド頂点シェーダー読み込み
 //	GpuResourceUtils::LoadVertexShader(
 //		device,
 //		"Data/Shader/FullScreenQuadVs.cso",
 //		nullptr, 0,
 //		nullptr,
 //		fullscreenQuadVS.GetAddressOf());
-//	//輝度抽出ピクセルシェーダー読み込み
 //	GpuResourceUtils::LoadPixelShader(
 //		device,
 //		"Data/Shader/LuminanceExtractionPS.cso",
 //		luminanceExtractionPS.GetAddressOf());
-//	//定数バッファ作成
 //	GpuResourceUtils::CreateConstantBuffer(
 //		device,
 //		sizeof(CbPostEffect),
 //		constantBuffer.GetAddressOf());
-//	//ブルームピクセルシェーダー読み込み
 //	GpuResourceUtils::LoadPixelShader(
 //		device,
 //		"Data/Shader/BloomPS.cso",
 //		bloomPS.GetAddressOf());
-//	//カラーフィルターピクセルシェーダー
 //	GpuResourceUtils::LoadPixelShader(
 //		device,
 //		"Data/Shader/ColorFilterPS.cso",
 //		colorFilterPS.GetAddressOf());
-//	// ★追加: DoFシェーダーロード
 //	GpuResourceUtils::LoadPixelShader(
 //		device,
 //		"Data/Shader/DepthOfFieldPS.cso",
@@ -45,14 +39,12 @@
 //	const size_t scratchBufferSize = ffxFsr2GetScratchMemorySizeDX11();
 //	void* scratchBuffer = malloc(scratchBufferSize);
 //
-//	// インターフェースの取得
 //	ffxFsr2GetInterfaceDX11(&m_fsr2Interface, device, scratchBuffer, scratchBufferSize);
 //
 //	FfxFsr2ContextDescription contextDesc = {};
 //
 //	contextDesc.flags = FFX_FSR2_ENABLE_HIGH_DYNAMIC_RANGE | FFX_FSR2_ENABLE_AUTO_EXPOSURE;
 //
-//	// ★修正2: エンジンの画面サイズを動的に取得して計算する
 //	float renderScale = 0.67f;
 //	uint32_t screenW = static_cast<uint32_t>(Graphics::Instance().GetScreenWidth());
 //	uint32_t screenH = static_cast<uint32_t>(Graphics::Instance().GetScreenHeight());
@@ -65,14 +57,12 @@
 //	contextDesc.callbacks = m_fsr2Interface;
 //	contextDesc.device = ffxGetDeviceDX11(device);
 //
-//	// ★ここで落ちていた
 //	FfxErrorCode errorCode = ffxFsr2ContextCreate(&m_fsr2Context, &contextDesc);
 //
 //	if (errorCode == FFX_OK) {
 //		m_fsr2Initialized = true;
 //	}
 //	else {
-//		// エラーコードを確認するためのブレークポイント用
 //		m_fsr2Initialized = false;
 //	}
 //
@@ -87,22 +77,17 @@
 //}
 //
 //
-////ブルーム処理
 //void PostEffect::Bloom(const RenderContext& rc, ID3D11ShaderResourceView* colorMap, ID3D11ShaderResourceView* luminanceMap)
 //{
 //	ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //
-//	//シェーダー専用
 //	dc->VSSetShader(fullscreenQuadVS.Get(), 0, 0);
 //	dc->PSSetShader(bloomPS.Get(), 0, 0);
-//	//シェーダーリソース設定
 //	ID3D11ShaderResourceView* srvs[] = { colorMap,luminanceMap };
 //	dc->PSSetShaderResources(0, _countof(srvs), srvs);
-//	//描画
 //	dc->Draw(4, 0);
 //}
 //
-////輝度抽出処理
 //void PostEffect::LuminanceExtraction(const RenderContext& rc, ID3D11ShaderResourceView* colorMap)
 //{
 //	ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
@@ -114,10 +99,8 @@
 //	dc->PSSetShader(luminanceExtractionPS.Get(), 0, 0);
 //
 //	// ========================================================
-//	// ★追加1：定数バッファをセット！（これでUIの閾値が届くようになります）
 //	dc->PSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
 //
-//	// ★追加2：サンプラーをセット！
 //	ID3D11SamplerState* sampler = rc.renderState->GetSamplerState(SamplerState::LinearClamp);
 //	dc->PSSetSamplers(0, 1, &sampler);
 //	// ========================================================
@@ -138,7 +121,6 @@
 //{
 //	ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //
-//	// 1. 定数バッファ更新（変更なし）
 //	cbPostEffect.time = rc.time;
 //	cbPostEffect.luminanceExtractionLowerEdge = rc.bloomData.luminanceLowerEdge;
 //	cbPostEffect.luminanceExtractionHigherEdge = rc.bloomData.luminanceHigherEdge;
@@ -158,25 +140,21 @@
 //
 //	dc->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &cbPostEffect, 0, 0);
 //
-//	// 2. 輝度抽出（変更なし）
 //	FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
 //	luminanceFB->Clear(dc, 0, 0, 0, 0);
 //	LuminanceExtraction(rc, src->GetColorMap());
 //
 //
-//	//// 3. 最終合成 (Uber-Shader)
 //	
 //	FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
 //	workFB->SetRenderTarget(dc, nullptr);
 //
 //	dc->VSSetShader(fullscreenQuadVS.Get(), nullptr, 0);
-//	// ★修正: 確実に bloomPS をセットする
 //	dc->PSSetShader(bloomPS.Get(), nullptr, 0);
 //	dc->PSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
 //	dc->IASetInputLayout(nullptr);
 //
 //	// =========================================================
-//	// ★追加: G-Buffer から Velocity バッファを取り出して t3 にセット
 //	// =========================================================
 //	FrameBuffer* gBuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::GBuffer);
 //	ID3D11ShaderResourceView* velocitySRV = gBuffer ? gBuffer->GetColorMap(3) : nullptr;
@@ -184,8 +162,6 @@
 //	ID3D11ShaderResourceView* srvs[] = {
 //		src->GetColorMap(),         // t0: colorMap
 //		luminanceFB->GetColorMap(), // t1: luminanceMap
-//		rc.sceneDepthSRV,           // t2: depthMap (DoF用など)
-//		velocitySRV                 // t3: velocityMap (★追加)
 //	};
 //	dc->PSSetShaderResources(0, _countof(srvs), srvs);
 //
@@ -195,7 +171,6 @@
 //	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 //	dc->Draw(4, 0);
 //
-//	// ★修正: SRVの解除を4つに増やす
 //	ID3D11ShaderResourceView* nullSRVs[] = { nullptr, nullptr, nullptr, nullptr };
 //	dc->PSSetShaderResources(0, _countof(nullSRVs), nullSRVs);
 //
@@ -233,7 +208,6 @@
 //		dispatchDesc.output = ffxGetResourceDX11(&m_fsr2Context, resOutput, L"FSR2_Output", FFX_RESOURCE_STATE_UNORDERED_ACCESS);
 //
 //		// =========================================================
-//		// ★ゴースト対策の核心：モーションベクトルのスケールと反転
 //		// =========================================================
 //
 //		
@@ -243,8 +217,6 @@
 //		float renderH = (float)(uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
 //
 //
-//		// 理由1: HLSLで (current - prev) となっているため、マイナスをかけて (prev - current) に反転させる
-//		// 理由2: HLSLが出力する 0.0～1.0(UV) を、FSR2が求めるピクセル単位に変換するため解像度を掛ける
 //		dispatchDesc.motionVectorScale.x = renderW;
 //		dispatchDesc.motionVectorScale.y = renderH;
 //
@@ -278,7 +250,6 @@
 //}
 //
 //
-////デバッグGUI描画
 //void PostEffect::DrawDebugGUI()
 //{
 //	ImGui::DragFloat("LuminanceLowerEdge", &cbPostEffect.luminanceExtractionLowerEdge, 0.01f, 0, 1.0f);
@@ -307,7 +278,6 @@
 //
 //PostEffect::PostEffect(ID3D11Device* device)
 //{
-//    // シェーダーと定数バッファの生成を RHI 化
 //    fullscreenQuadVS = std::make_unique<DX11Shader>(device, ShaderType::Vertex, "Data/Shader/FullScreenQuadVs.cso");
 //    luminanceExtractionPS = std::make_unique<DX11Shader>(device, ShaderType::Pixel, "Data/Shader/LuminanceExtractionPS.cso");
 //    bloomPS = std::make_unique<DX11Shader>(device, ShaderType::Pixel, "Data/Shader/BloomPS.cso");
@@ -316,7 +286,6 @@
 //
 //    constantBuffer = std::make_unique<DX11Buffer>(device, sizeof(CbPostEffect), BufferType::Constant);
 //
-//    // --- FSR2の初期化 ---
 //    const size_t scratchBufferSize = ffxFsr2GetScratchMemorySizeDX11();
 //    void* scratchBuffer = malloc(scratchBufferSize);
 //
@@ -348,7 +317,6 @@
 //    }
 //}
 //
-////ブルーム処理
 //void PostEffect::Bloom(const RenderContext& rc, ITexture* colorMap, ITexture* luminanceMap)
 //{
 //    rc.commandList->VSSetShader(fullscreenQuadVS.get());
@@ -360,11 +328,9 @@
 //    rc.commandList->Draw(4, 0);
 //}
 //
-////輝度抽出処理
 //void PostEffect::LuminanceExtraction(const RenderContext& rc, ITexture* colorMap)
 //{
 //    FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
-//    // ★ 修正：dc ではなく commandList を渡す
 //    luminanceFB->SetRenderTarget(rc.commandList, nullptr);
 //
 //    rc.commandList->VSSetShader(fullscreenQuadVS.get());
@@ -384,10 +350,8 @@
 //
 //void PostEffect::Process(const RenderContext& rc, FrameBuffer* src, FrameBuffer* dst)
 //{
-//    // 生のコンテキストは FSR2 と 未抽象化SRV のためだけに取得
 //    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //
-//    // 1. 定数バッファ更新
 //    cbPostEffect.time = rc.time;
 //    cbPostEffect.luminanceExtractionLowerEdge = rc.bloomData.luminanceLowerEdge;
 //    cbPostEffect.luminanceExtractionHigherEdge = rc.bloomData.luminanceHigherEdge;
@@ -404,18 +368,13 @@
 //    cbPostEffect.motionBlurIntensity = rc.motionBlurData.intensity;
 //    cbPostEffect.motionBlurSamples = rc.motionBlurData.samples;
 //
-//    // ★ 修正：RHI の UpdateBuffer を使用
 //    rc.commandList->UpdateBuffer(constantBuffer.get(), &cbPostEffect, sizeof(cbPostEffect));
 //
-//    // 2. 輝度抽出
 //    FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
-//    // ★ 修正：dc ではなく commandList を渡す
 //    luminanceFB->Clear(rc.commandList, 0, 0, 0, 0);
 //    LuminanceExtraction(rc, src->GetColorTexture(0));
 //
-//    // 3. 最終合成 (Uber-Shader)
 //    FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
-//    // ★ 修正：dc ではなく commandList を渡す
 //    workFB->SetRenderTarget(rc.commandList, nullptr);
 //
 //    rc.commandList->VSSetShader(fullscreenQuadVS.get());
@@ -431,7 +390,6 @@
 //    rc.commandList->PSSetTexture(1, luminanceFB->GetColorTexture(0));
 //    rc.commandList->PSSetTexture(3, velocityTex);
 //
-//    // 未抽象化のSRVは dc を使う
 //    if (rc.sceneDepthSRV) {
 //        dc->PSSetShaderResources(2, 1, &rc.sceneDepthSRV);
 //    }
@@ -446,17 +404,13 @@
 //    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
 //    rc.commandList->Draw(4, 0);
 //
-//    // お片付け
 //    rc.commandList->PSSetTexture(0, nullptr);
 //    rc.commandList->PSSetTexture(1, nullptr);
 //    rc.commandList->PSSetTexture(3, nullptr);
-//    // Depthスロット掃除
 //    rc.commandList->PSSetTexture(2, nullptr);
 //
-//    // レンダーターゲット解除を RHI 化
 //    rc.commandList->SetRenderTarget(nullptr, nullptr);
 //
-//    // 4. FSR2 (外部ライブラリのため生Contextが必要)
 //    if (m_fsr2Initialized)
 //    {
 //        FfxFsr2DispatchDescription dispatchDesc = {};
@@ -524,7 +478,6 @@
 #include "imgui.h"
 #include <Graphics.h>
 
-// RHI インクルード
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RHI/IShader.h"
@@ -539,37 +492,30 @@
 
 PostEffect::PostEffect(ID3D11Device* device)
 {
-    // 1. シェーダーロード (RHI)
     fullscreenQuadVS = std::make_unique<DX11Shader>(device, ShaderType::Vertex, "Data/Shader/FullScreenQuadVs.cso");
     luminanceExtractionPS = std::make_unique<DX11Shader>(device, ShaderType::Pixel, "Data/Shader/LuminanceExtractionPS.cso");
     uberPostPS = std::make_unique<DX11Shader>(device, ShaderType::Pixel, "Data/Shader/BloomPS.cso");
 
-    // 2. 定数バッファ生成 (RHI)
     constantBuffer = std::make_unique<DX11Buffer>(device, sizeof(CbPostEffect), BufferType::Constant);
 
-    // 3. PSO (Pipeline State Object) の構築
     PipelineStateDesc desc{};
     desc.vertexShader = fullscreenQuadVS.get();
-    desc.inputLayout = nullptr; // フルスクリーン描画は頂点バッファなし
+    desc.inputLayout = nullptr;
     desc.primitiveTopology = PrimitiveTopology::TriangleStrip;
-    desc.depthStencilState = nullptr; // Zテスト不要
-    desc.rasterizerState = nullptr;   // カリング不要
-    desc.blendState = nullptr;        // 上書き描画
+    desc.depthStencilState = nullptr;
+    desc.rasterizerState = nullptr;
+    desc.blendState = nullptr;
 
-    // レンダーターゲット設定 (通常 HDR 中間バッファは R16G16B16A16_FLOAT)
     desc.numRenderTargets = 1;
     desc.rtvFormats[0] = TextureFormat::R16G16B16A16_FLOAT;
     desc.dsvFormat = TextureFormat::Unknown;
 
-    // パス1: 輝度抽出用 PSO
     desc.pixelShader = luminanceExtractionPS.get();
     m_psoLuminance = Graphics::Instance().CreatePipelineState(desc);
 
-    // パス2: Uber Postプロセス用 PSO (各種ポストエフェクト統合)
     desc.pixelShader = uberPostPS.get();
     m_psoUber = Graphics::Instance().CreatePipelineState(desc);
 
-    // --- FSR2の初期化 (ここは外部ライブラリのためDX11依存のまま) ---
     const size_t scratchBufferSize = ffxFsr2GetScratchMemorySizeDX11();
     void* scratchBuffer = malloc(scratchBufferSize);
     ffxFsr2GetInterfaceDX11(&m_fsr2Interface, device, scratchBuffer, scratchBufferSize);
@@ -604,7 +550,6 @@ void PostEffect::LuminanceExtraction(const RenderContext& rc, ITexture* src)
     FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
     luminanceFB->SetRenderTarget(rc.commandList, nullptr);
 
-    // ★ PSO バインド
     rc.commandList->SetPipelineState(m_psoLuminance.get());
 
     rc.commandList->PSSetConstantBuffer(0, constantBuffer.get());
@@ -621,12 +566,10 @@ void PostEffect::UberPostProcess(const RenderContext& rc, ITexture* color, IText
     FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
     workFB->SetRenderTarget(rc.commandList, nullptr);
 
-    // ★ PSO バインド
     rc.commandList->SetPipelineState(m_psoUber.get());
 
     rc.commandList->PSSetConstantBuffer(0, constantBuffer.get());
 
-    // テクスチャバインド (t0:Color, t1:Luminance, t2:Depth, t3:Velocity)
     ITexture* textures[] = { color, luminance, depth, velocity };
     rc.commandList->PSSetTextures(0, 4, textures);
 
@@ -635,14 +578,12 @@ void PostEffect::UberPostProcess(const RenderContext& rc, ITexture* color, IText
 
     rc.commandList->Draw(4, 0);
 
-    // クリーンアップ
     ITexture* nullTextures[4] = { nullptr };
     rc.commandList->PSSetTextures(0, 4, nullTextures);
 }
 
 //void PostEffect::Process(const RenderContext& rc, FrameBuffer* src, FrameBuffer* dst)
 //{
-//    // 1. 定数バッファの更新 (RHI)
 //    cbPostEffect.time = rc.time;
 //    cbPostEffect.luminanceExtractionLowerEdge = rc.bloomData.luminanceLowerEdge;
 //    cbPostEffect.luminanceExtractionHigherEdge = rc.bloomData.luminanceHigherEdge;
@@ -661,21 +602,17 @@ void PostEffect::UberPostProcess(const RenderContext& rc, ITexture* color, IText
 //
 //    rc.commandList->UpdateBuffer(constantBuffer.get(), &cbPostEffect, sizeof(cbPostEffect));
 //
-//    // 2. 輝度抽出
 //    FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
 //    luminanceFB->Clear(rc.commandList, 0, 0, 0, 0);
 //    LuminanceExtraction(rc, src->GetColorTexture(0));
 //
-//    // 3. 最終合成 (Uber-Shader描画)
 //    FrameBuffer* gBuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::GBuffer);
 //    ITexture* velocityTex = gBuffer ? gBuffer->GetColorTexture(3) : nullptr;
 //
-//    // ★ 修正：RenderContext の完璧な ITexture* を使用！
 //    UberPostProcess(rc, src->GetColorTexture(0), luminanceFB->GetColorTexture(0), rc.sceneDepthTexture, velocityTex);
 //
 //    rc.commandList->SetRenderTarget(nullptr, nullptr);
 //
-//    // 4. FSR2 (AMDのライブラリのため、ここはネイティブ Context が必要)
 //    if (m_fsr2Initialized)
 //    {
 //        ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
@@ -735,7 +672,6 @@ void PostEffect::UberPostProcess(const RenderContext& rc, ITexture* color, IText
 
 void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, ITexture* depth, ITexture* velocity)
 {
-    // 1. 定数バッファの更新
     cbPostEffect.time = rc.time;
     cbPostEffect.luminanceExtractionLowerEdge = rc.bloomData.luminanceLowerEdge;
     cbPostEffect.luminanceExtractionHigherEdge = rc.bloomData.luminanceHigherEdge;
@@ -754,18 +690,14 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
 
     rc.commandList->UpdateBuffer(constantBuffer.get(), &cbPostEffect, sizeof(cbPostEffect));
 
-    // 2. 輝度抽出 (※ここのFrameBufferは今後解体予定)
     FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
     luminanceFB->Clear(rc.commandList, 0, 0, 0, 0);
     LuminanceExtraction(rc, src);
 
-    // 3. 最終合成 (Uber-Shader描画)
-    // ★古い GBuffer への依存を無くし、引数で貰った depth と velocity を渡す！
     UberPostProcess(rc, src, luminanceFB->GetColorTexture(0), depth, velocity);
 
     rc.commandList->SetRenderTarget(nullptr, nullptr);
 
-    // 4. FSR2 (AMDネイティブライブラリのための処理)
     if (m_fsr2Initialized && src && dst)
     {
         ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
@@ -773,7 +705,6 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
         dispatchDesc.commandList = (FfxCommandList)dc;
 
         // ====================================================
-        // ★ ITexture から 生の ID3D11Resource を引っ張り出す便利ラムダ
         // ====================================================
         auto getDx11Resource = [](ITexture* tex, ID3D11Resource** outRes) {
             if (!tex) return;
@@ -794,7 +725,6 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
         ID3D11Resource* resVelocity = nullptr;
         ID3D11Resource* resOutput = nullptr;
 
-        // Color (UberPostProcessの結果が入っている PostProcess バッファ)
         FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
         getDx11Resource(workFB->GetColorTexture(0), &resColor);
         if (resColor) {
@@ -840,12 +770,10 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
         dispatchDesc.cameraFar = (rc.farZ > 0.0f) ? rc.farZ : 1000.0f;
         dispatchDesc.cameraFovAngleVertical = (rc.fovY > 0.0f) ? rc.fovY : 1.047f;
 
-        // 実行！
         if (resColor && resOutput) {
             ffxFsr2ContextDispatch(&m_fsr2Context, &dispatchDesc);
         }
 
-        // COMオブジェクトの解放
         if (resColor) resColor->Release();
         if (resDepth) resDepth->Release();
         if (resVelocity) resVelocity->Release();
@@ -853,7 +781,6 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
     }
 }
 
-//デバッグGUI描画
 void PostEffect::DrawDebugGUI()
 {
     ImGui::DragFloat("LuminanceLowerEdge", &cbPostEffect.luminanceExtractionLowerEdge, 0.01f, 0, 1.0f);

@@ -43,7 +43,6 @@ void GTAOPass::Setup(FrameGraphBuilder& builder)
     if (m_hGBuffer2.IsValid()) builder.Read(m_hGBuffer2);
 
     // =========================================================
-    // �� �C���F�^�̃����_�����O�𑜓x(857x482����)�ɍ��킹��
     // =========================================================
     float renderScale = Graphics::Instance().GetRenderScale();
     uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
@@ -77,7 +76,6 @@ void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     rc.commandList->SetRenderTarget(gtaoTex, nullptr);
 
     // =========================================================
-    // �� �C���F�e�N�X�`�����g�̃T�C�Y(857x482����)���r���[�|�[�g�Ɏg�p
     // =========================================================
     rc.mainRenderTarget = gtaoTex;
     rc.mainDepthStencil = nullptr;

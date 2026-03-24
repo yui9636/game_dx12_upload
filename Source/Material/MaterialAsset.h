@@ -14,7 +14,6 @@ public:
     const std::string& GetFilePath() const { return m_filePath; }
 
     // ==========================================
-    // マテリアルパラメータ（PBR対応）
     // ==========================================
     DirectX::XMFLOAT4 baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
     float metallic = 0.0f;

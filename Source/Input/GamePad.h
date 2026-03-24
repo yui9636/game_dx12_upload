@@ -2,7 +2,6 @@
 
 using GamePadButton = unsigned int;
 
-// ゲームパッド
 class GamePad
 {
 public:
@@ -31,37 +30,26 @@ public:
 	GamePad() {}
 	~GamePad() {}
 
-	// 更新
 	void Update();
 
-	// スロット設定
 	void SetSlot(int slot) { this->slot = slot; }
 
-	// ボタン入力状態の取得
 	GamePadButton GetButton() const { return buttonState[0]; }
 
-	// ボタン押下状態の取得
 	GamePadButton GetButtonDown() const { return buttonDown; }
 
-	// ボタン押上状態の取得
 	GamePadButton GetButtonUp() const { return buttonUp; }
 
-	// 左スティックX軸入力状態の取得
 	float GetAxisLX() const { return axisLx; }
 
-	// 左スティックY軸入力状態の取得
 	float GetAxisLY() const { return axisLy; }
 
-	// 右スティックX軸入力状態の取得
 	float GetAxisRX() const { return axisRx; }
 
-	// 右スティックY軸入力状態の取得
 	float GetAxisRY() const { return axisRy; }
 
-	// 左トリガー入力状態の取得
 	float GetTriggerL() const { return triggerL; }
 
-	// 右トリガー入力状態の取得
 	float GetTriggerR() const { return triggerR; }
 
 private:

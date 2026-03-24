@@ -6,7 +6,8 @@ class DX12Texture : public ITexture {
 public:
     // Transient / created texture
     DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
-                TextureFormat format, TextureBindFlags bindFlags);
+                TextureFormat format, TextureBindFlags bindFlags,
+                const float* optimizedClearColor = nullptr);
 
     // Back buffer wrapper
     DX12Texture(DX12Device* device, ID3D12Resource* backBuffer, uint32_t index);
@@ -25,7 +26,7 @@ public:
     DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> sharedResource,
                 uint32_t width, uint32_t height, uint32_t arraySlice);
 
-    ~DX12Texture() override = default;
+    ~DX12Texture() override;
 
     uint32_t GetWidth()  const override { return m_width; }
     uint32_t GetHeight() const override { return m_height; }
@@ -42,6 +43,10 @@ public:
     bool HasRTV() const { return m_hasRTV; }
     bool HasDSV() const { return m_hasDSV; }
     bool HasSRV() const { return m_hasSRV; }
+    void SetRetireFence(ID3D12Fence* fence, uint64_t value) {
+        m_retireFence = fence;
+        m_retireFenceValue = value;
+    }
 
 private:
     DXGI_FORMAT ToDXGIFormat(TextureFormat format);
@@ -56,4 +61,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle = {};
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle = {};
     bool m_hasRTV = false, m_hasDSV = false, m_hasSRV = false;
+    DX12Device* m_device = nullptr;
+    ID3D12Fence* m_retireFence = nullptr;
+    uint64_t m_retireFenceValue = 0;
 };

@@ -1,13 +1,12 @@
 #pragma once
 #include "RenderPass/IRenderPass.h"
-#include "RenderGraph/FrameGraphTypes.h" // �n���h���p
+#include "RenderGraph/FrameGraphTypes.h"
 
 class ForwardTransparentPass : public IRenderPass {
 public:
     ForwardTransparentPass() = default;
     ~ForwardTransparentPass() override = default;
 
-    // �� �C���F���������O��Ԃ��悤�ɕύX
     std::string GetName() const override { return "ForwardTransparentPass"; }
     bool HasSideEffects() const override { return true; }
 

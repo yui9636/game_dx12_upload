@@ -5,7 +5,6 @@
 //#include "EffectMaterial.h"
 //#include "EffectManager.h"
 //#include "Graphics.h"
-//#include "JSONManager.h" // DirectX::XMFLOAT系のシリアライズを利用
 //#include <fstream>
 //#include <iostream>
 //
@@ -13,12 +12,9 @@
 //using namespace DirectX;
 //
 //// =================================================================
-//// 内部ヘルパー: 追加のJSONシリアライザ定義
-//// (ヘッダを変更せずにローダー内で完結させるための処置)
 //// =================================================================
 //namespace nlohmann {
 //
-//    // EffectMaterialConstants の変換
 //    template<> struct adl_serializer<EffectMaterialConstants> {
 //        static void to_json(json& j, const EffectMaterialConstants& c) {
 //            j = json{
@@ -155,10 +151,8 @@
 //}
 //
 //// =================================================================
-//// ヘルパー関数
 //// =================================================================
 //
-//// カーブのロード
 //void ParseCurve(const json& j, EffectCurve& curve)
 //{
 //    curve.keys.clear();
@@ -173,7 +167,6 @@
 //    }
 //}
 //
-//// カーブのセーブ
 //json SerializeCurve(const EffectCurve& curve)
 //{
 //    json jArr = json::array();
@@ -184,26 +177,21 @@
 //    return jArr;
 //}
 //
-//// マテリアルのロード
 //void ParseMaterial(const json& jMat, MeshEmitter* meshNode)
 //{
 //    if (!meshNode) return;
 //
-//    // マテリアルがなければ作成
 //    if (!meshNode->material) meshNode->material = std::make_shared<EffectMaterial>();
 //    auto mat = meshNode->material;
 //
-//    // 1. 定数バッファ (EffectMaterialConstants)
 //    if (jMat.contains("Constants")) {
 //        jMat.at("Constants").get_to(mat->GetConstants());
 //    }
 //
-//    // 2. ブレンドモード
 //    if (jMat.contains("BlendMode")) {
 //        mat->SetBlendMode((EffectBlendMode)jMat.value("BlendMode", 0));
 //    }
 //
-//    // 3. テクスチャ
 //    if (jMat.contains("Textures") && jMat["Textures"].is_array()) {
 //        for (const auto& texJson : jMat["Textures"]) {
 //            int slot = texJson.value("Slot", -1);
@@ -216,7 +204,6 @@
 //    }
 //}
 //
-//// マテリアルのセーブ
 //json SerializeMaterial(const std::shared_ptr<EffectMaterial>& mat)
 //{
 //    json jMat;
@@ -256,7 +243,6 @@
 //        return nullptr;
 //    }
 //
-//    // ★追加: Settingsブロックの読み込み
 //    if (j.contains("Settings")) {
 //        auto& s = j["Settings"];
 //        if (outLife)    *outLife = s.value("LifeTime", 2.0f);
@@ -265,12 +251,9 @@
 //        if (outLoop)    *outLoop = s.value("Loop", false);
 //    }
 //
-//    // ★追加: Rootノードの読み込み分岐
-//    // 新フォーマット: "Root" キーがある
 //    if (j.contains("Root")) {
 //        return ParseNode(j["Root"]);
 //    }
-//    // 旧フォーマット対応 (ファイル全体がノード)
 //    else {
 //        return ParseNode(j);
 //    }
@@ -278,7 +261,6 @@
 //
 //
 //// =================================================================
-//// ParseNode: ノードの再帰読み込み
 //// =================================================================
 //std::shared_ptr<EffectNode> EffectLoader::ParseNode(const json& j)
 //{
@@ -298,7 +280,6 @@
 //            ParseMaterial(j["Material"], meshNode.get());
 //        }
 //
-//        // カーブ読み込み
 //        if (j.contains("Curves")) {
 //            const auto& jc = j["Curves"];
 //            if (jc.contains("ColorR")) ParseCurve(jc["ColorR"], meshNode->colorCurves[0]);
@@ -342,17 +323,14 @@
 //    {
 //        auto particleNode = std::make_shared<ParticleEmitter>();
 //
-//        // ParticleSetting.h の adl_serializer を利用
 //        if (j.contains("Settings")) {
 //            try { j.at("Settings").get_to(particleNode->settings); }
 //            catch (...) {}
 //        }
-//        // ParticleRendererSettings (このファイル内のadl_serializerを利用)
 //        if (j.contains("RenderSettings")) {
 //            try { j.at("RenderSettings").get_to(particleNode->renderSettings); }
 //            catch (...) {}
 //        }
-//        // テクスチャ
 //        if (j.contains("Texture")) {
 //            std::string p = j["Texture"];
 //            if (!p.empty()) particleNode->LoadTexture(p);
@@ -365,7 +343,6 @@
 //        node = std::make_shared<EffectNode>();
 //    }
 //
-//    // 共通パラメータ
 //    node->name = j.value("Name", "Node");
 //
 //    if (j.contains("Transform")) {
@@ -378,7 +355,6 @@
 //        get_vec3("Scale", node->localTransform.scale);
 //    }
 //
-//    // Transform カーブ
 //    if (j.contains("TransformCurves")) {
 //        const auto& jtc = j["TransformCurves"];
 //        if (jtc.contains("PosX")) ParseCurve(jtc["PosX"], node->positionCurves[0]);
@@ -392,7 +368,6 @@
 //        if (jtc.contains("ScaleZ")) ParseCurve(jtc["ScaleZ"], node->scaleCurves[2]);
 //    }
 //
-//    // 子ノード
 //    if (j.contains("Children") && j["Children"].is_array()) {
 //        for (const auto& childJson : j["Children"]) {
 //            auto childNode = ParseNode(childJson);
@@ -413,10 +388,8 @@
 //{
 //    if (!rootNode) return false;
 //
-//    // ★修正: 全体を包むJSONオブジェクトを作成
 //    json doc;
 //
-//    // 設定値を保存
 //    doc["Settings"] = {
 //        {"LifeTime", life},
 //        {"FadeIn", fadeIn},
@@ -424,7 +397,6 @@
 //        {"Loop", loop}
 //    };
 //
-//    // ノードツリーを "Root" キー以下に保存
 //    doc["Root"] = SerializeNode(rootNode);
 //
 //    std::ofstream o(filePath);
@@ -436,7 +408,6 @@
 //
 //
 //// =================================================================
-//// SerializeNode: ノードの再帰書き出し
 //// =================================================================
 //json EffectLoader::SerializeNode(const std::shared_ptr<EffectNode>& node)
 //{
@@ -450,7 +421,6 @@
 //    j["Transform"]["Rotation"] = { node->localTransform.rotation.x, node->localTransform.rotation.y, node->localTransform.rotation.z };
 //    j["Transform"]["Scale"] = { node->localTransform.scale.x,    node->localTransform.scale.y,    node->localTransform.scale.z };
 //
-//    // Transform Curves (有効なものだけ)
 //    auto& pc = node->positionCurves;
 //    auto& rc = node->rotationCurves;
 //    auto& sc = node->scaleCurves;
@@ -470,15 +440,12 @@
 //    {
 //        j["Type"] = "MeshEmitter";
 //
-//        // ※ MeshEmitter.h に GetModelPath() が必要です。
-//        // もし無い場合は meshNode->modelPath のようにアクセスできる必要があります。
 //        j["Model"] = meshNode->GetModelPath();
 //
 //        if (meshNode->material) {
 //            j["Material"] = SerializeMaterial(meshNode->material);
 //        }
 //
-//        // 専用カーブ
 //        if (meshNode->colorCurves[0].IsValid()) j["Curves"]["ColorR"] = SerializeCurve(meshNode->colorCurves[0]);
 //        if (meshNode->colorCurves[1].IsValid()) j["Curves"]["ColorG"] = SerializeCurve(meshNode->colorCurves[1]);
 //        if (meshNode->colorCurves[2].IsValid()) j["Curves"]["ColorB"] = SerializeCurve(meshNode->colorCurves[2]);
@@ -521,7 +488,6 @@
 //        j["Type"] = "Empty";
 //    }
 //
-//    // 子ノード
 //    if (!node->children.empty()) {
 //        j["Children"] = json::array();
 //        for (const auto& child : node->children) {
@@ -546,7 +512,6 @@ using json = nlohmann::json;
 using namespace DirectX;
 
 namespace nlohmann {
-    // EffectMaterialConstants の変換
     template<> struct adl_serializer<EffectMaterialConstants> {
         static void to_json(json& j, const EffectMaterialConstants& c) {
             j = json{
@@ -683,7 +648,6 @@ namespace nlohmann {
 }
 
 
-// カーブのロード
 void ParseCurve(const json& j, EffectCurve& curve)
 {
     curve.keys.clear();
@@ -698,7 +662,6 @@ void ParseCurve(const json& j, EffectCurve& curve)
     }
 }
 
-// カーブのセーブ
 json SerializeCurve(const EffectCurve& curve)
 {
     json jArr = json::array();
@@ -709,26 +672,21 @@ json SerializeCurve(const EffectCurve& curve)
     return jArr;
 }
 
-// マテリアルのロード
 void ParseMaterial(const json& jMat, MeshEmitter* meshNode)
 {
     if (!meshNode) return;
 
-    // マテリアルがなければ作成
     if (!meshNode->material) meshNode->material = std::make_shared<EffectMaterial>();
     auto mat = meshNode->material;
 
-    // 1. 定数バッファ
     if (jMat.contains("Constants")) {
         jMat.at("Constants").get_to(mat->GetConstants());
     }
 
-    // 2. ブレンドモード
     if (jMat.contains("BlendMode")) {
         mat->SetBlendMode((EffectBlendMode)jMat.value("BlendMode", 0));
     }
 
-    // 3. テクスチャ
     if (jMat.contains("Textures") && jMat["Textures"].is_array()) {
         for (const auto& texJson : jMat["Textures"]) {
             int slot = texJson.value("Slot", -1);
@@ -743,7 +701,6 @@ void ParseMaterial(const json& jMat, MeshEmitter* meshNode)
     }
 }
 
-// マテリアルのセーブ (修正: パス変換適用)
 json SerializeMaterial(const std::shared_ptr<EffectMaterial>& mat)
 {
     json jMat;
@@ -756,7 +713,6 @@ json SerializeMaterial(const std::shared_ptr<EffectMaterial>& mat)
     for (int i = 0; i < EffectMaterial::TEXTURE_SLOT_COUNT; ++i) {
         std::string path = mat->GetTexturePath(i);
         if (!path.empty()) {
-            // ★修正: テクスチャパスを相対パスへ変換
             jTexs.push_back({ {"Slot", i}, {"Path", JSONManager::ToRelativePath(path)} });
         }
     }
@@ -784,7 +740,6 @@ std::shared_ptr<EffectNode> EffectLoader::LoadEffect(
         return nullptr;
     }
 
-    // Settingsブロック
     if (j.contains("Settings")) {
         auto& s = j["Settings"];
         if (outLife)    *outLife = s.value("LifeTime", 2.0f);
@@ -793,11 +748,9 @@ std::shared_ptr<EffectNode> EffectLoader::LoadEffect(
         if (outLoop)    *outLoop = s.value("Loop", false);
     }
 
-    // Rootノードの読み込み
     if (j.contains("Root")) {
         return ParseNode(j["Root"]);
     }
-    // 旧フォーマット対応
     else {
         return ParseNode(j);
     }
@@ -822,7 +775,6 @@ std::shared_ptr<EffectNode> EffectLoader::ParseNode(const json& j)
             ParseMaterial(j["Material"], meshNode.get());
         }
 
-        // カーブ読み込み
         if (j.contains("Curves")) {
             const auto& jc = j["Curves"];
             if (jc.contains("ColorR")) ParseCurve(jc["ColorR"], meshNode->colorCurves[0]);
@@ -889,7 +841,6 @@ std::shared_ptr<EffectNode> EffectLoader::ParseNode(const json& j)
         node = std::make_shared<EffectNode>();
     }
 
-    // 共通パラメータ
     node->name = j.value("Name", "Node");
 
     if (j.contains("Transform")) {
@@ -915,7 +866,6 @@ std::shared_ptr<EffectNode> EffectLoader::ParseNode(const json& j)
         if (jtc.contains("ScaleZ")) ParseCurve(jtc["ScaleZ"], node->scaleCurves[2]);
     }
 
-    // 子ノード
     if (j.contains("Children") && j["Children"].is_array()) {
         for (const auto& childJson : j["Children"]) {
             auto childNode = ParseNode(childJson);
@@ -938,7 +888,6 @@ bool EffectLoader::SaveEffect(
 
     json doc;
 
-    // 設定値を保存
     doc["Settings"] = {
         {"LifeTime", life},
         {"FadeIn", fadeIn},
@@ -946,7 +895,6 @@ bool EffectLoader::SaveEffect(
         {"Loop", loop}
     };
 
-    // ノードツリー
     doc["Root"] = SerializeNode(rootNode);
 
     std::ofstream o(filePath);
@@ -988,14 +936,12 @@ json EffectLoader::SerializeNode(const std::shared_ptr<EffectNode>& node)
     {
         j["Type"] = "MeshEmitter";
 
-        // ★修正: モデルパスを相対パスへ変換
         j["Model"] = JSONManager::ToRelativePath(meshNode->GetModelPath());
 
         if (meshNode->material) {
             j["Material"] = SerializeMaterial(meshNode->material);
         }
 
-        // 専用カーブ
         if (meshNode->colorCurves[0].IsValid()) j["Curves"]["ColorR"] = SerializeCurve(meshNode->colorCurves[0]);
         if (meshNode->colorCurves[1].IsValid()) j["Curves"]["ColorG"] = SerializeCurve(meshNode->colorCurves[1]);
         if (meshNode->colorCurves[2].IsValid()) j["Curves"]["ColorB"] = SerializeCurve(meshNode->colorCurves[2]);
@@ -1031,7 +977,6 @@ json EffectLoader::SerializeNode(const std::shared_ptr<EffectNode>& node)
         j["Settings"] = particleNode->settings;
         j["RenderSettings"] = particleNode->renderSettings;
 
-        // ★修正: パーティクルテクスチャパスを相対パスへ変換
         j["Texture"] = JSONManager::ToRelativePath(particleNode->texturePath);
     }
     // --- Empty Node ---
@@ -1040,7 +985,6 @@ json EffectLoader::SerializeNode(const std::shared_ptr<EffectNode>& node)
         j["Type"] = "Empty";
     }
 
-    // 子ノード
     if (!node->children.empty()) {
         j["Children"] = json::array();
         for (const auto& child : node->children) {

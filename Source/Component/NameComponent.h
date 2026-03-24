@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 
-// エンティティの識別名を管理するコンポーネント
 struct NameComponent {
     std::string name;
 

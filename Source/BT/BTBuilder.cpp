@@ -2,7 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include "JSONManager.h"
-#include "System/Dialog.h" // パス解決用などで使用している場合
+#include "System/Dialog.h"
 #include "BTNodes.h"
 
 static std::shared_ptr<BTNode> CreateNodeInstance(int type, const std::string& name) {
@@ -16,7 +16,7 @@ static std::shared_ptr<BTNode> CreateNodeInstance(int type, const std::string& n
         if (name.find("Sequence") != std::string::npos) return std::make_shared<BTSequence>();
         return std::make_shared<BTSequence>();
 
-    case 2: // Decorator (★ここを拡張)
+    case 2:
         if (name.find("CheckHP") != std::string::npos)   return std::make_shared<BTDecorator_CheckHP>();
         if (name.find("Cooldown") != std::string::npos)  return std::make_shared<BTDecorator_Cooldown>();
         if (name.find("Loop") != std::string::npos)      return std::make_shared<BTDecorator_Loop>();
@@ -61,10 +61,8 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
 
     auto brain = std::make_shared<BTBrain>();
 
-    // 1. 全ノードの生成とIDマッピング
     // Map: NodeID -> BTNode Instance
     std::map<unsigned int, std::shared_ptr<BTNode>> nodeMap;
-    // Map: PinID -> NodeID (リンク解決用)
     std::map<unsigned int, unsigned int> pinToNodeMap;
 
     for (const auto& nJ : rootJson["nodes"]) {
@@ -76,7 +74,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
         node->nodeId = nid;
         node->nodeName = name;
 
-        // プロパティの読み込み
         if (nJ.contains("props")) {
             for (auto& [key, val] : nJ["props"].items()) {
                 if (val.is_number_float()) node->paramsFloat[key] = val.get<float>();
@@ -87,7 +84,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
 
         nodeMap[nid] = node;
 
-        // ピン情報のマッピング
         for (const auto& p : nJ["inputs"]) {
             pinToNodeMap[p["id"]] = nid;
         }
@@ -96,7 +92,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
         }
     }
 
-    // 2. リンクの接続
     // JSON: links [ { "s": startPin, "e": endPin }, ... ]
     for (const auto& lJ : rootJson["links"]) {
         unsigned int startPin = lJ["s"];
@@ -114,7 +109,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
                 comp->AddChild(child);
                 comp->weights.push_back(weight);
             }
-            // ★Decorator対応: 子をセットする
             else if (auto dec = std::dynamic_pointer_cast<BTDecorator>(parent)) {
                 dec->SetChild(child);
             }
@@ -122,7 +116,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
     }
 
 
-    // 3. フェーズ情報の構築 (Brainへの登録)
     // JSON: phases { "Default": 10, "Angry": 25 }
     if (rootJson.contains("phases")) {
         for (auto& [phaseName, rootIdVal] : rootJson["phases"].items()) {
@@ -133,7 +126,6 @@ std::shared_ptr<BTBrain> BTBuilder::BuildFromFile(const std::string& path) {
         }
     }
     else {
-        // フェーズ情報がない古い形式の場合、ID最小のRootなどを探す等のフォールバック
     }
 
     return brain;

@@ -1,31 +1,35 @@
 #pragma once
-#include <string>
 #include <memory>
-#include <wrl/client.h>
-#include <d3d11.h>
-#include "Entity/Entity.h"
 
-class RenderPipeline;
-class Registry;
-class MaterialAsset;
+class ITexture;
 class Model;
+class MaterialAsset;
+class OffscreenRenderer;
 
 class MaterialPreviewStudio {
 public:
     static MaterialPreviewStudio& Instance();
-    void Initialize(ID3D11Device* device);
-    void RenderPreview(MaterialAsset* material, float scaleMult = 1.0f, float rotY = 0.0f);
-    ID3D11ShaderResourceView* GetPreviewSRV() const;
+    void Initialize(OffscreenRenderer* offscreen);
+
+    void RequestPreview(MaterialAsset* material);
+    void PumpPreview();
+    ITexture* GetPreviewTexture() const { return m_previewTexture.get(); }
     bool IsReady() const;
+    bool IsDirty() const { return m_dirty; }
 
 private:
     MaterialPreviewStudio() = default;
-    ~MaterialPreviewStudio() = default;
+    ~MaterialPreviewStudio();
 
-    std::unique_ptr<RenderPipeline> m_previewPipeline;
-    std::unique_ptr<Registry> m_previewRegistry;
-    EntityID m_previewCamera = Entity::NULL_ID;
+    void ExecuteRender();
 
+    static constexpr int PREVIEW_SIZE = 256;
+
+    OffscreenRenderer* m_offscreen = nullptr;
+    std::shared_ptr<ITexture> m_previewTexture;  // RT+SRV, RGBA8_UNORM
+    std::unique_ptr<ITexture> m_previewDepth;     // D24_UNORM_S8_UINT
     std::shared_ptr<Model> m_sphereModel;
-    bool m_initialized = false;
+
+    MaterialAsset* m_pendingMaterial = nullptr;
+    bool m_dirty = false;
 };

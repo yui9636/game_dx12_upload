@@ -8,6 +8,7 @@
 
 namespace
 {
+    // 描画側で未設定の transform を扱うときの安全な初期値。
     DirectX::XMFLOAT4X4 IdentityMatrix()
     {
         return DirectX::XMFLOAT4X4(
@@ -17,6 +18,7 @@ namespace
             0.0f, 0.0f, 0.0f, 1.0f);
     }
 
+    // 各メッシュのローカル境界を node の現在 transform で合成し、描画用のモデル境界を作る。
     DirectX::BoundingBox BuildLocalBounds(
         const Model& model,
         const std::vector<ModelResource::MeshResource>& meshResources)
@@ -117,6 +119,7 @@ namespace
 
 void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* factory)
 {
+    // CPU 側 Model から GPU バッファと描画メタデータを作り直す。
     const auto& meshes = model.GetMeshes();
     m_meshResources.clear();
     m_meshResources.reserve(meshes.size());
@@ -153,6 +156,7 @@ void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* facto
 
 void ModelResource::SyncSceneDataFromModel(const Model& model)
 {
+    // ノード行列や material の最新値だけを同期し、GPU バッファ自体は再生成しない。
     const auto& meshes = model.GetMeshes();
     const auto& materials = model.GetMaterials();
     const auto& nodes = model.GetNodes();
@@ -199,6 +203,7 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
 
 void ModelResource::SyncMeshBuffers(int meshIndex,
     const std::shared_ptr<IBuffer>& vertexBuffer,
+    // CPU 側で差し替わったメッシュバッファを描画資源へ反映する。
     const std::shared_ptr<IBuffer>& indexBuffer,
     uint32_t vertexStride,
     uint32_t indexCount,
@@ -237,6 +242,7 @@ ModelResource::MeshResource* ModelResource::GetMeshResource(int meshIndex)
 
 bool ModelResource::BindMeshBuffers(ICommandList* commandList, int meshIndex) const
 {
+    // 描画パスは Model ではなく ModelResource 経由で VB/IB を取得する。
     const MeshResource* meshResource = GetMeshResource(meshIndex);
     if (!commandList || !meshResource || !meshResource->vertexBuffer || !meshResource->indexBuffer) {
         return false;

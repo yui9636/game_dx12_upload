@@ -40,18 +40,16 @@ public:
     const std::vector<GESequencerItem>& GetItems() const;
     std::vector<GESequencerItem>& GetItemsMutable();
 
-    // ★追加: カーブ設定の取得・反映
     GECurveSettings GetCurveSettings() const;
     void SetCurveSettings(const GECurveSettings& settings);
 
-    // ★修正: privateからpublicへ移動 (外部から呼べるようにする)
     int   SecondsToFrames(float seconds) const;
     float FramesToSeconds(int frames) const;
 
     void SetCameraController(CameraController* camCtrl) { targetCamera = camCtrl; }
 
-    RunnerComponent* GetRunner() const { return runner; } // Runnerへのアクセス用
-    const GESequencerItem* GetActiveShakeItem() const;     // 現在有効なシェイク設定の検索用
+    RunnerComponent* GetRunner() const { return runner; }
+    const GESequencerItem* GetActiveShakeItem() const;
 private:
     void  SanitizeItems();
     void  LoadSpeedCurvePointsFromRunner();
@@ -82,7 +80,6 @@ private:
     int   uiSnapStep = 1;
     bool  previewDrive = false;
 
-    // カーブ編集用メンバ
     bool  uiSpeedCurveEnabled = false;
     bool  uiSpeedCurveUseRangeSpace = false;
     std::vector<ImVec2> uiSpeedCurvePoints;

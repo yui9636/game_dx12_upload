@@ -4,6 +4,7 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <unordered_map>
+#include <vector>
 #include <wrl/client.h>
 
 class DX12Device;
@@ -35,11 +36,19 @@ public:
 
     // ITexture を ImGui::Image 用の ImTextureID に変換する。
     static void* GetTextureID(ITexture* texture);
+    static void DeferUnregisterTexture(ITexture* texture, uint64_t fenceValue);
+    static void ProcessDeferredUnregisters(uint64_t completedFenceValue);
 
 private:
     static void NewFrame();
     static void Render(ID3D11DeviceContext* context);
     static void ResetTextureCache();
+
+    struct DeferredTextureSlot {
+        const ITexture* texture = nullptr;
+        uint32_t slot = 0;
+        uint64_t fenceValue = 0;
+    };
 
     static bool s_isDX12;
     static DX12Device* s_dx12Device;
@@ -47,4 +56,6 @@ private:
     static uint32_t s_descriptorSize;
     static uint32_t s_nextTextureSlot;
     static std::unordered_map<const ITexture*, uint32_t> s_textureSlots;
+    static std::vector<DeferredTextureSlot> s_deferredUnregisters;
+    static std::vector<uint32_t> s_freeSlots;
 };

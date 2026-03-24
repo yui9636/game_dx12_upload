@@ -7,7 +7,6 @@
 #include <DirectXMath.h>
 #include <algorithm>
 
-// �O���錾
 class Component;
 class Model;
 struct RenderContext;
@@ -34,16 +33,12 @@ public:
     virtual void OnCollisionEnter(Actor* other, const Collider* selfCol, const Collider* otherCol) {}
     virtual bool IsCharacter() const { return false; }
 
-    // �s��X�V�i�e�q�Ή��Łj
     void UpdateTransform();
 
-    // ���ǉ�: �e�q�֌W����
-    // keepWorldTransform: true�Ȃ�A�e�q�t�������u�ԂɌ����ڂ̈ʒu���ς��Ȃ��悤�Ƀ��[�J�����W���Čv�Z����iUnity��SetParent(p, true)�����j
     void SetParent(std::shared_ptr<Actor> newParent, bool keepWorldTransform = true);
     std::shared_ptr<Actor> GetParent() const;
     const std::vector<std::weak_ptr<Actor>>& GetChildren() const { return children; }
 
-    // �R���|�[�l���g�Ǘ�
     template <class T>
     std::shared_ptr<T> AddComponent();
 
@@ -53,8 +48,6 @@ public:
     template <class T>
     void RemoveComponent();
 
-    // �Q�b�^�[�E�Z�b�^�[�i������cpp�Ɉړ����܂����j
-    // �������͏�Ɂu���[���h���W�i�ŏI�I�Ȍ����ځj�v�������܂�
     const DirectX::XMFLOAT3& GetPosition() const { return position; }
     void SetPosition(const DirectX::XMFLOAT3& pos);
 
@@ -64,8 +57,6 @@ public:
     const DirectX::XMFLOAT3& GetScale() const { return scale; }
     void SetScale(const DirectX::XMFLOAT3& s);
 
-    // ���ǉ�: ���[�J�����W�i�e���猩�����Βl�j�ւ̃A�N�Z�X
-    // �e�����Ȃ��ꍇ�̓��[���h���W�Ɠ����l��Ԃ��܂�
     const DirectX::XMFLOAT3& GetLocalPosition() const { return localPosition; }
     void SetLocalPosition(const DirectX::XMFLOAT3& pos);
 
@@ -96,16 +87,13 @@ public:
     virtual void SetModel(std::shared_ptr<Model> model, const std::string& path, float scaling)
     {
         this->model = model;
-        this->modelFilePath = path; // �����o�ϐ����ɍ��킹�ďC��
+        this->modelFilePath = path;
 
-        // scale (XMFLOAT3) �ւ̐��������
         DirectX::XMFLOAT3 s = { scaling, scaling, scaling };
-        this->scale = s;      // ���[���h�X�P�[���i�݊����p�j
-        this->localScale = s; // �s��v�Z�Ŏg�p����郍�[�J���X�P�[��
+        this->scale = s;
+        this->localScale = s;
     }
 
-    // �V���A���C�Y�i�ۑ��j���ɌĂ΂��֐�
-    // �I�[�o�[���C�h�����ݒ肳��Ă���΂����Ԃ��A�Ȃ���� "Actor" ��Ԃ�
     virtual std::string GetTypeName() const
     {
         if (!overrideTypeName.empty())
@@ -127,12 +115,10 @@ protected:
 
     std::string modelFilePath;
 
-    // ���[���h���W�n�i�����݊����̂��߈ێ��BGetPosition���͂����Ԃ��j
     DirectX::XMFLOAT3 position = { 0, 0, 0 };
     DirectX::XMFLOAT4 rotation = { 0, 0, 0, 1 }; // Quaternion
     DirectX::XMFLOAT3 scale = { 1, 1, 1 };
 
-    // ���[���h�s��
     DirectX::XMFLOAT4X4 transform = {
         1, 0, 0, 0,
         0, 1, 0, 0,
@@ -140,18 +126,13 @@ protected:
         0, 0, 0, 1
     };
 
-    // ���ǉ�: �K�w�\���p�f�[�^
-    // �e�����Ȃ��ꍇ�A������ position/rotation/scale �Ɠ����l�ɂȂ�܂��B
     DirectX::XMFLOAT3 localPosition = { 0, 0, 0 };
     DirectX::XMFLOAT4 localRotation = { 0, 0, 0, 1 };
     DirectX::XMFLOAT3 localScale = { 1, 1, 1 };
 
-    // �X�}�[�g�|�C���^�ł̏z�Q�Ƃ�h�����߁A�e��weak�A�q��weak�ŊǗ�����̂���ʓI�ł���
-    // ����͐e���q�͏��L�����������AManager���S�����O��� weak_ptr ���g�p���܂��B
     std::weak_ptr<Actor> parent;
     std::vector<std::weak_ptr<Actor>> children;
 
-    // �����w���p�[
     void AddChild(std::shared_ptr<Actor> child);
     void RemoveChild(std::shared_ptr<Actor> child);
 
@@ -161,7 +142,6 @@ protected:
 };
 
 
-// �e���v���[�g����
 template <class T>
 std::shared_ptr<T> Actor::AddComponent()
 {

@@ -1,4 +1,4 @@
-ï»¿#include "BuildInstanceBufferPass.h"
+#include "BuildInstanceBufferPass.h"
 #include "Graphics.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IBuffer.h"
@@ -10,6 +10,7 @@ void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder)
 
 void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    // ‰Â‹ instance ‚ğ˜A‘±‚µ‚½”z—ñ‚Ö‹l‚ß‘Ö‚¦Ainstance stream ‚Æ structured buffer ‚ğXV‚·‚éB
     (void)resources;
     (void)queue;
 
@@ -18,12 +19,13 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     rc.preparedVisibleInstanceCount = 0;
     rc.useGpuCulling = false; // Reset; ComputeCullingPass will set if active
 
-    // Reset active fields (set by BuildIndirectCommandPass)
+    // BuildIndirectCommandPass ‚ª–„‚ß‚é active ƒtƒB[ƒ‹ƒh‚ğæ‚É‰Šú‰»‚·‚é
     rc.activeInstanceBuffer = nullptr;
     rc.activeDrawArgsBuffer = nullptr;
     rc.activeDrawCommands.clear();
     rc.activeSkinnedCommands.clear();
 
+    // batch ‚²‚Æ‚É instance ”ÍˆÍ‚ğ‹L˜^‚µ‚ÄAŒã’i‚Ì indirect command ‚©‚çQÆ‚Å‚«‚é‚æ‚¤‚É‚·‚éB
     uint32_t firstInstance = 0;
     for (const auto& batch : rc.visibleOpaqueInstanceBatches) {
         RenderContext::PreparedInstanceBatch prepared{};

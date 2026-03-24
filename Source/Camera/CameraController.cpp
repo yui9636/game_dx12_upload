@@ -50,7 +50,6 @@ void CameraController::SetPlayer(const Actor* player)
 	playerActor = player;
 }
 
-// 初期状態セット (リセット)
 void CameraController::ResetCameraState(const DirectX::XMFLOAT3& startEye, const DirectX::XMFLOAT3& startFocus)
 {
 	currentEye = startEye;
@@ -58,13 +57,11 @@ void CameraController::ResetCameraState(const DirectX::XMFLOAT3& startEye, const
 	position = startEye;
 	target = startFocus;
 
-	// カメラに即反映
 	Camera::Instance().SetLookAt(currentEye, currentFocus, DirectX::XMFLOAT3(0, 1, 0));
 }
 
 void CameraController::AddShake(float amplitude, float duration, float frequency, float decay)
 {
-	// 強力なシェイクで上書き (既存のシェイクが弱ければ更新)
 	if (amplitude >= activeShake.amplitude * 0.5f)
 	{
 		activeShake.amplitude = amplitude;
@@ -82,12 +79,10 @@ void CameraController::SetTimelineShakeOffset(const DirectX::XMFLOAT3& offset)
 
 void CameraController::ApplyShakeAndSetCamera(Camera* targetCam, const DirectX::XMFLOAT3& eye, const DirectX::XMFLOAT3& focus, const DirectX::XMFLOAT3& up)
 {
-	// 安全対策
 	if (!targetCam) return;
 
 	shakeOffset = { 0, 0, 0 };
 
-	// 1. 動的シェイク (ActiveShake)
 	if (activeShake.duration > 0.0f)
 	{
 		float dt = 1.0f / 60.0f;
@@ -96,7 +91,6 @@ void CameraController::ApplyShakeAndSetCamera(Camera* targetCam, const DirectX::
 
 		if (activeShake.amplitude > 0.001f)
 		{
-			// ノイズ生成
 			float time = (10.0f - activeShake.duration) * activeShake.frequency;
 			float nX = sinf(time + activeShake.seed) + sinf(time * 0.3f);
 			float nY = cosf(time * 0.9f + activeShake.seed);
@@ -112,7 +106,6 @@ void CameraController::ApplyShakeAndSetCamera(Camera* targetCam, const DirectX::
 		}
 	}
 
-	// 2. 合計値を計算
 	float totalShakeX = shakeOffset.x + timelineShakeOffset.x;
 	float totalShakeY = shakeOffset.y + timelineShakeOffset.y;
 	float totalShakeZ = shakeOffset.z + timelineShakeOffset.z;
@@ -120,20 +113,14 @@ void CameraController::ApplyShakeAndSetCamera(Camera* targetCam, const DirectX::
 	DirectX::XMFLOAT3 finalEye = { eye.x + totalShakeX, eye.y + totalShakeY, eye.z + totalShakeZ };
 	DirectX::XMFLOAT3 finalFocus = { focus.x + totalShakeX, focus.y + totalShakeY, focus.z + totalShakeZ };
 
-	// ★重要変更: Camera::Instance() ではなく、渡されたポインタ(targetCam)に直接セットする！
 	targetCam->SetLookAt(finalEye, finalFocus, up);
 
-	// リセット
 	timelineShakeOffset = { 0, 0, 0 };
 }
 
 
-// 更新処理
 void CameraController::Update(float dt)
 {
-	// 各モードでの処理
-	// ★重要: FollowCameraは内部でreturnするため、そこでシェイク適用済み
-	// それ以外は switch を抜けた後で適用する
 
 	if (mode == Mode::Cinematic) return;
 
@@ -145,7 +132,6 @@ void CameraController::Update(float dt)
 	case	Mode::MotionCamera:	MotionCamera(dt);	break;
 	}
 
-	// 徐々に目標に近づける (Free, Lockon, Motion用)
 	static	constexpr	float	Speed = 1.0f / 8.0f;
 	position.x += (newPosition.x - position.x) * Speed;
 	position.y += (newPosition.y - position.y) * Speed;
@@ -154,7 +140,6 @@ void CameraController::Update(float dt)
 	target.y += (newTarget.y - target.y) * Speed;
 	target.z += (newTarget.z - target.z) * Speed;
 
-	// ★変更: 最後にシェイクを乗せて適用
 	ApplyShakeAndSetCamera(&Camera::Instance(), position, target, DirectX::XMFLOAT3(0, 1, 0));
 
 }
@@ -164,30 +149,23 @@ void CameraController::FreeCamera(float dt)
 	GamePad& gamePad = Input::Instance().GetGamePad();
 	float ax = gamePad.GetAxisRX();
 	float ay = gamePad.GetAxisRY();
-	// カメラの回転速度
 	float speed = rollSpeed * dt;
 
-	// スティックの入力値に合わせてX軸とY軸を回転
 	angle.x += ay * speed;
 	angle.y += ax * speed;
 
-	// X軸のカメラ回転を制限
 	if (angle.x < minAngleX) angle.x = minAngleX;
 	if (angle.x > maxAngleX) angle.x = maxAngleX;
 
-	// Y軸の回転値を-3.14～3.14に収まるようにする
 	if (angle.y < -DirectX::XM_PI) angle.y += DirectX::XM_2PI;
 	if (angle.y > DirectX::XM_PI) angle.y -= DirectX::XM_2PI;
 
-	// カメラ回転値を回転行列に変換
 	DirectX::XMMATRIX Transform = DirectX::XMMatrixRotationRollPitchYaw(angle.x, angle.y, angle.z);
 
-	// 回転行列から前方向ベクトルを取り出す
 	DirectX::XMVECTOR Front = Transform.r[2];
 	DirectX::XMFLOAT3 front;
 	DirectX::XMStoreFloat3(&front, Front);
 
-	// 注視点から後ろベクトル方向に一定距離離れたカメラ視点を求める
 	newPosition.x = target.x - front.x * range;
 	newPosition.y = target.y - front.y * range;
 	newPosition.z = target.z - front.z * range;
@@ -197,10 +175,8 @@ void CameraController::FollowCamera(float dt)
 {
 	if (!playerActor) return;
 
-	// 1. プレイヤー座標取得
 	DirectX::XMFLOAT3 p = playerActor->GetPosition();
 
-	// 2. 目標位置計算 (オフセット加算)
 	const DirectX::XMFLOAT3 targetEye = {
 		p.x + camLocalOffset.x,
 		p.y + camLocalOffset.y,
@@ -212,7 +188,6 @@ void CameraController::FollowCamera(float dt)
 		p.z + camLookOffset.z
 	};
 
-	// 3. 補間 (Lerp)
 	float t = camFollowLerp * dt;
 	if (t > 1.0f) t = 1.0f;
 
@@ -224,13 +199,11 @@ void CameraController::FollowCamera(float dt)
 	currentFocus.y += (targetFocus.y - currentFocus.y) * t;
 	currentFocus.z += (targetFocus.z - currentFocus.z) * t;
 
-	// 4. 反映 (★変更: シェイクを乗せる)
 	ApplyShakeAndSetCamera(&Camera::Instance(), currentEye, currentFocus, DirectX::XMFLOAT3(0, 1, 0));
 }
 
 void CameraController::LockonCamera(float dt)
 {
-	//	後方斜に移動させる
 	DirectX::XMVECTOR	t0 = DirectX::XMVectorSet(targetWork[0].x, 0.5f, targetWork[0].z, 0);
 	DirectX::XMVECTOR	t1 = DirectX::XMVectorSet(targetWork[1].x, 0.5f, targetWork[1].z, 0);
 	DirectX::XMVECTOR	crv = DirectX::XMLoadFloat3(&Camera::Instance().GetRight());
@@ -241,10 +214,8 @@ void CameraController::LockonCamera(float dt)
 	t0 = DirectX::XMLoadFloat3(&targetWork[0]);
 	t1 = DirectX::XMLoadFloat3(&targetWork[1]);
 
-	//	新しい注視点を算出
 	DirectX::XMStoreFloat3(&newTarget, DirectX::XMVectorMultiplyAdd(v, DirectX::XMVectorReplicate(0.5f), t0));
 
-	//	新しい座標を算出
 	l = DirectX::XMVectorClamp(l
 		, DirectX::XMVectorReplicate(lengthLimit[0])
 		, DirectX::XMVectorReplicate(lengthLimit[1]));
@@ -311,14 +282,12 @@ void CameraController::OnFreeMode(void* data)
 	MessageData::CAMERACHANGEFREEMODEDATA* p = static_cast<MessageData::CAMERACHANGEFREEMODEDATA*>(data);
 	if (this->mode != Mode::FreeCamera)
 	{
-		// 角度算出
 		DirectX::XMFLOAT3	v;
 		v.x = newPosition.x - newTarget.x;
 		v.y = newPosition.y - newTarget.y;
 		v.z = newPosition.z - newTarget.z;
 		angle.y = atan2f(v.x, v.z) + DirectX::XM_PI;
 		angle.x = atan2f(v.y, v.z);
-		//	角度の正規化
 		angle.y = atan2f(sinf(angle.y), cosf(angle.y));
 		angle.x = atan2f(sinf(angle.x), cosf(angle.x));
 	}
@@ -329,7 +298,6 @@ void CameraController::OnFreeMode(void* data)
 
 void CameraController::OnFollowMode(void* data)
 {
-	// 必要であればデータをキャストして使う
 	MessageData::CAMERACHANGEFOLLOWMODEDATA* p = static_cast<MessageData::CAMERACHANGEFOLLOWMODEDATA*>(data);
 
 	this->mode = Mode::FollowCamera;
@@ -361,15 +329,12 @@ void CameraController::OnMotionMode(void* data)
 
 void CameraController::OnShake(void* data)
 {
-	// 旧式シェイクも対応 (互換性のため残す)
 	MessageData::CAMERASHAKEDATA* p = static_cast<MessageData::CAMERASHAKEDATA*>(data);
-	// 新方式へ変換して適用 (power -> amplitude)
 	AddShake(p->shakePower * 0.1f, p->shakeTimer / 60.0f, 20.0f, 0.9f);
 }
 
 float CameraController::CalcSide(DirectX::XMFLOAT3 p1, DirectX::XMFLOAT3 p2)
 {
-	// 外積を用いて横軸のズレ方向算出
 	DirectX::XMFLOAT2	v;
 	v.x = position.x - target.x;
 	v.y = position.z - target.z;
@@ -387,17 +352,15 @@ float CameraController::CalcSide(DirectX::XMFLOAT3 p1, DirectX::XMFLOAT3 p2)
 
 void CameraController::DebugGUI()
 {
-	// コラプシングヘッダー（折りたたみ可能）で表示
 	if (ImGui::CollapsingHeader("Camera Controller Settings", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		// ---------------------------------------------------------
-		// 1. 現在のモード表示
 		// ---------------------------------------------------------
 		const char* modeName = "Unknown";
 		switch (mode)
 		{
 		case Mode::FreeCamera:   modeName = "Free (Debug)";     break;
-		case Mode::FollowCamera: modeName = "Follow (Player)";  break; // Player追従
+		case Mode::FollowCamera: modeName = "Follow (Player)";  break;
 		case Mode::LockonCamera: modeName = "Lockon (Combat)";  break;
 		case Mode::MotionCamera: modeName = "Motion (Event)";   break;
 		}
@@ -406,44 +369,36 @@ void CameraController::DebugGUI()
 		ImGui::Separator();
 
 		// ---------------------------------------------------------
-		// 2. モード強制切り替えボタン (デバッグ用)
 		// ---------------------------------------------------------
 		ImGui::Text("Force Mode Switch:");
 
-		// [Free Mode] へ
 		if (ImGui::Button("Free"))
 		{
 			MessageData::CAMERACHANGEFREEMODEDATA data;
-			data.target = Camera::Instance().GetFocus(); // 現在の注視点を維持
+			data.target = Camera::Instance().GetFocus();
 			Messenger::Instance().SendData(MessageData::CAMERACHANGEFREEMODE, &data);
 		}
 
 		ImGui::SameLine();
 
-		// [Follow Mode] へ
 		if (ImGui::Button("Follow"))
 		{
-			// Followモードへ戻るメッセージを送信
-			// (MessageData.h に定義した CAMERACHANGEFOLLOWMODE を使用)
 			Messenger::Instance().SendData(MessageData::CAMERACHANGEFOLLOWMODE, nullptr);
 		}
 
 		ImGui::Separator();
 
 		// ---------------------------------------------------------
-		// 3. パラメータ調整 (モードに応じて表示を変える)
 		// ---------------------------------------------------------
 		if (mode == Mode::FollowCamera || mode == Mode::LockonCamera)
 		{
 			ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "[ Follow / Lockon Params ]");
 
-			// リアルタイムで数値をいじれるようにします
 			bool change = false;
 			change |= ImGui::DragFloat3("Local Offset", &camLocalOffset.x, 0.1f);
 			change |= ImGui::DragFloat3("Look Offset", &camLookOffset.x, 0.1f);
 			change |= ImGui::SliderFloat("Lerp Speed", &camFollowLerp, 1.0f, 30.0f);
 
-			// リセットボタン
 			if (ImGui::Button("Reset to Default"))
 			{
 				camLocalOffset = { 0.0f, 24.53f, -60.9f };
@@ -456,7 +411,6 @@ void CameraController::DebugGUI()
 			ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "[ Free Params ]");
 			ImGui::DragFloat("Distance Range", &range, 0.1f, 1.0f, 100.0f);
 
-			// 角度を度数法で表示・調整
 			float deg = DirectX::XMConvertToDegrees(rollSpeed);
 			if (ImGui::SliderFloat("Roll Speed (deg)", &deg, 10.0f, 180.0f)) {
 				rollSpeed = DirectX::XMConvertToRadians(deg);
@@ -466,7 +420,6 @@ void CameraController::DebugGUI()
 		ImGui::Separator();
 
 		// ---------------------------------------------------------
-		// 4. 共通情報 (座標確認)
 		// ---------------------------------------------------------
 		const auto& eye = Camera::Instance().GetEye();
 		const auto& focus = Camera::Instance().GetFocus();

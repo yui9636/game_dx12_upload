@@ -14,7 +14,6 @@ struct CollisionContact
 class CollisionManager
 {
 public:
-    // ★追加: シングルトンインスタンス取得
     static CollisionManager& Instance();
 
     uint32_t AddSphere(const SphereDesc& desc, void* userPtr = nullptr, ColliderAttribute attr = ColliderAttribute::Body);
@@ -42,7 +41,6 @@ public:
 
     bool Raycast(const ::Ray& ray, RaycastHit& outHit, float maxDistance = FLT_MAX);
 private:
-    // ★変更: コンストラクタをprivateにし、コピーを禁止する
     CollisionManager() = default;
     ~CollisionManager() = default;
     CollisionManager(const CollisionManager&) = delete;

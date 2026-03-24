@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Shader.h"
 
@@ -8,7 +8,6 @@
 
 
 
-// RHI �O���錾
 
 class IResourceFactory;
 
@@ -34,13 +33,11 @@ public:
 
 
 
-	// �J�n�����iPSO�̃o�C���h���j
 
 	void Begin(const RenderContext& rc) override;
 
 
 
-	// �X�V�����i���b�V�����Ƃ̃��\�[�X�X�V�j
 
 	void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) override;
 	void BeginInstanced(const RenderContext& rc) override;
@@ -48,7 +45,6 @@ public:
 
 
 
-	// �I������
 
 	void End(const RenderContext& rc) override;
 
@@ -68,7 +64,6 @@ private:
 
 
 
-	// RHI ���\�[�X
 	std::shared_ptr<ITexture>      m_whiteTexture; // 1x1 white fallback
 
 	std::unique_ptr<IShader>       m_vs;
@@ -83,7 +78,6 @@ private:
 
 
 
-	// �p�C�v���C���X�e�[�g�I�u�W�F�N�g
 
 	std::unique_ptr<IPipelineState> m_pso;
 	std::unique_ptr<IPipelineState> m_instancedPso;

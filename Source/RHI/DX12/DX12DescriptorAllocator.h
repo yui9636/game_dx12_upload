@@ -11,7 +11,7 @@ public:
     ~DX12DescriptorAllocator() = default;
 
     D3D12_CPU_DESCRIPTOR_HANDLE AllocateCPU();
-    D3D12_CPU_DESCRIPTOR_HANDLE AllocateBlock(uint32_t count);  // 連続ブロック確保
+    D3D12_CPU_DESCRIPTOR_HANDLE AllocateBlock(uint32_t count);
     D3D12_GPU_DESCRIPTOR_HANDLE GetGPUHandle(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle) const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetCPUHandleAtOffset(D3D12_CPU_DESCRIPTOR_HANDLE base, uint32_t offset) const;
     ID3D12DescriptorHeap* GetHeap() const { return m_heap.Get(); }

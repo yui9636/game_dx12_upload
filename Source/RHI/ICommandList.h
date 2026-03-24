@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <cstdint>
 #include "ITexture.h"
 
@@ -68,7 +68,6 @@ public:
     }
     virtual void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) = 0;
 
-    // �� UINT �� uint32_t �ɕύX
     virtual void PSSetTexture(uint32_t slot, ITexture* texture) = 0;
     virtual void PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) = 0;
 
@@ -78,7 +77,7 @@ public:
 
     virtual void VSSetShader(IShader* shader) = 0;
     virtual void PSSetShader(IShader* shader) = 0;
-    virtual void GSSetShader(IShader* shader) = 0; // ���[�e�B���e�B�ɂ���̂Œǉ�
+    virtual void GSSetShader(IShader* shader) = 0;
     virtual void CSSetShader(IShader* shader) = 0;
 
     virtual void PSSetSampler(uint32_t slot, ISampler* sampler) = 0;
@@ -101,13 +100,10 @@ public:
     virtual void SetRasterizerState(IRasterizerState* state) = 0;
     virtual void SetBlendState(IBlendState* state, const float blendFactor[4] = nullptr, uint32_t sampleMask = 0xFFFFFFFF) = 0;
 
-    // RHI/ICommandList.h �� public ���ɒǉ�
     virtual void SetRenderTargets(uint32_t numRenderTargets, ITexture* const* renderTargets, ITexture* depthStencil) = 0;
 
-    // �� �ǉ��F�P�ꃌ���_�[�^�[�Q�b�g�̐ݒ�i����܂ł̂��̂��ێ��A�܂��͐����j
     virtual void SetRenderTarget(ITexture* renderTarget, ITexture* depthStencil) = 0;
 
-    // �� �ǉ��F�N���A����
     virtual void ClearColor(ITexture* renderTarget, const float color[4]) = 0;
     virtual void ClearDepthStencil(ITexture* depthStencil, float depth, uint8_t stencil) = 0;
 

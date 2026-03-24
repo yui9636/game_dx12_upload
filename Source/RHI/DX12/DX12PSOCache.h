@@ -9,7 +9,6 @@ public:
     DX12PSOCache(DX12Device* device, DX12RootSignature* rootSig)
         : m_device(device), m_rootSig(rootSig) {}
 
-    // PSOを取得 (キャッシュミス時はコンパイル)
     ID3D12PipelineState* GetOrCreate(const PipelineStateDesc& desc);
 
 private:

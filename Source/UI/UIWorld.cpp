@@ -1,7 +1,7 @@
 #include "UIWorld.h"
 #include "Camera/Camera.h"
 #include "RenderContext/RenderContext.h"
-#include "Graphics.h" // 追加: 画面サイズ取得用
+#include "Graphics.h"
 
 using namespace DirectX;
 
@@ -30,7 +30,6 @@ void UIWorld::Render(const RenderContext& rc)
 
 void UIWorld::SetSprite(std::shared_ptr<Sprite3D> newSprite)
 {
-    // ★既存の実装そのまま
     sprite = newSprite;
     if (sprite)
     {
@@ -40,7 +39,6 @@ void UIWorld::SetSprite(std::shared_ptr<Sprite3D> newSprite)
     }
 }
 
-// ★追加: 派生クラスで使う座標変換ロジック
 bool UIWorld::WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScreenPos) const
 {
    
@@ -50,7 +48,7 @@ bool UIWorld::WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScree
     float w = Graphics::Instance().GetScreenWidth();
     float h = Graphics::Instance().GetScreenHeight();
 
-    XMVECTOR targetPos = XMLoadFloat3(&position); // 自分の position を使う
+    XMVECTOR targetPos = XMLoadFloat3(&position);
 
     XMVECTOR screenPosVec = XMVector3Project(
         targetPos,
@@ -60,7 +58,6 @@ bool UIWorld::WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScree
 
     XMStoreFloat3(&outScreenPos, screenPosVec);
 
-    // カメラ後ろ(Z<0)や遠すぎ(Z>1)は描画不可
     if (outScreenPos.z < 0.0f || outScreenPos.z > 1.0f) return false;
 
     return true;

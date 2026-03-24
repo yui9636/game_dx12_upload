@@ -10,5 +10,4 @@ UIElement::UIElement()
 
 void UIElement::Update(float dt)
 {
-    // 共通のアニメーション処理があればここに記述
 }

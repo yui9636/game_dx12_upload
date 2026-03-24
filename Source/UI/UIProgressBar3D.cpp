@@ -6,9 +6,9 @@
 using namespace DirectX;
 
 UIProgressBar3D::UIProgressBar3D()
-    : backgroundColor(0.2f, 0.2f, 0.2f, 0.5f) // デフォルト背景色: 暗いグレー半透明
+    : backgroundColor(0.2f, 0.2f, 0.2f, 0.5f)
 {
-    progress = 1.0f; // 基底クラスのメンバ初期化
+    progress = 1.0f;
 }
 
 void UIProgressBar3D::SetProgress(float v)
@@ -25,19 +25,14 @@ void UIProgressBar3D::Render(const RenderContext& rc)
 {
     if (!visible) return;
 
-    // カメラ情報の取得
     Camera& cam = Camera::Instance();
     XMMATRIX view = XMLoadFloat4x4(&cam.GetView());
     XMMATRIX proj = XMLoadFloat4x4(&cam.GetProjection());
 
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 
-    // 1. 背景の描画 (もしあれば)
-    // 背景は常に Progress = 1.0 (フル) で描画します
     if (backgroundSprite)
     {
-        // 色を一時的に背景色に上書きして描画することも可能ですが、
-        // ここではメンバ変数の backgroundColor を使用します。
 
         if (isBillboard)
         {
@@ -53,7 +48,6 @@ void UIProgressBar3D::Render(const RenderContext& rc)
         }
     }
 
-    // 2. 本体の描画
     if (sprite)
     {
         if (isBillboard)

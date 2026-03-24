@@ -1,6 +1,6 @@
 #pragma once
 #include "IRenderPass.h"
-#include "RenderGraph/FrameGraphTypes.h" // �ǉ�
+#include "RenderGraph/FrameGraphTypes.h"
 #include <string>
 
 class SkyboxPass : public IRenderPass {

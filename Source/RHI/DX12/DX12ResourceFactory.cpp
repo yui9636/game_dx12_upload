@@ -173,12 +173,15 @@ namespace {
 
 std::unique_ptr<ITexture> DX12ResourceFactory::CreateTexture(const std::string& name, const TextureDesc& desc) {
     if (!m_device) return nullptr;
+    // TextureDesc の clearColor を DX12 optimizedClearValue として渡す
+    const float* clearColor = (desc.bindFlags & TextureBindFlags::RenderTarget) ? desc.clearColor : nullptr;
     return std::make_unique<DX12Texture>(
         m_device,
         desc.width,
         desc.height,
         desc.format,
-        desc.bindFlags
+        desc.bindFlags,
+        clearColor
     );
 }
 

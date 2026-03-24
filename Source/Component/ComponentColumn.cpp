@@ -1,6 +1,6 @@
 #include "ComponentColumn.h"
-#include <cstring> // memcpy用
-#include <cstdlib> // malloc, free用
+#include <cstring>
+#include <cstdlib>
 
 ComponentColumn::ComponentColumn(size_t elementSize, ConstructFn c, MoveConstructFn mc, MoveAssignFn ma, DestructFn d)
     : m_elementSize(elementSize), m_count(0), m_capacity(0), m_data(nullptr),
@@ -26,16 +26,13 @@ ComponentColumn::ComponentColumn(ComponentColumn&& other) noexcept
     m_moveAssignFn(other.m_moveAssignFn),
     m_destructFn(other.m_destructFn)
 {
-    // ムーブ元のポインタを空にして、二重解放（Double Free）を防ぐ
     other.m_data = nullptr;
     other.m_count = 0;
     other.m_capacity = 0;
 }
 
-// （ついでにムーブ代入演算子も実装・確認してください）
 ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
     if (this != &other) {
-        // 自分の古いデータを破棄
         if (m_data) {
             for (size_t i = 0; i < m_count; ++i) {
                 m_destructFn(static_cast<char*>(m_data) + i * m_elementSize);
@@ -43,7 +40,6 @@ ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
             std::free(m_data);
         }
 
-        // 所有権の移動
         m_data = other.m_data;
         m_elementSize = other.m_elementSize;
         m_count = other.m_count;
@@ -53,7 +49,6 @@ ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
         m_moveAssignFn = other.m_moveAssignFn;
         m_destructFn = other.m_destructFn;
 
-        // ムーブ元の無効化
         other.m_data = nullptr;
         other.m_count = 0;
         other.m_capacity = 0;
@@ -69,8 +64,8 @@ void ComponentColumn::Reserve(size_t newCapacity) {
         for (size_t i = 0; i < m_count; ++i) {
             void* src = static_cast<char*>(m_data) + i * m_elementSize;
             void* dst = static_cast<char*>(newData) + i * m_elementSize;
-            m_moveConstructFn(dst, src); // ★ memcpyではなくムーブコンストラクタ
-            m_destructFn(src);           // ★ 古い方を破棄
+            m_moveConstructFn(dst, src);
+            m_destructFn(src);
         }
         std::free(m_data);
     }
@@ -81,14 +76,14 @@ void ComponentColumn::Reserve(size_t newCapacity) {
 void ComponentColumn::Add(const void* pData) {
     if (m_count >= m_capacity) Reserve(m_capacity == 0 ? 8 : m_capacity * 2);
     void* dst = static_cast<char*>(m_data) + m_count * m_elementSize;
-    m_constructFn(dst, pData); // ★ コピーコンストラクタ
+    m_constructFn(dst, pData);
     m_count++;
 }
 
 void ComponentColumn::MoveAdd(void* pData) {
     if (m_count >= m_capacity) Reserve(m_capacity == 0 ? 8 : m_capacity * 2);
     void* dst = static_cast<char*>(m_data) + m_count * m_elementSize;
-    m_moveConstructFn(dst, pData); // ★ ムーブコンストラクタ
+    m_moveConstructFn(dst, pData);
     m_count++;
 }
 
@@ -100,8 +95,8 @@ void ComponentColumn::Remove(size_t index) {
     size_t lastIndex = m_count - 1;
     if (index != lastIndex) {
         void* src = static_cast<char*>(m_data) + (lastIndex * m_elementSize);
-        m_moveAssignFn(dst, src); // ★ ムーブ代入で上書き
-        m_destructFn(src);        // ★ 最後尾を破棄
+        m_moveAssignFn(dst, src);
+        m_destructFn(src);
     }
     else {
         m_destructFn(dst);

@@ -1,6 +1,5 @@
 #include "TransformUtils.h"
 
-// 行列からヨー、ピッチ、ロールを行列を計算する。
 bool TransformUtils::MatrixToRollPitchYaw(const DirectX::XMFLOAT4X4& m, float& pitch, float& yaw, float& roll)
 {
 	float xRadian = asinf(-m._32);
@@ -28,7 +27,6 @@ bool TransformUtils::MatrixToRollPitchYaw(const DirectX::XMFLOAT4X4& m, float& p
 	}
 }
 
-// クォータニオンからヨー、ピッチ、ロールを行列を計算する。
 bool TransformUtils::QuaternionToRollPitchYaw(const DirectX::XMFLOAT4& q, float& pitch, float& yaw, float& roll)
 {
 	DirectX::XMVECTOR Q = DirectX::XMLoadFloat4(&q);

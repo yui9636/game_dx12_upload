@@ -10,16 +10,12 @@ class PrimitiveRenderer
 public:
 	PrimitiveRenderer(ID3D11Device* device);
 
-	// 頂点追加
 	void AddVertex(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT4& color);
 
-	// 軸描画(D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
 	void DrawAxis(const DirectX::XMFLOAT4X4& transform, const DirectX::XMFLOAT4& color);
 
-	// グリッド描画(D3D11_PRIMITIVE_TOPOLOGY_LINELIST)
 	void DrawGrid(int subdivisions, float scale);
 
-	// 描画実行
 	void Render(
 		ID3D11DeviceContext* dc,
 		const DirectX::XMFLOAT4X4& view,

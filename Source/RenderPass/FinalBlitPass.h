@@ -19,7 +19,6 @@ public:
     void Setup(FrameGraphBuilder& builder) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
-    // EngineKernel から PSO にアクセスするためのゲッター
     IPipelineState* GetPSO() const { return m_pso.get(); }
 
 private:

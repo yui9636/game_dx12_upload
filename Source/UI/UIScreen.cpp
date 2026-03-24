@@ -15,7 +15,6 @@ void UIScreen::Render(const RenderContext& rc)
 
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 
-    // ★修正: 親の座標を再帰的に取得して加算する
     DirectX::XMFLOAT2 globalPos = GetGlobalPosition();
     float drawX = globalPos.x - (size.x * pivot.x);
     float drawY = globalPos.y - (size.y * pivot.y);
@@ -27,11 +26,8 @@ void UIScreen::Render(const RenderContext& rc)
 void UIScreen::SetSprite(std::shared_ptr<Sprite> newSprite)
 {
     sprite = newSprite;
-    // スプライト設定時にサイズを画像の大きさに合わせる
     if (sprite)
     {
-        // SpriteクラスにGetTextureWidth/Heightがある前提
-        // もし名前が違う場合は合わせてください (例: GetWidth())
         size.x = static_cast<float>(sprite->GetTextureWidth());
         size.y = static_cast<float>(sprite->GetTextureHeight());
     }

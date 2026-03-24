@@ -50,7 +50,4 @@ void FinalBlitPass::Setup(FrameGraphBuilder& builder)
 
 void FinalBlitPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
-    // FrameGraph 内では何もしない。
-    // SceneColor → DisplayColor の Blit は EngineKernel から
-    // RenderPipeline::BlitSceneToDisplay() で FrameGraph 外で実行する。
 }

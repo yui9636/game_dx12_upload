@@ -1,4 +1,4 @@
-﻿//#include "System/Misc.h"
+//#include "System/Misc.h"
 //#include "Skybox.h"
 //#include "GpuResourceUtils.h"
 //#include "RHI/ICommandList.h"
@@ -6,19 +6,16 @@
 //
 //std::unordered_map<std::string, std::unique_ptr<Skybox>> Skybox::s_cache;
 //
-//// �� �ÓI�Ȏ擾�֐��̎���
 //Skybox* Skybox::Get(ID3D11Device* device, const std::string& filename)
 //{
 //    if (filename.empty()) return nullptr;
 //
-//    // �L���b�V���ɂ���΂����Ԃ�
 //    auto it = s_cache.find(filename);
 //    if (it != s_cache.end())
 //    {
 //        return it->second.get();
 //    }
 //
-//    // ������΍���ăL���b�V���ɕۑ�
 //    auto skybox = std::make_unique<Skybox>(device, filename.c_str());
 //    Skybox* ptr = skybox.get();
 //    s_cache[filename] = std::move(skybox);
@@ -50,7 +47,6 @@
 //{
 //    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 //
-//    // �X�e�[�g�ݒ�
 //    dc->OMSetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestAndWrite), 0);
 //    dc->RSSetState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));
 //

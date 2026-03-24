@@ -34,7 +34,7 @@ private:
 
     static const UINT SubdivisionPerSegment = 8;       
     static const UINT MaxRenderVertices=
-    VertexCapacity * SubdivisionPerSegment * 6 + 4;   // —]—T‚ğ‚Á‚ÄŒvZ
+    VertexCapacity * SubdivisionPerSegment * 6 + 4;
 
 
 

@@ -5,11 +5,11 @@
 #include <iostream>
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
-#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h> // BroadPhaseLayerFilter 用
-#include <Jolt/Physics/Collision/ObjectLayer.h>               // ObjectLayerFilter 用
-#include <Jolt/Physics/Body/BodyFilter.h>                      // BodyFilter 用
-#include <Jolt/Physics/Collision/ShapeFilter.h>               // ShapeFilter 用
-#include <Jolt/Physics/Body/Body.h>                            // Body::GetWorldSpaceSurfaceNormal 用
+#include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayer.h>
+#include <Jolt/Physics/Collision/ObjectLayer.h>
+#include <Jolt/Physics/Body/BodyFilter.h>
+#include <Jolt/Physics/Collision/ShapeFilter.h>
+#include <Jolt/Physics/Body/Body.h>
 
 using namespace JPH;
 
@@ -18,7 +18,6 @@ PhysicsManager& PhysicsManager::Instance() {
     return instance;
 }
 
-// --- Jolt必須のコールバック設定 ---
 static void TraceImpl(const char* inFMT, ...) {
     va_list list;
     va_start(list, inFMT);
@@ -31,11 +30,10 @@ static void TraceImpl(const char* inFMT, ...) {
 #ifdef JPH_ENABLE_ASSERTS
 static bool AssertFailedImpl(const char* inExpression, const char* inMessage, const char* inFile, uint32_t inLine) {
     std::cout << inFile << ":" << inLine << ": (" << inExpression << ") " << (inMessage ? inMessage : "") << std::endl;
-    return true; // ブレークポイントをトリガーする
+    return true;
 }
 #endif
 
-// --- 衝突フィルターの定義 ---
 namespace BroadPhaseLayers {
     static constexpr BroadPhaseLayer NON_MOVING(0);
     static constexpr BroadPhaseLayer MOVING(1);
@@ -83,7 +81,6 @@ public:
     }
 };
 
-// --- マネージャーの実装 ---
 void PhysicsManager::Initialize() {
     RegisterDefaultAllocator();
 
@@ -106,7 +103,6 @@ void PhysicsManager::Initialize() {
 
 void PhysicsManager::Update(float deltaTime) {
     if (m_physicsSystem) {
-        // 物理シミュレーションを1ステップ進める（コリジョンステップ数はとりあえず1）
         m_physicsSystem->Update(deltaTime, 1, m_tempAllocator.get(), m_jobSystem.get());
     }
 }
@@ -115,16 +111,12 @@ PhysicsRaycastResult PhysicsManager::CastRay(const DirectX::XMFLOAT3& origin, co
     PhysicsRaycastResult result;
     if (!m_physicsSystem) return result;
 
-    // Joltの型に変換
     JPH::RVec3 joltOrigin(origin.x, origin.y, origin.z);
     JPH::Vec3 joltDir(direction.x, direction.y, direction.z);
 
-    // --- 修正箇所: RayCast -> RRayCast ---
     JPH::RRayCast ray(joltOrigin, joltDir * maxDistance);
     JPH::RayCastResult joltResult;
 
-    // ナローフェーズ（正確な形状判定）クエリを実行
-    // ヘッダーが揃っていれば、デフォルト引数が適用され、この2引数での呼び出しが可能になります
     if (m_physicsSystem->GetNarrowPhaseQuery().CastRay(ray, joltResult)) {
         result.hasHit = true;
         result.distance = joltResult.mFraction * maxDistance;
@@ -137,7 +129,6 @@ PhysicsRaycastResult PhysicsManager::CastRay(const DirectX::XMFLOAT3& origin, co
             JPH::RVec3 hitPos = joltOrigin + joltDir * result.distance;
             result.position = { (float)hitPos.GetX(), (float)hitPos.GetY(), (float)hitPos.GetZ() };
 
-            // 法線の取得
             JPH::Vec3 n = body.GetWorldSpaceSurfaceNormal(joltResult.mSubShapeID2, hitPos);
             result.normal = { n.GetX(), n.GetY(), n.GetZ() };
         }

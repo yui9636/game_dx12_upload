@@ -5,7 +5,6 @@
 #include <memory>
 #include <DirectXMath.h>
 
-// 前方宣言
 class EffectInstance;
 
 class EffectComponent : public Component
@@ -23,15 +22,13 @@ public:
     void Update(float dt) override;
 
     // ---------------------------------------------------------
-    // エフェクト再生
-    // ★修正: 引数に scale を追加
     // ---------------------------------------------------------
     std::weak_ptr<EffectInstance> Play(
         const std::string& effectName,
         const std::string& boneName = "",
         const DirectX::XMFLOAT3& offset = { 0,0,0 },
         const DirectX::XMFLOAT3& rotation = { 0,0,0 },
-        const DirectX::XMFLOAT3& scale = { 1,1,1 }, // ★追加
+        const DirectX::XMFLOAT3& scale = { 1,1,1 },
         bool loop = false
     );
 
@@ -45,7 +42,7 @@ public:
     void Stop(const std::weak_ptr<EffectInstance>& handle);
     void StopAll();
 
-    void OnGUI() override; // ★追加
+    void OnGUI() override;
 private:
     struct ActiveEffect
     {
@@ -55,7 +52,7 @@ private:
 
         DirectX::XMFLOAT3 localOffsetPosition = { 0.0f, 0.0f, 0.0f };
         DirectX::XMFLOAT3 localOffsetRotation = { 0.0f, 0.0f, 0.0f };
-        DirectX::XMFLOAT3 localOffsetScale = { 1,1,1 }; // ★追加
+        DirectX::XMFLOAT3 localOffsetScale = { 1,1,1 };
 
         std::string effectPath;
         bool loop = true;

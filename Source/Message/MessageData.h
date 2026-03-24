@@ -6,7 +6,6 @@
 
 class Actor;
 
-// カメラモーション情報
 struct CameraMotionData
 {
 	float time;
@@ -16,14 +15,12 @@ struct CameraMotionData
 
 namespace	MessageData
 {
-	// フリーカメラ
 	static	constexpr	char* CAMERACHANGEFREEMODE = "CAMERA CHANGE FREEMODE";
 	struct	CAMERACHANGEFREEMODEDATA
 	{
 		DirectX::XMFLOAT3	target;
 	};
 
-	// ロックオンカメラ
 	static	constexpr	char* CAMERACHANGELOCKONMODE = "CAMERA CHANGE LOCKONMODE";
 	struct	CAMERACHANGELOCKONMODEDATA
 	{
@@ -41,7 +38,6 @@ namespace	MessageData
 	};
 
 
-	// エリアルカメラ
 	static	constexpr	char* CAMERACHANGEARIELMODE = "CAMERA CHANGE ARIELMODE";
 	struct	CAMERACHANGEARIELMODEDATA
 	{
@@ -50,14 +46,12 @@ namespace	MessageData
 		DirectX::XMFLOAT3	lockonTarget;
 	};
 
-	// モーションカメラ
 	static	constexpr	char* CAMERACHANGEMOTIONMODE = "CAMERA CHANGE MOTIONMODE";
 	struct	CAMERACHANGEMOTIONMODEDATA
 	{
 		std::vector<CameraMotionData>	data;
 	};
 
-	// カメラ揺れエフェクト
 	static	constexpr	char* CAMERASHAKE = "CAMERA SHAKE";
 	struct	CAMERASHAKEDATA
 	{
@@ -68,10 +62,9 @@ namespace	MessageData
 
 	static constexpr char* CINEMATIC_EVENT_TRIGGER = "CINEMATIC_EVENT_TRIGGER";
 
-	// イベントデータ (荷物)
 	struct CINEMATIC_EVENT_TRIGGER_DATA
 	{
-		std::string eventName; // 発火したイベントの名前 ("StartGame", "BossRoar" など)
+		std::string eventName;
 	};
 
 };

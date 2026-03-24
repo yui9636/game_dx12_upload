@@ -11,9 +11,8 @@ struct LightComponent {
     LightType type = LightType::Point;
     DirectX::XMFLOAT3 color = { 1.0f, 1.0f, 1.0f };
     float intensity = 1.0f;
-    float range = 10.0f; // Point/Spot用
+    float range = 10.0f;
 
-    // 将来的な拡張（影など）
     bool castShadow = false;
 
 };

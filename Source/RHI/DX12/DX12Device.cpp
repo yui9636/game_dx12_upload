@@ -127,7 +127,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // RTV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = FRAME_COUNT + 256; // back buffers + render targets + thumbnails
+        desc.NumDescriptors = FRAME_COUNT + 512; // back buffers + render targets + thumbnails
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
@@ -136,7 +136,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // DSV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 256;
+        desc.NumDescriptors = 512;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
@@ -210,23 +210,58 @@ void DX12Device::MoveToNextFrame() {
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateRTVDescriptor() {
+    if (!m_freeRTVList.empty()) {
+        auto handle = m_freeRTVList.back();
+        m_freeRTVList.pop_back();
+        return handle;
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextRtvDescriptor++) * m_rtvDescriptorSize;
     return handle;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateDSVDescriptor() {
+    if (!m_freeDSVList.empty()) {
+        auto handle = m_freeDSVList.back();
+        m_freeDSVList.pop_back();
+        return handle;
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextDsvDescriptor++) * m_dsvDescriptorSize;
     return handle;
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateSRVDescriptor() {
-    // Non-Shader-Visible ステージングヒープから割り当て。
-    // CopyDescriptorsSimple のソースとして安全に CPU 読み出し可能。
+    if (!m_freeSRVList.empty()) {
+        auto handle = m_freeSRVList.back();
+        m_freeSRVList.pop_back();
+        return handle;
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_cbvSrvUavStagingHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextStagingSrvDescriptor++) * m_cbvSrvUavDescriptorSize;
     return handle;
+}
+
+void DX12Device::DeferFreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle, ID3D12Fence* fence,
+                                      uint64_t fenceValue, DescriptorType type) {
+    if (!handle.ptr) return;
+    m_deferredFrees.push_back({ handle, fence, fenceValue, type });
+}
+
+void DX12Device::ProcessDeferredFrees() {
+    auto it = m_deferredFrees.begin();
+    while (it != m_deferredFrees.end()) {
+        if (!it->fence || it->fence->GetCompletedValue() >= it->fenceValue) {
+            switch (it->type) {
+            case DescriptorType::SRV: m_freeSRVList.push_back(it->handle); break;
+            case DescriptorType::RTV: m_freeRTVList.push_back(it->handle); break;
+            case DescriptorType::DSV: m_freeDSVList.push_back(it->handle); break;
+            }
+            it = m_deferredFrees.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void DX12Device::FlushDebugMessages() {

@@ -4,19 +4,16 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 {
 	HRESULT hr;
 
-	//	バイトニックソートの仕様上、2の累乗にしておく必要があるためパーティクル数を補正
 	float	f_exponent = log2f(static_cast<float>(particles_count));
 	int		exponent = static_cast<int>(ceilf(f_exponent) + 0.5f);
 	particles_count = static_cast<UINT>(pow(2, exponent) + 0.5f);
 	particles_count = max(min(particles_count, 1 << 27), 1 << 7);
 
-	//	パーティクル数をスレッド数に合わせて制限
 	num_particles = ((particles_count + (NumParticleThread - 1)) / NumParticleThread) * NumParticleThread;
-	num_emit_particles = min(num_particles, 10000);	//	1Fでの生成制限数はテキトーに決めているのでここは要調整
+	num_emit_particles = min(num_particles, 10000);
 	texture_split_count = split_count;
 	one_shot_initialize = false;
 
-	////シーン用定数バッファ
 	GpuResourceUtils::CreateConstantBuffer(
 	device,
 	sizeof(CbScene),
@@ -34,7 +31,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 
 
 
-	//	定数バッファ
 	{
 		D3D11_BUFFER_DESC buffer_desc{};
 		buffer_desc.Usage = D3D11_USAGE_DEFAULT;
@@ -58,7 +54,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 
 	}
 
-	//	パーティクルバッファ生成
 	{
 		D3D11_BUFFER_DESC desc = {};
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -75,7 +70,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 	}
 
-	//	パーティクルの生成/破棄番号をため込むバッファ生成
 	{
 		D3D11_BUFFER_DESC desc = {};
 		desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
@@ -86,7 +80,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		hr = device->CreateBuffer(&desc, nullptr, particle_append_consume_buffer.GetAddressOf());
 		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 
-		//	Append/Consumeを利用する場合はビュー側にフラグを立てる
 		D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
 		uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 		uav_desc.Format = DXGI_FORMAT_UNKNOWN;
@@ -97,7 +90,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 	}
 
-	//	パーティクルエミット用バッファ生成
 	{
 		D3D11_BUFFER_DESC desc = {};
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
@@ -113,7 +105,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 	}
 
 
-	//	パーティクルヘッダーバッファ
 	{
 		D3D11_BUFFER_DESC desc = {};
 		desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -130,7 +121,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 	}
 
-	//	パーティクルの更新・描画数の削減のためのバッファ
 	{
 		/*D3D11_BUFFER_DESC desc = {};
 		desc.BindFlags = D3D11_BIND_UNORDERED_ACCESS;
@@ -149,7 +139,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		D3D11_SUBRESOURCE_DATA initialize_data = {};
 		std::vector<UINT>	initialize_buffer(desc.ByteWidth / sizeof(UINT));
 		{
-			//	初期値設定
 			draw_indirect* draw_data = reinterpret_cast<draw_indirect*>(initialize_buffer.data() + DrawIndirectOffset / sizeof(UINT));
 			draw_data->vertex_count_per_instance = num_particles;
 			draw_data->instance_count = 1;
@@ -162,7 +151,6 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 
 
 
-		//	Append/Consumeを利用する場合はビュー側にフラグを立てる
 		D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = {};
 		uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
 		uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -179,43 +167,36 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 
 
 
-	// コンピュートシェーダー読み込み（初期化）
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_init_cs.cso",
 		init_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み（エミット）
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_emit_cs.cso",
 		emit_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み（アップデート）
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_update_cs.cso",
 		update_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み(begin)
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_begin_frame_cs.cso",
 		begin_frame_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み(end)
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_end_frame_cs.cso",
 		end_frame_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み(sort)
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_bitonic_sort_b2_cs.cso",
 		sort_b2_shader.GetAddressOf());
 
-	// コンピュートシェーダー読み込み(sort)
 	GpuResourceUtils::LoadComputeShader(
 		device,
 		"Data/Shader/compute_particle_bitonic_sort_c2_cs.cso",
@@ -224,10 +205,8 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 
 
 
-	//	描画用情報生成
 	this->shader_resource_view = shader_resource_view;
 
-	// 頂点シェーダー読み込み
 	GpuResourceUtils::LoadVertexShader(
 		device,
 		"Data/Shader/compute_particle_render_vs.cso",
@@ -237,14 +216,12 @@ compute_particle_system::compute_particle_system(ID3D11Device* device, UINT part
 		vertex_shader.GetAddressOf()
 	);
 
-	// ジオメトリシェーダー読み込み
 	GpuResourceUtils::LoadGeometryShader(
 		device,
 		"Data/Shader/compute_particle_render_gs.cso",
 		geometry_shader.GetAddressOf()
 	);
 
-	// ピクセルシェーダー読み込み
 	GpuResourceUtils::LoadPixelShader(
 		device,
 		"Data/Shader/compute_particle_render_ps.cso",
@@ -270,12 +247,10 @@ void compute_particle_system::Begin(const RenderContext& rc)
 {
 	ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
 
-	// ── シェーダー設定 ──
 	dc->VSSetShader(vertex_shader.Get(), nullptr, 0);
 	dc->GSSetShader(geometry_shader.Get(), nullptr, 0);
 	dc->PSSetShader(pixel_shader.Get(), nullptr, 0);
 
-	// ── シーン定数バッファ更新 ──
 	CbScene cbScene{};
 	DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&rc.viewMatrix);
 	DirectX::XMMATRIX P = DirectX::XMLoadFloat4x4(&rc.projectionMatrix);
@@ -304,7 +279,6 @@ void compute_particle_system::Begin(const RenderContext& rc)
 
 
 	dc->UpdateSubresource(renderOptionConstantBuffer.Get(), 0, nullptr, &renderOptionConstantData, 0, 0);
-	// GSへ（b2に合わせる）
 	ID3D11Buffer* cbs[] = { renderOptionConstantBuffer.Get() };
 	dc->GSSetConstantBuffers(2, 1, cbs);
 	dc->PSSetConstantBuffers(2, 1, cbs);
@@ -323,7 +297,6 @@ void compute_particle_system::Begin(const RenderContext& rc)
 
 	dc->CSSetShaderResources(2, 1, curl_noise_shader_resource_view.GetAddressOf());
 
-	////レンダーステート設定
 	//const float blend_factor[4] = { 1.0f,1.0f,1.0f,1.0f };
 	//dc->OMSetBlendState(rc.renderState->GetBlendState(BlendState::Additive), blend_factor, 0xFFFFFFFF);
 	//switch (blendMode)
@@ -389,7 +362,6 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 	immediate_context->CSSetShaderResources(0, 1, particle_emit_shader_resource_view.GetAddressOf());
 
 
-	//	SRV/UAV設定
 	{
 		//	
 		immediate_context->CSSetShaderResources(0, 1, particle_emit_shader_resource_view.GetAddressOf());
@@ -404,7 +376,6 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 		immediate_context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
 	}
 
-	//	初期化処理
 	if (!one_shot_initialize)
 	{
 		one_shot_initialize = true;
@@ -412,19 +383,14 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 		immediate_context->Dispatch(num_particles / NumParticleThread, 1, 1);
 	}
 
-	//	フレーム開始時の処理
 	{
-		//	現在フレームでのパーティクル総数を算出
-		//	それに合わせて各種設定を行う
 		immediate_context->CSSetShader(begin_frame_shader.Get(), nullptr, 0);
 		immediate_context->Dispatch(1, 1, 1);
 	}
 
 
-	//	エミット処理
 	if (!emit_particles.empty())
 	{
-		//	エミットバッファ更新
 		D3D11_BOX write_box = {};
 		write_box.left = 0;
 		write_box.right = static_cast<UINT>(emit_particles.size() * sizeof(emit_particle_data));
@@ -444,7 +410,6 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 		emit_particles.clear();
 	}
 
-	//	更新処理
 	{
 		immediate_context->CSSetShader(update_shader.Get(), nullptr, 0);
 		//immediate_context->Dispatch(num_particles / NumParticleThread, 1, 1);
@@ -452,11 +417,9 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 	}
 
 	{
-		//	ソート処理
 		//immediate_context->CSSetShader(sort_shader.Get(), nullptr, 0);
 		//immediate_context->Dispatch(1, 1, 1);
 
-			//	バイトニックソート
 		//	https://www.bealto.com/gpu-sorting_parallel-bitonic-1.html
 		float	f_exponent = log2f(static_cast<float>(num_particles));
 		UINT	exponent = static_cast<UINT>(ceilf(f_exponent) + 0.5f);
@@ -486,15 +449,12 @@ void compute_particle_system::Update(const RenderContext& rc, float dt)
 
 	}
 
-	//	フレーム終了時の処理
 	{
-		//	総パーティクル数を変動させる
 		immediate_context->CSSetShader(end_frame_shader.Get(), nullptr, 0);
 		immediate_context->Dispatch(1, 1, 1);
 	}
 
 
-	//	UAV設定
 	{
 		ID3D11UnorderedAccessView* uavs[] = { nullptr, nullptr, nullptr, nullptr, };
 		immediate_context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, nullptr);
@@ -512,7 +472,6 @@ void compute_particle_system::Draw(const RenderContext& rc)
 
 	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);  
 
-	//	入力レイアウト設定
 	dc->IASetInputLayout(nullptr);
 
 
@@ -523,7 +482,6 @@ void compute_particle_system::Draw(const RenderContext& rc)
 
 
 
-	//	バッファクリア
 	ID3D11Buffer* clear_buffer[] = { nullptr };
 	UINT strides[] = { 0 };
 	UINT offsets[] = { 0 };
@@ -532,8 +490,6 @@ void compute_particle_system::Draw(const RenderContext& rc)
 
 	//dc->Draw(num_particles, 0);
 
-	//	GPU側で計算したパーティクルの描画数をCPU側で取得して描画コールを呼び出すのはもったいないので、
-	//	DrawIndirect命令を使ってGPU側だけで処理させる
 	dc->DrawInstancedIndirect(indirect_data_buffer.Get(), DrawIndirectOffset);
 
 
@@ -558,9 +514,8 @@ void compute_particle_system::End(const RenderContext& rc)
 
 void compute_particle_system::SetIndirectDrawIndexCount(ID3D11DeviceContext* dc, UINT indexCount)
 {
-	// ここだけをピンポイントで書き換える処理
 	D3D11_BOX destBox;
-	destBox.left = 40;            // DrawIndirect構造体の開始位置
+	destBox.left = 40;
 	destBox.right = 40 + sizeof(UINT);
 	destBox.top = 0;
 	destBox.bottom = 1;
@@ -575,28 +530,21 @@ void compute_particle_system::Clear(const RenderContext& rc)
 {
 	ID3D11DeviceContext* immediate_context = rc.commandList->GetNativeContext();
 
-	// 1. エミットリストのクリア
 	emit_particles.clear();
 
 	// -----------------------------------------------------------------------
-	// ★追加修正: Indirect Buffer (カウンター類) のリセット処理
-	// これを行わないと、生存数カウントが残ったままになり、次回再生時に生成が止まります
 	// -----------------------------------------------------------------------
 	D3D11_BUFFER_DESC desc;
 	indirect_data_buffer->GetDesc(&desc);
 
-	// バッファの初期値を生成（コンストラクタと同様のデータを作成）
-	// 全体を0で埋めた後、DrawIndirect用の引数だけ正しい値セットします
 	std::vector<UINT> initialize_buffer(desc.ByteWidth / sizeof(UINT), 0);
 
-	// DrawArgs部分の設定 (DrawIndirectOffsetの位置)
 	draw_indirect* draw_data = reinterpret_cast<draw_indirect*>(initialize_buffer.data() + DrawIndirectOffset / sizeof(UINT));
-	draw_data->vertex_count_per_instance = num_particles; // コンストラクタと同じ設定値
+	draw_data->vertex_count_per_instance = num_particles;
 	draw_data->instance_count = 1;
 	draw_data->start_vertex_location = 0;
 	draw_data->start_instance_location = 0;
 
-	// GPUバッファに転送してリセット
 	immediate_context->UpdateSubresource(indirect_data_buffer.Get(), 0, nullptr, initialize_buffer.data(), 0, 0);
 	// -----------------------------------------------------------------------
 
@@ -616,14 +564,11 @@ void compute_particle_system::Clear(const RenderContext& rc)
 		indirect_data_unordered_access_view.Get(),
 		particle_header_unordered_access_view.Get(),
 	};
-	// Append/Consumeバッファのカウンタはここで0リセットされる
 	immediate_context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), uavs, initCounts);
 
-	// 3. 初期化シェーダー実行 (DeadListの充填)
 	immediate_context->CSSetShader(init_shader.Get(), nullptr, 0);
 	immediate_context->Dispatch(num_particles / NumParticleThread, 1, 1);
 
-	// 4. 後始末
 	ID3D11UnorderedAccessView* nullUAVs[] = { nullptr, nullptr, nullptr, nullptr };
 	immediate_context->CSSetUnorderedAccessViews(0, ARRAYSIZE(uavs), nullUAVs, nullptr);
 	immediate_context->CSSetShader(nullptr, nullptr, 0);

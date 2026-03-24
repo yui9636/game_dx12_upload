@@ -26,6 +26,7 @@ MaterialPreviewStudio::~MaterialPreviewStudio() = default;
 
 void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
 {
+    // マテリアルプレビュー専用の永続 RT と深度を確保する。
     m_offscreen = offscreen;
     m_pendingMaterial = nullptr;
     m_dirty = false;
@@ -97,6 +98,7 @@ void MaterialPreviewStudio::PumpPreview()
 
 void MaterialPreviewStudio::ExecuteRender()
 {
+    // live な MaterialAsset を球モデルへ適用し、そのままオフスクリーンへ描画する。
     MaterialAsset* material = m_pendingMaterial;
 
     XMFLOAT4X4 identity;
@@ -155,7 +157,7 @@ void MaterialPreviewStudio::ExecuteRender()
     XMFLOAT3 lightDir   = { -0.5f, -0.7f, 0.5f };
     XMFLOAT3 lightColor = { 3.0f, 3.0f, 3.0f };
 
-    // Direct rendering to persistent texture (no FrameBuffer, no CopyResource)
+    // 永続 RT に直接描画して、FrameBuffer のコピーや中間テクスチャを作らない。
     m_offscreen->BeginJob();
     m_offscreen->ClearExternalRT(m_previewTexture.get(), m_previewDepth.get(),
         CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A);

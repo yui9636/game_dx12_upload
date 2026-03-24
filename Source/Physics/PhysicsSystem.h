@@ -6,6 +6,5 @@
 
 class PhysicsSystem {
 public:
-    // 物理シミュレーションを回し、結果を Transform に同期する
     void Update(Registry& registry, float deltaTime);
 };

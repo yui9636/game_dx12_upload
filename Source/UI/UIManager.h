@@ -6,7 +6,6 @@
 #include <d3d11.h>
 #include "UIElement.h"
 
-// 前方宣言
 struct RenderContext;
 
 class UIManager
@@ -22,7 +21,6 @@ public:
         return instance;
     }
 
-    // UI要素の追加
     template <typename T>
     std::shared_ptr<T> CreateElement()
     {
@@ -34,11 +32,8 @@ public:
     void RemoveElement(std::shared_ptr<UIElement> element);
     void Clear();
 
-    // 更新
     void Update(float dt);
 
-    // 描画
-    // ★変更: RenderContextを受け取る
     void Render(const RenderContext& rc);
 
 

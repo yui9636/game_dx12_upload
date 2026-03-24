@@ -9,9 +9,8 @@
 
 #include <SimpleMath.h>
 #include <cmath>
-#include <algorithm> // ★追加: std::find_if 等を使用するため
+#include <algorithm>
 
-// ヘルパー
 static float Max3(float a, float b, float c)
 {
     float maxVal = a;
@@ -45,9 +44,6 @@ void ColliderComponent::Update(float)
     }
 }
 
-// ────────────────────────────────────────────
-// マネージャー連携処理
-// ────────────────────────────────────────────
 void ColliderComponent::RegisterToManager(Element& e)
 {
     if (e.registeredId != 0) return;
@@ -138,9 +134,6 @@ void ColliderComponent::UnregisterFromManager(Element& e)
     }
 }
 
-// ────────────────────────────────────────────
-// ヘルパー関数 (属性対応)
-// ────────────────────────────────────────────
 void ColliderComponent::AddSphere(const DirectX::SimpleMath::Vector3& offset, float radius, ColliderAttribute attr)
 {
     Element e;
@@ -172,33 +165,24 @@ void ColliderComponent::AddBox(const DirectX::SimpleMath::Vector3& offset, const
     elements.push_back(e);
 }
 
-// ────────────────────────────────────────────
-// 既存の関数群
-// ────────────────────────────────────────────
 
 DirectX::XMFLOAT3 ColliderComponent::ComputeWorldCenter(const Element& e)
 {
     auto owner = GetActor();
     if (!owner) return DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
 
-    // アクターのワールド行列（位置・回転・スケール）を取得
     DirectX::XMFLOAT4X4 actorWorld = owner->GetTransform();
     DirectX::XMMATRIX matActor = DirectX::XMLoadFloat4x4(&actorWorld);
 
-    // ボーン追従がある場合
     if (e.nodeIndex >= 0)
     {
         const ::Model* model = owner->GetModelRaw();
         if (model)
         {
-            // 1. ボーンのモデル空間での位置を取得
-            // NodeAttachComponentのヘルパーは「モデル原点からの位置」を返す想定
             DirectX::XMFLOAT3 posModelSpace = NodeAttachComponent::GetWorldPosition_NodeLocal(
                 model, e.nodeIndex, DirectX::XMFLOAT3(e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z)
             );
 
-            // 2. ★重要修正: それをアクターのワールド行列で変換する！
-            // これを忘れていたため、敵が動くと判定が置いていかれていました
             DirectX::XMVECTOR vPos = DirectX::XMLoadFloat3(&posModelSpace);
             vPos = DirectX::XMVector3TransformCoord(vPos, matActor);
 
@@ -208,7 +192,6 @@ DirectX::XMFLOAT3 ColliderComponent::ComputeWorldCenter(const Element& e)
         }
     }
 
-    // ボーンなし (Actor原点からのオフセット)
     //DirectX::XMMATRIX T = DirectX::XMMatrixTranslation(e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z);
     //DirectX::XMMATRIX M = T * matActor;
 
@@ -219,16 +202,12 @@ DirectX::XMFLOAT3 ColliderComponent::ComputeWorldCenter(const Element& e)
     DirectX::SimpleMath::Vector3 pos = owner->GetPosition();
     DirectX::SimpleMath::Quaternion rot = owner->GetRotation();
 
-    // S=1.0, R=rot, T=pos の行列を作成
     DirectX::XMMATRIX matRot = DirectX::XMMatrixRotationQuaternion(rot);
     DirectX::XMMATRIX matTrans = DirectX::XMMatrixTranslation(pos.x, pos.y, pos.z);
     DirectX::XMMATRIX matActorUnscaled = matRot * matTrans;
 
-    // オフセット行列を作成
     DirectX::XMMATRIX T = DirectX::XMMatrixTranslation(e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z);
 
-    // ★修正: スケールなしの行列と掛け合わせる
-    // これで offsetLocal (0, 11, 0) は、0.1倍されずにそのまま +11.0 されます
     DirectX::XMMATRIX M = T * matActorUnscaled;
 
     DirectX::XMFLOAT4X4 out{};
@@ -297,15 +276,11 @@ std::shared_ptr<Component> ColliderComponent::Clone()
     return clone;
 }
 
-// ────────────────────────────────────────────
-// ★修正: シーケンサー由来(runtimeTag != 0)の要素を全削除
-// ────────────────────────────────────────────
 void ColliderComponent::ClearSequencerRuntime()
 {
     auto it = elements.begin();
     while (it != elements.end())
     {
-        // 0以外はすべてシーケンサー管理とみなして削除
         if (it->runtimeTag != 0)
         {
             UnregisterFromManager(*it);
@@ -323,17 +298,14 @@ void ColliderComponent::SyncFromSequencer(TimelineSequencerComponent* seq, int c
 {
     if (!seq) return;
 
-    // 前回の「全削除(ClearSequencerRuntime)」は呼びません！
-    // 既存のIDを維持して更新するためです。
 
     const auto& items = seq->GetItems();
 
-    // 1. 今回のフレームで有効であるべきアイテムのリストを作る
     std::vector<int> activeIndices;
     for (int i = 0; i < (int)items.size(); ++i)
     {
         const auto& it = items[i];
-        if (it.type != 0) continue; // Hitboxのみ
+        if (it.type != 0) continue;
 
         if (currentFrame >= it.start && currentFrame <= it.end)
         {
@@ -341,31 +313,24 @@ void ColliderComponent::SyncFromSequencer(TimelineSequencerComponent* seq, int c
         }
     }
 
-    // 2. 有効なアイテムについて「更新」または「新規作成」
     for (int index : activeIndices)
     {
-        // アイテムを一意に識別するために (index + 1) をタグとして利用
-        // (0は静的コライダー用なので+1する)
         int targetTag = index + 1;
         const auto& it = items[index];
 
-        // 既にこのタグを持つElementがあるか探す
         auto found = std::find_if(elements.begin(), elements.end(),
             [targetTag](const Element& e) { return e.runtimeTag == targetTag; });
 
         if (found != elements.end())
         {
-            // [A] 既に存在する -> パラメータ更新 (ID維持！)
             Element& e = *found;
             e.nodeIndex = it.hb.nodeIndex;
             e.offsetLocal = DirectX::SimpleMath::Vector3(it.hb.offsetLocal.x, it.hb.offsetLocal.y, it.hb.offsetLocal.z);
             e.radius = it.hb.radius;
-            // 位置とサイズを物理マネージャーへ即時反映
             UpdateToManager(e);
         }
         else
         {
-            // [B] 存在しない -> 新規作成して登録
             Element e{};
             e.enabled = true;
             e.type = ShapeType::Sphere;
@@ -373,21 +338,18 @@ void ColliderComponent::SyncFromSequencer(TimelineSequencerComponent* seq, int c
             e.offsetLocal = DirectX::SimpleMath::Vector3(it.hb.offsetLocal.x, it.hb.offsetLocal.y, it.hb.offsetLocal.z);
             e.radius = it.hb.radius;
             e.color = DirectX::SimpleMath::Vector4(1, 0, 0, 0.35f);
-            e.runtimeTag = targetTag; // ★タグを設定して管理下に置く
+            e.runtimeTag = targetTag;
             e.label = "HB(runtime)";
             e.attribute = ColliderAttribute::Attack;
 
-            RegisterToManager(e); // ID発行
+            RegisterToManager(e);
             elements.push_back(e);
         }
     }
 
-    // 3. 有効期限が切れたElementを削除
-    // (runtimeTag != 0 かつ activeIndices に含まれないものを消す)
     auto it = elements.begin();
     while (it != elements.end())
     {
-        // シーケンサー由来のものだけチェック
         if (it->runtimeTag != 0)
         {
             int originalIndex = it->runtimeTag - 1;
@@ -398,7 +360,6 @@ void ColliderComponent::SyncFromSequencer(TimelineSequencerComponent* seq, int c
 
             if (!isActive)
             {
-                // もう有効範囲外なので削除
                 UnregisterFromManager(*it);
                 it = elements.erase(it);
                 continue;
@@ -506,7 +467,6 @@ void ColliderComponent::Serialize(json& outJson) const
     json shapes = json::array();
     for (const auto& e : elements)
     {
-        // ランタイム生成されたもの（攻撃判定）は保存しない
         if (e.runtimeTag != 0) continue;
 
         json j;
@@ -549,7 +509,6 @@ void ColliderComponent::Deserialize(const json& inJson)
             e.radius = j.value("radius", 0.5f);
             e.height = j.value("height", 1.0f);
 
-            // runtimeTagは0で初期化されるのでそのままでOK
 
             RegisterToManager(e);
             elements.push_back(e);
@@ -557,55 +516,42 @@ void ColliderComponent::Deserialize(const json& inJson)
     }
 }
 
-// ColliderComponent.cpp の最後に追加
 
 float ColliderComponent::GetMaxRadiusXZ() const
 {
     using namespace DirectX;
     using namespace DirectX::SimpleMath;
 
-    float maxRadius = 0.0f; // デフォルト (コライダーなしなら0)
+    float maxRadius = 0.0f;
 
     for (const auto& e : elements)
     {
-        // 無効なコライダーは無視
         if (!e.enabled) continue;
 
-        // アクター中心(0,0)から、コライダー中心(offset)までの距離
-        // Y軸(高さ)は壁判定に関係ないので無視してXZのみで計算
         Vector2 offsetXZ = Vector2(e.offsetLocal.x, e.offsetLocal.z);
         float distToCenter = offsetXZ.Length();
 
         float shapeRadius = 0.0f;
 
-        // 形状ごとの「厚み」を計算
         switch (e.type)
         {
         case ShapeType::Sphere:
         case ShapeType::Capsule:
-            // 球とカプセルは radius そのもの
             shapeRadius = e.radius;
             break;
 
         case ShapeType::Box:
-            // ボックスの場合、回転を考慮しない簡易計算として
-            // 「XZ断面の対角線の半分」を半径とみなす (一番出っ張る角までの距離)
-            // size は全幅なので * 0.5 する
             shapeRadius = Vector2(e.size.x, e.size.z).Length() * 0.5f;
             break;
         }
 
-        // 「中心までのズレ + その形状の半径」が、アクター中心からの最大到達距離
         float totalDist = distToCenter + shapeRadius;
 
-        // 最大値を更新
         if (totalDist > maxRadius)
         {
             maxRadius = totalDist;
         }
     }
 
-    // もしコライダーが1つもなければ、最低限の半径 (0.5m) を返しても良いが、
-    // ここでは忠実に 0.0f を返す実装とする
     return maxRadius;
 }

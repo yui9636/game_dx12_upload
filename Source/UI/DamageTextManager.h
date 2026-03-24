@@ -21,7 +21,6 @@ public:
     void Update(float dt);
     void Render(const RenderContext& rc);
 
-    // ƒ_ƒ[ƒW”­¶ (Enemy‚©‚çŒÄ‚Î‚ê‚é)
     void Spawn(const DirectX::XMFLOAT3& position, int damage);
 
 private:

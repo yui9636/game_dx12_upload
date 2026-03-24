@@ -9,17 +9,15 @@ public:
 
     const std::filesystem::path& GetCurrentDirectory() const { return m_currentDirectory; }
 
-    // ★追加: 表示を強制更新する（D&D後に呼ぶ）
-    void Refresh() { /* 次回のRenderUIで自動的に最新のディレクトリが読み込まれます */ }
+    void Refresh() { /* RenderUI で最新状態を読み直す */ }
 private:
     void RenderTopBar();
     void RenderFolderTree(const std::filesystem::path& currentDir);
     void RenderContentGrid();
 
-    std::filesystem::path m_currentDirectory; // 現在開いているフォルダ
-    std::string m_searchFilter;               // 検索文字列
+    std::filesystem::path m_currentDirectory;
+    std::string m_searchFilter;
 
-    // private: に状態変数を追加
     std::string m_renameTarget;
     char m_renameBuffer[256] = "";
     bool m_openRenamePopup = false;
@@ -27,6 +25,6 @@ private:
     std::string m_deleteTarget;
     bool m_openDeletePopup = false;
 
-    std::filesystem::path m_clipboardPath; // コピー/切り取り中のファイルパス
-    bool m_isCut = false;                  // trueなら切り取り、falseならコピー
+    std::filesystem::path m_clipboardPath;
+    bool m_isCut = false;
 };

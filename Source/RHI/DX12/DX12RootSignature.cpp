@@ -15,7 +15,6 @@ DX12RootSignature::DX12RootSignature(DX12Device* device) {
         rootParams[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
 
-    // SRV table: t0~t63 (DeferredLightingPS 等が t35 を使用するため拡張)
     D3D12_DESCRIPTOR_RANGE1 srvRange = {};
     srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     srvRange.NumDescriptors = 64;

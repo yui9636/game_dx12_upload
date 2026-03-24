@@ -6,7 +6,6 @@
 #include "Component/NodeAttachComponent.h"
 #include "Model.h" 
 
-// ★必須: 内部ヘッダー
 #include <imgui.h>
 #include <imgui_internal.h> 
 
@@ -30,7 +29,6 @@
 #define DEG_TO_RAD (PI / 180.0f)
 
 // ----------------------------------------------------------------------------
-// 時間変換・クリップ長取得
 // ----------------------------------------------------------------------------
 
 int TimelineSequencerComponent::SecondsToFrames(float seconds) const
@@ -59,7 +57,6 @@ float TimelineSequencerComponent::GetClipLengthSeconds() const
 }
 
 // ----------------------------------------------------------------------------
-// 座標計算ロジック
 // ----------------------------------------------------------------------------
 
 
@@ -100,12 +97,9 @@ DirectX::XMMATRIX TimelineSequencerComponent::CalcWorldMatrixForItem(const GESeq
         }
     }
 
-    // ★修正: 親行列(W_base)からスケール成分を強制的に除去(正規化)する
-    // これにより、ボーンに極端なスケール(0.01など)が入っていても計算が狂わなくなる
     XMVECTOR s, r, t;
     if (XMMatrixDecompose(&s, &r, &t, W_base))
     {
-        // スケールを(1,1,1)に固定して再構築
         W_base = XMMatrixAffineTransformation(
             DirectX::XMVectorSet(1.0f, 1.0f, 1.0f, 1.0f),
             DirectX::XMVectorZero(),
@@ -114,7 +108,6 @@ DirectX::XMMATRIX TimelineSequencerComponent::CalcWorldMatrixForItem(const GESeq
         );
     }
 
-    // オフセット行列の構築
     XMMATRIX T_offset = XMMatrixTranslation(item.vfx.offsetLocal.x, item.vfx.offsetLocal.y, item.vfx.offsetLocal.z);
 
     XMVECTOR r_quat = XMQuaternionRotationRollPitchYaw(
@@ -131,7 +124,6 @@ DirectX::XMMATRIX TimelineSequencerComponent::CalcWorldMatrixForItem(const GESeq
 }
 
 // ----------------------------------------------------------------------------
-// ライフサイクル (Start, Update)
 // ----------------------------------------------------------------------------
 
 void TimelineSequencerComponent::Start()
@@ -172,7 +164,6 @@ void TimelineSequencerComponent::Update(float dt)
     std::shared_ptr<Actor> owner = GetActor();
     if (!owner) return;
 
-    // 現在の時間を取得
     int frameNow = currentFrame;
     float timeNowSec = 0.0f;
 
@@ -189,7 +180,6 @@ void TimelineSequencerComponent::Update(float dt)
         collider->SyncFromSequencer(this, frameNow);
     }
 
-    // ───────── Items (VFX, Audio, Shake) 同期 ─────────
     for (size_t i = 0; i < items.size(); ++i)
     {
         GESequencerItem& it = items[i];
@@ -203,15 +193,12 @@ void TimelineSequencerComponent::Update(float dt)
 
             if (isInside)
             {
-                // A. 再生開始
                 if (!it.vfxActive || !it.vfxInstance)
                 {
                     if (it.vfx.assetId[0] != '\0')
                     {
-                        // 座標計算
                         DirectX::XMMATRIX W = CalcWorldMatrixForItem(it);
 
-                        // 初期位置を指定してPlay
                         float t[3], r[3], s[3];
                         DirectX::XMFLOAT4X4 matF;
                         DirectX::XMStoreFloat4x4(&matF, W);
@@ -224,10 +211,8 @@ void TimelineSequencerComponent::Update(float dt)
                             instance->loop = !it.vfx.fireOnEnterOnly;
                             instance->isSequencerControlled = true;
 
-                            // 親行列をセット
                             DirectX::XMStoreFloat4x4(&instance->parentMatrix, W);
 
-                            // ローカル変形初期化
                             instance->overrideLocalTransform.position = it.vfx.offsetLocal;
                             instance->overrideLocalTransform.rotation = it.vfx.offsetRotDeg;
                             instance->overrideLocalTransform.scale = it.vfx.offsetScale;
@@ -242,15 +227,12 @@ void TimelineSequencerComponent::Update(float dt)
                     }
                 }
 
-                // B. 毎フレーム同期
                 if (it.vfxInstance)
                 {
-                    // 1. 寿命
                     float barDuration = FramesToSeconds(it.end - it.start);
                     if (barDuration < 0.1f) barDuration = 0.1f;
                     it.vfxInstance->lifeTime = barDuration;
 
-                    // 2. ボーン行列(Parent)
                     using namespace DirectX;
                     XMMATRIX W_Socket = XMMatrixIdentity();
                     if (owner) {
@@ -266,7 +248,6 @@ void TimelineSequencerComponent::Update(float dt)
                             W_Socket = XMLoadFloat4x4(&owner->GetTransform());
                         }
                     }
-                    // 正規化
                     {
                         XMFLOAT4X4 m; XMStoreFloat4x4(&m, W_Socket);
                         XMVECTOR ax = XMVector3Normalize(XMVectorSet(m._11, m._12, m._13, 0));
@@ -278,12 +259,10 @@ void TimelineSequencerComponent::Update(float dt)
                     }
                     DirectX::XMStoreFloat4x4(&it.vfxInstance->parentMatrix, W_Socket);
 
-                    // 3. ローカル変形
                     it.vfxInstance->overrideLocalTransform.position = it.vfx.offsetLocal;
                     it.vfxInstance->overrideLocalTransform.rotation = it.vfx.offsetRotDeg;
                     it.vfxInstance->overrideLocalTransform.scale = it.vfx.offsetScale;
 
-                    // 4. 時間同期
                     float startTimeSec = FramesToSeconds(it.start);
                     float effectAge = timeNowSec - startTimeSec;
                     EffectManager::Get().SyncInstanceToTime(it.vfxInstance, effectAge);
@@ -291,7 +270,6 @@ void TimelineSequencerComponent::Update(float dt)
             }
             else
             {
-                // C. 範囲外なら停止
                 if (it.vfxActive)
                 {
                     if (it.vfxInstance) it.vfxInstance->Stop(true);
@@ -307,7 +285,6 @@ void TimelineSequencerComponent::Update(float dt)
         {
             const bool isInside = (frameNow >= it.start && frameNow <= it.end);
 
-            // A. 再生開始
             if (isInside)
             {
                 if (!it.audioActive)
@@ -317,7 +294,6 @@ void TimelineSequencerComponent::Update(float dt)
                     {
                         if (it.audio.is3D)
                         {
-                            // 3D座標の計算
                             DirectX::XMFLOAT3 pos = owner->GetPosition();
                             if (it.audio.nodeIndex >= 0) {
                                 if (auto model = owner->GetModelRaw()) {
@@ -333,7 +309,6 @@ void TimelineSequencerComponent::Update(float dt)
                                     }
                                 }
                             }
-                            // 3D再生
                             it.audioSource = Audio::Instance()->Play3D(
                                 it.audio.assetId, pos,
                                 it.audio.volume, it.audio.pitch, it.audio.loop
@@ -341,7 +316,6 @@ void TimelineSequencerComponent::Update(float dt)
                         }
                         else
                         {
-                            // 2D再生
                             Audio::Instance()->Play2D(
                                 it.audio.assetId, it.audio.volume, it.audio.pitch, it.audio.loop
                             );
@@ -350,7 +324,6 @@ void TimelineSequencerComponent::Update(float dt)
                     }
                 }
 
-                // B. 3D位置の更新
                 if (it.audioActive && it.audioSource && it.audio.is3D)
                 {
                     DirectX::XMFLOAT3 pos = owner->GetPosition();
@@ -370,7 +343,6 @@ void TimelineSequencerComponent::Update(float dt)
                     it.audioSource->SetPosition(pos);
                 }
             }
-            // C. 停止
             else
             {
                 if (it.audioActive)
@@ -385,25 +357,19 @@ void TimelineSequencerComponent::Update(float dt)
             }
         }
         // -----------------------------------------------------------------
-        // ★追加 Type 4: Shake & HitStop (Motion Shake)
         // -----------------------------------------------------------------
         else if (it.type == 4)
         {
-            // 範囲内に入ったか判定
             bool isInside = (frameNow >= it.start && frameNow <= it.end);
 
-            // 巻き戻し対応: 範囲より前に戻ったらフラグをリセット
             if (frameNow < it.start) it.fired = false;
 
             // --------------------------------------------------------
-            // 1. ヒットストップ (イベント方式: 突入時に1回だけ発動)
             // --------------------------------------------------------
-            // ※これはRunnerの状態を変えるものなので、イベント方式が正解
             if (isInside && !it.fired)
             {
                 it.fired = true;
 
-                // ヒットストップ時間が設定されていれば実行
                 if (targetCamera && runner && it.shake.hitStopDuration > 0.0f)
                 {
                     runner->RequestHitStop(it.shake.hitStopDuration, it.shake.timeScale);
@@ -412,12 +378,9 @@ void TimelineSequencerComponent::Update(float dt)
             }
 
             // --------------------------------------------------------
-            // 2. カメラシェイク (評価方式: 毎フレーム計算して上書き)
             // --------------------------------------------------------
-            // ※「範囲内にいる間」はずっと計算し続けることで、エディタでシークしても揺れる
             if (isInside)
             {
-                // (1) 経過時間の計算
                 float startTime = FramesToSeconds(it.start);
                 float time = timeNowSec - startTime;
                 if (time < 0.0f) time = 0.0f;
@@ -431,13 +394,11 @@ void TimelineSequencerComponent::Update(float dt)
                 if (decayFactor < 0.0f) decayFactor = 0.0f;
 
 
-                // 現在の強さ
                 float currentAmp = it.shake.amplitude * decayFactor;
 
                 static float shakeRealTime = 0.0f;
                 shakeRealTime += dt;
 
-                // まだ揺れが残っているなら計算
                 if (currentAmp > 0.001f)
                 {
                     float t = shakeRealTime * it.shake.frequency;
@@ -485,11 +446,10 @@ namespace {
         void Add(int type) override {
             if (!items) return;
             GESequencerItem it; it.type = type; it.start = frameMin; it.end = frameMin + 10;
-            // デフォルト設定
             if (type == 0) { it.color = 0xFF3CB371u; it.label = "Hitbox"; it.hb.radius = 30.0f; }
             else if (type == 1) { it.color = 0xFFFFA500u; it.label = "Event"; }
             else if (type == 2) { it.color = 0xFF66CCFFu; it.label = "Presets"; it.vfx.nodeIndex = -1; }
-            else if (type == 3) { it.color = 0xFF00FF7Fu; it.label = "Audio"; it.audio.volume = 1.0f; } // ★Audio初期化
+            else if (type == 3) { it.color = 0xFF00FF7Fu; it.label = "Audio"; it.audio.volume = 1.0f; }
             else if (type == 4) {
                 it.color = 0xFFFF4040u;
                 it.label = "Shake";
@@ -502,9 +462,7 @@ namespace {
         }
         void Del(int index) override {
             if (items && index >= 0) {
-                // VFX停止
                 if ((*items)[index].vfxActive && (*items)[index].vfxInstance) (*items)[index].vfxInstance->Stop();
-                // Audio停止
                 if ((*items)[index].audioActive && (*items)[index].audioSource) (*items)[index].audioSource->Stop();
 
                 items->erase(items->begin() + index);
@@ -515,7 +473,7 @@ namespace {
                 GESequencerItem cp = (*items)[index];
                 int w = cp.end - cp.start; cp.start += w + 1; cp.end += w + 1;
                 cp.vfxActive = false; cp.vfxInstance.reset();
-                cp.audioActive = false; cp.audioSource.reset(); // Audioリセット
+                cp.audioActive = false; cp.audioSource.reset();
                 items->push_back(cp);
             }
         }
@@ -548,7 +506,6 @@ namespace {
 
 void TimelineSequencerComponent::OnGUI()
 {
-    // タイプ名を拡張
     if (typeNames.size() < 5) {
         typeNames = { "Hitbox", "Event", "Presets", "Audio", "Shake" };
     }
@@ -559,7 +516,6 @@ void TimelineSequencerComponent::OnGUI()
         float currentTime = runner ? runner->GetTimeSeconds() : 0.0f;
         float totalTime = GetClipLengthSeconds();
 
-        // [再生コントロール]
         ImGui::PushStyleColor(ImGuiCol_Button, isPlaying ? ImVec4(0.5f, 0.1f, 0.1f, 1) : ImVec4(0.1f, 0.5f, 0.1f, 1));
         if (ImGui::Button(isPlaying ? " || " : " > ", ImVec2(40, 24))) {
             if (runner) { if (isPlaying) runner->Pause(); else runner->Play(); }
@@ -571,7 +527,6 @@ void TimelineSequencerComponent::OnGUI()
             if (runner) { runner->SetTimeSeconds(0.0f); runner->Pause(); currentFrame = 0; }
         }
 
-        // [シークバー]
         ImGui::SameLine();
         ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x - 180);
         float seekTime = currentTime;
@@ -585,7 +540,6 @@ void TimelineSequencerComponent::OnGUI()
         }
         ImGui::PopItemWidth();
 
-        // [速度スライダー]
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80);
         float spd = runner ? runner->GetPlaySpeed() : 1.0f;
@@ -593,7 +547,6 @@ void TimelineSequencerComponent::OnGUI()
             if (runner) runner->SetPlaySpeed(spd);
         }
 
-        // [追加ボタン]
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Horizontal);
         ImGui::TextDisabled("Add Track:");
         ImGui::SameLine();
@@ -632,16 +585,14 @@ void TimelineSequencerComponent::OnGUI()
             selectedEntry = (int)items.size() - 1;
         }
         ImGui::SameLine();
-        // ★追加: Shakeボタン
         if (ImGui::Button("+ Shake")) {
             GESequencerItem it;
             it.type = 4; // Shake type
             it.start = currentFrame;
-            it.end = currentFrame + 5; // ワンショットなので短くてOK
-            it.color = 0xFFFF4040u;    // 赤色
+            it.end = currentFrame + 5;
+            it.color = 0xFFFF4040u;
             it.label = "Shake";
 
-            // デフォルト値 (打撃感のある設定)
             it.shake.amplitude = 0.5f;
             it.shake.duration = 0.2f;
             it.shake.frequency = 20.0f;
@@ -653,7 +604,6 @@ void TimelineSequencerComponent::OnGUI()
 
         ImGui::Separator();
 
-        // [Sequencer 本体]
         {
             frameMin = 0;
             frameMax = SecondsToFrames(totalTime);
@@ -706,7 +656,6 @@ void TimelineSequencerComponent::OnGUI()
         if (selectedEntry >= 0 && selectedEntry < (int)items.size()) {
             GESequencerItem& it = items[(size_t)selectedEntry];
 
-            // タイプ名の表示
             const char* typeName = "Unknown";
             if (it.type == 0) typeName = "Hitbox";
             else if (it.type == 1) typeName = "Event";
@@ -731,7 +680,6 @@ void TimelineSequencerComponent::OnGUI()
                 if (ImGui::Button("...")) {
                     char path[MAX_PATH] = {};
                     if (Dialog::OpenFileName(path, MAX_PATH, "Effect JSON (*.json)\0*.json\0", "Select Effect", nullptr) == DialogResult::OK) {
-                        // パス処理（省略せず記述）
                         std::string fullPath = path;
                         std::string key = "Data\\";
                         size_t pos = fullPath.find(key);
@@ -744,7 +692,6 @@ void TimelineSequencerComponent::OnGUI()
                             strcpy_s(vfx.assetId, path);
                         }
 
-                        // 寿命自動読み込み
                         float life = 2.0f;
                         float inF = 0, outF = 0; bool lp = false;
                         if (EffectLoader::LoadEffect(vfx.assetId, &life, &inF, &outF, &lp)) {
@@ -837,12 +784,10 @@ void TimelineSequencerComponent::OnGUI()
                 ImGui::DragFloat("Radius", &it.hb.radius, 0.1f);
             }
             // -----------------------------------------------------------------
-            // ★追加 Type 4: Shake & HitStop
             // -----------------------------------------------------------------
             else if (it.type == 4)
             {
                 ImGui::SeparatorText("Camera Shake");
-                // ニーア的なパラメータ群
                 ImGui::DragFloat("Amplitude (m)", &it.shake.amplitude, 0.01f, 0.0f, 10.0f);
                 ImGui::DragFloat("Duration (s)", &it.shake.duration, 0.01f, 0.0f, 2.0f);
                 ImGui::DragFloat("Frequency (Hz)", &it.shake.frequency, 0.1f, 0.0f, 100.0f);
@@ -875,7 +820,6 @@ void TimelineSequencerComponent::DrawGizmoForItem(GESequencerItem& item)
 {
     using namespace DirectX;
 
-    // 1. 現在のワールド行列を計算（正規化済み親行列を使用）
     XMMATRIX W_current = CalcWorldMatrixForItem(item);
 
     XMFLOAT4X4 matF;
@@ -893,7 +837,6 @@ void TimelineSequencerComponent::DrawGizmoForItem(GESequencerItem& item)
 
     XMMATRIX W_new = XMLoadFloat4x4(&matF);
 
-    // 2. 親行列の再取得＆正規化
     XMMATRIX W_socket = XMMatrixIdentity();
     std::shared_ptr<Actor> actor = GetActor();
     if (actor)
@@ -920,7 +863,6 @@ void TimelineSequencerComponent::DrawGizmoForItem(GESequencerItem& item)
         W_socket.r[0] = ax; W_socket.r[1] = ay; W_socket.r[2] = az; W_socket.r[3] = p;
     }
 
-    // 3. 逆算して保存
     XMMATRIX W_invSocket = XMMatrixInverse(nullptr, W_socket);
     XMMATRIX W_newLocal = W_new * W_invSocket;
 
@@ -943,7 +885,6 @@ void TimelineSequencerComponent::DrawGizmoForItem(GESequencerItem& item)
     item.vfx.offsetRotDeg = { r_arr[0], r_arr[1], r_arr[2] };
     item.vfx.offsetScale = { s_arr[0], s_arr[1], s_arr[2] };
 
-    // 4. プレビュー反映
     if (item.vfxInstance && item.vfxInstance->rootNode)
     {
         XMStoreFloat4x4(&item.vfxInstance->parentMatrix, W_socket);
@@ -952,7 +893,6 @@ void TimelineSequencerComponent::DrawGizmoForItem(GESequencerItem& item)
         item.vfxInstance->overrideLocalTransform.rotation = item.vfx.offsetRotDeg;
         item.vfxInstance->overrideLocalTransform.scale = item.vfx.offsetScale;
 
-        // 即時適用
         item.vfxInstance->rootNode->localTransform = item.vfxInstance->overrideLocalTransform;
         item.vfxInstance->rootNode->UpdateTransform(W_socket);
     }
@@ -1055,7 +995,6 @@ void TimelineSequencerComponent::StoreSpeedCurvePointsToRunner()
 
 const GESequencerItem* TimelineSequencerComponent::GetActiveShakeItem() const
 {
-    // 全アイテムの中から、現在再生中のフレームに含まれる Type 4 (Shake) を探す
     for (const auto& it : items)
     {
         if (it.type == 4 && currentFrame >= it.start && currentFrame <= it.end)

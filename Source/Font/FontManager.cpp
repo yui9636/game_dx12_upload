@@ -23,7 +23,6 @@ std::shared_ptr<Font> FontManager::Get(const std::string& key)
     return (it != fonts.end()) ? it->second : nullptr;
 }
 
-// フル機能版 DrawFormat
 void FontManager::DrawFormat(
     ID3D11DeviceContext* dc,
     const std::string& key,
@@ -37,7 +36,6 @@ void FontManager::DrawFormat(
     auto font = Get(key);
     if (!font) return;
 
-    // 1. 文字列整形
     va_list args;
     va_start(args, format);
     int len = _vscwprintf(format, args) + 1;
@@ -45,21 +43,17 @@ void FontManager::DrawFormat(
     vswprintf_s(buffer.data(), len, format, args);
     va_end(args);
 
-    // 2. アライメント計算 (座標補正)
     float drawX = x;
     if (align != FontAlign::Left)
     {
-        // 文字列の幅を取得してオフセット計算
         float width = font->GetTextWidth(buffer.data()) * scale;
 
         if (align == FontAlign::Center)
-            drawX -= width * 0.5f; // 半分左へずらす
+            drawX -= width * 0.5f;
         else if (align == FontAlign::Right)
-            drawX -= width;        // 全部左へずらす
+            drawX -= width;
     }
 
-    // 3. 設定適用 & 描画
-    // ステートを保存・復元する仕組みはないため、毎回設定します
     font->SetColor(color);
     font->SetScale(scale, scale);
 
@@ -68,10 +62,8 @@ void FontManager::DrawFormat(
     font->End(dc);
 }
 
-// シンプル版 (オーバーロード)
 void FontManager::DrawFormat(ID3D11DeviceContext* dc, const std::string& key, float x, float y, const wchar_t* format, ...)
 {
-    // 引数転送のため、ここでもva_list処理が必要
     va_list args;
     va_start(args, format);
     int len = _vscwprintf(format, args) + 1;
@@ -79,7 +71,6 @@ void FontManager::DrawFormat(ID3D11DeviceContext* dc, const std::string& key, fl
     vswprintf_s(buffer.data(), len, format, args);
     va_end(args);
 
-    // デフォルト設定で呼び出し
     DrawFormat(dc, key, x, y, { 1,1,1,1 }, 1.0f, FontAlign::Left, L"%s", buffer.data());
 }
 
@@ -100,7 +91,6 @@ void FontManager::DrawFormat3D(
     auto font = Get(key);
     if (!font) return;
 
-    // 1. 文字列整形
     va_list args;
     va_start(args, format);
     int len = _vscwprintf(format, args) + 1;
@@ -108,7 +98,6 @@ void FontManager::DrawFormat3D(
     vswprintf_s(buffer.data(), len, format, args);
     va_end(args);
 
-    // 2. アライメント計算
     float offsetX = 0.0f;
     if (align != FontAlign::Left)
     {
@@ -117,33 +106,26 @@ void FontManager::DrawFormat3D(
         else if (align == FontAlign::Right) offsetX = -width;
     }
 
-    // 3. 行列計算
     XMMATRIX MOffset = XMMatrixTranslation(offsetX, 0.0f, 0.0f);
 
-    // スケール補正 (0.02f)
     float worldScale = scale * 0.02f;
     XMMATRIX MScale = XMMatrixScaling(worldScale, worldScale, 1.0f);
 
-    // 回転
     XMMATRIX MRot = XMMatrixRotationRollPitchYaw(
         XMConvertToRadians(rotation.x),
         XMConvertToRadians(rotation.y),
         XMConvertToRadians(rotation.z)
     );
 
-    // 平行移動
     XMMATRIX MTrans = XMMatrixTranslation(position.x, position.y, position.z);
 
-    // ワールド行列
     XMMATRIX World = MOffset * MScale * MRot * MTrans;
 
-    // 4. 描画
     font->SetColor(color);
 
     font->SetScale(1.0f, 1.0f);
 
     font->Begin(dc);
-    // 引数で受け取った view, projection をそのまま渡す
     font->Draw3D(World, view, projection, buffer.data());
     font->End(dc);
 }

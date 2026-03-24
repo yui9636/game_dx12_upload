@@ -14,7 +14,6 @@
 #include "C_DodgeGauge.h"
 #include <set>
 
-// 前方宣言
 class InputActionComponent;
 class LocomotionComponent;
 class AnimatorComponent;
@@ -171,25 +170,21 @@ public:
 
     };
 
-    // アクションデータ構造体 (Ver.4.0)
     struct ActionNode
     {
-        int   animIndex;            // 再生アニメID
+        int   animIndex;
 
-        // 派生先
-        int   nextLight = -1;       // □派生
-        int   nextHeavy = -1;       // △派生
-        int   nextDodge = -1;       // 回避派生(基本は自動)
+        int   nextLight = -1;
+        int   nextHeavy = -1;
+        int   nextDodge = -1;
 
-        // タイミング (0.0~1.0)
-        float inputStart = 0.0f;   // 先行入力開始
-        float inputEnd = 1.0f;   // 先行入力終了
-        float comboStart = 0.5f;   // 派生遷移タイミング
-        float cancelStart = 0.2f;   // 回避キャンセル可能タイミング
+        float inputStart = 0.0f;
+        float inputEnd = 1.0f;
+        float comboStart = 0.5f;
+        float cancelStart = 0.2f;
 
-        // マグネティズム (吸着)
-        float magnetismRange = 10.0f; // 発動距離
-        float magnetismSpeed = 0.0f;  // 移動速度 (0で無効)
+        float magnetismRange = 10.0f;
+        float magnetismSpeed = 0.0f;
 
         int   damageVal = 0;
 
@@ -207,13 +202,11 @@ private:
     void UpdateAction(float dt);
     bool TryDodge();
 
-    void BuildActionDatabase(); // データベース構築
+    void BuildActionDatabase();
 
-    // マグネティズム・追尾
     void RotateToNearestEnemyInstant();
     void UpdateMagnetism(float dt);
 
-    // ユーティリティ
     bool IsAttackAction(int animIndex) const;
 
 protected:
@@ -223,36 +216,31 @@ protected:
 private:
     State state = State::Locomotion;
 
-    // アクション管理
     std::vector<ActionNode> actionDatabase;
     int currentActionIdx = -1;
     int reservedActionIdx = -1;
     ActionNode currentActionData;
 
-    // 物理・移動
     float verticalVelocity = 0.0f;
     float customGravity = -30.0f;
 
     float stageLimitRadius = 50.0f;
 
-    // マグネティズム 2.0
     bool isMagnetismActive = false;
     DirectX::XMFLOAT3 magTargetPos = { 0,0,0 };
     float magnetismTimer = 0.0f;
     float magnetismDuration = 0.0f;
 
-    // 回避など
     bool isJustDodgeAccept = false;
     float dodgeMoveScale = 5.0f;
     int comboCount = 0;
     float comboTimer = 0.0f;
     const float COMBO_TIMEOUT = 3.0f;
 
-    std::set<Actor*> hitList; // 今回の攻撃で既に叩いた相手のリスト
+    std::set<Actor*> hitList;
     int lastHitboxStart = -1;
 
     float stateTimer = 0.0f;
-    // コンポーネント
     GameplayAsset gameplayData;
     std::shared_ptr<InputActionComponent> input;
     std::shared_ptr<LocomotionComponent>  locomotion;

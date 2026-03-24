@@ -8,7 +8,7 @@
 
 #include "ThumbnailGenerator.h"
 
-#include "System/ResourceManager.h" // ★あなたの強力なマネージャーを使用
+#include "System/ResourceManager.h"
 
 #include <fstream>
 
@@ -51,9 +51,7 @@ std::vector<AssetEntry> AssetManager::GetAssetsInDirectory(const std::filesystem
 
     // ==========================================
 
-    // ★ 修正: 範囲for文（for :）は使わない！
 
-    // 範囲for文は隠れて ++it を呼び出すため、そこで権限エラーが起きると例外クラッシュします
 
     // ==========================================
 
@@ -69,7 +67,7 @@ std::vector<AssetEntry> AssetManager::GetAssetsInDirectory(const std::filesystem
 
             ec.clear();
 
-            continue; // エラーが起きたファイルや隠しフォルダは無視
+            continue;
 
         }
 
@@ -89,7 +87,6 @@ std::vector<AssetEntry> AssetManager::GetAssetsInDirectory(const std::filesystem
 
 
 
-    // フォルダ優先、その後名前順でソート
 
     std::sort(entries.begin(), entries.end(), [](const AssetEntry& a, const AssetEntry& b) {
 
@@ -139,7 +136,6 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     // ==========================================
 
-    // モデル：専用スタジオで写真を撮る！
 
     // ==========================================
 
@@ -151,8 +147,6 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
         entry.iconColor = ImVec4(0.4f, 0.8f, 0.9f, 1.0f);
 
-
-
         ThumbnailGenerator::Instance().Request(entry.path.string());
         entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
 
@@ -160,13 +154,11 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     // ==========================================
 
-    // 2. エンジンのアクター / プレハブデータ（Assimp不可）
 
     // ==========================================
 
     else if (ext == ".bin" || ext == ".json") {
 
-        // ★ これらは「アクター（配置情報）」なので Assimp には渡さない！
 
         entry.type = AssetType::Prefab;
 
@@ -176,9 +168,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
 
 
-        // プレハブのサムネイルは、中身のモデルが判明するまで一旦デフォルトアイコンにするか、
 
-        // あるいは専用の静止画アイコンをセットする
 
         entry.thumbnail = nullptr;
 
@@ -186,7 +176,6 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     // ==========================================
 
-    // テクスチャ：リソースマネージャーを通す！
 
     // ==========================================
 
@@ -232,21 +221,24 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
         entry.iconStr = ICON_FA_PALETTE;
 
-        entry.iconColor = ImVec4(1.0f, 0.5f, 0.8f, 1.0f); // マテリアルは視認性の高いピンク系
+        entry.iconColor = ImVec4(1.0f, 0.5f, 0.8f, 1.0f);
+
+        ThumbnailGenerator::Instance().RequestMaterial(entry.path.string());
+        entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
 
     }
 
-    else if (ext == ".cpp" || ext == ".h" || ext == ".hlsl" || ext == ".hlsli") { // ★.hlslを追加
+    else if (ext == ".cpp" || ext == ".h" || ext == ".hlsl" || ext == ".hlsli") {
 
-        entry.type = AssetType::Script; // または AssetType::Shader を新設してもOK
+        entry.type = AssetType::Script;
 
         entry.iconStr = ICON_FA_FILE_CODE;
 
         entry.iconColor = (ext == ".hlsl" || ext == ".hlsli")
 
-            ? ImVec4(0.3f, 0.9f, 0.6f, 1.0f)  // シェーダーは緑っぽく
+            ? ImVec4(0.3f, 0.9f, 0.6f, 1.0f)
 
-            : ImVec4(0.8f, 0.8f, 0.8f, 1.0f); // スクリプトはグレー
+            : ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
 
     }
 
@@ -278,13 +270,11 @@ void AssetManager::ImportExternalFile(const std::filesystem::path& sourcePath, c
 
 
 
-    // 1. コピー先のフルパスを作成
 
     std::filesystem::path finalDest = destinationDir / sourcePath.filename();
 
 
 
-    // 2. 同名ファイルがある場合は "(1)" などを付ける（上書き事故防止）
 
     int count = 1;
 
@@ -298,11 +288,9 @@ void AssetManager::ImportExternalFile(const std::filesystem::path& sourcePath, c
 
 
 
-    // 3. 物理コピー実行
 
     if (std::filesystem::copy_file(sourcePath, finalDest, std::filesystem::copy_options::none, ec)) {
 
-        // コピー成功。AssetManagerのキャッシュなどはRefreshで更新される
 
     }
 
@@ -336,7 +324,6 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
 
 
-    // ベースとなるクラス名
 
     std::string baseName = "NewActor";
 
@@ -346,7 +333,6 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
 
 
-    // 同名ファイルが存在する場合、連番をつける
 
     int count = 1;
 
@@ -362,7 +348,6 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
 
 
-    // --- 1. ヘッダーファイル (.h) の生成 ---
 
     std::ofstream ofsH(hPath);
 
@@ -382,7 +367,6 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
 
 
-    // --- 2. ソースファイル (.cpp) の生成 ---
 
     std::ofstream ofsCpp(cppPath);
 
@@ -390,9 +374,9 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
         << "void " << baseName << "::Update(float dt) {\n"
 
-        << "    // 毎フレームの処理をここに記述\n"
+        << "      // 実装をここに追加する\\n"
 
-        << "}\n";
+        << "}\\n";
 
     ofsCpp.close();
 
@@ -440,7 +424,6 @@ void AssetManager::CreateNewMaterial(const std::filesystem::path& parentDir) {
 
 
 
-    // デフォルトのパラメータを持つJSONとして書き出す
 
     std::ofstream ofs(newPath);
 
@@ -484,7 +467,7 @@ bool AssetManager::RenameAsset(const std::filesystem::path& oldPath, const std::
 
     std::filesystem::path newPath = oldPath.parent_path() / newName;
 
-    if (std::filesystem::exists(newPath)) return false; // 既に同名が存在
+    if (std::filesystem::exists(newPath)) return false;
 
 
 
@@ -514,7 +497,6 @@ bool AssetManager::MoveAsset(const std::filesystem::path& sourcePath, const std:
 
 
 
-    // 既に同名ファイルが存在する場合は移動をキャンセル
 
     if (std::filesystem::exists(finalDest)) {
 
@@ -540,7 +522,6 @@ bool AssetManager::CopyAsset(const std::filesystem::path& sourcePath, const std:
 
 
 
-    // 既に同名ファイルが存在する場合は「 - Copy (1)」などを付けて複製する
 
     int count = 1;
 
@@ -554,7 +535,6 @@ bool AssetManager::CopyAsset(const std::filesystem::path& sourcePath, const std:
 
 
 
-    // 物理的にコピー
 
     std::filesystem::copy(sourcePath, finalDest, std::filesystem::copy_options::recursive, ec);
 

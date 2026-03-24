@@ -1,6 +1,6 @@
 #include "CinematicPlayComponent.h"
-#include "Actor/Actor.h"        // GetName()のために必要
-#include "Cinematic/CinematicTrack.h" // TransformTrackのために必要
+#include "Actor/Actor.h"
+#include "Cinematic/CinematicTrack.h"
 #include "imgui.h"
 #include "System/Dialog.h"
 
@@ -12,18 +12,15 @@ void CinematicPlayComponent::Start()
     {
         sequence = std::make_shared<Sequence>();
 
-        // ★既存のSequenceクラスにLoadFromFileが追加されている前提
         sequence->LoadFromFile(sequenceFilePath);
 
         // -------------------------------------------------------
-        // ★バインド処理: 名前から実体を探してリンクする
         // -------------------------------------------------------
         const auto& actors = ActorManager::Instance().GetActors();
 
         for (auto& track : sequence->tracks)
         {
             
-            // CameraTrackの場合: カメラコントローラーをバインド
             if (auto camTrack = std::dynamic_pointer_cast<CameraTrack>(track))
             {
                 camTrack->Bind(CameraController::Instance());
@@ -45,7 +42,7 @@ void CinematicPlayComponent::Update(float dt)
         if (currentTime >= sequence->duration)
         {
             currentTime = sequence->duration;
-            Stop(); // ループさせたい場合はここで currentTime = 0;
+            Stop();
         }
         sequence->Evaluate(currentTime);
     }
@@ -66,14 +63,12 @@ void CinematicPlayComponent::Stop()
     currentTime = 0.0f;
 }
 
-// 保存
 void CinematicPlayComponent::Serialize(json& outJson) const
 {
     outJson["file"] = sequenceFilePath;
     outJson["playOnStart"] = playOnStart;
 }
 
-// 読み込み
 void CinematicPlayComponent::Deserialize(const json& inJson)
 {
     if (inJson.contains("file")) inJson.at("file").get_to(sequenceFilePath);

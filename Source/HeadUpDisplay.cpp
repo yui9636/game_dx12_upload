@@ -9,7 +9,6 @@
 
 HeadUpDisplay::HeadUpDisplay()
 {
-	// DX12 では Sprite が DX11 直接依存のため暫定スキップ
 	if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12)
 		lockonCursol = new Sprite(Graphics::Instance().GetDevice(), "Data/Sprite/LockonCursol.png");
 
@@ -32,7 +31,6 @@ HeadUpDisplay::~HeadUpDisplay()
 	}
 }
 
-// �X�V����
 void HeadUpDisplay::Update(float dt)
 {
 	{
@@ -44,7 +42,6 @@ void HeadUpDisplay::Update(float dt)
 	}
 }
 
-// �`�揈��
 void HeadUpDisplay::Render(ID3D11DeviceContext* dc)
 {
 	//
@@ -55,14 +52,12 @@ void HeadUpDisplay::Render(ID3D11DeviceContext* dc)
 		float	halfHeight		= static_cast<float>( lockonCursol->GetTextureHeight() ) * 0.25f;
 		float	alphaValue		= lockonTimer / lockonTimerMax;
 		float	sideValue		= 32 + 128 * ( 1 - alphaValue );
-		//	������`��
 		lockonCursol->Render(dc,
 			lockonPosition.x - sideValue, lockonPosition.y - halfHeight, 0.0f, cursolWidth, cursolHeight,
 			0, 0, static_cast<float>(lockonCursol->GetTextureWidth()), static_cast<float>(lockonCursol->GetTextureHeight()),
 			0,
 			1, 1, 1, alphaValue);
 
-		//	�E����`��
 		lockonCursol->Render(dc,
 			lockonPosition.x + sideValue, lockonPosition.y - halfHeight, 0.0f, cursolWidth, cursolHeight,
 			0, 0, static_cast<float>(lockonCursol->GetTextureWidth()), static_cast<float>(lockonCursol->GetTextureHeight()),
@@ -73,12 +68,10 @@ void HeadUpDisplay::Render(ID3D11DeviceContext* dc)
 	}
 }
 
-// ���b�N�I���J�[�\���`�揈������
 void HeadUpDisplay::OnLockOn(void* data)
 {
 	MessageData::CAMERACHANGELOCKONMODEDATA*	p	= static_cast<MessageData::CAMERACHANGELOCKONMODEDATA*>(data);
 
-	//	���[���h��ԏ�̍��W���X�N���[����ԏ�̍��W�ɕϊ�����
 	DirectX::XMMATRIX	vm	= DirectX::XMLoadFloat4x4( &Camera::Instance().GetView() );
 	DirectX::XMMATRIX	pm	= DirectX::XMLoadFloat4x4( &Camera::Instance().GetProjection() );
 	DirectX::XMVECTOR	wp	= DirectX::XMLoadFloat3( &p->target );
@@ -90,7 +83,6 @@ void HeadUpDisplay::OnLockOn(void* data)
 	lockonDirection	= +1;
 }
 
-// ���b�N�I���J�[�\���`�揈������
 void HeadUpDisplay::OnLockOff(void* data)
 {
 	lockonDirection	= -1;

@@ -1,4 +1,4 @@
-﻿#include "ResourceManager.h"
+#include "ResourceManager.h"
 #include "Model/Model.h"
 #include "Graphics.h"
 #include "GpuResourceUtils.h"
@@ -188,19 +188,17 @@ void ResourceManager::Clear()
     textureMap.clear();
 }
 
-// ResourceManager.cpp �� GetModel
-std::shared_ptr<Model> ResourceManager::GetModel(const std::string& path, float scaling)
+std::shared_ptr<Model> ResourceManager::GetModel(const std::string& path, float scaling, bool sourceOnly)
 {
     if (path.empty()) return nullptr;
 
-    // �X�P�[�����݂̃L�[�ŃL���b�V������
     std::string key = path + "_" + std::to_string(scaling);
+    if (sourceOnly) key += "_source";
     if (modelMap.count(key)) return modelMap[key];
 
-    // �������� PathResolver ��ʂ��B����Ő�΃p�X���������B
     std::string resolved = PathResolver::Resolve(path);
 
-    auto model = std::make_shared<Model>(resolved.c_str(), scaling);
+    auto model = std::make_shared<Model>(resolved.c_str(), scaling, sourceOnly);
 
     modelMap[key] = model;
     return model;
@@ -213,7 +211,6 @@ std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
 
     std::string resolved = PathResolver::Resolve(path);
 
-    // API非依存の画像読み込み
     DirectX::ScratchImage image;
     DirectX::TexMetadata metadata;
     HRESULT hr = GpuResourceUtils::LoadImageFromFile(resolved.c_str(), image, metadata);
@@ -235,7 +232,6 @@ std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
             static_cast<int>(metadata.format));
     }
 
-    // IResourceFactory 経由でテクスチャ生成（DX11/DX12 自動分岐）
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) return nullptr;
 
@@ -268,7 +264,6 @@ std::shared_ptr<MaterialAsset> ResourceManager::GetMaterial(const std::string& p
 
 std::shared_ptr<MaterialAsset> ResourceManager::GetDefaultMaterial() {
     if (!m_defaultMaterial) {
-        // ��������Ɂu�W���̃O���[������}�e���A���v��1��������Ă���
         m_defaultMaterial = std::make_shared<MaterialAsset>("Default");
         m_defaultMaterial->baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
         m_defaultMaterial->metallic = 1.0f;

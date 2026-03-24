@@ -30,7 +30,6 @@ XMFLOAT2 InputActionComponent::ApplyDeadzoneAndNormalize(const XMFLOAT2& raw) co
     float len = std::sqrt(len2);
     if (len < r) return XMFLOAT2{ 0,0 };
 
-    // [r..1] → [0..1] へ線形リマップ
     float denom = (1.0f - r);
     float t = (denom > 0.0f) ? ((len - r) / denom) : 0.0f;
     if (t < 0.0f) t = 0.0f;
@@ -77,7 +76,6 @@ void InputActionComponent::PushBufferedIfAvailable(ActionType type, const Action
     if (st.cooldownFrames > 0) return;
     if (!actionConfig[i].enabled) return;
 
-    // 固定長リング：満杯なら最古を捨てる
     if (bufferCount >= BufferCap) {
         bufferHead += 1; if (bufferHead >= BufferCap) bufferHead = 0;
         bufferCount -= 1; if (bufferCount < 0) bufferCount = 0;
@@ -96,16 +94,12 @@ void InputActionComponent::Start()
     bufferCount = 0;
     moveDeadzone = 0.15f;
 
-    // アクション設定初期化
     for (int i = 0; i < (int)ActionType::Count; ++i) {
         actionConfig[i] = ActionConfig{};
         bindTable[i] = ActionBindSet{};
     }
-    // 例：Dodge は基準CDを少し与える
     actionConfig[(int)ActionType::Dodge].cooldownDefault = 20;
 
-    // === 既定の GamePad 割当（XInput想定） ===
-    // BTN_* は GamePad クラスの定義を利用するのじゃ
     bindTable[(int)ActionType::Dodge].pad.heldMask = GamePad::BTN_RIGHT_SHOULDER;
     bindTable[(int)ActionType::Dodge].pad.downMask = GamePad::BTN_RIGHT_SHOULDER;
     bindTable[(int)ActionType::Dodge].pad.upMask = GamePad::BTN_RIGHT_SHOULDER;
@@ -130,7 +124,6 @@ void InputActionComponent::Start()
     bindTable[(int)ActionType::Jump].pad.downMask = GamePad::BTN_RIGHT_THUMB;
     bindTable[(int)ActionType::Jump].pad.upMask = GamePad::BTN_RIGHT_THUMB;
 
-    // === 既定の Keyboard 割当（WASD / J,K,L,U / Space） ===
     int atkL_down[8] = { 'J', 0 };
     int atkH_down[8] = { 'K', 0 };
     int dodge_down[8] = { 'L', 0 };
@@ -142,7 +135,6 @@ void InputActionComponent::Start()
     SetKeyboardBinding(ActionType::Parry, nullptr, parry_down, nullptr);
     SetKeyboardBinding(ActionType::Jump, nullptr, jump_down, nullptr);
 
-    // GUI関連
     guiOpenRebind = false;
     listenDev = ListenDevice::None;
     listenEdge = ListenEdge::Down;
@@ -153,7 +145,7 @@ void InputActionComponent::Start()
 }
 
 /**
- * @brief 固定FPSを設定（フレーム換算の基準）
+ * @brief ・ｽﾅ抵ｿｽFPS・ｽ・ｽﾝ抵ｿｽi・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽ・ｽ・ｽZ・ｽﾌ基準・ｽj
  */
 void InputActionComponent::SetFixedFps(float fps)
 {
@@ -162,7 +154,7 @@ void InputActionComponent::SetFixedFps(float fps)
 }
 
 /**
- * @brief デッドゾーン半径を設定（0.0?0.95）
+ * @brief ・ｽf・ｽb・ｽh・ｽ]・ｽ[・ｽ・ｽ・ｽ・ｽ・ｽa・ｽ・ｽﾝ抵ｿｽi0.0?0.95・ｽj
  */
 void InputActionComponent::SetMoveDeadzone(float r)
 {
@@ -180,7 +172,7 @@ void InputActionComponent::CopyKeys8(int dst[8], const int* src)
 }
 
 /**
- * @brief Keyboard割当（held/down/up）をまとめて設定するのじゃ
+ * @brief Keyboard・ｽ・ｽ・ｽ・ｽ・ｽiheld/down/up・ｽj・ｽ・ｽﾜとめて設定す・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::SetKeyboardBinding(ActionType a, const int* heldKeys, const int* downKeys, const int* upKeys)
 {
@@ -191,53 +183,44 @@ void InputActionComponent::SetKeyboardBinding(ActionType a, const int* heldKeys,
 }
 
 /**
- * @brief GamePad/Keyboard の生入力を読み、論理フラグへマッピングするのじゃ
+ * @brief GamePad/Keyboard ・ｽﾌ撰ｿｽ・ｽ・ｽ・ｽﾍゑｿｽﾇみ、・ｽ_・ｽ・ｽ・ｽt・ｽ・ｽ・ｽO・ｽﾖマ・ｽb・ｽs・ｽ・ｽ・ｽO・ｽ・ｽ・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::SampleDeviceAndMap()
 {
-    // クリア
     for (int i = 0; i < (int)ActionType::Count; ++i) { rawHeld[i] = rawDown[i] = rawUp[i] = false; }
     rawMove = XMFLOAT2{ 0,0 };
 
-    // --- GamePad 生入力 ---
     GamePad& gp = Input::Instance().GetGamePad();
     const uint32_t btn = (uint32_t)gp.GetButton();
     const uint32_t btnDown = (uint32_t)gp.GetButtonDown();
     const uint32_t btnUp = (uint32_t)gp.GetButtonUp();
 
-    // スティック
     rawMove.x = gp.GetAxisLX();
     rawMove.y = gp.GetAxisLY();
 
-    // 可視化用
     lastGpDownMask = btnDown;
 
-    // --- Keyboard 生入力 ---
     for (int vk = 0; vk <= 0xFF; ++vk) {
         SHORT s = GetAsyncKeyState(vk);
         keyCurr[vk] = ((s & 0x8000) != 0);
     }
 
-    // 移動（WASD をスティック合成）
     if (keyCurr['W']) rawMove.y += 1.0f;
     if (keyCurr['S']) rawMove.y -= 1.0f;
     if (keyCurr['A']) rawMove.x -= 1.0f;
     if (keyCurr['D']) rawMove.x += 1.0f;
 
-    // 斜めで √2 超過を正規化
     float len2 = Length2(rawMove);
     if (len2 > 1.0f) {
         float inv = 1.0f / std::sqrt(len2);
         rawMove.x *= inv; rawMove.y *= inv;
     }
 
-    // 直近の KeyDown（GUI用）
     lastKeyboardVk = 0;
     for (int vk = 0x08; vk <= 0xFE; ++vk) {
         if (!keyPrev[vk] && keyCurr[vk]) { lastKeyboardVk = vk; break; }
     }
 
-    // --- アクション毎にバインド評価（Pad/KB の OR） ---
     for (int i = 0; i < (int)ActionType::Count; ++i)
     {
         const ActionBindSet& B = bindTable[i];
@@ -251,7 +234,6 @@ void InputActionComponent::SampleDeviceAndMap()
         bool downPad = (B.pad.downMask != 0) && ((btnDown & B.pad.downMask) != 0);
         bool upPad = (B.pad.upMask != 0) && ((btnUp & B.pad.upMask) != 0);
 
-        // Keyboard（0終端配列を総当たり）
         auto anyKeyVK = [&](const int keys[8], int edge)->bool {
             int k = 0;
             while (k < 8 && keys[k] != 0) {
@@ -268,13 +250,11 @@ void InputActionComponent::SampleDeviceAndMap()
         bool downKb = anyKeyVK(B.kb.downKeys, 1);
         bool upKb = anyKeyVK(B.kb.upKeys, 2);
 
-        // 両デバイスの OR
         rawHeld[i] = (heldPad || heldKb);
         rawDown[i] = (downPad || downKb);
         rawUp[i] = (upPad || upKb);
     }
 
-    // --- リッスン（簡易リバインド） ---
     if (listenDev != ListenDevice::None && listenActionIndex >= 0)
     {
         if (listenDev == ListenDevice::GamePad) {
@@ -299,20 +279,17 @@ void InputActionComponent::SampleDeviceAndMap()
         }
     }
 
-    // --- prev を更新 ---
     for (int vk = 0; vk <= 0xFF; ++vk) keyPrev[vk] = keyCurr[vk];
 }
 
 //==============================================================
-// メイン更新
 //==============================================================
 
 /**
- * @brief 1フレーム更新：時間を進め、デバイス→論理化→先行入力積みを行うのじゃ
+ * @brief 1・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽX・ｽV・ｽF・ｽ・ｽ・ｽﾔゑｿｽi・ｽﾟ、・ｽf・ｽo・ｽC・ｽX・ｽ・ｽ・ｽ_・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽs・ｽ・ｽ・ｽﾍ積みゑｿｽs・ｽ・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::Update(float dt)
 {
-    // 入力時間（フレーム）を進める
     frameAccumulator += dt * fixedFps;
     if (frameAccumulator >= 1.0f) {
         int adv = static_cast<int>(frameAccumulator);
@@ -321,13 +298,10 @@ void InputActionComponent::Update(float dt)
         frameAccumulator -= static_cast<float>(adv);
     }
 
-    // 1) デバイス→論理の正規化
     SampleDeviceAndMap();
 
-    // 2) 移動ベクトル（デッドゾーン適用→正規化）
     output.move = ApplyDeadzoneAndNormalize(rawMove);
 
-    // 3) 各アクション状態を更新＆必要なら先行入力へ積む
     for (int i = 0; i < (int)ActionType::Count; ++i)
     {
         ActionState& st = output.actions[i];
@@ -337,7 +311,7 @@ void InputActionComponent::Update(float dt)
 }
 
 /**
- * @brief 先行入力を消費（受付窓内なら true）
+ * @brief ・ｽ・ｽs・ｽ・ｽ・ｽﾍゑｿｽ・ｽ・ｽ・ｽi・ｽ・ｽt・ｽ・ｽ・ｽ・ｽﾈゑｿｽ true・ｽj
  */
 bool InputActionComponent::ConsumeBuffered(ActionType type, int maxAcceptFrames)
 {
@@ -348,7 +322,6 @@ bool InputActionComponent::ConsumeBuffered(ActionType type, int maxAcceptFrames)
     }
     if (bufferCount <= 0) return false;
 
-    // 先頭から探す（成立順で処理）
     for (int k = 0; k < bufferCount; ++k)
     {
         int idx = bufferHead + k; while (idx >= BufferCap) idx -= BufferCap;
@@ -359,7 +332,6 @@ bool InputActionComponent::ConsumeBuffered(ActionType type, int maxAcceptFrames)
             if (age < 0) age = 0;
             bool ok = (age <= window);
 
-            // 要素を抜いて詰める
             for (int m = k; m < bufferCount - 1; ++m)
             {
                 int a = bufferHead + m;       while (a >= BufferCap) a -= BufferCap;
@@ -375,7 +347,7 @@ bool InputActionComponent::ConsumeBuffered(ActionType type, int maxAcceptFrames)
 }
 
 /**
- * @brief バッファを覗き見る（消費しない）。受理可能なら true
+ * @brief ・ｽo・ｽb・ｽt・ｽ@・ｽ・ｽ`・ｽ・ｽ・ｽ・ｽ・ｽ・ｽi・ｽ・ｽ・ｽ・ｵ・ｽﾈゑｿｽ・ｽj・ｽB・ｽ揄ﾂ能・ｽﾈゑｿｽ true
  */
 bool InputActionComponent::PeekBuffered(ActionType type, int maxAcceptFrames) const
 {
@@ -400,11 +372,11 @@ bool InputActionComponent::PeekBuffered(ActionType type, int maxAcceptFrames) co
 }
 
 /**
- * @brief “要求スナップショット”を構築して返す（必要ならバッファ消費）
+ * @brief ・ｽg・ｽv・ｽ・ｽ・ｽX・ｽi・ｽb・ｽv・ｽV・ｽ・ｽ・ｽb・ｽg・ｽh・ｽ・ｽ\・ｽz・ｽ・ｽ・ｽﾄ返ゑｿｽ・ｽi・ｽK・ｽv・ｽﾈゑｿｽo・ｽb・ｽt・ｽ@・ｽ・ｽ・ｽ・ｽj
  * @details
- *  - まず先行入力（Consume or Peek）を見て要求フラグを立てる
- *  - 先行入力が無ければ「今フレーム pressed」でも要求を立てる
- *  - 代表例としてダブルタップや長押しの判定も入れておくのじゃ
+ *  - ・ｽﾜゑｿｽ・ｽ・ｽs・ｽ・ｽ・ｽﾍ（Consume or Peek・ｽj・ｽ・ｽ・ｽ・ｽﾄ要・ｽ・ｽ・ｽt・ｽ・ｽ・ｽO・ｽｧてゑｿｽ
+ *  - ・ｽ・ｽs・ｽ・ｽ・ｽﾍゑｿｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽﾎ「・ｽ・ｽ・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ pressed・ｽv・ｽﾅゑｿｽv・ｽ・ｽ・ｽｧてゑｿｽ
+ *  - ・ｽ・ｽ\・ｽ・ｽﾆゑｿｽ・ｽﾄダ・ｽu・ｽ・ｽ・ｽ^・ｽb・ｽv・ｽ竰ｷ・ｽ・ｽ・ｽ・ｽ・ｽﾌ費ｿｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽﾄゑｿｽ・ｽ・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::BuildActionRequest(ActionRequest& out, bool consumeBuffered, int acceptFramesOverride)
 {
@@ -417,7 +389,6 @@ void InputActionComponent::BuildActionRequest(ActionRequest& out, bool consumeBu
         else                  return PeekBuffered(t, acceptFramesOverride);
         };
 
-    // 先行入力 or 今フレーム押下で要求ON
     out.attackLight = want(ActionType::AttackLight) || output.actions[(int)ActionType::AttackLight].pressed;
     out.attackHeavy = want(ActionType::AttackHeavy) || output.actions[(int)ActionType::AttackHeavy].pressed;
     out.dodge = want(ActionType::Dodge) || output.actions[(int)ActionType::Dodge].pressed;
@@ -425,13 +396,12 @@ void InputActionComponent::BuildActionRequest(ActionRequest& out, bool consumeBu
     out.lockOn = want(ActionType::LockOn) || output.actions[(int)ActionType::LockOn].pressed;
     out.jump = want(ActionType::Jump) || output.actions[(int)ActionType::Jump].pressed;
 
-    // 参考：特殊判定
     out.wasDoubleTapDodge = IsDoubleTap(ActionType::Dodge);
     out.wasLongPressHeavy = IsLongPress(ActionType::AttackHeavy);
 }
 
 /**
- * @brief アクションにクールダウンを与えるのじゃ
+ * @brief ・ｽA・ｽN・ｽV・ｽ・ｽ・ｽ・ｽ・ｽﾉク・ｽ[・ｽ・ｽ・ｽ_・ｽE・ｽ・ｽ・ｽ・ｽ^・ｽ・ｽ・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::SetCooldown(ActionType type, int frames)
 {
@@ -440,7 +410,7 @@ void InputActionComponent::SetCooldown(ActionType type, int frames)
 }
 
 /**
- * @brief GamePadボタンの割当を設定するのじゃ
+ * @brief GamePad・ｽ{・ｽ^・ｽ・ｽ・ｽﾌ奇ｿｽ・ｽ・ｽ・ｽ・ｽﾝ定す・ｽ・ｽﾌゑｿｽ・ｽ・ｽ
  */
 void InputActionComponent::SetGamePadBinding(ActionType a, uint32_t held, uint32_t down, uint32_t up)
 {
@@ -451,11 +421,10 @@ void InputActionComponent::SetGamePadBinding(ActionType a, uint32_t held, uint32
 }
 
 //==============================================================
-// GUI（必要なければ空のままでOK）
 //==============================================================
 
 /**
- * @brief 簡易状態確認GUI（Pressed/Held/Releasedやバッファ）
+ * @brief ・ｽﾈ易擾ｿｽﾔ確・ｽFGUI・ｽiPressed/Held/Released・ｽ・ｽo・ｽb・ｽt・ｽ@・ｽj
  */
 void InputActionComponent::DebugGUI()
 {
@@ -480,7 +449,7 @@ void InputActionComponent::DebugGUI()
 }
 
 /**
- * @brief リバインドGUI（簡易）
+ * @brief ・ｽ・ｽ・ｽo・ｽC・ｽ・ｽ・ｽhGUI・ｽi・ｽﾈ易）
  */
 void InputActionComponent::DebugGUI_Rebind()
 {
@@ -491,7 +460,7 @@ void InputActionComponent::DebugGUI_Rebind()
 }
 
 /**
- * @brief コンパクト版パネル
+ * @brief ・ｽR・ｽ・ｽ・ｽp・ｽN・ｽg・ｽﾅパ・ｽl・ｽ・ｽ
  */
 void InputActionComponent::DrawCompactPanel()
 {
@@ -499,7 +468,7 @@ void InputActionComponent::DrawCompactPanel()
 }
 
 /**
- * @brief HUDオーバーレイ
+ * @brief HUD・ｽI・ｽ[・ｽo・ｽ[・ｽ・ｽ・ｽC
  */
 void InputActionComponent::DrawHudOverlay(bool* on, int /*corner*/)
 {
@@ -510,7 +479,7 @@ void InputActionComponent::DrawHudOverlay(bool* on, int /*corner*/)
 }
 
 /**
- * @brief ポップアップ開始
+ * @brief ・ｽ|・ｽb・ｽv・ｽA・ｽb・ｽv・ｽJ・ｽn
  */
 void InputActionComponent::OpenRebindPopup()
 {
@@ -518,7 +487,7 @@ void InputActionComponent::OpenRebindPopup()
 }
 
 /**
- * @brief ポップアップ本体
+ * @brief ・ｽ|・ｽb・ｽv・ｽA・ｽb・ｽv・ｽ{・ｽ・ｽ
  */
 void InputActionComponent::DrawRebindPopup()
 {

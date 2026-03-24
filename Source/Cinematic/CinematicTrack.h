@@ -12,11 +12,9 @@
 
 namespace Cinematic
 {
-    // トラックの種類
     enum class TrackType { Camera, Animation, Event, Effect }; 
 
     // ==========================================
-    // トラック基底クラス
     // ==========================================
     class Track
     {
@@ -28,10 +26,8 @@ namespace Cinematic
         virtual ~Track() = default;
         virtual TrackType GetType() const = 0;
 
-        // 評価関数：指定時間の状態を適用する
         virtual void Evaluate(float time) = 0;
 
-        // 対象のバインド
         virtual void Bind(void* target) = 0;
 
         virtual void Serialize(json& out) const {
@@ -47,7 +43,6 @@ namespace Cinematic
         }
     };
 
-    // ... (CameraTrack は変更なし) ...
     class CameraTrack : public Track
     {
     public:
@@ -90,7 +85,6 @@ namespace Cinematic
         }
     };
 
-    // ... (AnimationTrack は変更なし) ...
     class AnimationTrack : public Track
     {
     public:
@@ -161,58 +155,47 @@ namespace Cinematic
     };
 
     // ==========================================
-    // ★追加: エフェクト制御トラック
     // ==========================================
     class EffectTrack : public Track
     {
     public:
-        // エフェクトキー（クリップ情報）
         struct Key {
-            float time;             // 開始時間
-            float duration;         // 再生期間
-            std::string effectName; // ファイルパス
-            std::string boneName;   // アタッチするボーン名
+            float time;
+            float duration;
+            std::string effectName;
+            std::string boneName;
 
-            // オフセット
             DirectX::XMFLOAT3 offsetPos = { 0,0,0 };
             DirectX::XMFLOAT3 offsetRot = { 0,0,0 };
             DirectX::XMFLOAT3 offsetScale = { 1,1,1 };
 
-            // ランタイム用 (保存しない)
             std::weak_ptr<EffectInstance> activeInstance;
         };
 
         std::vector<Key> keys;
-        EffectComponent* targetComponent = nullptr; // 操作対象
+        EffectComponent* targetComponent = nullptr;
 
         TrackType GetType() const override { return TrackType::Effect; }
 
-        // Bind: ActorからEffectComponentを取得する
         void Bind(void* target) override {
             if (auto actor = static_cast<Actor*>(target)) {
-                // GetComponents<EffectComponent>() だと複数取れる可能性がありますが、
-                // 通常は1つと仮定して GetComponent を使用します。
                 auto comp = actor->GetComponent<EffectComponent>();
                 targetComponent = comp.get();
             }
         }
 
-        // Evaluate: 再生・停止・同期ロジック
         void Evaluate(float time) override
         {
             if (isMuted || !targetComponent) return;
 
             for (auto& key : keys)
             {
-                // 現在時間がクリップの範囲内か？
                 bool isInside = (time >= key.time && time < (key.time + key.duration));
 
-                // 既に再生中のインスタンスがあるか確認
                 auto instance = key.activeInstance.lock();
 
                 if (isInside)
                 {
-                    // 範囲内かつ未再生なら Play
                     if (!instance)
                     {
                         key.activeInstance = targetComponent->Play(
@@ -221,22 +204,18 @@ namespace Cinematic
                             key.offsetPos,
                             key.offsetRot,
                             key.offsetScale,
-                            false // ループ制御はトラック側で行うためEffect自体はOneShot扱いにしつつ、Durationで管理する
+                            false
                         );
                         instance = key.activeInstance.lock();
 
                        
                     }
 
-                    // 再生中なら時間を同期 (Scrubbing対応)
                     if (instance)
                     {
-                        // クリップ内での相対時間を計算
                         float relativeTime = time - key.time;
 
-                        // エフェクトの時間を強制的に上書き
                         instance->age = relativeTime;
-                        // 寿命をクリップの長さに合わせる
                         instance->lifeTime = key.duration;
 
                         targetComponent->SetEffectTransform(
@@ -250,7 +229,6 @@ namespace Cinematic
                 }
                 else
                 {
-                    // 範囲外に出たのに再生中なら Stop
                     if (instance)
                     {
                         targetComponent->Stop(key.activeInstance);
@@ -260,7 +238,6 @@ namespace Cinematic
             }
         }
 
-        // --- シリアライズ ---
         void Serialize(json& out) const override {
             Track::Serialize(out);
             std::vector<json> kArray;
@@ -296,50 +273,43 @@ namespace Cinematic
                     keys.push_back(k);
                 }
             }
-            // StartTime順にソートしておくと描画時に便利
             std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
                 return a.time < b.time;
                 });
         }
 
-        // 編集用ヘルパー
         void AddKey(float time, const std::string& effectName, float duration = 2.0f) {
             Key k;
             k.time = time;
             k.duration = duration;
             k.effectName = effectName;
             keys.push_back(k);
-            // ソート
             std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) { return a.time < b.time; });
         }
     };
 
     // ==========================================
-    // ★追加: ゲーム内イベント発生用トラック
     // ==========================================
     class EventTrack : public Track
     {
     public:
         struct Key {
             float time;
-            std::string eventName; // "StartGame", "BossBattle", "FadeOut" など
-            bool fired = false;    // 二重発火防止フラグ
+            std::string eventName;
+            bool fired = false;
         };
 
         std::vector<Key> keys;
-        float lastEvaluateTime = -1.0f; // 前回の時間を記録（巻き戻り検知用）
+        float lastEvaluateTime = -1.0f;
 
         TrackType GetType() const override { return TrackType::Event; }
 
-        // イベントは特定のターゲット（Actor）を持たず、全体に通知するのでBindは空でOK
         void Bind(void* target) override {}
 
-        // 評価関数：時間がキーをまたいだら発火
         void Evaluate(float time) override
         {
             if (isMuted) return;
 
-            // シークバーが巻き戻されたら（リセットまたはループ）、発火フラグを戻す
             if (time < lastEvaluateTime)
             {
                 for (auto& key : keys) key.fired = false;
@@ -347,20 +317,15 @@ namespace Cinematic
 
             for (auto& key : keys)
             {
-                // 「まだ発火していなくて」かつ「時間が到達した」場合
                 if (!key.fired && time >= key.time)
                 {
-                    // 1. データを詰める
                     MessageData::CINEMATIC_EVENT_TRIGGER_DATA data;
                     data.eventName = key.eventName;
 
-                    // 2. メッセンジャーで全体に送信！
                     Messenger::Instance().SendData(MessageData::CINEMATIC_EVENT_TRIGGER, &data);
 
-                    // 3. 発火済みにする
                     key.fired = true;
 
-                    // デバッグログ（出力ウィンドウで確認用）
                     char buf[256];
                     sprintf_s(buf, "[Sequencer] Event Fired: %s at %.2f\n", key.eventName.c_str(), time);
                     OutputDebugStringA(buf);
@@ -370,7 +335,6 @@ namespace Cinematic
             lastEvaluateTime = time;
         }
 
-        // --- 編集用ヘルパー ---
         void AddKey(float time, const std::string& name)
         {
             Key k;
@@ -379,13 +343,11 @@ namespace Cinematic
             k.fired = false;
             keys.push_back(k);
 
-            // 時間順にソート
             std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
                 return a.time < b.time;
                 });
         }
 
-        // --- シリアライズ (保存) ---
         void Serialize(json& out) const override {
             Track::Serialize(out);
             std::vector<json> kArray;
@@ -398,7 +360,6 @@ namespace Cinematic
             out["keys"] = kArray;
         }
 
-        // --- デシリアライズ (ロード) ---
         void Deserialize(const json& in) override {
             Track::Deserialize(in);
             keys.clear();
@@ -411,7 +372,6 @@ namespace Cinematic
                     keys.push_back(k);
                 }
             }
-            // ロード後もソートしておく
             std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
                 return a.time < b.time;
                 });

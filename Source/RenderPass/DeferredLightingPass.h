@@ -34,7 +34,6 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrvCube = {};
 
     // ====================================================
-    // �� �u���b�N�{�[�h����󂯎��n���h���ꗗ
     // ====================================================
     ResourceHandle m_hGBuffer0; // Albedo
     ResourceHandle m_hGBuffer1; // Normal

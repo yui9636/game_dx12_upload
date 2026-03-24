@@ -20,13 +20,11 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
     auto shadowMap = const_cast<ShadowMap*>(rc.shadowMap);
     if (!shadowMap) return;
 
-    // View/Proj のバックアップ (影描画はライトのView/Projを使うため)
     auto mainView = rc.viewMatrix;
     auto mainProj = rc.projectionMatrix;
     auto mainCamPos = rc.cameraPosition;
     auto mainCamDir = rc.cameraDirection;
 
-    // 1. カスケード行列更新
     shadowMap->UpdateCascades(rc);
 
     {
@@ -45,7 +43,6 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         rc.commandList->UpdateBuffer(GlobalRootSignature::Instance().GetShadowBuffer(), &shadow, sizeof(shadow));
     }
 
-    // 2. 各カスケード描画
     for (int i = 0; i < ShadowMap::CASCADE_COUNT; ++i) {
         shadowMap->BeginCascade(rc, i);
 
@@ -94,7 +91,6 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         rc.commandList->TransitionBarrier(shadowMap->GetTexture(), ResourceState::ShaderResource);
     }
 
-    // View/Proj を復元 (後続の GBufferPass, LightingPass 用)
     rc.viewMatrix = mainView;
     rc.projectionMatrix = mainProj;
     rc.cameraPosition = mainCamPos;

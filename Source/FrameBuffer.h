@@ -25,7 +25,8 @@ public:
 
     FrameBuffer(IResourceFactory* factory, uint32_t width, uint32_t height,
         const std::vector<TextureFormat>& colorFormats,
-        TextureFormat depthFormat = TextureFormat::D32_FLOAT);
+        TextureFormat depthFormat = TextureFormat::D32_FLOAT,
+        const float* optimizedClearColor = nullptr);
 
     ~FrameBuffer();
 

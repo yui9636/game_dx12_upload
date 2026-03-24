@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <d3d11.h>
 #include <wrl.h>
@@ -22,21 +22,20 @@ struct PipelineStateDesc;
 class IPipelineState;
 class ITexture;
 
-// ・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽo・ｽb・ｽt・ｽ@ID
 enum class FrameBufferId
 {
 	Display,
-	Scene,      // ・ｽ・ｽ・ｽC・ｽ・ｽ・ｽV・ｽ[・ｽ・ｽ・ｽp
+	Scene,
 	PrevScene,
 	GBuffer,
-	Luminance,  // ・ｽu・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽp・ｽi・ｽP・ｽx・ｽ・ｽ・ｽo・ｽj
+	Luminance,
 	GTAO,
 	SSGI,
 	SSGIBlur,
-	VolumetricFog,      // ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽt・ｽH・ｽO・ｽﾌ撰ｿｽ・ｽf・ｽ[・ｽ^
-	VolumetricFogBlur,  // ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽu・ｽ・ｽ・ｽ[・ｽﾏみの奇ｿｽ・ｽ轤ｩ・ｽﾈフ・ｽH・ｽO
-	SSR,       // ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽ・ｽ・ｽﾌ費ｿｽ・ｽﾋデ・ｽ[・ｽ^
-	SSRBlur,   // ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽu・ｽ・ｽ・ｽ[・ｽﾅ難ｿｽ・ｽ・ｽﾜゑｿｽ・ｽ・ｽ・ｽ・ｽ・ｽﾋデ・ｽ[・ｽ^
+	VolumetricFog,
+	VolumetricFogBlur,
+	SSR,
+	SSRBlur,
 	PostProcess,
 	EnumCount
 };
@@ -74,19 +73,15 @@ public:
 	float GetScreenHeight() const { return screenHeight; }
 	float GetRenderScale() const { return m_renderScale; }
 
-	// ・ｽ・ｽ・ｽ・ｽ・ｽ_・ｽ[・ｽ^・ｽ[・ｽQ・ｽb・ｽg・ｽr・ｽ・ｽ・ｽ[・ｽ謫ｾ
 	ID3D11RenderTargetView* GetRenderTargetView() { return renderTargetView.Get(); }
-	// ・ｽ[・ｽx・ｽX・ｽe・ｽ・ｽ・ｽV・ｽ・ｽ・ｽr・ｽ・ｽ・ｽ[・ｽ謫ｾ
 	ID3D11DepthStencilView* GetDepthStencilView() { return depthStencilView.Get(); }
 
-	// ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽ[・ｽx・ｽX・ｽe・ｽ・ｽ・ｽV・ｽ・ｽSRV・ｽ謫ｾ (DoF・ｽp)
 	ID3D11ShaderResourceView* GetDepthStencilSRV() { return depthStencilSRV.Get(); }
 
 	ITexture* GetBackBufferTexture() const { return backBufferTexture.get(); }
 
 	IResourceFactory* GetResourceFactory() const { return resourceFactory.get(); }
 
-	// ・ｽe・ｽ・ｽT・ｽu・ｽV・ｽX・ｽe・ｽ・ｽ・ｽ謫ｾ
 
 	RenderState* GetRenderState() { return renderState.get(); }
 	Gizmos* GetGizmos() { return gizmos.get(); }
@@ -98,7 +93,6 @@ public:
 	std::mutex& GetMutex() { return mutex; }
 
 
-	// ・ｽt・ｽ・ｽ・ｽ[・ｽ・ｽ・ｽo・ｽb・ｽt・ｽ@・ｽ・ｽ・ｽ・ｽ
 	FrameBuffer* GetFrameBuffer(FrameBufferId id) const { return frameBuffers[static_cast<int>(id)].get(); }
 	void CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination);
 
@@ -107,10 +101,8 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11DeviceContext>		immediateContext;
 	Microsoft::WRL::ComPtr<IDXGISwapChain>			swapchain;
 
-	// ・ｽo・ｽb・ｽN・ｽo・ｽb・ｽt・ｽ@・ｽﾖ連
 	Microsoft::WRL::ComPtr<ID3D11RenderTargetView>	renderTargetView;
 	Microsoft::WRL::ComPtr<ID3D11DepthStencilView>	depthStencilView;
-	// ・ｽ・ｽ・ｽﾇ会ｿｽ: ・ｽ[・ｽx・ｽﾇみ搾ｿｽ・ｽﾝ用SRV
 	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> depthStencilSRV;
 
 

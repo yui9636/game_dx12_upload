@@ -29,7 +29,6 @@ void CollisionSystem::Update(Registry& registry)
             XMMATRIX matWorld = XMLoadFloat4x4(&trans.worldMatrix);
 
             if (e.nodeIndex >= 0) {
-                // RegistryからMeshを直接検索
                 MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
                 if (mesh && mesh->model) {
                     XMFLOAT3 offset = { (float)e.offsetLocal.x, (float)e.offsetLocal.y, (float)e.offsetLocal.z };
@@ -45,9 +44,7 @@ void CollisionSystem::Update(Registry& registry)
                 vWorldPos = XMVector3TransformCoord(XMLoadFloat3((XMFLOAT3*)&e.offsetLocal), matWorld);
             }
 
-            // （以下、登録・更新処理は元のコードと同じ。
-            // 　ただし e.registeredId などの設定があるため、そのまま使用）
-            /* ... (省略) ... */
+            /* ... 既存処理 ... */
         }
         });
 }

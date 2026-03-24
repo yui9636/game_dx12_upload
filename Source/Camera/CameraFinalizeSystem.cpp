@@ -23,23 +23,18 @@ void CameraFinalizeSystem::Update(Registry& registry) {
             auto& lens = *static_cast<CameraLensComponent*>(lensCol->Get(i));
             auto& mats = *static_cast<CameraMatricesComponent*>(matsCol->Get(i));
 
-            // ★ 修正：TransformSystemが計算した「worldMatrix」を直接使う！
             XMMATRIX W = XMLoadFloat4x4(&trans.worldMatrix);
 
-            // 行列から直接、ワールド座標・前方向・上方向を抜き出す（これが一番ズレない）
-            XMVECTOR eye = W.r[3];        // 4行目が座標
-            XMVECTOR forward = W.r[2];    // 3行目が前方向 (Z軸)
-            XMVECTOR up = W.r[1];         // 2行目が上方向 (Y軸)
+            XMVECTOR eye = W.r[3];
+            XMVECTOR forward = W.r[2];
+            XMVECTOR up = W.r[1];
 
-            // View行列の作成 (LookToを使うのがミソ)
             XMMATRIX view = XMMatrixLookToLH(eye, forward, up);
             XMStoreFloat4x4(&mats.view, view);
 
-            // Projection行列
             XMMATRIX proj = XMMatrixPerspectiveFovLH(lens.fovY, lens.aspect, lens.nearZ, lens.farZ);
             XMStoreFloat4x4(&mats.projection, proj);
 
-            // パイプライン用データの更新
             XMStoreFloat3(&mats.worldPos, eye);
             XMStoreFloat3(&mats.cameraFront, forward);
         }

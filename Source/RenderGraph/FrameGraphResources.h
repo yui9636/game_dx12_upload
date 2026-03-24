@@ -5,7 +5,6 @@ class FrameGraph;
 class ITexture;
 
 // ============================================================
-// FrameGraphResources: Execute フェーズでハンドル→物理テクスチャを解決
 // ============================================================
 class FrameGraphResources {
 public:

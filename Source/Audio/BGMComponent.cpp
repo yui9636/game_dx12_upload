@@ -3,14 +3,12 @@
 #include "Audio/AudioSource.h"
 #include "JSONManager.h"
 #include "imgui.h"
-#include "System/Dialog.h" // ファイル選択ダイアログ
+#include "System/Dialog.h"
 
 void BGMComponent::Start()
 {
-    // ゲーム実行時：設定されたファイルを再生
     if (!filePath.empty())
     {
-        // 多重再生防止
         if (playingSource) playingSource->Stop();
 
         playingSource = Audio::Instance()->Play2D(filePath, volume, pitch, loop);
@@ -19,16 +17,13 @@ void BGMComponent::Start()
 
 void BGMComponent::OnDestroy()
 {
-    // シーン遷移や削除時：音を止める
     StopPreview();
 }
 
 void BGMComponent::OnGUI()
 {
-    // ヘッダーは親(Inspector)が出しているので中身だけ
     ImGui::TextDisabled("Background Music");
 
-    // --- ファイル選択 ---
     char buf[256];
     strcpy_s(buf, filePath.c_str());
     if (ImGui::InputText("File", buf, sizeof(buf))) {
@@ -44,13 +39,11 @@ void BGMComponent::OnGUI()
         }
     }
 
-    // --- パラメータ ---
     bool changed = false;
     changed |= ImGui::SliderFloat("Volume", &volume, 0.0f, 1.0f);
     changed |= ImGui::SliderFloat("Pitch", &pitch, 0.1f, 2.0f);
     changed |= ImGui::Checkbox("Loop", &loop);
 
-    // プレビュー中にパラメータを変えたら即反映
     if (changed && playingSource && playingSource->IsPlaying())
     {
         playingSource->SetVolume(volume);
@@ -58,7 +51,6 @@ void BGMComponent::OnGUI()
         playingSource->SetLoop(loop);
     }
 
-    // --- プレビューボタン ---
     ImGui::Separator();
     float width = ImGui::GetContentRegionAvail().x;
 
@@ -75,7 +67,7 @@ void BGMComponent::OnGUI()
 
 void BGMComponent::PlayPreview()
 {
-    StopPreview(); // 前のを止める
+    StopPreview();
     if (!filePath.empty())
     {
         playingSource = Audio::Instance()->Play2D(filePath, volume, pitch, loop);

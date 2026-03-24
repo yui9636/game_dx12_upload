@@ -3,6 +3,7 @@
 #include <dxgi1_4.h>
 #include <wrl.h>
 #include <cstdint>
+#include <vector>
 
 using Microsoft::WRL::ComPtr;
 
@@ -34,7 +35,16 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE AllocateDSVDescriptor();
     D3D12_CPU_DESCRIPTOR_HANDLE AllocateSRVDescriptor();
 
-    // D3D12 デバッグ InfoQueue からエラーメッセージを取得してログ出力
+    // Deferred descriptor free: schedule release after GPU completes fence
+    enum class DescriptorType { SRV, RTV, DSV };
+    void DeferFreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle, ID3D12Fence* fence,
+                             uint64_t fenceValue, DescriptorType type);
+    void ProcessDeferredFrees();
+
+    // Main fence access (fallback for textures without explicit retire fence)
+    ID3D12Fence* GetMainFence() const { return m_fence.Get(); }
+    uint64_t GetMainFenceCurrentValue() const { return m_fenceValues[m_frameIndex]; }
+
     void FlushDebugMessages();
 
     static constexpr uint32_t FRAME_COUNT = 2;
@@ -55,8 +65,8 @@ private:
     // Descriptor heaps
     ComPtr<ID3D12DescriptorHeap>     m_rtvHeap;
     ComPtr<ID3D12DescriptorHeap>     m_dsvHeap;
-    ComPtr<ID3D12DescriptorHeap>     m_cbvSrvUavHeap;          // Shader-Visible (将来のバインドレス用に予約)
-    ComPtr<ID3D12DescriptorHeap>     m_cbvSrvUavStagingHeap;   // Non-Shader-Visible (SRV作成用ステージング)
+    ComPtr<ID3D12DescriptorHeap>     m_cbvSrvUavHeap;
+    ComPtr<ID3D12DescriptorHeap>     m_cbvSrvUavStagingHeap;
     uint32_t m_rtvDescriptorSize = 0;
     uint32_t m_dsvDescriptorSize = 0;
     uint32_t m_cbvSrvUavDescriptorSize = 0;
@@ -74,4 +84,16 @@ private:
     HANDLE                           m_fenceEvent = nullptr;
     uint64_t                         m_fenceValues[FRAME_COUNT] = {};
     uint32_t                         m_frameIndex = 0;
+
+    // Deferred descriptor free
+    struct DeferredDescriptorFree {
+        D3D12_CPU_DESCRIPTOR_HANDLE handle;
+        ID3D12Fence* fence;
+        uint64_t fenceValue;
+        DescriptorType type;
+    };
+    std::vector<DeferredDescriptorFree> m_deferredFrees;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeSRVList;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeRTVList;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeDSVList;
 };

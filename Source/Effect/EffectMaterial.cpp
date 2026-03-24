@@ -9,11 +9,9 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 
 // --------------------------------------------------------
-// �R���X�g���N�^
 // --------------------------------------------------------
 EffectMaterial::EffectMaterial()
 {
-    // �p�����[�^������ (�g����)
     constants.baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
     constants.emissiveIntensity = 1.0f;
     constants.currentTime = 0.0f;
@@ -23,34 +21,30 @@ EffectMaterial::EffectMaterial()
     constants.distortionUvScrollSpeed = { 0.0f, 0.0f };
 
     constants.dissolveThreshold = 0.0f;
-    constants.dissolveEdgeWidth = 0.05f; // ���悢����
-    constants.dissolveEdgeColor = { 1.0f, 0.5f, 0.1f }; // �f�t�H���g�͉��̂悤�ȃI�����W
+    constants.dissolveEdgeWidth = 0.05f;
+    constants.dissolveEdgeColor = { 1.0f, 0.5f, 0.1f };
 
-    // �����[�e�B���O������
-    constants.mainTexIndex = 0;       // ���C����Slot0
-    constants.distortionTexIndex = -1; // �f�t�H���g����
-    constants.dissolveTexIndex = -1;   // �f�t�H���g����
+    constants.mainTexIndex = 0;
+    constants.distortionTexIndex = -1;
+    constants.dissolveTexIndex = -1;
     constants.dissolveEdgeColor = { 1.0f, 0.5f, 0.2f };
 
 
-    // �萔�o�b�t�@�쐬
     CreateConstantBuffer();
 }
 
 // --------------------------------------------------------
-// �e�N�X�`���ݒ� (�V�O�l�`���� .h �Ɗ��S�Ɉ�v������)
 // --------------------------------------------------------
 void EffectMaterial::SetTexture(int slot, const std::string& path, ComPtr<ID3D11ShaderResourceView> texture)
 {
     if (slot >= 0 && slot < TEXTURE_SLOT_COUNT)
     {
-        textures[slot] = texture;     // GPU���\�[�X��ێ�
-        texturePaths[slot] = path;    // �t�@�C���p�X���L�� (�G�f�B�^�\���E�ۑ��p)
+        textures[slot] = texture;
+        texturePaths[slot] = path;
     }
 }
 
 // --------------------------------------------------------
-// �p�X�擾
 // --------------------------------------------------------
 std::string EffectMaterial::GetTexturePath(int slot) const
 {
@@ -62,14 +56,11 @@ std::string EffectMaterial::GetTexturePath(int slot) const
 }
 
 // --------------------------------------------------------
-// �萔�o�b�t�@�쐬 (�����w���p�[)
 // --------------------------------------------------------
 void EffectMaterial::CreateConstantBuffer()
 {
-    // DX12 では DX11 定数バッファ直接生成をスキップ
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) return;
 
-    // �O���t�B�b�N�X�N���X�o�R�Ńf�o�C�X���擾
     auto device = Graphics::Instance().GetDevice();
 
     D3D11_BUFFER_DESC desc = {};
@@ -83,14 +74,12 @@ void EffectMaterial::CreateConstantBuffer()
 }
 
 // --------------------------------------------------------
-// �`��K�p (Apply)
 // --------------------------------------------------------
 void EffectMaterial::Apply(const RenderContext& rc)
 {
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
     if (!dc) return;
 
-    // 1. �萔�o�b�t�@�̍X�V (CPU -> GPU)
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(dc->Map(constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
     {
@@ -98,12 +87,9 @@ void EffectMaterial::Apply(const RenderContext& rc)
         dc->Unmap(constantBuffer.Get(), 0);
     }
 
-    // 2. �萔�o�b�t�@���Z�b�g (b1)
-    // ���C��: PS�����łȂ�VS�ɂ��Z�b�g���� (���_�ό`��UV�X�N���[���Ŏg���\�������邽��)
     dc->VSSetConstantBuffers(1, 1, constantBuffer.GetAddressOf());
     dc->PSSetConstantBuffers(1, 1, constantBuffer.GetAddressOf());
 
-    // 3. �e�N�X�`���z��̃Z�b�g (t0 ~ t5)
     ID3D11ShaderResourceView* views[TEXTURE_SLOT_COUNT];
     for (int i = 0; i < TEXTURE_SLOT_COUNT; ++i)
     {
@@ -112,7 +98,6 @@ void EffectMaterial::Apply(const RenderContext& rc)
     dc->PSSetShaderResources(0, TEXTURE_SLOT_COUNT, views);
 
 
-    // 4. �u�����h�X�e�[�g�̐ݒ�
     auto renderState = Graphics::Instance().GetRenderState();
 
 

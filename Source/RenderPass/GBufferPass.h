@@ -12,7 +12,6 @@ public:
 
 private:
     // ====================================================
-    // �� �O���t�ŊǗ�����`�P�b�g�i0�`3 + Depth�j
     // ====================================================
     ResourceHandle m_hGBuffer0; // Albedo + Metallic
     ResourceHandle m_hGBuffer1; // Normal + Roughness

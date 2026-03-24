@@ -24,9 +24,8 @@ private:
     std::unique_ptr<IPipelineState> m_pso;
 
     // ====================================================
-    // �� �O���t�ŊǗ�����`�P�b�g
     // ====================================================
     ResourceHandle m_hGBuffer1; // Normal
     ResourceHandle m_hGBuffer2; // WorldPos
-    ResourceHandle m_hGTAO;     // �o�͐�
+    ResourceHandle m_hGTAO;
 };

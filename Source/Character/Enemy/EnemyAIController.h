@@ -1,6 +1,6 @@
 #pragma once
 #include "Component/Component.h"
-#include "BT/BehaviorTree.h" // ランタイム基盤
+#include "BT/BehaviorTree.h"
 #include <memory>
 #include <string>
 
@@ -15,18 +15,15 @@ public:
 
     void SyncToEditor(std::shared_ptr<BTBrain> brain);
 
-    // 特定のAIアセットをロードする
     void LoadAIAsset(const std::string& path);
 
 private:
-    void UpdateBlackboard(); // ターゲット検索などの情報更新
+    void UpdateBlackboard();
 
 private:
-    // --- Behavior Tree 実装 ---
     std::shared_ptr<BTBrain> m_Brain;
     BTContext m_Context;
     std::string m_CurrentAssetPath;
 
-    // デバッグ用
     std::string m_CurrentPhaseName = "Default";
 };

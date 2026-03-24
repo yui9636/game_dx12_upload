@@ -14,11 +14,10 @@ class ITexture;
 class ModelResource;
 
 
-// モデル
 class Model
 {
 public:
-	Model(const char* filename, float scaling = 1.0f);
+	Model(const char* filename, float scaling = 1.0f, bool sourceOnly = false);
 
 	~Model();
 
@@ -161,20 +160,15 @@ public:
 		void serialize(Archive& archive);
 	};
 
-	//アニメーション再生中か
 	bool IsPlayAnimation() const;
 
-	//アニメーション再生
 	void PlayAnimation(int index, bool loop, float blendSeconds = 0.2f);
 
-	//アニメーション更新処理
 	void UpdateAnimation(float dt);
 
 
-	//トランスフォーム更新処理
 	void UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform);
 
-	// ノードリスト取得
 	const std::vector<Node>& GetNodes() const { return nodes; }
 	std::vector<Node>& GetNodes() { return nodes; }
 
@@ -197,7 +191,7 @@ public:
 				return &node;
 			}
 		}
-		return nullptr; // 該当するノードがない場合
+		return nullptr;
 	}
 	const Node* GetNode(const std::string& name)const
 	{
@@ -208,14 +202,12 @@ public:
 				return &node;
 			}
 		}
-		return nullptr; // 該当するノードがない場合
+		return nullptr;
 	}
 
 
-	//ルートノード取得
 	Node* GetRootNode() { return nodes.data(); }
 
-	// ノードインデックス取得
 	int GetNodeIndex(const char* name) const;
 
 
@@ -225,34 +217,25 @@ public:
 	const float GetCurrentAnimSeconds()const { return currentAnimationSeconds; }
 	const float GetCurrentAnimLength()const;
 	
-	// ノード検索
 	Node* FindNode(const char* name);
 
-	//メッシュデータ取得
 	const std::vector<Mesh>& GetMeshes()const { return meshes; }
 	std::shared_ptr<ModelResource> GetModelResource() const { return modelResource; }
 	int GetMeshMaterialIndex(int meshIndex) const;
 	int GetMeshNodeIndex(int meshIndex) const;
 	int GetMeshBoneNodeIndex(int meshIndex, int boneIndex) const;
-	//マテリアルデータ取得
 	const std::vector<Material>& GetMaterials()const { return materials; }
 
-	// ★追加: マテリアルデータ取得 (編集用・非const版)
 	std::vector<Material>& GetMaterialss() { return materials; }
 
-	//アニメーションデータ取得
 	const std::vector<Animation>& GetAnimations()const { return animations; }
 
 
-	// アニメーションインデックス取得
 	int GetAnimationIndex(const char* name) const;
 
 
 	const DirectX::BoundingBox& GetWorldBounds() const { return bounds; }
 
-	// ★追加: マウスレイと全頂点の当たり判定を行い、最も近い頂点の座標を返す
-	// 戻り値: 見つかったら true
-	// outVertexPos: 見つかった頂点のワールド座標
 	bool GetNearestVertex(
 		const DirectX::XMFLOAT3& rayOrigin,
 		const DirectX::XMFLOAT3& rayDir,
@@ -267,21 +250,17 @@ public:
 
 
 private:
-	//アニメーション計算処理
 	void ComputeAnimation(float dt);
 
 
-	//ブレンディング計算処理
 	void ComputeBlending(float dt);
 
 	void ComputeWorldBounds();
 
 	DirectX::BoundingBox bounds;
 
-	//シリアライズ
 	void Serialize(const char* filename);
 
-	//デシリアライズ
 	void Deserialize(const char* filename);
 
 	// ModelResource????: ??????Rebuild???????SceneSync?????????MeshBufferSync???
@@ -345,23 +324,17 @@ public:
 	void GetNodePoses(std::vector<NodePose>& nodePoses) const;
 
 // =========================================================
-// ★追加: メッシュ削減機能用インターフェース
 // =========================================================
 
-		// メッシュ情報の取得用構造体 (ポインタで渡す)
 	struct MeshData {
 		std::vector<Vertex>* vertices;
 		std::vector<uint32_t>* indices;
 	};
 
-	// サブセット（メッシュパーツ）の数を取得
 	int GetSubsetCount() const;
 
-	// 指定したサブセットのメッシュデータを取得
 	MeshData GetMeshData(int subsetIndex);
 
-	// インデックスバッファを更新する（削減後のデータを適用）
-	// device: バッファ再生成のために必要
 	void UpdateMeshIndices(ID3D11Device* device, int subsetIndex, const std::vector<uint32_t>& newIndices);
 
 };

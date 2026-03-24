@@ -64,7 +64,6 @@ PhongShader::PhongShader(IResourceFactory* factory)
     instancedDesc.inputLayout = m_instancedInputLayout.get();
     m_instancedPso = factory->CreatePipelineState(instancedDesc);
 
-    // 1x1 white fallback texture (テクスチャなしモデル用)
     {
         DirectX::ScratchImage img;
         img.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, 1, 1);

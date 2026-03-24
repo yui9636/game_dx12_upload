@@ -9,14 +9,13 @@ class CurlNoiseGenerator
 public:
     struct Config
     {
-        int width = 32;        // テクスチャサイズ (例: 32x32x32)
+        int width = 32;
         int height = 32;
         int depth = 32;
-        float frequency = 0.1f; // ノイズの細かさ
+        float frequency = 0.1f;
         int seed = 1337;
     };
 
-    // 3Dテクスチャを作成してSRVを返す
     static HRESULT CreateCurlNoiseTexture(
         ID3D11Device* device,
         const Config& config,

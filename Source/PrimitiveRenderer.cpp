@@ -2,7 +2,6 @@
 #include "GpuResourceUtils.h"
 #include "PrimitiveRenderer.h"
 
-// コンストラクタ
 PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 {
 	D3D11_INPUT_ELEMENT_DESC inputElementDesc[]
@@ -10,7 +9,6 @@ PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 	};
-	// 頂点シェーダー
 	GpuResourceUtils::LoadVertexShader(
 		device,
 		"Data/Shader/PrimitiveRendererVS.cso",
@@ -19,19 +17,16 @@ PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 		inputLayout.GetAddressOf(),
 		vertexShader.GetAddressOf());
 
-	// ピクセルシェーダー
 	GpuResourceUtils::LoadPixelShader(
 		device,
 		"Data/Shader/PrimitiveRendererPS.cso",
 		pixelShader.GetAddressOf());
 
-	// 定数バッファ
 	GpuResourceUtils::CreateConstantBuffer(
 		device,
 		sizeof(CbScene),
 		constantBuffer.GetAddressOf());
 
-	// 頂点バッファ
 	D3D11_BUFFER_DESC desc;
 	desc.ByteWidth = sizeof(Vertex) * VertexCapacity;
 	desc.Usage = D3D11_USAGE_DYNAMIC;
@@ -43,7 +38,6 @@ PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 	_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
 }
 
-// 頂点追加
 void PrimitiveRenderer::AddVertex(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT4& color)
 {
 	Vertex& v = vertices.emplace_back();
@@ -51,7 +45,6 @@ void PrimitiveRenderer::AddVertex(const DirectX::XMFLOAT3& position, const Direc
 	v.color = color;
 }
 
-// 軸描画
 void PrimitiveRenderer::DrawAxis(const DirectX::XMFLOAT4X4& transform, const DirectX::XMFLOAT4& color)
 {
 	DirectX::XMMATRIX W = DirectX::XMLoadFloat4x4(&transform);
@@ -68,7 +61,6 @@ void PrimitiveRenderer::DrawAxis(const DirectX::XMFLOAT4X4& transform, const Dir
 	AddVertex(z, { 0, 0, 1, 1 });
 }
 
-// グリッド描画
 void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 {
 	int numLines = (subdivisions + 1) * 2;
@@ -119,7 +111,6 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 		s += step;
 	}
 
-	// X軸
 	{
 		const DirectX::XMFLOAT4 red = DirectX::XMFLOAT4(1, 0, 0, 1);
 		V = DirectX::XMVectorSet(0, 0, 0, 0);
@@ -133,7 +124,6 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 		AddVertex(position, red);
 	}
 
-	// Y軸
 	{
 		const DirectX::XMFLOAT4 green = DirectX::XMFLOAT4(0, 1, 0, 1);
 		V = DirectX::XMVectorSet(0, 0, 0, 0);
@@ -147,7 +137,6 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 		AddVertex(position, green);
 	}
 
-	// Z軸
 	{
 		const DirectX::XMFLOAT4 blue = DirectX::XMFLOAT4(0, 0, 1, 1);
 		V = DirectX::XMVectorSet(0, 0, 0, 0);
@@ -162,39 +151,32 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 	}
 }
 
-// 描画実行
 void PrimitiveRenderer::Render(
 	ID3D11DeviceContext* dc,
 	const DirectX::XMFLOAT4X4& view,
 	const DirectX::XMFLOAT4X4& projection,
 	D3D11_PRIMITIVE_TOPOLOGY primitiveTopology)
 {
-	// シェーダー設定
 	dc->VSSetShader(vertexShader.Get(), nullptr, 0);
 	dc->PSSetShader(pixelShader.Get(), nullptr, 0);
 	dc->IASetInputLayout(inputLayout.Get());
 
-	// 定数バッファ設定
 	dc->VSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
 
-	// ビュープロジェクション行列作成
 	DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&view);
 	DirectX::XMMATRIX P = DirectX::XMLoadFloat4x4(&projection);
 	DirectX::XMMATRIX VP = V * P;
 
-	// 定数バッファ更新
 	CbScene cbScene;
 	DirectX::XMStoreFloat4x4(&cbScene.viewProjection, VP);
 	dc->UpdateSubresource(constantBuffer.Get(), 0, 0, &cbScene, 0, 0);
 
-	// 頂点バッファ設定
 	UINT stride = sizeof(Vertex);
 	UINT offset = 0;
 	dc->IASetPrimitiveTopology(primitiveTopology);
 	dc->IASetIndexBuffer(nullptr, DXGI_FORMAT_R32_UINT, 0);
 	dc->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
 
-	// 描画
 	UINT totalVertexCount = static_cast<UINT>(vertices.size());
 	UINT start = 0;
 	UINT count = (totalVertexCount < VertexCapacity) ? totalVertexCount : VertexCapacity;

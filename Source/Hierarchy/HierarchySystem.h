@@ -7,6 +7,5 @@ public:
     void Update(Registry& registry);
 
 private:
-    // 特定のエンティティのワールド行列を確定させる内部関数
     void ComputeWorldMatrix(EntityID entity, Registry& registry);
 };

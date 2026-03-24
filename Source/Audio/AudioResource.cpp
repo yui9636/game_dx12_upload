@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <cassert>
 
-// WAVEタグ作成マクロ
 #define MAKE_WAVE_TAG_VALUE(c1, c2, c3, c4)  ( c1 | (c2<<8) | (c3<<16) | (c4<<24) )
 
 AudioResource::AudioResource(const char* filename)
@@ -11,14 +10,12 @@ AudioResource::AudioResource(const char* filename)
     errno_t error = fopen_s(&fp, filename, "rb");
     if (error != 0)
     {
-        // 読み込み失敗時はアサートやログ出力
         char buf[256];
         sprintf_s(buf, "WAV File not found: %s", filename);
         OutputDebugStringA(buf);
         return;
     }
 
-    // ファイルサイズ取得
     fseek(fp, 0, SEEK_END);
     size_t size = static_cast<size_t>(ftell(fp));
     fseek(fp, 0, SEEK_SET);
@@ -26,7 +23,6 @@ AudioResource::AudioResource(const char* filename)
     size_t readBytes = 0;
     Riff riff = {};
 
-    // RIFFヘッダ
     fread(&riff, sizeof(riff), 1, fp);
     readBytes += sizeof(riff);
 
@@ -51,7 +47,6 @@ AudioResource::AudioResource(const char* filename)
             fread(&fmt, sizeof(fmt), 1, fp);
             readBytes += sizeof(fmt);
 
-            // 拡張領域スキップ
             if (chunk.size > sizeof(Fmt))
             {
                 size_t skip = chunk.size - sizeof(Fmt);
@@ -66,7 +61,6 @@ AudioResource::AudioResource(const char* filename)
             fread(data.data(), chunk.size, 1, fp);
             readBytes += chunk.size;
 
-            // 8bit変換 (unsigned -> signed)
             if (fmt.quantumBits == 8)
             {
                 for (size_t i = 0; i < data.size(); ++i)
@@ -75,7 +69,6 @@ AudioResource::AudioResource(const char* filename)
                 }
             }
         }
-        // その他チャンクはスキップ
         else
         {
             fseek(fp, chunk.size, SEEK_CUR);
@@ -85,7 +78,6 @@ AudioResource::AudioResource(const char* filename)
 
     fclose(fp);
 
-    // WAVEFORMATEX設定
     wfx.wFormatTag = WAVE_FORMAT_PCM;
     wfx.nChannels = fmt.channel;
     wfx.nSamplesPerSec = fmt.sampleRate;
