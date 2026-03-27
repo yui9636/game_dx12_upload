@@ -1,5 +1,7 @@
 #include "AssetBrowser.h"
 #include "AssetManager.h"
+#include "PrefabSystem.h"
+#include "Registry/Registry.h"
 #include "ThumbnailGenerator.h"
 #include "Engine/EditorSelection.h"
 #include "Graphics.h"
@@ -290,6 +292,17 @@ void AssetBrowser::RenderContentGrid() {
                         EditorSelection::Instance().Clear();
                     }
                 }
+                if (m_registry) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
+                        if (payload->DataSize == sizeof(EntityID)) {
+                            const EntityID entity = *static_cast<const EntityID*>(payload->Data);
+                            std::filesystem::path prefabPath;
+                            if (PrefabSystem::SaveEntityAsPrefab(entity, *m_registry, asset.path, &prefabPath)) {
+                                EditorSelection::Instance().SelectAsset(prefabPath.string());
+                            }
+                        }
+                    }
+                }
                 ImGui::EndDragDropTarget();
             }
         }
@@ -302,6 +315,28 @@ void AssetBrowser::RenderContentGrid() {
 
     ImGui::Columns(1);
     ThumbnailGenerator::Instance().SetVisiblePaths(visiblePaths);
+
+    // Keep a tangible drop surface in the content panel so dropping an entity onto
+    // empty space reliably creates a prefab in the current folder.
+    ImVec2 dropSurface = ImGui::GetContentRegionAvail();
+    if (dropSurface.x <= 0.0f) dropSurface.x = 1.0f;
+    if (dropSurface.y < 64.0f) dropSurface.y = 64.0f;
+    ImGui::Dummy(dropSurface);
+
+    if (ImGui::BeginDragDropTarget()) {
+        if (m_registry) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
+                if (payload->DataSize == sizeof(EntityID)) {
+                    const EntityID entity = *static_cast<const EntityID*>(payload->Data);
+                    std::filesystem::path prefabPath;
+                    if (PrefabSystem::SaveEntityAsPrefab(entity, *m_registry, m_currentDirectory, &prefabPath)) {
+                        EditorSelection::Instance().SelectAsset(prefabPath.string());
+                    }
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
 
     if (ImGui::BeginPopupContextWindow("BrowserEmptySpace", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS " New Folder")) {
