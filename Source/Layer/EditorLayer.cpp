@@ -17,7 +17,11 @@
 #include "Console/Logger.h"
 #include "Hierarchy/HierarchySystem.h"
 #include "Physics/PhysicsManager.h"
+#include "System/Dialog.h"
 #include "ImGuizmo.h"
+#include "Component/LightComponent.h"
+#include "Component/ReflectionProbeComponent.h"
+#include "Component/CameraComponent.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Hierarchy/HierarchyECSUI.h"
@@ -42,7 +46,8 @@ namespace {
     constexpr float kSceneViewPickDragThreshold = 4.0f;
     constexpr float kEditorFocusMinDistance = 1.5f;
     constexpr float kMinScaleValue = 0.001f;
-    constexpr const char* kDefaultSceneSavePath = "Data/Scene/EditorScene.scene.json";
+    constexpr const char* kDefaultSceneSavePath = "Data/Scene/EditorScene.scene";
+    constexpr const char* kSceneDialogFilter = "Scene Files (*.scene)\0*.scene\0Legacy Scene Files (*.scene.json)\0*.scene.json\0All Files\0*.*\0\0";
 
     using json = nlohmann::json;
 
@@ -249,6 +254,60 @@ namespace {
     {
         return path.empty() ? std::string(kDefaultSceneSavePath) : path;
     }
+
+    void ClearRegistryEntities(Registry& registry)
+    {
+        std::vector<EntityID> entities;
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& archetypeEntities = archetype->GetEntities();
+            entities.insert(entities.end(), archetypeEntities.begin(), archetypeEntities.end());
+        }
+
+        for (auto it = entities.rbegin(); it != entities.rend(); ++it) {
+            if (registry.IsAlive(*it)) {
+                registry.DestroyEntity(*it);
+            }
+        }
+    }
+
+    void CreateDefaultSceneEntities(Registry& registry)
+    {
+        using namespace DirectX;
+
+        EntityID cameraEntity = registry.CreateEntity();
+        registry.AddComponent(cameraEntity, NameComponent{ "Main Camera" });
+
+        TransformComponent camTrans;
+        camTrans.localPosition = { 0.0f, 2.0f, -10.0f };
+        registry.AddComponent(cameraEntity, camTrans);
+        registry.AddComponent(cameraEntity, HierarchyComponent{});
+        registry.AddComponent(cameraEntity, CameraFreeControlComponent{});
+        registry.AddComponent(cameraEntity, CameraLensComponent{});
+        registry.AddComponent(cameraEntity, CameraMatricesComponent{});
+        registry.AddComponent(cameraEntity, CameraMainTagComponent{});
+
+        EntityID lightEntity = registry.CreateEntity();
+        registry.AddComponent(lightEntity, NameComponent{ "Directional Light" });
+        TransformComponent lightTrans;
+        XMVECTOR rot = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(45.0f), XMConvertToRadians(45.0f), 0.0f);
+        XMStoreFloat4(&lightTrans.localRotation, rot);
+        registry.AddComponent(lightEntity, lightTrans);
+        registry.AddComponent(lightEntity, HierarchyComponent{});
+
+        LightComponent lightComp;
+        lightComp.type = LightType::Directional;
+        lightComp.color = { 1.0f, 1.0f, 1.0f };
+        lightComp.intensity = 1.0f;
+        registry.AddComponent(lightEntity, lightComp);
+
+        EntityID probeEntity = registry.CreateEntity();
+        registry.AddComponent(probeEntity, NameComponent{ "Reflection Probe" });
+        ReflectionProbeComponent probeComp;
+        probeComp.position = { 0.0f, 1.5f, 0.0f };
+        probeComp.radius = 20.0f;
+        probeComp.needsBake = true;
+        registry.AddComponent(probeEntity, probeComp);
+    }
 }
 void ApplyUnityTheme()
 {
@@ -319,6 +378,7 @@ void EditorLayer::Update(const EngineTime& time)
     using namespace DirectX;
 
     HandleEditorShortcuts();
+    ProcessDeferredEditorActions();
 
     if (!io.WantTextInput && m_gameLayer) {
         Registry& registry = m_gameLayer->GetRegistry();
@@ -479,7 +539,22 @@ void EditorLayer::DrawMenuBar()
 {
     if (ImGui::BeginMainMenuBar())
     {
-        if (ImGui::BeginMenu("File(F)")) { ImGui::EndMenu(); }
+        if (ImGui::BeginMenu("File(F)")) {
+            if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+                m_requestNewScene = true;
+            }
+            if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
+                m_requestOpenScene = true;
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Save", "Ctrl+S")) {
+                SaveCurrentScene();
+            }
+            if (ImGui::MenuItem("Save As...")) {
+                m_requestSaveSceneAs = true;
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("Edit(E)")) { ImGui::EndMenu(); }
         if (ImGui::BeginMenu("View(V)")) { ImGui::EndMenu(); }
         if (ImGui::BeginMenu("Game(G)")) { ImGui::EndMenu(); }
@@ -758,6 +833,33 @@ void EditorLayer::SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const
     m_editorCameraPitch = std::atan2(dir3.y, xzLen);
 }
 
+void EditorLayer::ProcessDeferredEditorActions()
+{
+    const bool requestNewScene = m_requestNewScene;
+    const bool requestOpenScene = m_requestOpenScene;
+    const bool requestSaveSceneAs = m_requestSaveSceneAs;
+
+    m_requestNewScene = false;
+    m_requestOpenScene = false;
+    m_requestSaveSceneAs = false;
+
+    std::filesystem::path pendingScenePath;
+    const bool hasPendingSceneFromAssetBrowser = m_assetBrowser && m_assetBrowser->ConsumePendingSceneLoad(pendingScenePath);
+
+    if (requestNewScene) {
+        NewScene();
+    }
+    if (requestOpenScene) {
+        OpenScene();
+    }
+    if (requestSaveSceneAs) {
+        SaveCurrentSceneAs();
+    }
+    if (hasPendingSceneFromAssetBrowser) {
+        LoadSceneFromPath(pendingScenePath);
+    }
+}
+
 void EditorLayer::HandleEditorShortcuts()
 {
     if (!m_gameLayer) {
@@ -770,7 +872,19 @@ void EditorLayer::HandleEditorShortcuts()
     }
 
     if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
-        SaveCurrentScene();
+        if (io.KeyShift) {
+            m_requestSaveSceneAs = true;
+        } else {
+            SaveCurrentScene();
+        }
+    }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_N, false)) {
+        m_requestNewScene = true;
+        return;
+    }
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O, false)) {
+        m_requestOpenScene = true;
+        return;
     }
 
     if (!m_sceneViewHovered || io.KeyCtrl || io.KeyAlt || io.MouseDown[ImGuiMouseButton_Right]) {
@@ -1141,6 +1255,66 @@ void EditorLayer::SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, con
     m_editorCameraUserOverride = true;
 }
 
+void EditorLayer::NewScene()
+{
+    if (!m_gameLayer) {
+        return;
+    }
+
+    EngineKernel::Instance().ResetRenderStateForSceneChange();
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    EditorSelection::Instance().Clear();
+    UndoSystem::Instance().ClearECSHistory();
+    m_scenePickPending = false;
+    m_scenePickBlockedByGizmo = false;
+    m_gizmoWasUsing = false;
+    m_gizmoIsOver = false;
+    m_gizmoUndoEntity = Entity::NULL_ID;
+    m_hasGizmoBeforeTransform = false;
+
+    ClearRegistryEntities(registry);
+    CreateDefaultSceneEntities(registry);
+
+    m_sceneSavePath = kDefaultSceneSavePath;
+    LOG_INFO("[Editor] New scene created.");
+}
+
+bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
+{
+    if (!m_gameLayer) {
+        return false;
+    }
+
+    EngineKernel::Instance().ResetRenderStateForSceneChange();
+    if (!PrefabSystem::LoadSceneIntoRegistry(scenePath, m_gameLayer->GetRegistry())) {
+        LOG_WARN("[Editor] Failed to load scene: %s", scenePath.string().c_str());
+        return false;
+    }
+
+    UndoSystem::Instance().ClearECSHistory();
+    EditorSelection::Instance().Clear();
+    m_sceneSavePath = scenePath.string();
+    LOG_INFO("[Editor] Scene loaded: %s", scenePath.string().c_str());
+    return true;
+}
+
+bool EditorLayer::OpenScene()
+{
+    if (!m_gameLayer) {
+        return false;
+    }
+
+    char filePath[MAX_PATH] = {};
+    const std::filesystem::path initialPath = SanitizeSceneDefaultPath(m_sceneSavePath);
+    strcpy_s(filePath, initialPath.string().c_str());
+    if (Dialog::OpenFileName(filePath, MAX_PATH, kSceneDialogFilter, "Open Scene", nullptr) != DialogResult::OK) {
+        return false;
+    }
+
+    return LoadSceneFromPath(std::filesystem::path(filePath));
+}
+
 bool EditorLayer::SaveCurrentScene()
 {
     if (!m_gameLayer) {
@@ -1156,6 +1330,22 @@ bool EditorLayer::SaveCurrentScene()
         LOG_WARN("[Editor] Failed to save scene: %s", scenePath.string().c_str());
     }
     return success;
+}
+
+bool EditorLayer::SaveCurrentSceneAs()
+{
+    if (!m_gameLayer) {
+        return false;
+    }
+
+    char filePath[MAX_PATH] = {};
+    strcpy_s(filePath, SanitizeSceneDefaultPath(m_sceneSavePath).c_str());
+    if (Dialog::SaveFileName(filePath, MAX_PATH, kSceneDialogFilter, "Save Scene As", "scene", nullptr) != DialogResult::OK) {
+        return false;
+    }
+
+    m_sceneSavePath = filePath;
+    return SaveCurrentScene();
 }
 
 void EditorLayer::DrawGameView()

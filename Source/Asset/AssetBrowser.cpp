@@ -7,8 +7,33 @@
 #include "Graphics.h"
 #include "ImGuiRenderer.h"
 #include <unordered_set>
+#include <cstring>
 #include <imgui.h>
 
+namespace
+{
+    bool IsSceneAssetPath(const std::filesystem::path& path)
+    {
+        const std::string filename = path.filename().string();
+        const char* legacyExtension = ".scene.json";
+        const size_t legacyLength = std::strlen(legacyExtension);
+        const bool isLegacyScene = filename.size() >= legacyLength &&
+            filename.compare(filename.size() - legacyLength, legacyLength, legacyExtension) == 0;
+        return path.extension() == ".scene" || isLegacyScene;
+    }
+}
+
+
+bool AssetBrowser::ConsumePendingSceneLoad(std::filesystem::path& outPath)
+{
+    if (m_pendingSceneLoadPath.empty()) {
+        return false;
+    }
+
+    outPath = m_pendingSceneLoadPath;
+    m_pendingSceneLoadPath.clear();
+    return true;
+}
 
 void AssetBrowser::Initialize() {
     AssetManager::Instance().Initialize("Data");
@@ -272,6 +297,11 @@ void AssetBrowser::RenderContentGrid() {
             if (asset.type == AssetType::Folder) {
                 m_currentDirectory = asset.path;
             }
+            else if (IsSceneAssetPath(asset.path)) {
+                selection.SelectAsset(asset.path.string());
+                m_loadSceneTarget = asset.path.string();
+                m_openLoadScenePopup = true;
+            }
             else {
                 AssetManager::Instance().OpenInExternalEditor(asset.path);
             }
@@ -369,7 +399,23 @@ void AssetBrowser::RenderContentGrid() {
 
     // ==========================================
     // ==========================================
-    if (m_openRenamePopup) {
+        if (m_openLoadScenePopup) {
+        ImGui::OpenPopup("Load Scene");
+        m_openLoadScenePopup = false;
+    }
+    if (ImGui::BeginPopupModal("Load Scene", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Load this scene?\n\nCurrent scene changes will be discarded.\n\n%s", m_loadSceneTarget.c_str());
+        ImGui::Separator();
+        if (ImGui::Button("Yes, Load", ImVec2(120, 0))) {
+            m_pendingSceneLoadPath = m_loadSceneTarget;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) { ImGui::CloseCurrentPopup(); }
+        ImGui::EndPopup();
+    }
+
+if (m_openRenamePopup) {
         ImGui::OpenPopup("Rename Asset");
         m_openRenamePopup = false;
     }

@@ -2,10 +2,14 @@
 #include <string>
 #include <filesystem>
 
+class Registry;
+
 class AssetBrowser {
 public:
     void Initialize();
     void RenderUI();
+    void SetRegistry(Registry* registry) { m_registry = registry; }
+    bool ConsumePendingSceneLoad(std::filesystem::path& outPath);
 
     const std::filesystem::path& GetCurrentDirectory() const { return m_currentDirectory; }
 
@@ -25,6 +29,11 @@ private:
     std::string m_deleteTarget;
     bool m_openDeletePopup = false;
 
+    std::string m_loadSceneTarget;
+    bool m_openLoadScenePopup = false;
+
     std::filesystem::path m_clipboardPath;
     bool m_isCut = false;
+    Registry* m_registry = nullptr;
+    std::filesystem::path m_pendingSceneLoadPath;
 };

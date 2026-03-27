@@ -5,6 +5,7 @@
 #include <memory>
 #include <DirectXMath.h>
 #include <string>
+#include <filesystem>
 
 class ITexture;
 
@@ -104,5 +105,14 @@ private:
     void FocusSelectedEntity();
     void FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius);
     void SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance);
+    void ProcessDeferredEditorActions();
+    void NewScene();
+    bool LoadSceneFromPath(const std::filesystem::path& scenePath);
+    bool OpenScene();
     bool SaveCurrentScene();
+    bool SaveCurrentSceneAs();
+
+    bool m_requestNewScene = false;
+    bool m_requestOpenScene = false;
+    bool m_requestSaveSceneAs = false;
 };
