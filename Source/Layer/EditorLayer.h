@@ -25,6 +25,14 @@ public:
         World
     };
 
+    enum class PendingSceneAction
+    {
+        None,
+        NewScene,
+        OpenSceneDialog,
+        LoadScenePath
+    };
+
     EditorLayer(GameLayer* gameLayer);
     ~EditorLayer() override = default;
 
@@ -87,6 +95,17 @@ private:
     bool m_scenePickBlockedByGizmo = false;
     DirectX::XMFLOAT2 m_scenePickStart = { 0.0f, 0.0f };
     std::string m_sceneSavePath;
+    float m_cameraMoveSpeed = 20.0f;
+    bool m_translateSnapEnabled = false;
+    bool m_rotateSnapEnabled = false;
+    bool m_scaleSnapEnabled = false;
+    float m_translateSnapStep = 0.5f;
+    float m_rotateSnapStep = 15.0f;
+    float m_scaleSnapStep = 0.1f;
+    uint64_t m_savedSceneRevision = 0;
+    bool m_openUnsavedChangesPopup = false;
+    PendingSceneAction m_pendingSceneAction = PendingSceneAction::None;
+    std::filesystem::path m_pendingSceneLoadPath;
     // ==========================================
     // ==========================================
     void DrawDockSpace();
@@ -98,6 +117,8 @@ private:
     void DrawInspector();
     void DrawLightingWindow();
     void DrawGBufferDebugWindow();
+    void DrawStatusBar();
+    void DrawUnsavedChangesPopup();
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();
@@ -106,6 +127,10 @@ private:
     void FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius);
     void SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance);
     void ProcessDeferredEditorActions();
+    bool IsSceneDirty() const;
+    void MarkSceneSaved();
+    void RequestSceneAction(PendingSceneAction action, std::filesystem::path scenePath = {});
+    bool ExecutePendingSceneAction();
     void NewScene();
     bool LoadSceneFromPath(const std::filesystem::path& scenePath);
     bool OpenScene();

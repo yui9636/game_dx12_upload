@@ -366,6 +366,7 @@ void EditorLayer::Initialize()
     m_assetBrowser->Initialize();
 
     ApplyUnityTheme();
+    MarkSceneSaved();
 }
 
 void EditorLayer::Finalize()
@@ -483,8 +484,9 @@ void EditorLayer::Update(const EngineTime& time)
         m_editorCameraPitch += io.MouseDelta.y * 0.005f;
         m_editorCameraPitch = std::clamp(m_editorCameraPitch, -1.55f, 1.55f);
 
-        float speed = 20.0f * io.DeltaTime;
+        float speed = m_cameraMoveSpeed * io.DeltaTime;
         if (io.KeyShift) speed *= 3.0f;
+        if (io.KeyCtrl) speed *= 0.25f;
 
         const XMVECTOR moveRot = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
         const XMVECTOR moveForward = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 0, 1, 0), moveRot));
@@ -501,14 +503,14 @@ void EditorLayer::Update(const EngineTime& time)
 
     if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Middle] && !m_gizmoWasUsing) {
         m_editorCameraUserOverride = true;
-        const float panSpeed = 10.0f * io.DeltaTime;
+        const float panSpeed = (m_cameraMoveSpeed * 0.5f) * io.DeltaTime;
         pos -= right * io.MouseDelta.x * panSpeed;
         pos += up * io.MouseDelta.y * panSpeed;
     }
 
     if (m_sceneViewHovered && io.MouseWheel != 0.0f && !m_gizmoWasUsing) {
         m_editorCameraUserOverride = true;
-        pos += forward * (io.MouseWheel * 10.0f);
+        pos += forward * (io.MouseWheel * (m_cameraMoveSpeed * 0.5f));
     }
 
     XMStoreFloat3(&m_editorCameraPosition, pos);
@@ -528,6 +530,8 @@ void EditorLayer::RenderUI()
 
     DrawLightingWindow();
     DrawGBufferDebugWindow();
+    DrawStatusBar();
+    DrawUnsavedChangesPopup();
     Console::Instance().Draw();
     if (m_assetBrowser) {
         m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
@@ -540,17 +544,17 @@ void EditorLayer::DrawMenuBar()
     if (ImGui::BeginMainMenuBar())
     {
         if (ImGui::BeginMenu("File(F)")) {
-            if (ImGui::MenuItem("New Scene", "Ctrl+N")) {
+            if (ImGui::MenuItem(ICON_FA_FILE " New Scene", "Ctrl+N")) {
                 m_requestNewScene = true;
             }
-            if (ImGui::MenuItem("Open Scene...", "Ctrl+O")) {
+            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open Scene...", "Ctrl+O")) {
                 m_requestOpenScene = true;
             }
             ImGui::Separator();
-            if (ImGui::MenuItem("Save", "Ctrl+S")) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save", "Ctrl+S")) {
                 SaveCurrentScene();
             }
-            if (ImGui::MenuItem("Save As...")) {
+            if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save As...")) {
                 m_requestSaveSceneAs = true;
             }
             ImGui::EndMenu();
@@ -571,7 +575,11 @@ void EditorLayer::DrawMenuBar()
             ImGui::EndMenu();
         }
 
-        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 200.0f);
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 300.0f);
+        if (IsSceneDirty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.30f, 1.0f), ICON_FA_CIRCLE " Unsaved");
+            ImGui::SameLine();
+        }
         ImGui::TextDisabled(ICON_FA_GEAR " %.1f FPS", ImGui::GetIO().Framerate);
         ImGui::SameLine();
 
@@ -667,6 +675,89 @@ void EditorLayer::DrawMainToolbar()
 
     ImGui::PopStyleColor(1);
     ImGui::PopStyleVar(2);
+}
+
+void EditorLayer::DrawStatusBar()
+{
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    const float statusBarHeight = 26.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + vp->Size.y - statusBarHeight));
+    ImGui::SetNextWindowSize(ImVec2(vp->Size.x, statusBarHeight));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
+    if (ImGui::Begin("##EditorStatusBar", nullptr, flags)) {
+        const std::string sceneName = std::filesystem::path(m_sceneSavePath).filename().string();
+        ImGui::TextDisabled("%s %s", ICON_FA_FILE, sceneName.empty() ? "Untitled.scene" : sceneName.c_str());
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s %s", ICON_FA_FLOPPY_DISK, IsSceneDirty() ? "Unsaved" : "Saved");
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        ImGui::TextDisabled("Speed %.1f", m_cameraMoveSpeed);
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        ImGui::TextDisabled("Snap T:%s R:%s S:%s",
+            m_translateSnapEnabled ? "On" : "Off",
+            m_rotateSnapEnabled ? "On" : "Off",
+            m_scaleSnapEnabled ? "On" : "Off");
+        ImGui::SameLine();
+        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::SameLine();
+        auto& selection = EditorSelection::Instance();
+        if (selection.GetType() == SelectionType::Entity && !Entity::IsNull(selection.GetEntity())) {
+            ImGui::TextDisabled("Entity %llu", static_cast<unsigned long long>(selection.GetEntity()));
+        } else if (selection.GetType() == SelectionType::Asset) {
+            ImGui::TextDisabled("%s Asset", ICON_FA_FOLDER_OPEN);
+        } else {
+            ImGui::TextDisabled("No Selection");
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawUnsavedChangesPopup()
+{
+    if (m_openUnsavedChangesPopup) {
+        ImGui::OpenPopup("Unsaved Scene Changes");
+        m_openUnsavedChangesPopup = false;
+    }
+
+    if (ImGui::BeginPopupModal("Unsaved Scene Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%s Current scene has unsaved changes.", ICON_FA_TRIANGLE_EXCLAMATION);
+        ImGui::Text("Save before continuing?");
+        ImGui::Separator();
+
+        if (ImGui::Button("Save", ImVec2(120, 0))) {
+            bool saved = SaveCurrentScene();
+            if (!saved) {
+                saved = SaveCurrentSceneAs();
+            }
+            if (saved) {
+                ExecutePendingSceneAction();
+                ImGui::CloseCurrentPopup();
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Don't Save", ImVec2(120, 0))) {
+            ExecutePendingSceneAction();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            m_pendingSceneAction = PendingSceneAction::None;
+            m_pendingSceneLoadPath.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void EditorLayer::DrawDockSpace()
@@ -847,16 +938,63 @@ void EditorLayer::ProcessDeferredEditorActions()
     const bool hasPendingSceneFromAssetBrowser = m_assetBrowser && m_assetBrowser->ConsumePendingSceneLoad(pendingScenePath);
 
     if (requestNewScene) {
-        NewScene();
+        RequestSceneAction(PendingSceneAction::NewScene);
     }
     if (requestOpenScene) {
-        OpenScene();
+        RequestSceneAction(PendingSceneAction::OpenSceneDialog);
     }
     if (requestSaveSceneAs) {
         SaveCurrentSceneAs();
     }
     if (hasPendingSceneFromAssetBrowser) {
-        LoadSceneFromPath(pendingScenePath);
+        RequestSceneAction(PendingSceneAction::LoadScenePath, pendingScenePath);
+    }
+}
+
+bool EditorLayer::IsSceneDirty() const
+{
+    return UndoSystem::Instance().GetECSRevision() != m_savedSceneRevision;
+}
+
+void EditorLayer::MarkSceneSaved()
+{
+    m_savedSceneRevision = UndoSystem::Instance().GetECSRevision();
+}
+
+void EditorLayer::RequestSceneAction(PendingSceneAction action, std::filesystem::path scenePath)
+{
+    if (action == PendingSceneAction::None) {
+        return;
+    }
+
+    m_pendingSceneAction = action;
+    m_pendingSceneLoadPath = std::move(scenePath);
+
+    if (IsSceneDirty()) {
+        m_openUnsavedChangesPopup = true;
+        return;
+    }
+
+    ExecutePendingSceneAction();
+}
+
+bool EditorLayer::ExecutePendingSceneAction()
+{
+    const PendingSceneAction action = m_pendingSceneAction;
+    const std::filesystem::path scenePath = m_pendingSceneLoadPath;
+    m_pendingSceneAction = PendingSceneAction::None;
+    m_pendingSceneLoadPath.clear();
+
+    switch (action) {
+    case PendingSceneAction::NewScene:
+        NewScene();
+        return true;
+    case PendingSceneAction::OpenSceneDialog:
+        return OpenScene();
+    case PendingSceneAction::LoadScenePath:
+        return !scenePath.empty() && LoadSceneFromPath(scenePath);
+    default:
+        return false;
     }
 }
 
@@ -899,6 +1037,12 @@ void EditorLayer::HandleEditorShortcuts()
         m_gizmoOperation = GizmoOperation::Scale;
     } else if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
         FocusSelectedEntity();
+    } else if (ImGui::IsKeyPressed(ImGuiKey_1, false)) {
+        m_translateSnapEnabled = !m_translateSnapEnabled;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_2, false)) {
+        m_rotateSnapEnabled = !m_rotateSnapEnabled;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_3, false)) {
+        m_scaleSnapEnabled = !m_scaleSnapEnabled;
     }
 }
 
@@ -953,6 +1097,23 @@ void EditorLayer::DrawSceneViewToolbar()
             FocusSelectedEntity();
         }
         ImGui::Separator();
+        ImGui::TextDisabled("Snap");
+        ImGui::SameLine();
+        ImGui::Checkbox("Move##SnapMove", &m_translateSnapEnabled);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(56.0f);
+        ImGui::DragFloat("##MoveSnapStep", &m_translateSnapStep, 0.05f, 0.05f, 1000.0f, "%.2f");
+        ImGui::SameLine();
+        ImGui::Checkbox("Rot##SnapRotate", &m_rotateSnapEnabled);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(56.0f);
+        ImGui::DragFloat("##RotateSnapStep", &m_rotateSnapStep, 1.0f, 1.0f, 180.0f, "%.0f");
+        ImGui::SameLine();
+        ImGui::Checkbox("Scale##SnapScale", &m_scaleSnapEnabled);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(56.0f);
+        ImGui::DragFloat("##ScaleSnapStep", &m_scaleSnapStep, 0.05f, 0.01f, 100.0f, "%.2f");
+        ImGui::Separator();
         ImGui::TextDisabled("View");
         ImGui::SameLine();
 
@@ -989,6 +1150,11 @@ void EditorLayer::DrawSceneViewToolbar()
         viewButton("Right", { 1.0f, 0.0f, 0.0f }); ImGui::SameLine();
         viewButton("Top", { 0.0f, -1.0f, 0.0f }); ImGui::SameLine();
         viewButton("Bottom", { 0.0f, 1.0f, 0.0f });
+        ImGui::Separator();
+        ImGui::TextDisabled("Camera");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80.0f);
+        ImGui::SliderFloat("##SceneCameraSpeed", &m_cameraMoveSpeed, 1.0f, 100.0f, "%.1f");
     }
     ImGui::End();
 
@@ -1059,7 +1225,24 @@ void EditorLayer::DrawTransformGizmo()
         ? ImGuizmo::LOCAL
         : (m_gizmoSpace == GizmoSpace::Local ? ImGuizmo::LOCAL : ImGuizmo::WORLD);
 
-    ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], operation, mode, &world.m[0][0]);
+    float snapValues[3] = { 0.0f, 0.0f, 0.0f };
+    const float* snap = nullptr;
+    if (m_gizmoOperation == GizmoOperation::Translate && m_translateSnapEnabled) {
+        snapValues[0] = m_translateSnapStep;
+        snapValues[1] = m_translateSnapStep;
+        snapValues[2] = m_translateSnapStep;
+        snap = snapValues;
+    } else if (m_gizmoOperation == GizmoOperation::Rotate && m_rotateSnapEnabled) {
+        snapValues[0] = m_rotateSnapStep;
+        snap = snapValues;
+    } else if (m_gizmoOperation == GizmoOperation::Scale && m_scaleSnapEnabled) {
+        snapValues[0] = m_scaleSnapStep;
+        snapValues[1] = m_scaleSnapStep;
+        snapValues[2] = m_scaleSnapStep;
+        snap = snapValues;
+    }
+
+    ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], operation, mode, &world.m[0][0], nullptr, snap);
     const bool isUsing = ImGuizmo::IsUsing();
     m_gizmoIsOver = ImGuizmo::IsOver();
 
@@ -1090,11 +1273,18 @@ void EditorLayer::DrawTransformGizmo()
         XMVECTOR rotation;
         XMVECTOR translation;
         if (XMMatrixDecompose(&scale, &rotation, &translation, localMatrix)) {
-            XMStoreFloat3(&transform->localPosition, translation);
-            XMStoreFloat4(&transform->localRotation, rotation);
+            DirectX::XMFLOAT3 localPosition{};
+            DirectX::XMFLOAT4 localRotation{};
+            DirectX::XMFLOAT3 localScale{};
+
+            XMStoreFloat3(&localPosition, translation);
+            XMStoreFloat4(&localRotation, rotation);
+            XMStoreFloat3(&localScale, scale);
+
+            transform->localPosition = localPosition;
+            transform->localRotation = localRotation;
             NormalizeQuaternion(transform->localRotation);
-            XMStoreFloat3(&transform->localScale, scale);
-            transform->localScale = ClampScale(transform->localScale);
+            transform->localScale = ClampScale(localScale);
             transform->isDirty = true;
             HierarchySystem::MarkDirtyRecursive(entity, registry);
             PrefabSystem::MarkPrefabOverride(entity, registry);
@@ -1277,6 +1467,7 @@ void EditorLayer::NewScene()
     CreateDefaultSceneEntities(registry);
 
     m_sceneSavePath = kDefaultSceneSavePath;
+    MarkSceneSaved();
     LOG_INFO("[Editor] New scene created.");
 }
 
@@ -1295,6 +1486,7 @@ bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
     UndoSystem::Instance().ClearECSHistory();
     EditorSelection::Instance().Clear();
     m_sceneSavePath = scenePath.string();
+    MarkSceneSaved();
     LOG_INFO("[Editor] Scene loaded: %s", scenePath.string().c_str());
     return true;
 }
@@ -1326,6 +1518,7 @@ bool EditorLayer::SaveCurrentScene()
     if (success) {
         LOG_INFO("[Editor] Scene saved: %s", scenePath.string().c_str());
         m_sceneSavePath = scenePath.string();
+        MarkSceneSaved();
     } else {
         LOG_WARN("[Editor] Failed to save scene: %s", scenePath.string().c_str());
     }
