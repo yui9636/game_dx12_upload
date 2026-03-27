@@ -23,10 +23,98 @@
 #include <string>
 #include <filesystem>
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <Component\MaterialComponent.h>
 
 namespace
 {
+    std::string s_hierarchyFilterLower;
+
+    std::string ToLowerCopy(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    }
+
+    std::string GetEntityDisplayName(Registry& registry, EntityID entity)
+    {
+        if (auto* name = registry.GetComponent<NameComponent>(entity)) {
+            return name->name;
+        }
+        return "Entity_" + std::to_string(Entity::GetIndex(entity));
+    }
+
+    bool EntityMatchesFilter(Registry& registry, EntityID entity)
+    {
+        if (s_hierarchyFilterLower.empty()) {
+            return true;
+        }
+        return ToLowerCopy(GetEntityDisplayName(registry, entity)).find(s_hierarchyFilterLower) != std::string::npos;
+    }
+
+    bool SubtreeMatchesFilter(Registry& registry, EntityID entity)
+    {
+        if (s_hierarchyFilterLower.empty()) {
+            return true;
+        }
+        if (EntityMatchesFilter(registry, entity)) {
+            return true;
+        }
+
+        const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        EntityID child = hierarchy ? hierarchy->firstChild : Entity::NULL_ID;
+        while (!Entity::IsNull(child)) {
+            if (SubtreeMatchesFilter(registry, child)) {
+                return true;
+            }
+            hierarchy = registry.GetComponent<HierarchyComponent>(child);
+            child = hierarchy ? hierarchy->nextSibling : Entity::NULL_ID;
+        }
+        return false;
+    }
+
+    bool HasSelectedAncestor(EntityID entity, Registry& registry, const EditorSelection& selection)
+    {
+        const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        EntityID parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        while (!Entity::IsNull(parent)) {
+            if (selection.IsEntitySelected(parent)) {
+                return true;
+            }
+            hierarchy = registry.GetComponent<HierarchyComponent>(parent);
+            parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        }
+        return false;
+    }
+
+    std::vector<EntityID> GetSelectedRootEntities(Registry& registry, const EditorSelection& selection)
+    {
+        std::vector<EntityID> roots;
+        for (EntityID entity : selection.GetSelectedEntities()) {
+            if (!registry.IsAlive(entity)) {
+                continue;
+            }
+            if (!HasSelectedAncestor(entity, registry, selection)) {
+                roots.push_back(entity);
+            }
+        }
+        return roots;
+    }
+
+    void HandleEntitySelectionClick(EntityID entity)
+    {
+        auto& selection = EditorSelection::Instance();
+        ImGuiIO& io = ImGui::GetIO();
+        if (io.KeyCtrl) {
+            selection.ToggleEntity(entity, true);
+        } else {
+            selection.SelectEntity(entity);
+        }
+    }
+
     EntitySnapshot::Snapshot BuildSingleEntitySnapshot(const std::string& name,
                                                        const MeshComponent* meshComponent = nullptr,
                                                        const LightComponent* lightComponent = nullptr,
@@ -106,6 +194,22 @@ void HierarchyECSUI::Render(Registry* registry) {
         return;
     }
 
+    static std::array<char, 256> searchBuffer{};
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
+    ImGui::SetNextItemWidth(-1.0f);
+    if (ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_MAGNIFYING_GLASS " Search hierarchy", searchBuffer.data(), searchBuffer.size())) {
+        s_hierarchyFilterLower = ToLowerCopy(searchBuffer.data());
+    }
+    ImGui::PopStyleVar();
+    if (!s_hierarchyFilterLower.empty()) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear")) {
+            searchBuffer[0] = '\0';
+            s_hierarchyFilterLower.clear();
+        }
+    }
+    ImGui::Spacing();
+
     // ==========================================
     // ==========================================
     auto archetypes = registry->GetAllArchetypes();
@@ -114,6 +218,9 @@ void HierarchyECSUI::Render(Registry* registry) {
         for (EntityID entity : entities) {
             HierarchyComponent* hier = registry->GetComponent<HierarchyComponent>(entity);
             if (!hier || Entity::IsNull(hier->parent)) {
+                if (!SubtreeMatchesFilter(*registry, entity)) {
+                    continue;
+                }
                 DrawEntityNode(registry, entity);
             }
         }
@@ -178,6 +285,10 @@ void HierarchyECSUI::Render(Registry* registry) {
 }
 
 void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
+    if (!registry || !SubtreeMatchesFilter(*registry, entity)) {
+        return;
+    }
+
     auto* nameComp = registry->GetComponent<NameComponent>(entity);
     auto* hierComp = registry->GetComponent<HierarchyComponent>(entity);
 
@@ -190,16 +301,19 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     if (!hasChildren) {
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
     }
+    if (!s_hierarchyFilterLower.empty()) {
+        flags |= ImGuiTreeNodeFlags_DefaultOpen;
+    }
 
     if (EditorSelection::Instance().GetType() == SelectionType::Entity &&
-        EditorSelection::Instance().GetEntity() == entity) {
+        EditorSelection::Instance().IsEntitySelected(entity)) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
     bool isOpen = ImGui::TreeNodeEx((entityName + idStr).c_str(), flags, "%s %s", ICON_FA_CUBE, entityName.c_str());
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        EditorSelection::Instance().SelectEntity(entity);
+        HandleEntitySelectionClick(entity);
     }
 
     if (ImGui::BeginDragDropSource()) {
@@ -212,30 +326,62 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     const std::string popupId = "HierarchyEntityContext##" + std::to_string(static_cast<unsigned long long>(entity));
     if (ImGui::BeginPopupContextItem(popupId.c_str())) {
         if (ImGui::MenuItem("Duplicate")) {
-            if (!PrefabSystem::CanDuplicate(entity, *registry)) {
-                LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
-            } else {
-                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(entity, *registry);
+            auto& selection = EditorSelection::Instance();
+            if (!selection.IsEntitySelected(entity)) {
+                selection.SelectEntity(entity);
+            }
+            const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(*registry, selection);
+            auto composite = std::make_unique<CompositeUndoAction>("Duplicate Entities");
+            std::vector<DuplicateEntityAction*> duplicateActions;
+            for (EntityID selectedRoot : selectedRoots) {
+                if (!PrefabSystem::CanDuplicate(selectedRoot, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
+                    continue;
+                }
+                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, *registry);
                 EntityID parentEntity = Entity::NULL_ID;
-                if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(entity)) {
+                if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(selectedRoot)) {
                     parentEntity = hierarchy->parent;
                 }
                 EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
                 auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
                 auto* actionPtr = action.get();
-                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+                composite->Add(std::move(action));
+                duplicateActions.push_back(actionPtr);
+            }
+            if (!composite->Empty()) {
+                UndoSystem::Instance().ExecuteAction(std::move(composite), *registry);
+                std::vector<EntityID> liveRoots;
+                for (DuplicateEntityAction* action : duplicateActions) {
+                    if (!Entity::IsNull(action->GetLiveRoot())) {
+                        liveRoots.push_back(action->GetLiveRoot());
+                    }
+                }
+                if (!liveRoots.empty()) {
+                    EditorSelection::Instance().SetEntitySelection(liveRoots, liveRoots.back());
+                }
             }
         }
 
         if (ImGui::MenuItem("Delete")) {
-            if (!PrefabSystem::CanDelete(entity, *registry)) {
-                LOG_WARN("[Prefab] Prefab instance children cannot be deleted directly. Use Unpack first.");
-            } else {
-                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(entity, *registry);
-                UndoSystem::Instance().ExecuteAction(
-                    std::make_unique<DeleteEntityAction>(std::move(snapshot), entity),
-                    *registry);
+            auto& selection = EditorSelection::Instance();
+            if (!selection.IsEntitySelected(entity)) {
+                selection.SelectEntity(entity);
+            }
+            const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(*registry, selection);
+            auto composite = std::make_unique<CompositeUndoAction>("Delete Entities");
+            bool canDeleteAny = false;
+            for (EntityID selectedRoot : selectedRoots) {
+                if (!PrefabSystem::CanDelete(selectedRoot, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance children cannot be deleted directly. Use Unpack first.");
+                    continue;
+                }
+                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, *registry);
+                composite->Add(std::make_unique<DeleteEntityAction>(std::move(snapshot), selectedRoot));
+                canDeleteAny = true;
+            }
+            if (canDeleteAny) {
+                UndoSystem::Instance().ExecuteAction(std::move(composite), *registry);
                 EditorSelection::Instance().Clear();
             }
         }

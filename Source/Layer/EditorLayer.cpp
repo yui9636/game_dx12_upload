@@ -255,6 +255,34 @@ namespace {
         return path.empty() ? std::string(kDefaultSceneSavePath) : path;
     }
 
+    bool HasSelectedAncestor(EntityID entity, Registry& registry, const EditorSelection& selection)
+    {
+        const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        EntityID parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        while (!Entity::IsNull(parent)) {
+            if (selection.IsEntitySelected(parent)) {
+                return true;
+            }
+            hierarchy = registry.GetComponent<HierarchyComponent>(parent);
+            parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        }
+        return false;
+    }
+
+    std::vector<EntityID> GetSelectedRootEntities(Registry& registry, const EditorSelection& selection)
+    {
+        std::vector<EntityID> roots;
+        for (EntityID entity : selection.GetSelectedEntities()) {
+            if (!registry.IsAlive(entity)) {
+                continue;
+            }
+            if (!HasSelectedAncestor(entity, registry, selection)) {
+                roots.push_back(entity);
+            }
+        }
+        return roots;
+    }
+
     void ClearRegistryEntities(Registry& registry)
     {
         std::vector<EntityID> entities;
@@ -397,26 +425,37 @@ void EditorLayer::Update(const EngineTime& time)
 
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
             if (selection.GetType() == SelectionType::Entity) {
-                const EntityID selectedEntity = selection.GetEntity();
-                if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
-                    if (!PrefabSystem::CanDuplicate(selectedEntity, registry)) {
+                const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(registry, selection);
+                auto composite = std::make_unique<CompositeUndoAction>("Duplicate Entities");
+                std::vector<DuplicateEntityAction*> duplicateActions;
+                for (EntityID selectedRoot : selectedRoots) {
+                    if (!PrefabSystem::CanDuplicate(selectedRoot, registry)) {
                         LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
-                        return;
+                        continue;
                     }
-                    EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedEntity, registry);
+                    EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, registry);
                     if (!snapshot.nodes.empty()) {
                         EntityID parentEntity = Entity::NULL_ID;
-                        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedEntity)) {
+                        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedRoot)) {
                             parentEntity = hierarchy->parent;
                         }
-
                         EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
                         auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
                         auto* actionPtr = action.get();
-                        UndoSystem::Instance().ExecuteAction(std::move(action), registry);
-                        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
-                            selection.SelectEntity(actionPtr->GetLiveRoot());
+                        composite->Add(std::move(action));
+                        duplicateActions.push_back(actionPtr);
+                    }
+                }
+                if (!composite->Empty()) {
+                    UndoSystem::Instance().ExecuteAction(std::move(composite), registry);
+                    std::vector<EntityID> liveRoots;
+                    for (DuplicateEntityAction* action : duplicateActions) {
+                        if (!Entity::IsNull(action->GetLiveRoot())) {
+                            liveRoots.push_back(action->GetLiveRoot());
                         }
+                    }
+                    if (!liveRoots.empty()) {
+                        selection.SetEntitySelection(liveRoots, liveRoots.back());
                     }
                 }
             }
@@ -455,19 +494,23 @@ void EditorLayer::Update(const EngineTime& time)
         }
 
         if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && selection.GetType() == SelectionType::Entity) {
-            const EntityID selectedEntity = selection.GetEntity();
-            if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
-                if (!PrefabSystem::CanDelete(selectedEntity, registry)) {
+            const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(registry, selection);
+            auto composite = std::make_unique<CompositeUndoAction>("Delete Entities");
+            bool canDeleteAny = false;
+            for (EntityID selectedRoot : selectedRoots) {
+                if (!PrefabSystem::CanDelete(selectedRoot, registry)) {
                     LOG_WARN("[Prefab] Prefab instance children cannot be deleted directly. Use Unpack first.");
-                    return;
+                    continue;
                 }
-                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedEntity, registry);
+                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, registry);
                 if (!snapshot.nodes.empty()) {
-                    UndoSystem::Instance().ExecuteAction(
-                        std::make_unique<DeleteEntityAction>(std::move(snapshot), selectedEntity),
-                        registry);
-                    selection.Clear();
+                    composite->Add(std::make_unique<DeleteEntityAction>(std::move(snapshot), selectedRoot));
+                    canDeleteAny = true;
                 }
+            }
+            if (canDeleteAny) {
+                UndoSystem::Instance().ExecuteAction(std::move(composite), registry);
+                selection.Clear();
             }
         }
     }
@@ -711,8 +754,14 @@ void EditorLayer::DrawStatusBar()
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
         ImGui::SameLine();
         auto& selection = EditorSelection::Instance();
-        if (selection.GetType() == SelectionType::Entity && !Entity::IsNull(selection.GetEntity())) {
-            ImGui::TextDisabled("Entity %llu", static_cast<unsigned long long>(selection.GetEntity()));
+        if (selection.GetType() == SelectionType::Entity && selection.GetSelectedEntityCount() > 0) {
+            if (selection.GetSelectedEntityCount() == 1) {
+                ImGui::TextDisabled("Entity %llu", static_cast<unsigned long long>(selection.GetPrimaryEntity()));
+            } else {
+                ImGui::TextDisabled("%zu Selected (Primary %llu)",
+                    selection.GetSelectedEntityCount(),
+                    static_cast<unsigned long long>(selection.GetPrimaryEntity()));
+            }
         } else if (selection.GetType() == SelectionType::Asset) {
             ImGui::TextDisabled("%s Asset", ICON_FA_FOLDER_OPEN);
         } else {
@@ -1377,10 +1426,15 @@ void EditorLayer::HandleScenePicking()
         selectedEntity = fallbackEntity;
     }
 
+    auto& selection = EditorSelection::Instance();
     if (!Entity::IsNull(selectedEntity)) {
-        EditorSelection::Instance().SelectEntity(selectedEntity);
-    } else {
-        EditorSelection::Instance().Clear();
+        if (ImGui::GetIO().KeyCtrl) {
+            selection.ToggleEntity(selectedEntity, true);
+        } else {
+            selection.SelectEntity(selectedEntity);
+        }
+    } else if (!ImGui::GetIO().KeyCtrl) {
+        selection.Clear();
     }
 }
 
