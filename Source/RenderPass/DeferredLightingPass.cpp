@@ -189,6 +189,22 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         ? nullptr
         : ResourceManager::Instance().GetTexture(rc.environment.specularIBLPath).get();
 
+    static uint32_t s_shadowInputLogCount = 0;
+    if (s_shadowInputLogCount < 8) {
+        auto* dx12Shadow = dynamic_cast<DX12Texture*>(shadow);
+        LOG_INFO(
+            "[DeferredShadowInput] frame=%u shadow=%p state=%d hasSRV=%d ao=%p ssgi=%p fog=%p ssr=%p",
+            s_shadowInputLogCount,
+            shadow,
+            shadow ? static_cast<int>(shadow->GetCurrentState()) : -1,
+            dx12Shadow && dx12Shadow->HasSRV() ? 1 : 0,
+            ao,
+            ssgi,
+            fog,
+            ssr);
+        ++s_shadowInputLogCount;
+    }
+
     if (!ao && m_whiteFallback) {
         ao = m_whiteFallback.get();
     }

@@ -871,6 +871,23 @@ void ShadowMap::BeginCascade(const RenderContext& rc, int cascadeIndex)
         rc.commandList->TransitionBarrier(m_shadowTexture.get(), ResourceState::DepthWrite);
     }
 
+    static uint32_t s_shadowBeginLogCount = 0;
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12 && s_shadowBeginLogCount < 8) {
+        auto* dx12Shadow = dynamic_cast<DX12Texture*>(m_shadowTexture.get());
+        auto* dx12Slice = dynamic_cast<DX12Texture*>(m_cascadeTextures[cascadeIndex].get());
+        LOG_INFO(
+            "[ShadowMapBegin] frame=%u cascade=%d fullState=%d sliceState=%d fullRes=%p sliceRes=%p",
+            s_shadowBeginLogCount,
+            cascadeIndex,
+            dx12Shadow ? static_cast<int>(dx12Shadow->GetCurrentState()) : -1,
+            dx12Slice ? static_cast<int>(dx12Slice->GetCurrentState()) : -1,
+            dx12Shadow ? dx12Shadow->GetNativeResource() : nullptr,
+            dx12Slice ? dx12Slice->GetNativeResource() : nullptr);
+        if (cascadeIndex == CASCADE_COUNT - 1) {
+            ++s_shadowBeginLogCount;
+        }
+    }
+
     // 2. 現在の状態を「保存」する
     if (cascadeIndex == 0)
     {
@@ -912,13 +929,23 @@ void ShadowMap::End(const RenderContext& rc)
     // キャッシュしたポインタをクリア
     m_cachedRT = nullptr;
     m_cachedDS = nullptr;
+
+    static uint32_t s_shadowEndLogCount = 0;
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12 && s_shadowEndLogCount < 8) {
+        auto* dx12Shadow = dynamic_cast<DX12Texture*>(m_shadowTexture.get());
+        LOG_INFO(
+            "[ShadowMapEnd] frame=%u fullState=%d fullRes=%p",
+            s_shadowEndLogCount,
+            dx12Shadow ? static_cast<int>(dx12Shadow->GetCurrentState()) : -1,
+            dx12Shadow ? dx12Shadow->GetNativeResource() : nullptr);
+        ++s_shadowEndLogCount;
+    }
 }
 
 void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix)
 {
     if (!modelResource) return;
     XMMATRIX actorWorld = XMLoadFloat4x4(&worldMatrix);
-
     for (int meshIndex = 0; meshIndex < modelResource->GetMeshCount(); ++meshIndex)
     {
         const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
@@ -933,12 +960,15 @@ void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource
                 const auto& bone = mesh->bones[i];
                 XMMATRIX nodeTransform = XMLoadFloat4x4(&bone.worldTransform);
                 XMMATRIX offsetTransform = XMLoadFloat4x4(&bone.offsetTransform);
-                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], offsetTransform * nodeTransform * actorWorld);
+                // ModelResource stores world-space node transforms already, so applying
+                // actorWorld again here pushes skinned shadow casters to the wrong place.
+                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], offsetTransform * nodeTransform);
             }
         }
         else
         {
             XMMATRIX nodeTransform = XMLoadFloat4x4(&mesh->nodeWorldTransform);
+            // Static meshes still need the entity transform applied here.
             XMStoreFloat4x4(&cbSkeleton.boneTransforms[0], nodeTransform * actorWorld);
         }
 
@@ -1070,6 +1100,21 @@ XMMATRIX ShadowMap::CalcCascadeMatrix(const RenderContext& rc, float nearZ, floa
     float maxY = XMVectorGetY(maxBox);
     float minZ = XMVectorGetZ(minBox) - 5000.0f;
     float maxZ = XMVectorGetZ(maxBox);
+
+    static uint32_t s_shadowCascadeRangeLogCount = 0;
+    if (s_shadowCascadeRangeLogCount < 8) {
+        LOG_INFO(
+            "[ShadowCascadeRange] frame=%u near=%.3f far=%.3f depthRange=%.3f width=%.3f height=%.3f minZBox=%.3f maxZBox=%.3f",
+            s_shadowCascadeRangeLogCount,
+            minZ,
+            maxZ,
+            maxZ - minZ,
+            maxX - minX,
+            maxY - minY,
+            XMVectorGetZ(minBox),
+            XMVectorGetZ(maxBox));
+        ++s_shadowCascadeRangeLogCount;
+    }
 
     return lightView * XMMatrixOrthographicOffCenterLH(minX, maxX, minY, maxY, minZ, maxZ);
 }

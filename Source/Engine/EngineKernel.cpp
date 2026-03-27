@@ -138,6 +138,11 @@ namespace {
         return state;
     }
 
+    TextureSnapshotState& GetShadowMapSnapshotState() {
+        static TextureSnapshotState state;
+        return state;
+    }
+
     void ReadSnapshotPixel(const TextureSnapshotState& state, const uint8_t* bytes, UINT x, UINT y,
         double& r, double& g, double& b, double& a)
     {
@@ -1155,6 +1160,7 @@ void EngineKernel::Render()
     TextureSnapshotState& gbuffer1Snapshot = GetGBuffer1SnapshotState();
     TextureSnapshotState& gbuffer2Snapshot = GetGBuffer2SnapshotState();
     TextureSnapshotState& gbufferDepthSnapshot = GetGBufferDepthSnapshotState();
+    TextureSnapshotState& shadowMapSnapshot = GetShadowMapSnapshotState();
     const bool shouldCaptureDisplay = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && s_perfLogFrame >= kDiagnosticStartFrame
         && displaySnapshot.captureCount < kMaxDiagnosticFrames;
@@ -1180,6 +1186,10 @@ void EngineKernel::Render()
     const bool shouldCaptureGBufferDepth = kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12
         && s_perfLogFrame >= kDiagnosticStartFrame
         && gbufferDepthSnapshot.captureCount < kMaxDiagnosticFrames && hasOpaqueGeometry && rc.debugGBufferDepth;
+    const bool shouldCaptureShadowMap = Graphics::Instance().GetAPI() == GraphicsAPI::DX12
+        && shadowMapSnapshot.captureCount < 4u
+        && rc.shadowMap
+        && rc.shadowMap->GetTexture();
 
     if (kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         static bool s_loggedGBufferCaptureState = false;
@@ -1235,6 +1245,10 @@ void EngineKernel::Render()
             auto* gbufferDepth = dynamic_cast<DX12Texture*>(rc.debugGBufferDepth);
             ScheduleTextureSnapshot(dx12Cmd, gbufferDepth, gbufferDepthSnapshot);
         }
+        if (shouldCaptureShadowMap) {
+            auto* shadowTexture = dynamic_cast<DX12Texture*>(rc.shadowMap->GetTexture());
+            ScheduleTextureSnapshot(dx12Cmd, shadowTexture, shadowMapSnapshot);
+        }
     }
 
     m_renderPipeline->SubmitFrame(rc);
@@ -1244,7 +1258,7 @@ void EngineKernel::Render()
         Graphics::Instance().GetDX12Device()->FlushDebugMessages();
     }
 
-    if (shouldCaptureDisplay || shouldCaptureBackBuffer || shouldCaptureScene || shouldCaptureSceneOpaque || shouldCaptureGBuffer0 || shouldCaptureGBuffer1 || shouldCaptureGBuffer2 || shouldCaptureGBufferDepth) {
+    if (shouldCaptureDisplay || shouldCaptureBackBuffer || shouldCaptureScene || shouldCaptureSceneOpaque || shouldCaptureGBuffer0 || shouldCaptureGBuffer1 || shouldCaptureGBuffer2 || shouldCaptureGBufferDepth || shouldCaptureShadowMap) {
         Graphics::Instance().GetDX12Device()->WaitForGPU();
         LogTextureSnapshot("DisplaySnapshot", displaySnapshot);
         LogTextureSnapshot("BackBufferSnapshot", backBufferSnapshot);
@@ -1254,6 +1268,7 @@ void EngineKernel::Render()
         LogTextureSnapshot("GBuffer1Snapshot", gbuffer1Snapshot);
         LogTextureSnapshot("GBuffer2Snapshot", gbuffer2Snapshot);
         LogTextureSnapshot("GBufferDepthSnapshot", gbufferDepthSnapshot);
+        LogTextureSnapshot("ShadowMapSnapshot", shadowMapSnapshot);
         LogSceneOverGBufferMask(gbuffer0Snapshot, sceneOpaqueSnapshot);
         LogDepthOverGBufferMask(gbuffer0Snapshot, gbufferDepthSnapshot);
         LogGBufferStatsOverAlbedoMask(gbuffer0Snapshot, gbuffer1Snapshot, gbufferDepthSnapshot);

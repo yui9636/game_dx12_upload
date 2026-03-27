@@ -76,7 +76,7 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
             shadow.lightViewProjections[i] = rc.shadowMap->GetLightViewProjection(i);
         }
         shadow.shadowColor = { rc.shadowColor.x, rc.shadowColor.y, rc.shadowColor.z, 1.0f };
-        shadow.shadowBias = { 0.005f, 0.0f, 0.0f, 0.0f };
+        shadow.shadowBias = { 0.00002f, 0.0f, 0.0f, 0.0f };
 
         shadow.cascadeSplits.x = rc.shadowMap->GetCascadeEnd(0);
         shadow.cascadeSplits.y = rc.shadowMap->GetCascadeEnd(1);
