@@ -456,35 +456,181 @@ fence は queue 単位で管理する。
 
 ---
 
-## Phase 4: multi-view / multi-window 対応 FrameGraph
+## Phase 4: tool-ready multi-view / multi-window 対応 FrameGraph
 
 ### 目的
 
-将来の専用ツールや複数ビューを前提に、描画を view 単位で分離する。
+将来の専用ツールウィンドウを前提に、描画を `view` 単位で完全に分離する。
+
+ここで言う multi-window は、
+
+- 常時 `Game View` と `Scene View` を 2 画面同時表示すること
+
+ではない。
+
+本フェーズの本質は、
+
+- 通常時は 1 view でもよい
+- 必要なときだけ 2 本目、3 本目の tool view を増やせる
+- その際に main view を壊さない
+
+という UE 系エディタに近い土台を作ることにある。
 
 ### 方針
 
 - グローバル定数と view 定数を分ける
-- FrameGraph は 1 本共有ではなく、view ごとに独立実行する
-- 各 view は独自の target / depth / history / jitter / culling 状態を持つ
+- `FrameGraph` は 1 本共有ではなく、view ごとに独立実行する
+- 各 view は独自の
+  - render size
+  - viewport
+  - target / depth
+  - prev scene / history / jitter
+  - shadow state
+  - renderer state
+  - post / display 出力
+  を持つ
+- panel 表示サイズと内部 render size を分離する
+
+### Phase 4 で避けるべき誤実装
+
+以下は「view を分けたように見えて、実際には壊れる」典型なので禁止する。
+
+- 1 つの `RenderContext` を view ごとに上書き再利用する
+- 1 つの `FrameGraph` 実体を複数 view で使い回す
+- 1 セットの pass インスタンスを複数 view で使い回す
+- view ごとに camera だけ分けて、内部 pass サイズは screen 固定のままにする
+- `SceneColor` / `PrevScene` / `DisplayColor` だけ差し替え、GBuffer や AO/SSR/Fog の内部作業 RT は共有する
+- panel の表示サイズをそのまま camera aspect に使い、render target 側のサイズ契約を合わせない
 
 ### 補足
 
 現在は「FrameGraph は直列、recording だけ並列」が現実的な段階だが、最終形では FrameGraph 自体も並列化対象に含める。
 具体的には、compile 済み pass DAG を task graph 化し、依存のない pass / view は並列 recording できる構造を目指す。
 
+ただし Phase 4 の完了条件は「並列化」ではなく「view 分離の完全性」である。
+
 ### 実施内容
 
-- `CbSceneGlobal` と `CbView` の分離
-- `RenderViewContext` 導入
-- `RenderPipeline::ExecuteView()` 化
-- Scene / Game / Tool preview の複数 view 実行
-- worker recording も view 単位で分散可能にする
+#### 4.1 `RenderViewContext` 導入
+
+`RenderContext` を view ごとに直接書き換えて回すのではなく、view 専用の文脈を明示する。
+
+最低限必要な要素:
+
+- camera / view / projection
+- render size / display size / aspect
+- main render target / depth
+- scene color / prev scene / display color
+- shadow map
+- scene constant buffer / shadow constant buffer
+- per-view renderer
+- history key
+- per-view feature enable
+
+#### 4.2 `CbSceneGlobal` と `CbView` の分離
+
+`CbScene` 1 本共有ではなく、以下に分割する。
+
+- `CbSceneGlobal`
+  - 時間
+  - directional light
+  - point lights
+  - environment / IBL
+  - view 非依存の共通値
+- `CbView`
+  - viewProjection
+  - prevViewProjection
+  - jitter
+  - cameraPosition
+  - renderW / renderH
+  - view 専用 shadow / history 参照
+
+#### 4.3 `RenderPipeline::ExecuteView()` 化
+
+`ExecuteViews()` はあくまで orchestration に限定し、実体は
+
+- `ExecuteView(RenderViewContext&)`
+
+の積み上げにする。
+
+これにより
+
+- 1 view 実行
+- 複数 view 実行
+- 将来の tool window 実行
+
+を同一モデルで扱える。
+
+#### 4.4 FrameGraph / pass 実体の view 分離
+
+各 view は以下を独立保持する。
+
+- `FrameGraph`
+- pass instance 群
+- transient resource pool 上の resource namespace
+- history state
+
+pass が `ResourceHandle` や一時キャッシュをメンバに持つ場合、view ごとに独立インスタンス化する。
+共有 pass のまま再入可能であることを前提にしない。
+
+#### 4.5 render size と panel size の分離
+
+本フェーズで最重要の土台。
+
+各 view は少なくとも次を持つ。
+
+- `renderWidth / renderHeight`
+- `displayWidth / displayHeight`
+- `panelWidth / panelHeight`
+
+ルール:
+
+- camera aspect は `renderWidth / renderHeight` から決める
+- panel は presentation のみ担当する
+- panel サイズ変更時に、必要なら view の render target 群を再確保する
+- GBuffer / Scene / PrevScene / Display / AO / SSR / Fog など、内部 pass で使う全 RT は view の render size に従う
+
+#### 4.6 tool window 前提の view 管理
+
+本フェーズでは「Game + Scene を常時 2 画面表示」を必須にしない。
+
+代わりに、以下の形を成立させる。
+
+- main view は 1 本で正常動作
+- 必要な tool が開いたときだけ追加 view を生成
+- tool view を閉じたら history / RT / shadow / renderer を安全に破棄
+- tool view の存在が main view の見た目や速度を壊さない
+
+想定する tool view:
+
+- model behavior tool
+- particle / mesh effect tool
+- 将来の preview / bake / capture 系ツール
+
+### 完了条件
+
+Phase 4 完了は、以下をすべて満たした状態を指す。
+
+- main view 単体で Phase 3 と同じ見た目を維持する
+- 2 本目の tool view を追加しても main view が変化しない
+- tool view を追加しても
+  - 色が変わらない
+  - model が flicker しない
+  - history / prev scene が混線しない
+  - shadow が混線しない
+- view ごとに
+  - render size
+  - internal pass size
+  - display target
+  - history
+  が独立している
+- panel 表示サイズの違いで camera / projection / internal pass が壊れない
 
 ### 効果
 
 - カメラ競合を防げる
 - editor の専用ツールウィンドウを自然に増やせる
+- main view を壊さずに preview/tool view を追加できる
 - マルチスレッド recording と相性が良い
 
 ---

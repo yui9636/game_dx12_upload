@@ -252,9 +252,14 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
     DirectX::XMMATRIX vp = DirectX::XMLoadFloat4x4(&viewProjection);
     DirectX::XMStoreFloat4x4(&data.inverseViewProjection, DirectX::XMMatrixInverse(nullptr, vp));
 
-    rc.commandList->UpdateBuffer(m_cb.get(), &data, sizeof(data));
-    rc.commandList->VSSetConstantBuffer(0, m_cb.get());
-    rc.commandList->PSSetConstantBuffer(0, m_cb.get());
+    if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+        dx12Cmd->VSSetDynamicConstantBuffer(0, &data, sizeof(data));
+        dx12Cmd->PSSetDynamicConstantBuffer(0, &data, sizeof(data));
+    } else {
+        rc.commandList->UpdateBuffer(m_cb.get(), &data, sizeof(data));
+        rc.commandList->VSSetConstantBuffer(0, m_cb.get());
+        rc.commandList->PSSetConstantBuffer(0, m_cb.get());
+    }
 
     // Use standard PSSetTextures path for all APIs.
     // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.

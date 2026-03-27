@@ -25,7 +25,7 @@
 
 
 
-void DrawObjectsPass::Setup(FrameGraphBuilder& builder)
+void DrawObjectsPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 
 
 {
@@ -112,7 +112,7 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
     Graphics& g = Graphics::Instance();
 
 
-    auto renderer = g.GetModelRenderer();
+    auto renderer = rc.modelRendererOverride ? rc.modelRendererOverride : g.GetModelRenderer();
 
 
     if (!renderer) return;
@@ -158,7 +158,7 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
 
                     batch.key.baseColor, batch.key.metallic, batch.key.roughness, batch.key.emissive,
-                    batch.key.materialAsset.get(),
+                    batch.key.materialAsset,
 
 
                     batch.key.blendState, batch.key.depthState, batch.key.rasterizerState

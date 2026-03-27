@@ -6,7 +6,7 @@
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 
-void ForwardTransparentPass::Setup(FrameGraphBuilder& builder)
+void ForwardTransparentPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
@@ -36,7 +36,7 @@ void ForwardTransparentPass::Execute(FrameGraphResources& resources, const Rende
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)rtScene->GetWidth(), (float)rtScene->GetHeight());
     rc.commandList->SetViewport(rc.mainViewport);
 
-    auto renderer = g.GetModelRenderer();
+    auto renderer = rc.modelRendererOverride ? rc.modelRendererOverride : g.GetModelRenderer();
     if (!renderer) return;
 
     renderer->SetIBL(rc.environment.diffuseIBLPath, rc.environment.specularIBLPath);

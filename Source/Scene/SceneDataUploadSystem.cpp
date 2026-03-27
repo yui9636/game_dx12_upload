@@ -5,8 +5,6 @@
 #include "RHI/IBuffer.h"
 #include "RHI/ICommandList.h"
 #include "Render/GlobalRootSignature.h"
-#include "RHI/DX12/DX12Texture.h"
-#include "Console/Logger.h"
 
 void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature& rootSig)
 {
@@ -26,9 +24,32 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
     scene.prevJitterX = rc.prevJitterOffset.x;
     scene.prevJitterY = rc.prevJitterOffset.y;
 
-    float renderScale = Graphics::Instance().GetRenderScale();
-    scene.renderW = (float)(uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    scene.renderH = (float)(uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    // DX12 は Phase 4 の途中段階で temporal 履歴契約をまだ完全に分離できていない。
+    // まず main view の見た目破綻を止めるため、SSGI などが使う previous view は
+    // 現在の unjittered 行列へフォールバックさせる。
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        scene.prevViewProjection = scene.viewProjectionUnjittered;
+        scene.prevJitterX = 0.0f;
+        scene.prevJitterY = 0.0f;
+    }
+
+    const ITexture* sceneTarget = rc.sceneColorTexture ? rc.sceneColorTexture : rc.mainRenderTarget;
+    const float renderWidth = rc.renderWidth > 0
+        ? static_cast<float>(rc.renderWidth)
+        : (sceneTarget
+            ? static_cast<float>(sceneTarget->GetWidth())
+            : (rc.mainViewport.width > 0.0f
+                ? rc.mainViewport.width
+                : static_cast<float>(Graphics::Instance().GetScreenWidth())));
+    const float renderHeight = rc.renderHeight > 0
+        ? static_cast<float>(rc.renderHeight)
+        : (sceneTarget
+            ? static_cast<float>(sceneTarget->GetHeight())
+            : (rc.mainViewport.height > 0.0f
+                ? rc.mainViewport.height
+                : static_cast<float>(Graphics::Instance().GetScreenHeight())));
+    scene.renderW = renderWidth;
+    scene.renderH = renderHeight;
     scene.shadowTexelSize = 1.0f / 2048.0f;
     scene.shadowColor = { rc.shadowColor.x, rc.shadowColor.y, rc.shadowColor.z, 1.0f };
 
@@ -43,7 +64,8 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
         scene.pointLights[i].intensity = rc.pointLights[i].intensity;
     }
 
-    rc.commandList->UpdateBuffer(rootSig.GetSceneBuffer(), &scene, sizeof(scene));
+    IBuffer* sceneBuffer = rc.sceneConstantBufferOverride ? rc.sceneConstantBufferOverride : rootSig.GetSceneBuffer();
+    rc.commandList->UpdateBuffer(sceneBuffer, &scene, sizeof(scene));
 
     float shadowSplit0 = 0.0f;
     float shadowSplit1 = 0.0f;
@@ -63,42 +85,12 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
         shadowSplit1 = shadow.cascadeSplits.y;
         shadowSplit2 = shadow.cascadeSplits.z;
 
-        rc.commandList->UpdateBuffer(rootSig.GetShadowBuffer(), &shadow, sizeof(shadow));
+        IBuffer* shadowBuffer = rc.shadowConstantBufferOverride ? rc.shadowConstantBufferOverride : rootSig.GetShadowBuffer();
+        rc.commandList->UpdateBuffer(shadowBuffer, &shadow, sizeof(shadow));
     }
 
     auto diffTex = rc.environment.diffuseIBLPath.empty() ? nullptr : ResourceManager::Instance().GetTexture(rc.environment.diffuseIBLPath);
     auto specTex = rc.environment.specularIBLPath.empty() ? nullptr : ResourceManager::Instance().GetTexture(rc.environment.specularIBLPath);
-
-    static bool s_loggedSceneInputs = false;
-    if (!s_loggedSceneInputs) {
-        LOG_INFO("[SceneDataUpload] dirLight=(%.3f, %.3f, %.3f) color=(%.3f, %.3f, %.3f) pointCount=%d shadowSplits=(%.3f, %.3f, %.3f)",
-            scene.lightDirection.x, scene.lightDirection.y, scene.lightDirection.z,
-            scene.lightColor.x, scene.lightColor.y, scene.lightColor.z,
-            count,
-            shadowSplit0, shadowSplit1, shadowSplit2);
-
-        auto logCubemap = [](const char* label, const std::shared_ptr<ITexture>& tex) {
-            if (!tex) {
-                LOG_INFO("[SceneDataUpload] %s=null", label);
-                return;
-            }
-            if (auto* dx12 = dynamic_cast<DX12Texture*>(tex.get())) {
-                auto desc = dx12->GetNativeResource()->GetDesc();
-                LOG_INFO("[SceneDataUpload] %s dx12 format=%d array=%u mip=%u hasSRV=%d",
-                    label,
-                    static_cast<int>(desc.Format),
-                    static_cast<unsigned>(desc.DepthOrArraySize),
-                    static_cast<unsigned>(desc.MipLevels),
-                    dx12->HasSRV() ? 1 : 0);
-            } else {
-                LOG_INFO("[SceneDataUpload] %s tex=%p", label, tex.get());
-            }
-        };
-
-        logCubemap("diffuseIBL", diffTex);
-        logCubemap("specularIBL", specTex);
-        s_loggedSceneInputs = true;
-    }
 
     rootSig.SetIBL(diffTex.get(), specTex.get());
 }

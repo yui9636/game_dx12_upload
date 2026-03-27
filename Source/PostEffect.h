@@ -27,8 +27,8 @@ public:
     void DrawDebugGUI();
 
 private:
-    void LuminanceExtraction(const RenderContext& rc, ITexture* src);
-    void UberPostProcess(const RenderContext& rc, ITexture* color, ITexture* luminance, ITexture* depth, ITexture* velocity);
+    void LuminanceExtraction(const RenderContext& rc, FrameBuffer* luminanceTarget, ITexture* src);
+    void UberPostProcess(const RenderContext& rc, FrameBuffer* workTarget, ITexture* color, ITexture* luminance, ITexture* depth, ITexture* velocity);
 
 private:
     std::unique_ptr<IShader> fullscreenQuadVS;

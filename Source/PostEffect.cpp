@@ -545,9 +545,11 @@ PostEffect::~PostEffect() {
     }
 }
 
-void PostEffect::LuminanceExtraction(const RenderContext& rc, ITexture* src)
+void PostEffect::LuminanceExtraction(const RenderContext& rc, FrameBuffer* luminanceFB, ITexture* src)
 {
-    FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
+    if (!luminanceFB) {
+        return;
+    }
     luminanceFB->SetRenderTarget(rc.commandList, nullptr);
 
     rc.commandList->SetPipelineState(m_psoLuminance.get());
@@ -561,9 +563,11 @@ void PostEffect::LuminanceExtraction(const RenderContext& rc, ITexture* src)
     rc.commandList->Draw(4, 0);
 }
 
-void PostEffect::UberPostProcess(const RenderContext& rc, ITexture* color, ITexture* luminance, ITexture* depth, ITexture* velocity)
+void PostEffect::UberPostProcess(const RenderContext& rc, FrameBuffer* workFB, ITexture* color, ITexture* luminance, ITexture* depth, ITexture* velocity)
 {
-    FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
+    if (!workFB) {
+        return;
+    }
     workFB->SetRenderTarget(rc.commandList, nullptr);
 
     rc.commandList->SetPipelineState(m_psoUber.get());
@@ -690,11 +694,15 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
 
     rc.commandList->UpdateBuffer(constantBuffer.get(), &cbPostEffect, sizeof(cbPostEffect));
 
-    FrameBuffer* luminanceFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::Luminance);
+    Graphics& graphics = Graphics::Instance();
+    FrameBuffer* editorDisplay = graphics.GetFrameBuffer(FrameBufferId::EditorDisplay);
+    const bool isEditorView = editorDisplay && dst == editorDisplay->GetColorTexture(0);
+    FrameBuffer* luminanceFB = graphics.GetFrameBuffer(isEditorView ? FrameBufferId::EditorLuminance : FrameBufferId::Luminance);
+    FrameBuffer* workFB = graphics.GetFrameBuffer(isEditorView ? FrameBufferId::EditorPostProcess : FrameBufferId::PostProcess);
     luminanceFB->Clear(rc.commandList, 0, 0, 0, 0);
-    LuminanceExtraction(rc, src);
+    LuminanceExtraction(rc, luminanceFB, src);
 
-    UberPostProcess(rc, src, luminanceFB->GetColorTexture(0), depth, velocity);
+    UberPostProcess(rc, workFB, src, luminanceFB->GetColorTexture(0), depth, velocity);
 
     rc.commandList->SetRenderTarget(nullptr, nullptr);
 
@@ -725,7 +733,6 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
         ID3D11Resource* resVelocity = nullptr;
         ID3D11Resource* resOutput = nullptr;
 
-        FrameBuffer* workFB = Graphics::Instance().GetFrameBuffer(FrameBufferId::PostProcess);
         getDx11Resource(workFB->GetColorTexture(0), &resColor);
         if (resColor) {
             dispatchDesc.color = ffxGetResourceDX11(&m_fsr2Context, resColor, L"FSR2_InputColor", FFX_RESOURCE_STATE_COMPUTE_READ);

@@ -4,7 +4,7 @@
 #include "Model/Model.h"
 //#include "RHI/ICommandList.h"
 //
-//void GBufferPass::Setup(FrameGraphBuilder& builder)
+//void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 //{
 //}
 //
@@ -42,16 +42,19 @@
 #include "Model/Model.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
-#include "RHI/DX12/DX12Texture.h"
+#include "RHI/DX12/DX12Device.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "Console/Logger.h"
 
-void GBufferPass::Setup(FrameGraphBuilder& builder)
+void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
- 
-    float renderScale = Graphics::Instance().GetRenderScale();
-    uint32_t w = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    uint32_t h = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    uint32_t w = rc.renderWidth;
+    uint32_t h = rc.renderHeight;
+    if (w == 0 || h == 0) {
+        float renderScale = Graphics::Instance().GetRenderScale();
+        w = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
+        h = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    }
 
 
     // 1. シェーダーの要求するフォーマットで内部テクスチャを作成
@@ -101,6 +104,14 @@ void GBufferPass::Setup(FrameGraphBuilder& builder)
 }
 
 void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) {
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12 && rc.pendingAsyncComputeFenceValue != 0) {
+        if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
+            dx12Device->QueueGraphicsWaitForCompute(rc.pendingAsyncComputeFenceValue);
+            rc.prepMetrics.asyncComputeWaitCount++;
+        }
+        rc.pendingAsyncComputeFenceValue = 0;
+    }
+
     // グラフから実体を取得
     ITexture* rtvs[] = {
         resources.GetTexture(m_hGBuffer0),
@@ -119,27 +130,6 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
         return;
     }
 
-    static bool s_loggedDepthResource = false;
-    if (!s_loggedDepthResource && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        if (auto* dx12Depth = dynamic_cast<DX12Texture*>(dsv)) {
-            LOG_INFO("[GBufferPass] depthResource=%p", dx12Depth->GetNativeResource());
-            s_loggedDepthResource = true;
-        }
-    }
-    static bool s_loggedColorResources = false;
-    if (!s_loggedColorResources && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        auto* rt0 = dynamic_cast<DX12Texture*>(rtvs[0]);
-        auto* rt1 = dynamic_cast<DX12Texture*>(rtvs[1]);
-        auto* rt2 = dynamic_cast<DX12Texture*>(rtvs[2]);
-        auto* rt3 = dynamic_cast<DX12Texture*>(rtvs[3]);
-        LOG_INFO("[GBufferPass] rt0=%p rt1=%p rt2=%p rt3=%p",
-            rt0 ? rt0->GetNativeResource() : nullptr,
-            rt1 ? rt1->GetNativeResource() : nullptr,
-            rt2 ? rt2->GetNativeResource() : nullptr,
-            rt3 ? rt3->GetNativeResource() : nullptr);
-        s_loggedColorResources = true;
-    }
-
     // クリアとターゲット設定
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     for (int i = 0; i < 4; ++i) rc.commandList->ClearColor(rtvs[i], clearColor);
@@ -155,25 +145,15 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
     rc.debugGBuffer0 = rtvs[0];
     rc.debugGBuffer1 = rtvs[1];
     rc.debugGBuffer2 = rtvs[2];
+    rc.debugGBufferDepth = dsv;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)rtvs[0]->GetWidth(), (float)rtvs[0]->GetHeight());
     rc.commandList->SetViewport(rc.mainViewport);
 
     // モデル描画
-    auto renderer = Graphics::Instance().GetModelRenderer();
+    auto renderer = rc.modelRendererOverride ? rc.modelRendererOverride : Graphics::Instance().GetModelRenderer();
     if (!renderer) {
         LOG_ERROR("[GBufferPass] ModelRenderer is null");
         return;
-    }
-
-    static size_t s_lastBatchCount = static_cast<size_t>(-1);
-    const size_t batchCount = rc.preparedOpaqueInstanceBatches.empty()
-        ? queue.opaqueInstanceBatches.size()
-        : rc.preparedOpaqueInstanceBatches.size();
-    if (s_lastBatchCount != batchCount) {
-        LOG_INFO("[GBufferPass] opaque=%zu batches=%zu prepared=%zu size=%ux%u",
-            queue.opaquePackets.size(), queue.opaqueInstanceBatches.size(), rc.preparedOpaqueInstanceBatches.size(),
-            rtvs[0]->GetWidth(), rtvs[0]->GetHeight());
-        s_lastBatchCount = batchCount;
     }
 
     if (rc.HasPreparedOpaqueCommands()) {
@@ -184,7 +164,7 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
                 renderer->Draw(
                     ShaderId::GBufferPBR, batch.modelResource, instance.worldMatrix, instance.prevWorldMatrix,
                     batch.key.baseColor, batch.key.metallic, batch.key.roughness, batch.key.emissive,
-                    batch.key.materialAsset.get(),
+                    batch.key.materialAsset,
                     batch.key.blendState, batch.key.depthState, batch.key.rasterizerState
                 );
         }

@@ -134,73 +134,133 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
     IBuffer* instanceBuf = rc.activeInstanceBuffer;
     IBuffer* drawArgsBuf = rc.activeDrawArgsBuffer;
     const bool useIndirect = instanceBuf && drawArgsBuf;
+    if (useIndirect && !rc.gpuDrivenDispatchGroups.empty()) {
+        for (const auto& group : rc.gpuDrivenDispatchGroups) {
+            auto modelResource = group.modelResource;
+            if (!modelResource) continue;
 
-    for (const auto& cmd : rc.activeDrawCommands) {
-        auto modelResource = cmd.modelResource;
-        if (!modelResource) continue;
+            ShaderId shaderId = forceShaderId ? forcedShaderId : static_cast<ShaderId>(group.key.shaderId);
+            Shader* shader = shaders[static_cast<int>(shaderId)].get();
+            if (!shader) continue;
 
-        ShaderId shaderId = forceShaderId ? forcedShaderId : static_cast<ShaderId>(cmd.key.shaderId);
-        Shader* shader = shaders[static_cast<int>(shaderId)].get();
-        if (!shader) continue;
+            const int meshIndex = static_cast<int>(group.meshIndex);
+            const ModelResource::MeshResource* meshResource = modelResource->GetMeshResource(meshIndex);
+            if (!meshResource) continue;
 
-        const int meshIndex = static_cast<int>(cmd.meshIndex);
-        const ModelResource::MeshResource* meshResource = modelResource->GetMeshResource(meshIndex);
-        if (!meshResource) continue;
+            const auto& material = meshResource->material;
+            if (material.alphaMode == Model::AlphaMode::Blend || (material.color.w > 0.01f && material.color.w < 0.99f)) {
+                continue;
+            }
 
-        const auto& material = meshResource->material;
-        if (material.alphaMode == Model::AlphaMode::Blend || (material.color.w > 0.01f && material.color.w < 0.99f)) {
-            continue;
-        }
+            if (lastDepthState != group.key.depthState) {
+                rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(group.key.depthState), 0);
+                lastDepthState = group.key.depthState;
+            }
+            if (lastRasterizerState != group.key.rasterizerState) {
+                rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(group.key.rasterizerState));
+                lastRasterizerState = group.key.rasterizerState;
+            }
 
-        if (lastDepthState != cmd.key.depthState) {
-            rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
-            lastDepthState = cmd.key.depthState;
-        }
-        if (lastRasterizerState != cmd.key.rasterizerState) {
-            rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
-            lastRasterizerState = cmd.key.rasterizerState;
-        }
+            if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
-        if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
+            ApplyMaterialOverrides(shaderId, shader, group.key.baseColor, group.key.metallic, group.key.roughness, group.key.emissive, group.key.materialAsset);
 
-        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset.get());
-
-        if (useIndirect && cmd.supportsInstancing &&
-            cmd.instanceCount > 0 && shader->SupportsInstancing(*meshResource)) {
-            {
+            if (group.supportsInstancing && shader->SupportsInstancing(*meshResource)) {
                 CbSkeleton cbSkeleton{};
                 DirectX::XMFLOAT4X4 identity;
                 DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
                 FillSkeletonConstantBuffer(*meshResource, identity, identity, cbSkeleton);
                 ApplySkeletonConstantBuffer(rc, cbSkeleton);
-            }
-            shader->BeginInstanced(rc);
-            rc.commandList->SetVertexBuffer(1, instanceBuf, rc.activeInstanceStride, 0);
-            shader->Update(rc, *meshResource);
-            uint32_t offsetBytes = cmd.drawArgsIndex * DRAW_ARGS_STRIDE;
-            if (rc.useGpuCulling && rc.activeCountBuffer) {
-                rc.commandList->ExecuteIndexedIndirectMulti(
-                    drawArgsBuf, offsetBytes,
-                    1, DRAW_ARGS_STRIDE,
-                    rc.activeCountBuffer, rc.activeCountBufferOffset);
-            } else {
-                rc.commandList->ExecuteIndexedIndirect(drawArgsBuf, offsetBytes);
-            }
-            shader->End(rc);
-        } else {
-            // CPU fallback
-            shader->Begin(rc);
-            const uint32_t begin = cmd.firstInstance;
-            const uint32_t end = cmd.firstInstance + cmd.instanceCount;
-            for (uint32_t i = begin; i < end && i < rc.preparedInstanceData.size(); ++i) {
-                const auto& instance = rc.preparedInstanceData[i];
-                CbSkeleton cbSkeleton{};
-                FillSkeletonConstantBuffer(*meshResource, instance.worldMatrix, instance.prevWorldMatrix, cbSkeleton);
-                ApplySkeletonConstantBuffer(rc, cbSkeleton);
+                shader->BeginInstanced(rc);
+                rc.commandList->SetVertexBuffer(1, instanceBuf, rc.activeInstanceStride, 0);
                 shader->Update(rc, *meshResource);
-                rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
+                rc.commandList->ExecuteIndexedIndirectMulti(
+                    drawArgsBuf,
+                    group.firstArgumentOffsetBytes,
+                    group.commandCount,
+                    DRAW_ARGS_STRIDE);
+                shader->End(rc);
+                continue;
+            }
+
+            shader->Begin(rc);
+            const uint32_t beginCommand = group.firstCommand;
+            const uint32_t endCommand = beginCommand + group.commandCount;
+            for (uint32_t commandIndex = beginCommand;
+                 commandIndex < endCommand && commandIndex < rc.activeDrawCommands.size();
+                 ++commandIndex) {
+                const auto& cmd = rc.activeDrawCommands[commandIndex];
+                const uint32_t begin = cmd.firstInstance;
+                const uint32_t end = cmd.firstInstance + cmd.instanceCount;
+                for (uint32_t i = begin; i < end && i < rc.preparedInstanceData.size(); ++i) {
+                    const auto& instance = rc.preparedInstanceData[i];
+                    CbSkeleton cbSkeleton{};
+                    FillSkeletonConstantBuffer(*meshResource, instance.worldMatrix, instance.prevWorldMatrix, cbSkeleton);
+                    ApplySkeletonConstantBuffer(rc, cbSkeleton);
+                    shader->Update(rc, *meshResource);
+                    rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
+                }
             }
             shader->End(rc);
+        }
+    } else {
+        for (const auto& cmd : rc.activeDrawCommands) {
+            auto modelResource = cmd.modelResource;
+            if (!modelResource) continue;
+
+            ShaderId shaderId = forceShaderId ? forcedShaderId : static_cast<ShaderId>(cmd.key.shaderId);
+            Shader* shader = shaders[static_cast<int>(shaderId)].get();
+            if (!shader) continue;
+
+            const int meshIndex = static_cast<int>(cmd.meshIndex);
+            const ModelResource::MeshResource* meshResource = modelResource->GetMeshResource(meshIndex);
+            if (!meshResource) continue;
+
+            const auto& material = meshResource->material;
+            if (material.alphaMode == Model::AlphaMode::Blend || (material.color.w > 0.01f && material.color.w < 0.99f)) {
+                continue;
+            }
+
+            if (lastDepthState != cmd.key.depthState) {
+                rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(cmd.key.depthState), 0);
+                lastDepthState = cmd.key.depthState;
+            }
+            if (lastRasterizerState != cmd.key.rasterizerState) {
+                rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(cmd.key.rasterizerState));
+                lastRasterizerState = cmd.key.rasterizerState;
+            }
+
+            if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
+
+            ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset);
+
+            if (useIndirect && cmd.supportsInstancing &&
+                cmd.instanceCount > 0 && shader->SupportsInstancing(*meshResource)) {
+                CbSkeleton cbSkeleton{};
+                DirectX::XMFLOAT4X4 identity;
+                DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
+                FillSkeletonConstantBuffer(*meshResource, identity, identity, cbSkeleton);
+                ApplySkeletonConstantBuffer(rc, cbSkeleton);
+                shader->BeginInstanced(rc);
+                rc.commandList->SetVertexBuffer(1, instanceBuf, rc.activeInstanceStride, 0);
+                shader->Update(rc, *meshResource);
+                rc.commandList->ExecuteIndexedIndirect(drawArgsBuf, cmd.drawArgsIndex * DRAW_ARGS_STRIDE);
+                shader->End(rc);
+            } else {
+                // CPU fallback
+                shader->Begin(rc);
+                const uint32_t begin = cmd.firstInstance;
+                const uint32_t end = cmd.firstInstance + cmd.instanceCount;
+                for (uint32_t i = begin; i < end && i < rc.preparedInstanceData.size(); ++i) {
+                    const auto& instance = rc.preparedInstanceData[i];
+                    CbSkeleton cbSkeleton{};
+                    FillSkeletonConstantBuffer(*meshResource, instance.worldMatrix, instance.prevWorldMatrix, cbSkeleton);
+                    ApplySkeletonConstantBuffer(rc, cbSkeleton);
+                    shader->Update(rc, *meshResource);
+                    rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
+                }
+                shader->End(rc);
+            }
         }
     }
 
@@ -227,7 +287,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
 
         if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) continue;
 
-        ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset.get());
+            ApplyMaterialOverrides(shaderId, shader, cmd.key.baseColor, cmd.key.metallic, cmd.key.roughness, cmd.key.emissive, cmd.key.materialAsset);
 
         shader->Begin(rc);
         const uint32_t begin = cmd.firstInstance;

@@ -36,7 +36,7 @@ SSRPass::SSRPass(IResourceFactory* factory)
     m_psoBlur = factory->CreatePipelineState(desc);
 }
 
-void SSRPass::Setup(FrameGraphBuilder& builder)
+void SSRPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
@@ -50,9 +50,13 @@ void SSRPass::Setup(FrameGraphBuilder& builder)
 
     // =========================================================
     // =========================================================
-    float renderScale = Graphics::Instance().GetRenderScale();
-    uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    uint32_t renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    uint32_t renderW = rc.renderWidth;
+    uint32_t renderH = rc.renderHeight;
+    if (renderW == 0 || renderH == 0) {
+        float renderScale = Graphics::Instance().GetRenderScale();
+        renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
+        renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    }
 
     TextureDesc ssrDesc{};
     ssrDesc.width = renderW / 2;
@@ -71,6 +75,10 @@ void SSRPass::Setup(FrameGraphBuilder& builder)
 
 void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    if (!rc.enableSSR) {
+        return;
+    }
+
     ITexture* ssrTex = resources.GetTexture(m_hSSR);
     ITexture* blurTex = resources.GetTexture(m_hSSRBlur);
     if (!ssrTex || !blurTex) return;

@@ -14,7 +14,7 @@ namespace {
 
 std::unique_ptr<ITexture> RenderGraphResourcePool::AcquireTexture(const std::string& name, const TextureDesc& desc, IResourceFactory* factory, uint64_t currentFrame) {
     for (auto& pooled : m_pool) {
-        if (pooled.texture && IsSameDesc(pooled.desc, desc)) {
+        if (pooled.texture && pooled.lastUsedFrame < currentFrame && IsSameDesc(pooled.desc, desc)) {
             pooled.lastUsedFrame = currentFrame;
             // LOG_INFO("  [Pool] Reused Resource: %s", name.c_str());
             return std::move(pooled.texture);

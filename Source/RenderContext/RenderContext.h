@@ -16,6 +16,10 @@
 class ShadowMap;
 class Skybox;
 class ModelResource;
+class ModelRenderer;
+class DX12RootSignature;
+class DX12CommandList;
+class IBuffer;
 
 
 struct BloomData {
@@ -100,10 +104,24 @@ struct RenderContext
     {
         uint64_t historyKey = 0;
         RhiViewport viewport;
+        uint32_t renderWidth = 0;
+        uint32_t renderHeight = 0;
+        uint32_t displayWidth = 0;
+        uint32_t displayHeight = 0;
+        uint32_t panelWidth = 0;
+        uint32_t panelHeight = 0;
         ITexture* mainRenderTarget = nullptr;
         ITexture* mainDepthStencil = nullptr;
         ITexture* sceneColorTexture = nullptr;
         ITexture* sceneDepthTexture = nullptr;
+        ITexture* prevSceneTexture = nullptr;
+        ITexture* displayColorTexture = nullptr;
+        bool enableComputeCulling = true;
+        bool enableAsyncCompute = true;
+        bool enableGTAO = true;
+        bool enableSSGI = true;
+        bool enableVolumetricFog = true;
+        bool enableSSR = true;
 
         DirectX::XMFLOAT4X4 viewMatrix;
         DirectX::XMFLOAT4X4 projectionMatrix;
@@ -129,6 +147,10 @@ struct RenderContext
         double visibleExtractMs = 0.0;
         double instanceBuildMs = 0.0;
         double indirectBuildMs = 0.0;
+        double asyncComputeSubmitMs = 0.0;
+        double asyncComputeGpuMs = 0.0;
+        float visibleInstanceHitRate = 0.0f;
+        float averageInstancesPerVisibleBatch = 0.0f;
         uint32_t visibleBatchCount = 0;
         uint32_t visibleInstanceCount = 0;
         uint32_t preparedBatchCount = 0;
@@ -145,6 +167,13 @@ struct RenderContext
         uint32_t metadataVectorGrowths = 0;
         uint32_t skinnedCommandCount = 0;
         uint32_t nonSkinnedCommandCount = 0;
+        uint32_t gpuDrivenCandidateBatchCount = 0;
+        uint32_t gpuDrivenCandidateInstanceCount = 0;
+        uint32_t gpuDrivenDispatchGroupCount = 0;
+        uint32_t asyncComputeDispatchCount = 0;
+        uint32_t asyncComputeFallbackCount = 0;
+        uint32_t asyncComputeWaitCount = 0;
+        float gpuDrivenDispatchReduction = 0.0f;
     };
 
     struct PreparedInstanceBatch
@@ -166,13 +195,17 @@ struct RenderContext
         bool supportsInstancing = false;
     };
 
-    struct GpuDrivenCommandMetadata
+    using GpuDrivenCommandMetadata = CullCommandMeta;
+
+    struct GpuDrivenDispatchGroup
     {
+        DrawBatchKey key;
+        std::shared_ptr<ModelResource> modelResource;
         uint32_t meshIndex = 0;
-        uint32_t firstInstance = 0;
-        uint32_t instanceCount = 0;
-        uint32_t argumentOffsetBytes = 0;
-        uint32_t supportsInstancing = 0;
+        uint32_t firstCommand = 0;
+        uint32_t commandCount = 0;
+        uint32_t firstArgumentOffsetBytes = 0;
+        bool supportsInstancing = false;
     };
 
     bool HasPreparedOpaqueCommands() const
@@ -183,8 +216,20 @@ struct RenderContext
     //ID3D11DeviceContext* deviceContext;
     ICommandList* commandList;
     const RenderState* renderState;
+    DX12RootSignature* dx12RootSignature = nullptr;
+    ModelRenderer* modelRendererOverride = nullptr;
+    std::vector<std::shared_ptr<DX12CommandList>>* recordedDx12CommandLists = nullptr;
+    std::vector<std::shared_ptr<DX12CommandList>>* workerDx12CommandListPool = nullptr;
+    IBuffer* sceneConstantBufferOverride = nullptr;
+    IBuffer* shadowConstantBufferOverride = nullptr;
 
     RhiViewport mainViewport;
+    uint32_t renderWidth = 0;
+    uint32_t renderHeight = 0;
+    uint32_t displayWidth = 0;
+    uint32_t displayHeight = 0;
+    uint32_t panelWidth = 0;
+    uint32_t panelHeight = 0;
     ITexture* mainRenderTarget = nullptr;
     ITexture* mainDepthStencil = nullptr;
 
@@ -217,6 +262,7 @@ struct RenderContext
     ITexture* debugGBuffer0 = nullptr;
     ITexture* debugGBuffer1 = nullptr;
     ITexture* debugGBuffer2 = nullptr;
+    ITexture* debugGBufferDepth = nullptr;
 
     RenderEnvironment environment;
 
@@ -234,6 +280,7 @@ struct RenderContext
     std::vector<PreparedInstanceBatch> preparedOpaqueInstanceBatches;
     std::vector<PreparedIndirectCommand> preparedIndirectCommands;
     std::vector<PreparedIndirectCommand> preparedSkinnedCommands;
+    std::vector<GpuDrivenDispatchGroup> gpuDrivenDispatchGroups;
 
     // Active draw state (set by BuildIndirectCommandPass, overridden by ComputeCullingPass)
     IBuffer*  activeInstanceBuffer   = nullptr;   // VB slot1
@@ -244,9 +291,17 @@ struct RenderContext
 
     // GPU culling state (set by ComputeCullingPass)
     bool useGpuCulling = false;
+    bool allowGpuDrivenCompute = true;
+    bool allowAsyncCompute = true;
+    bool allowParallelRecording = true;
+    bool enableGTAO = true;
+    bool enableSSGI = true;
+    bool enableVolumetricFog = true;
+    bool enableSSR = true;
     IBuffer* activeCountBuffer = nullptr;      // count buffer for multi-draw
     uint32_t activeCountBufferOffset = 0;
     uint32_t activeMaxDrawCount = 0;           // max commands for multi-draw
+    uint64_t pendingAsyncComputeFenceValue = 0;
 
     BloomData       bloomData;
     ColorFilterData colorFilterData;

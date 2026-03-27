@@ -39,6 +39,7 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
     m_ps = factory->CreateShader(ShaderType::Pixel, "Data/Shader/DeferredLightingPS.cso");
     // LUT テクスチャ読み込み（DX11/DX12 共通: ResourceManager が API 自動分岐）
     m_lutGGX = ResourceManager::Instance().GetTexture("Data/Texture/IBL/lut_ggx.dds");
+    m_whiteFallback = ResourceManager::Instance().GetTexture("Data/Texture/UI/White.png");
 
     auto* rs = Graphics::Instance().GetRenderState();
     PipelineStateDesc desc{};
@@ -106,7 +107,7 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
     }
 }
 
-void DeferredLightingPass::Setup(FrameGraphBuilder& builder)
+void DeferredLightingPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
@@ -174,11 +175,11 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
     ITexture* gbuffer0 = resources.GetTexture(m_hGBuffer0);
     ITexture* gbuffer1 = resources.GetTexture(m_hGBuffer1);
     ITexture* gbuffer2 = resources.GetTexture(m_hGBuffer2);
-    ITexture* ao = resources.GetTexture(m_hGTAO);
+    ITexture* ao = rc.enableGTAO ? resources.GetTexture(m_hGTAO) : nullptr;
     ITexture* shadow = rc.shadowMap ? rc.shadowMap->GetTexture() : nullptr;
-    ITexture* ssgi = resources.GetTexture(m_hSSGI);
-    ITexture* fog = resources.GetTexture(m_hFog);
-    ITexture* ssr = resources.GetTexture(m_hSSR);
+    ITexture* ssgi = rc.enableSSGI ? resources.GetTexture(m_hSSGI) : nullptr;
+    ITexture* fog = rc.enableVolumetricFog ? resources.GetTexture(m_hFog) : nullptr;
+    ITexture* ssr = rc.enableSSR ? resources.GetTexture(m_hSSR) : nullptr;
     ITexture* probe = rc.reflectionProbeTexture;
     ITexture* depth = dsReal;
     ITexture* diffuseIBL = rc.environment.diffuseIBLPath.empty()
@@ -187,6 +188,10 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
     ITexture* specularIBL = rc.environment.specularIBLPath.empty()
         ? nullptr
         : ResourceManager::Instance().GetTexture(rc.environment.specularIBLPath).get();
+
+    if (!ao && m_whiteFallback) {
+        ao = m_whiteFallback.get();
+    }
 
     // Use standard PSSetTextures path for all APIs.
     // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
@@ -202,17 +207,6 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         rc.commandList->PSSetTexture(33, diffuseIBL);
         rc.commandList->PSSetTexture(34, specularIBL);
         rc.commandList->PSSetTexture(35, m_lutGGX.get());
-    }
-
-    static bool s_loggedOnce = false;
-    if (!s_loggedOnce) {
-        LOG_INFO("[DeferredLightingPass] LUT=%p reflection=%p shadow=%p diffIBL=%p specIBL=%p",
-            m_lutGGX.get(),
-            rc.reflectionProbeTexture,
-            rc.shadowMap ? rc.shadowMap->GetTexture() : nullptr,
-            diffuseIBL,
-            specularIBL);
-        s_loggedOnce = true;
     }
 
     rc.commandList->Draw(3, 0);

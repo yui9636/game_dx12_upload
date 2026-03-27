@@ -33,16 +33,20 @@ void GlobalRootSignature::Initialize(DX12Device* device)
     m_isDX12 = true;
 }
 
-void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap)
+void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap,
+    IBuffer* sceneBufferOverride, IBuffer* shadowBufferOverride)
 {
-    commandList->VSSetConstantBuffer(7, m_cbScene.get());
-    commandList->PSSetConstantBuffer(7, m_cbScene.get());
-    if (!m_isDX12) commandList->CSSetConstantBuffer(7, m_cbScene.get());
+    IBuffer* sceneBuffer = sceneBufferOverride ? sceneBufferOverride : m_cbScene.get();
+    IBuffer* shadowBuffer = shadowBufferOverride ? shadowBufferOverride : m_cbShadow.get();
+
+    commandList->VSSetConstantBuffer(7, sceneBuffer);
+    commandList->PSSetConstantBuffer(7, sceneBuffer);
+    if (!m_isDX12) commandList->CSSetConstantBuffer(7, sceneBuffer);
 
     if (shadowMap) {
-        commandList->VSSetConstantBuffer(4, m_cbShadow.get());
-        commandList->PSSetConstantBuffer(4, m_cbShadow.get());
-        if (!m_isDX12) commandList->CSSetConstantBuffer(4, m_cbShadow.get());
+        commandList->VSSetConstantBuffer(4, shadowBuffer);
+        commandList->PSSetConstantBuffer(4, shadowBuffer);
+        if (!m_isDX12) commandList->CSSetConstantBuffer(4, shadowBuffer);
     }
 
     if (m_isDX12) return;

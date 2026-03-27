@@ -60,6 +60,8 @@ public:
     FrameGraph() = default;
     ~FrameGraph() = default;
 
+    void SetFrameIndex(uint64_t frameIndex) { m_frameCount = frameIndex; }
+
     void AddPass(IRenderPass* pass);
 
     ResourceHandle ImportTexture(const std::string& name, ITexture* texture);
@@ -71,7 +73,7 @@ public:
     std::string DumpGraphviz() const;
 
 private:
-    void Setup();
+    void Setup(const RenderContext& rc);
     void Compile();
     void ExecutePasses(const RenderQueue& queue, RenderContext& rc);
 

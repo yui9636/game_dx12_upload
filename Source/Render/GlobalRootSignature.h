@@ -54,7 +54,8 @@ public:
 
     ~GlobalRootSignature();
 
-    void BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap);
+    void BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap,
+        IBuffer* sceneBufferOverride = nullptr, IBuffer* shadowBufferOverride = nullptr);
 
     IBuffer* GetSceneBuffer() const;
     IBuffer* GetShadowBuffer() const;

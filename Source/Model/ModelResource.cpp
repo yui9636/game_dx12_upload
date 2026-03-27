@@ -123,6 +123,7 @@ void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* facto
     const auto& meshes = model.GetMeshes();
     m_meshResources.clear();
     m_meshResources.reserve(meshes.size());
+    m_hasSkinnedMeshes = false;
 
     for (size_t meshIndex = 0; meshIndex < meshes.size(); ++meshIndex)
     {
@@ -147,6 +148,9 @@ void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* facto
         resource.materialIndex = model.GetMeshMaterialIndex(static_cast<int>(meshIndex));
         resource.nodeIndex = model.GetMeshNodeIndex(static_cast<int>(meshIndex));
         resource.localBounds = BuildMeshLocalBounds(mesh);
+        if (!mesh.bones.empty()) {
+            m_hasSkinnedMeshes = true;
+        }
         m_meshResources.push_back(std::move(resource));
     }
 
@@ -160,6 +164,8 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
     const auto& meshes = model.GetMeshes();
     const auto& materials = model.GetMaterials();
     const auto& nodes = model.GetNodes();
+
+    m_hasSkinnedMeshes = false;
 
     const auto getMaterial = [&](int meshIndex) -> Model::Material {
         const int materialIndex = model.GetMeshMaterialIndex(meshIndex);
@@ -184,6 +190,9 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
 
         resource.bones.clear();
         resource.bones.reserve(mesh.bones.size());
+        if (!mesh.bones.empty()) {
+            m_hasSkinnedMeshes = true;
+        }
         for (size_t boneIndex = 0; boneIndex < mesh.bones.size(); ++boneIndex)
         {
             const auto& bone = mesh.bones[boneIndex];

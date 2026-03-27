@@ -7,23 +7,42 @@
 #include "Type/TypeInfo.h"
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <unordered_map>
 
 namespace
 {
-    struct ExtractSource
+    inline void HashCombine(uint64_t& seed, uint64_t value)
     {
-        MeshComponent* mesh = nullptr;
-        const TransformComponent* transform = nullptr;
-        MaterialComponent* material = nullptr;
-    };
+        seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
+    }
 
-    struct ExtractBucket
+    inline uint64_t HashFloat(float value)
     {
-        std::vector<RenderPacket> opaquePackets;
-        std::vector<RenderPacket> transparentPackets;
-        uint32_t materialResolveCount = 0;
-    };
+        uint32_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(value));
+        std::memcpy(&bits, &value, sizeof(bits));
+        return std::hash<uint32_t>()(bits);
+    }
+
+    uint64_t BuildMaterialGroupHash(const MaterialAsset& material)
+    {
+        uint64_t seed = 0;
+        HashCombine(seed, std::hash<int>()(material.shaderId));
+        HashCombine(seed, std::hash<int>()(material.alphaMode));
+        HashCombine(seed, HashFloat(material.baseColor.x));
+        HashCombine(seed, HashFloat(material.baseColor.y));
+        HashCombine(seed, HashFloat(material.baseColor.z));
+        HashCombine(seed, HashFloat(material.baseColor.w));
+        HashCombine(seed, HashFloat(material.metallic));
+        HashCombine(seed, HashFloat(material.roughness));
+        HashCombine(seed, HashFloat(material.emissive));
+        HashCombine(seed, std::hash<std::string>()(material.diffuseTexturePath));
+        HashCombine(seed, std::hash<std::string>()(material.normalTexturePath));
+        HashCombine(seed, std::hash<std::string>()(material.metallicRoughnessTexturePath));
+        HashCombine(seed, std::hash<std::string>()(material.emissiveTexturePath));
+        return seed;
+    }
 }
 
 void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
@@ -32,7 +51,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
     const auto startTime = Clock::now();
 
     auto defaultMat = ResourceManager::Instance().GetDefaultMaterial();
-    std::vector<ExtractSource> sources;
+    m_sources.clear();
 
     const Signature querySignature = CreateSignature<MeshComponent, TransformComponent>();
     const ComponentTypeID meshType = TypeManager::GetComponentTypeID<MeshComponent>();
@@ -61,10 +80,10 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         auto* transforms = static_cast<TransformComponent*>(transformColumn->Get(0));
         auto* materials = materialColumn ? static_cast<MaterialComponent*>(materialColumn->Get(0)) : nullptr;
 
-        const size_t beginIndex = sources.size();
-        sources.resize(beginIndex + entityCount);
+        const size_t beginIndex = m_sources.size();
+        m_sources.resize(beginIndex + entityCount);
         for (size_t i = 0; i < entityCount; ++i) {
-            auto& source = sources[beginIndex + i];
+            auto& source = m_sources[beginIndex + i];
             source.mesh = &meshes[i];
             source.transform = &transforms[i];
             source.material = materials ? &materials[i] : nullptr;
@@ -75,7 +94,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         }
     }
 
-    const size_t expectedVisibleCount = sources.size();
+    const size_t expectedVisibleCount = m_sources.size();
     if (queue.opaquePackets.capacity() < expectedVisibleCount) {
         ++queue.metrics.opaquePacketVectorGrowths;
     }
@@ -83,12 +102,16 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         ++queue.metrics.transparentPacketVectorGrowths;
     }
 
-    std::vector<ExtractBucket> buckets(expectedVisibleCount);
+    m_buckets.resize(expectedVisibleCount);
+    for (size_t i = 0; i < expectedVisibleCount; ++i) {
+        m_buckets[i].opaquePackets.clear();
+        m_buckets[i].transparentPackets.clear();
+    }
     TaskSystem::Instance().ParallelFor(
         expectedVisibleCount,
         32,
         [&](size_t sourceIndex) {
-            const auto& source = sources[sourceIndex];
+            const auto& source = m_sources[sourceIndex];
             if (!source.mesh || !source.transform) {
                 return;
             }
@@ -116,8 +139,9 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
             packet.materialAsset = source.material && source.material->materialAsset
                 ? source.material->materialAsset
                 : defaultMat;
+            packet.materialGroupHash = BuildMaterialGroupHash(*activeMat);
 
-            auto& bucket = buckets[sourceIndex];
+            auto& bucket = m_buckets[sourceIndex];
             const bool isTransparent = (activeMat->alphaMode == 2);
             if (isTransparent) {
                 bucket.transparentPackets.push_back(std::move(packet));
@@ -131,7 +155,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
     queue.opaquePackets.reserve(expectedVisibleCount);
     queue.transparentPackets.reserve(expectedVisibleCount);
 
-    for (auto& bucket : buckets) {
+    for (auto& bucket : m_buckets) {
         if (!bucket.opaquePackets.empty()) {
             queue.opaquePackets.insert(
                 queue.opaquePackets.end(),
@@ -146,14 +170,23 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         }
     }
 
-    std::unordered_map<DrawBatchKey, size_t, DrawBatchKeyHash> batchLookup;
-    batchLookup.reserve(queue.opaquePackets.size());
+    m_batchLookup.clear();
+    m_batchLookup.reserve(queue.opaquePackets.size());
     if (queue.opaqueInstanceBatches.capacity() < queue.opaquePackets.size()) {
         ++queue.metrics.opaqueBatchVectorGrowths;
     }
     queue.opaqueInstanceBatches.reserve(queue.opaquePackets.size());
 
+    uint32_t nonSkinnedOpaquePacketCount = 0;
+    uint32_t skinnedOpaquePacketCount = 0;
     for (const RenderPacket& packet : queue.opaquePackets) {
+        const bool isSkinnedPacket = packet.modelResource && packet.modelResource->HasSkinnedMeshes();
+        if (isSkinnedPacket) {
+            ++skinnedOpaquePacketCount;
+        } else {
+            ++nonSkinnedOpaquePacketCount;
+        }
+
         DrawBatchKey batchKey{};
         batchKey.modelResource = packet.modelResource.get();
         batchKey.shaderId = packet.shaderId;
@@ -165,9 +198,10 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         batchKey.metallic = packet.metallic;
         batchKey.roughness = packet.roughness;
         batchKey.emissive = packet.emissive;
-        batchKey.materialAsset = packet.materialAsset;
+        batchKey.materialAsset = packet.materialAsset.get();
+        batchKey.materialGroupHash = packet.materialGroupHash;
 
-        auto [it, inserted] = batchLookup.emplace(batchKey, queue.opaqueInstanceBatches.size());
+        auto [it, inserted] = m_batchLookup.emplace(batchKey, queue.opaqueInstanceBatches.size());
         if (inserted) {
             InstanceBatch batch{};
             batch.key = batchKey;
@@ -181,6 +215,7 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
         queue.opaqueInstanceBatches[it->second].instances.push_back(instance);
     }
 
+    const auto sortStart = Clock::now();
     std::sort(
         queue.opaqueInstanceBatches.begin(),
         queue.opaqueInstanceBatches.end(),
@@ -188,11 +223,12 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
             if (lhs.key.shaderId != rhs.key.shaderId) {
                 return lhs.key.shaderId < rhs.key.shaderId;
             }
-            if (lhs.key.materialAsset.get() != rhs.key.materialAsset.get()) {
-                return lhs.key.materialAsset.get() < rhs.key.materialAsset.get();
+            if (lhs.key.materialGroupHash != rhs.key.materialGroupHash) {
+                return lhs.key.materialGroupHash < rhs.key.materialGroupHash;
             }
             return lhs.modelResource.get() < rhs.modelResource.get();
         });
+    const auto sortEnd = Clock::now();
 
     uint32_t maxInstancesPerBatch = 0;
     for (const InstanceBatch& batch : queue.opaqueInstanceBatches) {
@@ -205,10 +241,15 @@ void MeshExtractSystem::Extract(Registry& registry, RenderQueue& queue)
     queue.metrics.meshExtractMs =
         std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
     queue.metrics.materialResolveCount = materialResolveCount;
+    queue.metrics.materialGroupCount = static_cast<uint32_t>(m_batchLookup.size());
     queue.metrics.opaquePacketCount = static_cast<uint32_t>(queue.opaquePackets.size());
     queue.metrics.transparentPacketCount = static_cast<uint32_t>(queue.transparentPackets.size());
     queue.metrics.opaqueBatchCount = static_cast<uint32_t>(queue.opaqueInstanceBatches.size());
     queue.metrics.maxInstancesPerBatch = maxInstancesPerBatch;
+    queue.metrics.nonSkinnedOpaquePacketCount = nonSkinnedOpaquePacketCount;
+    queue.metrics.skinnedOpaquePacketCount = skinnedOpaquePacketCount;
+    queue.metrics.batchSortMs =
+        std::chrono::duration<double, std::milli>(sortEnd - sortStart).count();
 
     static size_t s_lastOpaqueCount = static_cast<size_t>(-1);
     static size_t s_lastTransparentCount = static_cast<size_t>(-1);

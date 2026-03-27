@@ -17,7 +17,7 @@ public:
 
     std::string GetName() const override { return "DeferredLightingPass"; }
 
-    void Setup(FrameGraphBuilder& builder) override;
+    void Setup(FrameGraphBuilder& builder, const RenderContext& rc) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
@@ -25,6 +25,7 @@ private:
     std::unique_ptr<IShader> m_ps;
     std::unique_ptr<IPipelineState> m_pso;
     std::shared_ptr<ITexture> m_lutGGX;
+    std::shared_ptr<ITexture> m_whiteFallback;
 
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dx12SrvHeap;
     UINT m_dx12SrvDescriptorSize = 0;

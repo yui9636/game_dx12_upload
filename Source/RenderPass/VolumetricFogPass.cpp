@@ -37,7 +37,7 @@ VolumetricFogPass::VolumetricFogPass(IResourceFactory* factory)
     m_psoBlur = factory->CreatePipelineState(desc);
 }
 
-void VolumetricFogPass::Setup(FrameGraphBuilder& builder)
+void VolumetricFogPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     // 1. 入力の要求
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -46,9 +46,13 @@ void VolumetricFogPass::Setup(FrameGraphBuilder& builder)
     // =========================================================
     // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
     // =========================================================
-    float renderScale = Graphics::Instance().GetRenderScale();
-    uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    uint32_t renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    uint32_t renderW = rc.renderWidth;
+    uint32_t renderH = rc.renderHeight;
+    if (renderW == 0 || renderH == 0) {
+        float renderScale = Graphics::Instance().GetRenderScale();
+        renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
+        renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    }
 
     // 2. ハーフ解像度のテクスチャ設計図
     TextureDesc fogDesc{};
@@ -70,6 +74,10 @@ void VolumetricFogPass::Setup(FrameGraphBuilder& builder)
 
 void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    if (!rc.enableVolumetricFog) {
+        return;
+    }
+
     ITexture* gbuffer2 = resources.GetTexture(m_hGBuffer2);
     ITexture* fogTex = resources.GetTexture(m_hVolumetricFog);
     ITexture* blurTex = resources.GetTexture(m_hVolumetricFogBlur);

@@ -11,7 +11,7 @@ public:
     std::string GetName() const override { return "SkyboxPass"; }
     bool HasSideEffects() const override { return true; }
 
-    void Setup(FrameGraphBuilder& builder) override;
+    void Setup(FrameGraphBuilder& builder, const RenderContext& rc) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:

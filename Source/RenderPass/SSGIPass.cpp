@@ -36,7 +36,7 @@ SSGIPass::SSGIPass(IResourceFactory* factory)
     m_psoBlur = factory->CreatePipelineState(desc);
 }
 
-void SSGIPass::Setup(FrameGraphBuilder& builder)
+void SSGIPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -49,9 +49,13 @@ void SSGIPass::Setup(FrameGraphBuilder& builder)
     // =========================================================
     // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
     // =========================================================
-    float renderScale = Graphics::Instance().GetRenderScale();
-    uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    uint32_t renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    uint32_t renderW = rc.renderWidth;
+    uint32_t renderH = rc.renderHeight;
+    if (renderW == 0 || renderH == 0) {
+        float renderScale = Graphics::Instance().GetRenderScale();
+        renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
+        renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    }
 
     TextureDesc ssgiDesc{};
     ssgiDesc.width = renderW / 2;
@@ -70,6 +74,10 @@ void SSGIPass::Setup(FrameGraphBuilder& builder)
 
 void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    if (!rc.enableSSGI) {
+        return;
+    }
+
     ITexture* ssgiTex = resources.GetTexture(m_hSSGI);
     ITexture* blurTex = resources.GetTexture(m_hSSGIBlur);
     if (!ssgiTex || !blurTex) return;

@@ -379,6 +379,7 @@
 #include "RHI/IShader.h"
 #include "RHI/IBuffer.h"
 #include "RHI/IState.h"
+#include "RHI/DX12/DX12CommandList.h"
 
 Gizmos::~Gizmos() = default;
 
@@ -613,9 +614,7 @@ void Gizmos::Render(const RenderContext& rc)
 	rc.commandList->PSSetShader(pixelShader.get());
 	rc.commandList->SetInputLayout(inputLayout.get());
 
-	rc.commandList->VSSetConstantBuffer(0, constantBuffer.get());
-
-	const float blendFactor[4] = { 1.0f,1.0f,1.0f,1.0f };
+    const float blendFactor[4] = { 1.0f,1.0f,1.0f,1.0f };
 	rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
 	rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestAndWrite), 0);
 	rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));
@@ -639,12 +638,15 @@ void Gizmos::Render(const RenderContext& rc)
 		DirectX::XMStoreFloat4x4(&cbMesh.worldViewProjection, WVP);
 		cbMesh.color = instance.color;
 
-		//ID3D11Resource* cbRes = static_cast<ID3D11Resource*>(constantBuffer->GetNativeBuffer());
-		//dc->UpdateSubresource(cbRes, 0, 0, &cbMesh, 0, 0);
-		rc.commandList->UpdateBuffer(constantBuffer.get(), &cbMesh, sizeof(cbMesh));
+        if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+            dx12Cmd->VSSetDynamicConstantBuffer(0, &cbMesh, sizeof(cbMesh));
+        } else {
+            rc.commandList->VSSetConstantBuffer(0, constantBuffer.get());
+            rc.commandList->UpdateBuffer(constantBuffer.get(), &cbMesh, sizeof(cbMesh));
+        }
 
 
-		rc.commandList->Draw(instance.mesh->vertexCount, 0);
+        rc.commandList->Draw(instance.mesh->vertexCount, 0);
 	}
 	instances.clear();
 }

@@ -4,9 +4,8 @@
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "RHI/ICommandList.h"
-#include "Console/Logger.h"
 
-void SkyboxPass::Setup(FrameGraphBuilder& builder)
+void SkyboxPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
@@ -30,12 +29,6 @@ void SkyboxPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
 
     IResourceFactory* factory = Graphics::Instance().GetResourceFactory();
     Skybox* skybox = Skybox::Get(factory, rc.environment.skyboxPath);
-
-    static bool s_loggedOnce = false;
-    if (!s_loggedOnce) {
-        LOG_INFO("[SkyboxPass] path=%s skybox=%p", rc.environment.skyboxPath.c_str(), skybox);
-        s_loggedOnce = true;
-    }
 
     if (skybox) {
         rc.commandList->TransitionBarrier(rtScene, ResourceState::RenderTarget);

@@ -73,9 +73,14 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		frameBuffers[static_cast<int>(FrameBufferId::GBuffer)]          = std::make_unique<FrameBuffer>(factory, renderW, renderH, gBufFmt);
 		frameBuffers[static_cast<int>(FrameBufferId::Scene)]            = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::PrevScene)]        = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorScene)]      = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorPrevScene)]  = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::PostProcess)]      = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorPostProcess)] = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::Display)]          = std::make_unique<FrameBuffer>(factory, w, h, ldr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorDisplay)]    = std::make_unique<FrameBuffer>(factory, w, h, ldr);
 		frameBuffers[static_cast<int>(FrameBufferId::Luminance)]        = std::make_unique<FrameBuffer>(factory, w, h, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorLuminance)]  = std::make_unique<FrameBuffer>(factory, w, h, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::GTAO)]             = std::make_unique<FrameBuffer>(factory, renderW, renderH, ao);
 		frameBuffers[static_cast<int>(FrameBufferId::SSGI)]             = std::make_unique<FrameBuffer>(factory, halfW, halfH, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::SSGIBlur)]         = std::make_unique<FrameBuffer>(factory, halfW, halfH, hdr);
@@ -231,12 +236,17 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	std::vector<DXGI_FORMAT> hdrFormat = { DXGI_FORMAT_R16G16B16A16_FLOAT };
 
 	frameBuffers[static_cast<int>(FrameBufferId::PostProcess)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, hdrFormat);
+	frameBuffers[static_cast<int>(FrameBufferId::EditorPostProcess)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, hdrFormat);
 	frameBuffers[static_cast<int>(FrameBufferId::Display)] = std::make_unique<FrameBuffer>(device.Get(), w, h, hdrFormat);
+	frameBuffers[static_cast<int>(FrameBufferId::EditorDisplay)] = std::make_unique<FrameBuffer>(device.Get(), w, h, hdrFormat);
 
 	frameBuffers[static_cast<int>(FrameBufferId::GBuffer)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, gBufferFormats);
 	frameBuffers[static_cast<int>(FrameBufferId::Scene)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH);
+	frameBuffers[static_cast<int>(FrameBufferId::EditorScene)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH);
 
 	frameBuffers[static_cast<int>(FrameBufferId::PrevScene)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, hdrFormat);
+	frameBuffers[static_cast<int>(FrameBufferId::EditorPrevScene)] = std::make_unique<FrameBuffer>(device.Get(), renderW, renderH, hdrFormat);
+	frameBuffers[static_cast<int>(FrameBufferId::EditorLuminance)] = std::make_unique<FrameBuffer>(device.Get(), w, h, hdrFormat);
 }
 
 static void DumpDRED(ID3D12Device* device) {

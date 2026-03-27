@@ -25,10 +25,14 @@ class ITexture;
 enum class FrameBufferId
 {
 	Display,
+	EditorDisplay,
 	Scene,
 	PrevScene,
+	EditorScene,
+	EditorPrevScene,
 	GBuffer,
 	Luminance,
+	EditorLuminance,
 	GTAO,
 	SSGI,
 	SSGIBlur,
@@ -37,6 +41,7 @@ enum class FrameBufferId
 	SSR,
 	SSRBlur,
 	PostProcess,
+	EditorPostProcess,
 	EnumCount
 };
 

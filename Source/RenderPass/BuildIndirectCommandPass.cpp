@@ -6,9 +6,25 @@
 #include "RenderContext/IndirectDrawCommon.h"
 #include "System/TaskSystem.h"
 #include <chrono>
+#include <cmath>
 #include <vector>
 
-void BuildIndirectCommandPass::Setup(FrameGraphBuilder& builder)
+namespace
+{
+    bool CanMergeGpuDrivenGroup(
+        const RenderContext::PreparedIndirectCommand& first,
+        const RenderContext::PreparedIndirectCommand& next,
+        uint32_t expectedOffsetBytes)
+    {
+        return first.modelResource.get() == next.modelResource.get() &&
+            first.meshIndex == next.meshIndex &&
+            first.supportsInstancing == next.supportsInstancing &&
+            first.key == next.key &&
+            next.argumentOffsetBytes == expectedOffsetBytes;
+    }
+}
+
+void BuildIndirectCommandPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     (void)builder;
 }
@@ -25,8 +41,11 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     rc.activeSkinnedCommands.clear();
     rc.preparedIndirectCommands.clear();
     rc.preparedSkinnedCommands.clear();
+    rc.gpuDrivenDispatchGroups.clear();
     rc.prepMetrics.preparedIndirectCount = 0;
     rc.prepMetrics.preparedSkinnedCount = 0;
+    rc.prepMetrics.gpuDrivenDispatchGroupCount = 0;
+    rc.prepMetrics.gpuDrivenDispatchReduction = 0.0f;
 
     if (m_batchResults.capacity() < rc.preparedOpaqueInstanceBatches.size()) {
         ++rc.prepMetrics.indirectScratchVectorGrowths;
@@ -97,10 +116,20 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
                     result.drawArgs.push_back(args);
 
                     RenderContext::GpuDrivenCommandMetadata meta{};
-                    meta.meshIndex = meshIndex;
                     meta.firstInstance = batch.firstInstance;
                     meta.instanceCount = batch.instanceCount;
-                    meta.supportsInstancing = 1;
+                    meta.outputInstanceStart = 0;
+                    meta.drawArgsIndex = 0;
+                    meta.indexCount = args.indexCountPerInstance;
+                    meta.baseVertex = args.baseVertexLocation;
+                    const auto bounds = batch.modelResource->GetLocalBounds();
+                    meta.boundsCenterX = bounds.Center.x;
+                    meta.boundsCenterY = bounds.Center.y;
+                    meta.boundsCenterZ = bounds.Center.z;
+                    meta.boundsRadius = static_cast<float>(std::sqrt(
+                        bounds.Extents.x * bounds.Extents.x +
+                        bounds.Extents.y * bounds.Extents.y +
+                        bounds.Extents.z * bounds.Extents.z));
                     result.metadata.push_back(meta);
 
                     result.drawCommands.push_back(cmd);
@@ -144,6 +173,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     drawArgs.reserve(totalDrawArgs);
     metadata.reserve(totalMetadata);
 
+    uint32_t outputInstanceStart = 0;
     for (auto& result : m_batchResults) {
         const uint32_t drawArgsBaseIndex = static_cast<uint32_t>(drawArgs.size());
         const uint32_t metadataBaseIndex = static_cast<uint32_t>(metadata.size());
@@ -155,7 +185,9 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
             result.drawCommands[i].drawArgsIndex = drawArgsBaseIndex + static_cast<uint32_t>(i);
             result.preparedDrawCommands[i].argumentOffsetBytes = (drawArgsBaseIndex + static_cast<uint32_t>(i)) * DRAW_ARGS_STRIDE;
             if (metadataBaseIndex + i < metadata.size()) {
-                metadata[metadataBaseIndex + i].argumentOffsetBytes = result.preparedDrawCommands[i].argumentOffsetBytes;
+                metadata[metadataBaseIndex + i].drawArgsIndex = drawArgsBaseIndex + static_cast<uint32_t>(i);
+                metadata[metadataBaseIndex + i].outputInstanceStart = outputInstanceStart;
+                outputInstanceStart += result.drawCommands[i].instanceCount;
             }
         }
 
@@ -169,14 +201,44 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     rc.prepMetrics.preparedSkinnedCount = static_cast<uint32_t>(rc.activeSkinnedCommands.size());
     rc.prepMetrics.nonSkinnedCommandCount = static_cast<uint32_t>(rc.activeDrawCommands.size());
     rc.prepMetrics.skinnedCommandCount = static_cast<uint32_t>(rc.activeSkinnedCommands.size());
+    rc.prepMetrics.gpuDrivenCandidateBatchCount = static_cast<uint32_t>(rc.activeDrawCommands.size());
+    rc.prepMetrics.gpuDrivenCandidateInstanceCount = 0;
+    for (const auto& cmd : rc.activeDrawCommands) {
+        rc.prepMetrics.gpuDrivenCandidateInstanceCount += cmd.instanceCount;
+    }
+
+    for (size_t i = 0; i < rc.preparedIndirectCommands.size();) {
+        const auto& first = rc.preparedIndirectCommands[i];
+        RenderContext::GpuDrivenDispatchGroup group{};
+        group.key = first.key;
+        group.modelResource = first.modelResource;
+        group.meshIndex = first.meshIndex;
+        group.firstCommand = static_cast<uint32_t>(i);
+        group.commandCount = 1;
+        group.firstArgumentOffsetBytes = first.argumentOffsetBytes;
+        group.supportsInstancing = first.supportsInstancing;
+
+        uint32_t expectedOffsetBytes = first.argumentOffsetBytes + DRAW_ARGS_STRIDE;
+        ++i;
+        while (i < rc.preparedIndirectCommands.size() &&
+               CanMergeGpuDrivenGroup(first, rc.preparedIndirectCommands[i], expectedOffsetBytes)) {
+            ++group.commandCount;
+            expectedOffsetBytes += DRAW_ARGS_STRIDE;
+            ++i;
+        }
+
+        rc.gpuDrivenDispatchGroups.push_back(std::move(group));
+    }
+    rc.prepMetrics.gpuDrivenDispatchGroupCount = static_cast<uint32_t>(rc.gpuDrivenDispatchGroups.size());
+    if (!rc.preparedIndirectCommands.empty()) {
+        rc.prepMetrics.gpuDrivenDispatchReduction =
+            1.0f - (static_cast<float>(rc.gpuDrivenDispatchGroups.size()) /
+                    static_cast<float>(rc.preparedIndirectCommands.size()));
+    }
 
     const uint32_t requiredArgsBytes = static_cast<uint32_t>(drawArgs.size() * sizeof(DrawArgs));
     const uint32_t requiredMetadataBytes = static_cast<uint32_t>(metadata.size() * sizeof(RenderContext::GpuDrivenCommandMetadata));
     if (requiredArgsBytes == 0) {
-        rc.preparedIndirectArgumentBuffer.reset();
-        rc.preparedIndirectArgumentCapacity = 0;
-        rc.preparedIndirectCommandMetadataBuffer.reset();
-        rc.preparedIndirectCommandMetadataCapacity = 0;
         rc.activeDrawArgsBuffer = nullptr;
         rc.prepMetrics.indirectBuildMs =
             std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
@@ -185,16 +247,16 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
 
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) {
-        rc.preparedIndirectArgumentBuffer.reset();
-        rc.preparedIndirectArgumentCapacity = 0;
-        rc.preparedIndirectCommandMetadataBuffer.reset();
-        rc.preparedIndirectCommandMetadataCapacity = 0;
         rc.activeDrawCommands.clear();
         rc.activeSkinnedCommands.clear();
         rc.preparedIndirectCommands.clear();
+        rc.preparedSkinnedCommands.clear();
+        rc.gpuDrivenDispatchGroups.clear();
         rc.activeDrawArgsBuffer = nullptr;
         rc.prepMetrics.preparedIndirectCount = 0;
         rc.prepMetrics.preparedSkinnedCount = 0;
+        rc.prepMetrics.gpuDrivenDispatchGroupCount = 0;
+        rc.prepMetrics.gpuDrivenDispatchReduction = 0.0f;
         rc.prepMetrics.indirectBuildMs =
             std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
         return;

@@ -4,6 +4,7 @@
 #include "RHI/IResourceFactory.h"
 #include "RHI/DX12/DX12Device.h"
 #include "RHI/DX12/DX12Buffer.h"
+#include "RHI/DX12/DX12CommandList.h"
 #include "Render/GlobalRootSignature.h"
 #include "Model/ModelResource.h"
 #include "RenderContext/IndirectDrawCommon.h"
@@ -13,6 +14,7 @@
 #include <cassert>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -44,6 +46,107 @@ namespace
         barrier.Transition.StateAfter = after;
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         commandList->ResourceBarrier(1, &barrier);
+    }
+
+    void RecordCullingDispatch(
+        ID3D12GraphicsCommandList* commandList,
+        ID3D12QueryHeap* timestampHeap,
+        uint32_t timingSlot,
+        ID3D12Resource* timestampReadback,
+        bool& instanceInVBState,
+        bool& drawArgsInIndirectState,
+        bool& countInIndirectState,
+        ID3D12RootSignature* rootSig,
+        ID3D12PipelineState* pso,
+        DX12Buffer* paramsBuf,
+        DX12Buffer* inputBuf,
+        DX12Buffer* metaBuf,
+        DX12Buffer* stagingBuf,
+        DX12Buffer* gpuDrawArgs,
+        DX12Buffer* gpuInstance,
+        DX12Buffer* countBuf,
+        DX12Buffer* countStagingBuf,
+        uint32_t drawArgsBytes,
+        uint32_t groupsX,
+        uint32_t groupsY)
+    {
+        if (timestampHeap && timestampReadback && timingSlot != UINT32_MAX) {
+            const UINT beginQuery = timingSlot * 2u;
+            commandList->EndQuery(timestampHeap, D3D12_QUERY_TYPE_TIMESTAMP, beginQuery);
+        }
+
+        TransitionBuffer(
+            commandList,
+            gpuDrawArgs->GetNativeResource(),
+            drawArgsInIndirectState ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_COPY_DEST);
+        commandList->CopyBufferRegion(
+            gpuDrawArgs->GetNativeResource(), 0,
+            stagingBuf->GetNativeResource(), 0,
+            drawArgsBytes);
+        TransitionBuffer(
+            commandList,
+            gpuDrawArgs->GetNativeResource(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+
+        TransitionBuffer(
+            commandList,
+            countBuf->GetNativeResource(),
+            countInIndirectState ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_COPY_DEST);
+        commandList->CopyBufferRegion(
+            countBuf->GetNativeResource(), 0,
+            countStagingBuf->GetNativeResource(), 0,
+            sizeof(uint32_t));
+        TransitionBuffer(
+            commandList,
+            countBuf->GetNativeResource(),
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+        countInIndirectState = true;
+
+        commandList->SetComputeRootSignature(rootSig);
+        commandList->SetPipelineState(pso);
+        commandList->SetComputeRootConstantBufferView(0, paramsBuf->GetGPUVirtualAddress());
+        commandList->SetComputeRootShaderResourceView(1, inputBuf->GetGPUVirtualAddress());
+        commandList->SetComputeRootShaderResourceView(2, metaBuf->GetGPUVirtualAddress());
+
+        TransitionBuffer(
+            commandList,
+            gpuInstance->GetNativeResource(),
+            instanceInVBState ? D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER : D3D12_RESOURCE_STATE_COMMON,
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->SetComputeRootUnorderedAccessView(3, gpuInstance->GetGPUVirtualAddress());
+        commandList->SetComputeRootUnorderedAccessView(4, gpuDrawArgs->GetGPUVirtualAddress());
+        commandList->Dispatch(groupsX, groupsY, 1);
+
+        TransitionBuffer(
+            commandList,
+            gpuInstance->GetNativeResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        instanceInVBState = true;
+
+        TransitionBuffer(
+            commandList,
+            gpuDrawArgs->GetNativeResource(),
+            D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+        drawArgsInIndirectState = true;
+
+        if (timestampHeap && timestampReadback && timingSlot != UINT32_MAX) {
+            const UINT beginQuery = timingSlot * 2u;
+            const UINT endQuery = beginQuery + 1u;
+            commandList->EndQuery(timestampHeap, D3D12_QUERY_TYPE_TIMESTAMP, endQuery);
+            commandList->ResolveQueryData(
+                timestampHeap,
+                D3D12_QUERY_TYPE_TIMESTAMP,
+                beginQuery,
+                2,
+                timestampReadback,
+                static_cast<UINT64>(beginQuery) * sizeof(uint64_t));
+        }
     }
 }
 
@@ -116,6 +219,113 @@ void ComputeCullingPass::InitGpuResources(DX12Device* device)
     m_initialized = true;
 }
 
+void ComputeCullingPass::InitTimingResources(DX12Device* device)
+{
+    if (!device || m_computeTimestampHeap || m_computeTimestampReadback) {
+        return;
+    }
+
+    auto* d3dDevice = device->GetDevice();
+    if (!d3dDevice) {
+        return;
+    }
+
+    D3D12_QUERY_HEAP_DESC queryDesc = {};
+    queryDesc.Count = kTimingSlotCount * 2u;
+    queryDesc.NodeMask = 0;
+    queryDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    HRESULT hr = d3dDevice->CreateQueryHeap(&queryDesc, IID_PPV_ARGS(&m_computeTimestampHeap));
+    if (FAILED(hr)) {
+        LOG_ERROR("[ComputeCulling] CreateQueryHeap failed");
+        return;
+    }
+
+    D3D12_HEAP_PROPERTIES heapProps = {};
+    heapProps.Type = D3D12_HEAP_TYPE_READBACK;
+
+    D3D12_RESOURCE_DESC bufferDesc = {};
+    bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bufferDesc.Width = static_cast<UINT64>(queryDesc.Count) * sizeof(uint64_t);
+    bufferDesc.Height = 1;
+    bufferDesc.DepthOrArraySize = 1;
+    bufferDesc.MipLevels = 1;
+    bufferDesc.SampleDesc.Count = 1;
+    bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    hr = d3dDevice->CreateCommittedResource(
+        &heapProps,
+        D3D12_HEAP_FLAG_NONE,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+        nullptr,
+        IID_PPV_ARGS(&m_computeTimestampReadback));
+    if (FAILED(hr)) {
+        LOG_ERROR("[ComputeCulling] Create timing readback failed");
+        m_computeTimestampHeap.Reset();
+        return;
+    }
+}
+
+uint32_t ComputeCullingPass::AcquireTimingSlot() const
+{
+    for (uint32_t slot = 0; slot < kTimingSlotCount; ++slot) {
+        const bool inUse = std::any_of(
+            m_inFlightSubmissions.begin(),
+            m_inFlightSubmissions.end(),
+            [slot](const InFlightComputeSubmission& submission) {
+                return submission.timingSlot == slot;
+            });
+        if (!inUse) {
+            return slot;
+        }
+    }
+    return UINT32_MAX;
+}
+
+void ComputeCullingPass::RetireCompletedSubmissions(DX12Device* device)
+{
+    if (!device) {
+        return;
+    }
+
+    auto* computeFence = device->GetComputeFence();
+    if (!computeFence) {
+        return;
+    }
+
+    const uint64_t completedValue = computeFence->GetCompletedValue();
+    auto it = m_inFlightSubmissions.begin();
+    while (it != m_inFlightSubmissions.end()) {
+        if (it->fenceValue > completedValue) {
+            ++it;
+            continue;
+        }
+
+        if (m_computeTimestampReadback && it->timingSlot != UINT32_MAX && device->GetComputeQueue()) {
+            uint64_t* timestamps = nullptr;
+            D3D12_RANGE readRange = {
+                static_cast<SIZE_T>(it->timingSlot * 2u * sizeof(uint64_t)),
+                static_cast<SIZE_T>((it->timingSlot * 2u + 2u) * sizeof(uint64_t))
+            };
+            HRESULT hr = m_computeTimestampReadback->Map(0, &readRange, reinterpret_cast<void**>(&timestamps));
+            if (SUCCEEDED(hr) && timestamps) {
+                const uint64_t begin = timestamps[it->timingSlot * 2u];
+                const uint64_t end = timestamps[it->timingSlot * 2u + 1u];
+                uint64_t frequency = 0;
+                if (end >= begin &&
+                    SUCCEEDED(device->GetComputeQueue()->GetTimestampFrequency(&frequency)) &&
+                    frequency > 0) {
+                    m_lastAsyncGpuMs = static_cast<double>(end - begin) * 1000.0 / static_cast<double>(frequency);
+                }
+                D3D12_RANGE writtenRange = {};
+                m_computeTimestampReadback->Unmap(0, &writtenRange);
+            }
+        }
+
+        it = m_inFlightSubmissions.erase(it);
+    }
+}
+
 void ComputeCullingPass::ExtractFrustumPlanes(const XMFLOAT4X4& vp, XMFLOAT4 planesOut[6])
 {
     const float* m = reinterpret_cast<const float*>(&vp);
@@ -136,7 +346,7 @@ void ComputeCullingPass::ExtractFrustumPlanes(const XMFLOAT4X4& vp, XMFLOAT4 pla
     }
 }
 
-void ComputeCullingPass::Setup(FrameGraphBuilder& builder)
+void ComputeCullingPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     (void)builder;
 }
@@ -145,8 +355,12 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
 {
     (void)resources;
     (void)queue;
+    using Clock = std::chrono::high_resolution_clock;
 
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+        return;
+    }
+    if (!rc.allowGpuDrivenCompute) {
         return;
     }
     if (rc.activeDrawCommands.empty()) {
@@ -159,29 +373,19 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         return;
     }
 
-    if (auto* computeFence = dx12Device->GetComputeFence()) {
-        const uint64_t completedValue = computeFence->GetCompletedValue();
-        auto it = m_inFlightSubmissions.begin();
-        while (it != m_inFlightSubmissions.end()) {
-            if (it->fenceValue <= completedValue) {
-                it = m_inFlightSubmissions.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
-
     InitGpuResources(dx12Device);
+    InitTimingResources(dx12Device);
+    RetireCompletedSubmissions(dx12Device);
     if (!m_initialized) {
         return;
     }
+    rc.prepMetrics.asyncComputeGpuMs = m_lastAsyncGpuMs;
 
     auto* factory = graphics.GetResourceFactory();
     if (!factory) {
         return;
     }
 
-    std::vector<CullCommandMeta> metaEntries;
     std::vector<DrawArgs> initialDrawArgs;
     std::vector<size_t> commandIndices;
 
@@ -194,37 +398,8 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
             continue;
         }
 
-        const auto* meshRes = cmd.modelResource->GetMeshResource(static_cast<int>(cmd.meshIndex));
-        if (!meshRes) {
-            continue;
-        }
-
-        float cx = 0.0f;
-        float cy = 0.0f;
-        float cz = 0.0f;
-        float radius = 5.0f;
-        const auto bounds = cmd.modelResource->GetLocalBounds();
-        cx = bounds.Center.x;
-        cy = bounds.Center.y;
-        cz = bounds.Center.z;
-        const auto& ext = bounds.Extents;
-        radius = sqrtf(ext.x * ext.x + ext.y * ext.y + ext.z * ext.z);
-
-        CullCommandMeta meta{};
-        meta.firstInstance = cmd.firstInstance;
-        meta.instanceCount = cmd.instanceCount;
-        meta.outputInstanceStart = outputStart;
-        meta.drawArgsIndex = static_cast<uint32_t>(metaEntries.size());
-        meta.indexCount = cmd.modelResource->GetMeshIndexCount(static_cast<int>(cmd.meshIndex));
-        meta.baseVertex = 0;
-        meta.boundsCenterX = cx;
-        meta.boundsCenterY = cy;
-        meta.boundsCenterZ = cz;
-        meta.boundsRadius = radius;
-        metaEntries.push_back(meta);
-
         DrawArgs args{};
-        args.indexCountPerInstance = meta.indexCount;
+        args.indexCountPerInstance = cmd.modelResource->GetMeshIndexCount(static_cast<int>(cmd.meshIndex));
         args.instanceCount = 0;
         args.startIndexLocation = 0;
         args.baseVertexLocation = 0;
@@ -236,14 +411,13 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         outputStart += cmd.instanceCount;
     }
 
-    if (metaEntries.empty()) {
+    if (initialDrawArgs.empty()) {
         return;
     }
 
-    const uint32_t commandCount = static_cast<uint32_t>(metaEntries.size());
+    const uint32_t commandCount = static_cast<uint32_t>(initialDrawArgs.size());
     const uint32_t totalOutputSlots = outputStart;
     const uint32_t drawArgsBytes = commandCount * DRAW_ARGS_STRIDE;
-    const uint32_t metaBytes = commandCount * static_cast<uint32_t>(sizeof(CullCommandMeta));
 
     const bool needsInitialInstanceBuffer = !m_culledInstanceBuffer;
     const bool needsInitialDrawArgsBuffer = !m_culledDrawArgsBuffer;
@@ -284,22 +458,6 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         }
         memcpy(mapped, initialDrawArgs.data(), drawArgsBytes);
         staging->Unmap();
-    }
-
-    if (!m_cullMetaBuffer || m_cullMetaCapacity < metaBytes) {
-        const uint32_t cap = ((metaBytes + 255u) / 256u) * 256u;
-        m_cullMetaBuffer = factory->CreateBuffer(cap, BufferType::Vertex, nullptr);
-        m_cullMetaCapacity = cap;
-    }
-    {
-        auto* meta = static_cast<DX12Buffer*>(m_cullMetaBuffer.get());
-        void* mapped = meta ? meta->Map() : nullptr;
-        if (!mapped) {
-            LOG_ERROR("[ComputeCulling] meta Map failed");
-            return;
-        }
-        memcpy(mapped, metaEntries.data(), metaBytes);
-        meta->Unmap();
     }
 
     if (!m_paramsBuffer) {
@@ -345,7 +503,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     }
 
     auto* inputBuf = static_cast<DX12Buffer*>(rc.preparedVisibleInstanceStructuredBuffer.get());
-    auto* metaBuf = static_cast<DX12Buffer*>(m_cullMetaBuffer.get());
+    auto* metaBuf = static_cast<DX12Buffer*>(rc.preparedIndirectCommandMetadataBuffer.get());
     auto* paramsBuf = static_cast<DX12Buffer*>(m_paramsBuffer.get());
     auto* stagingBuf = static_cast<DX12Buffer*>(m_stagingBuffer.get());
     auto* gpuDrawArgs = static_cast<DX12Buffer*>(m_culledDrawArgsBuffer.get());
@@ -356,102 +514,109 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         return;
     }
 
-    ComPtr<ID3D12CommandAllocator> allocator;
-    HRESULT hr = dx12Device->GetDevice()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&allocator));
-    if (FAILED(hr)) {
-        LOG_ERROR("[ComputeCulling] CreateCommandAllocator failed");
-        return;
-    }
-
-    ComPtr<ID3D12GraphicsCommandList> commandList;
-    hr = dx12Device->GetDevice()->CreateCommandList(
-        0,
-        D3D12_COMMAND_LIST_TYPE_COMPUTE,
-        allocator.Get(),
-        nullptr,
-        IID_PPV_ARGS(&commandList));
-    if (FAILED(hr)) {
-        LOG_ERROR("[ComputeCulling] CreateCommandList failed");
-        return;
-    }
-
-    TransitionBuffer(
-        commandList.Get(),
-        gpuDrawArgs->GetNativeResource(),
-        m_drawArgsInIndirectState ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : D3D12_RESOURCE_STATE_COMMON,
-        D3D12_RESOURCE_STATE_COPY_DEST);
-    commandList->CopyBufferRegion(
-        gpuDrawArgs->GetNativeResource(), 0,
-        stagingBuf->GetNativeResource(), 0,
-        drawArgsBytes);
-    TransitionBuffer(
-        commandList.Get(),
-        gpuDrawArgs->GetNativeResource(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-
-    TransitionBuffer(
-        commandList.Get(),
-        countBuf->GetNativeResource(),
-        m_countInIndirectState ? D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT : D3D12_RESOURCE_STATE_COMMON,
-        D3D12_RESOURCE_STATE_COPY_DEST);
-    commandList->CopyBufferRegion(
-        countBuf->GetNativeResource(), 0,
-        countStagingBuf->GetNativeResource(), 0,
-        sizeof(uint32_t));
-    TransitionBuffer(
-        commandList.Get(),
-        countBuf->GetNativeResource(),
-        D3D12_RESOURCE_STATE_COPY_DEST,
-        D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-    m_countInIndirectState = true;
-
-    commandList->SetComputeRootSignature(m_computeRootSig.Get());
-    commandList->SetPipelineState(m_computePSO.Get());
-    commandList->SetComputeRootConstantBufferView(0, paramsBuf->GetGPUVirtualAddress());
-    commandList->SetComputeRootShaderResourceView(1, inputBuf->GetGPUVirtualAddress());
-    commandList->SetComputeRootShaderResourceView(2, metaBuf->GetGPUVirtualAddress());
-
-    TransitionBuffer(
-        commandList.Get(),
-        gpuInstance->GetNativeResource(),
-        m_instanceInVBState ? D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER : D3D12_RESOURCE_STATE_COMMON,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    commandList->SetComputeRootUnorderedAccessView(3, gpuInstance->GetGPUVirtualAddress());
-    commandList->SetComputeRootUnorderedAccessView(4, gpuDrawArgs->GetGPUVirtualAddress());
+    const bool canUseAsyncQueue =
+        rc.allowAsyncCompute &&
+        dx12Device->GetComputeQueue() != nullptr &&
+        dx12Device->GetComputeFence() != nullptr;
+    const bool useAsyncQueue = canUseAsyncQueue;
+    const auto submitStart = Clock::now();
 
     const uint32_t groupsX = (maxInstancesPerCmd + CULL_THREAD_GROUP_SIZE - 1u) / CULL_THREAD_GROUP_SIZE;
     const uint32_t groupsY = commandCount;
-    commandList->Dispatch(groupsX, groupsY, 1);
 
-    TransitionBuffer(
-        commandList.Get(),
-        gpuInstance->GetNativeResource(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-    m_instanceInVBState = true;
+    if (useAsyncQueue) {
+        ComPtr<ID3D12CommandAllocator> allocator;
+        HRESULT hr = dx12Device->GetDevice()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&allocator));
+        if (FAILED(hr)) {
+            LOG_ERROR("[ComputeCulling] CreateCommandAllocator failed");
+            return;
+        }
 
-    TransitionBuffer(
-        commandList.Get(),
-        gpuDrawArgs->GetNativeResource(),
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
-    m_drawArgsInIndirectState = true;
+        ComPtr<ID3D12GraphicsCommandList> commandList;
+        hr = dx12Device->GetDevice()->CreateCommandList(
+            0,
+            D3D12_COMMAND_LIST_TYPE_COMPUTE,
+            allocator.Get(),
+            nullptr,
+            IID_PPV_ARGS(&commandList));
+        if (FAILED(hr)) {
+            LOG_ERROR("[ComputeCulling] CreateCommandList failed");
+            return;
+        }
 
-    hr = commandList->Close();
-    if (FAILED(hr)) {
-        LOG_ERROR("[ComputeCulling] Close command list failed");
-        return;
+        const uint32_t timingSlot = AcquireTimingSlot();
+        RecordCullingDispatch(
+            commandList.Get(),
+            m_computeTimestampHeap.Get(),
+            timingSlot,
+            m_computeTimestampReadback.Get(),
+            m_instanceInVBState,
+            m_drawArgsInIndirectState,
+            m_countInIndirectState,
+            m_computeRootSig.Get(),
+            m_computePSO.Get(),
+            paramsBuf,
+            inputBuf,
+            metaBuf,
+            stagingBuf,
+            gpuDrawArgs,
+            gpuInstance,
+            countBuf,
+            countStagingBuf,
+            drawArgsBytes,
+            groupsX,
+            groupsY);
+
+        hr = commandList->Close();
+        if (FAILED(hr)) {
+            LOG_ERROR("[ComputeCulling] Close command list failed");
+            return;
+        }
+
+        ID3D12CommandList* computeLists[] = { commandList.Get() };
+        const uint64_t computeFenceValue = dx12Device->ExecuteComputeCommandLists(computeLists, 1);
+        InFlightComputeSubmission submission{};
+        submission.allocator = allocator;
+        submission.commandList = commandList;
+        submission.fenceValue = computeFenceValue;
+        submission.timingSlot = timingSlot;
+        submission.commandCount = commandCount;
+        submission.instanceCount = totalOutputSlots;
+        m_inFlightSubmissions.push_back(std::move(submission));
+        rc.pendingAsyncComputeFenceValue = computeFenceValue;
+        rc.prepMetrics.asyncComputeDispatchCount++;
+    } else {
+        rc.prepMetrics.asyncComputeGpuMs = 0.0;
+        auto* dx12GraphicsCmd = static_cast<DX12CommandList*>(rc.commandList);
+
+        RecordCullingDispatch(
+            dx12GraphicsCmd->GetNativeCommandList(),
+            nullptr,
+            UINT32_MAX,
+            nullptr,
+            m_instanceInVBState,
+            m_drawArgsInIndirectState,
+            m_countInIndirectState,
+            m_computeRootSig.Get(),
+            m_computePSO.Get(),
+            paramsBuf,
+            inputBuf,
+            metaBuf,
+            stagingBuf,
+            gpuDrawArgs,
+            gpuInstance,
+            countBuf,
+            countStagingBuf,
+            drawArgsBytes,
+            groupsX,
+            groupsY);
+        dx12GraphicsCmd->RestoreDescriptorHeap();
+        rc.pendingAsyncComputeFenceValue = 0;
+        rc.prepMetrics.asyncComputeFallbackCount++;
     }
 
-    ID3D12CommandList* computeLists[] = { commandList.Get() };
-    const uint64_t computeFenceValue = dx12Device->ExecuteComputeCommandLists(computeLists, 1);
-    InFlightComputeSubmission submission{};
-    submission.allocator = allocator;
-    submission.commandList = commandList;
-    submission.fenceValue = computeFenceValue;
-    m_inFlightSubmissions.push_back(std::move(submission));
-    dx12Device->QueueGraphicsWaitForCompute(computeFenceValue);
+    rc.prepMetrics.asyncComputeSubmitMs +=
+        std::chrono::duration<double, std::milli>(Clock::now() - submitStart).count();
 
     rc.activeInstanceBuffer = m_culledInstanceBuffer.get();
     rc.activeDrawArgsBuffer = m_culledDrawArgsBuffer.get();
@@ -466,7 +631,8 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
 
     static bool s_loggedOnce = false;
     if (!s_loggedOnce) {
-        LOG_INFO("[ComputeCulling] async compute dispatch=(%u x %u) commands=%u maxInst=%u",
+        LOG_INFO("[ComputeCulling] mode=%s dispatch=(%u x %u) commands=%u maxInst=%u",
+            useAsyncQueue ? "async" : "graphics",
             groupsX, groupsY, commandCount, maxInstancesPerCmd);
         s_loggedOnce = true;
     }

@@ -3,6 +3,9 @@
 #include "GameLayer.h"
 #include "Asset/AssetBrowser.h"
 #include <memory>
+#include <DirectXMath.h>
+
+class ITexture;
 
 class EditorLayer : public Layer
 {
@@ -16,6 +19,25 @@ public:
     void RenderUI() override;
 
     AssetBrowser* GetAssetBrowser() const { return m_assetBrowser.get(); }
+    DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
+    DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
+    DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
+    DirectX::XMFLOAT3 GetEditorCameraPosition() const { return m_editorCameraPosition; }
+    DirectX::XMFLOAT3 GetEditorCameraDirection() const;
+    DirectX::XMFLOAT4X4 GetEditorViewMatrix() const;
+    DirectX::XMFLOAT4X4 BuildEditorProjectionMatrix(float aspect) const;
+    float GetEditorCameraFovY() const { return m_editorCameraFovY; }
+    bool HasEditorCameraUserOverride() const { return m_editorCameraUserOverride; }
+    bool HasEditorCameraAutoFramed() const { return m_editorCameraAutoFramed; }
+    void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
+    void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
+    void SetGBufferDebugTextures(ITexture* g0, ITexture* g1, ITexture* g2, ITexture* g3, ITexture* depth) {
+        m_gbufferTexture0 = g0;
+        m_gbufferTexture1 = g1;
+        m_gbufferTexture2 = g2;
+        m_gbufferTexture3 = g3;
+        m_gbufferDepthTexture = depth;
+    }
 private:
     GameLayer* m_gameLayer;
     std::unique_ptr<AssetBrowser> m_assetBrowser;
@@ -23,12 +45,29 @@ private:
     EntityID m_selectedEntity = Entity::NULL_ID;
     bool m_showLightingWindow = false;
     bool m_showGBufferDebug = false;
+    DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };
+    DirectX::XMFLOAT2 m_gameViewSize = { 0.0f, 0.0f };
+    DirectX::XMFLOAT4 m_sceneViewRect = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 m_editorCameraPosition = { 0.0f, 12.0f, -80.0f };
+    float m_editorCameraYaw = 0.0f;
+    float m_editorCameraPitch = 0.0f;
+    float m_editorCameraFovY = 0.785398f;
+    bool m_sceneViewHovered = false;
+    ITexture* m_sceneViewTexture = nullptr;
+    ITexture* m_gbufferTexture0 = nullptr;
+    ITexture* m_gbufferTexture1 = nullptr;
+    ITexture* m_gbufferTexture2 = nullptr;
+    ITexture* m_gbufferTexture3 = nullptr;
+    ITexture* m_gbufferDepthTexture = nullptr;
+    bool m_editorCameraUserOverride = false;
+    bool m_editorCameraAutoFramed = false;
     // ==========================================
     // ==========================================
     void DrawDockSpace();
     void DrawMenuBar();
     void DrawMainToolbar();
     void DrawSceneView();
+    void DrawGameView();
     void DrawHierarchy();
     void DrawInspector();
     void DrawLightingWindow();

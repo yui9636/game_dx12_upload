@@ -35,6 +35,11 @@ public:
         int meshIndex,
         IBuffer* instanceBuffer, uint32_t instanceStride, uint32_t firstInstance, uint32_t instanceCount,
         IBuffer* argumentBuffer = nullptr, uint32_t argumentOffsetBytes = 0);
+    void DrawInstancedMulti(const RenderContext& rc, const ModelResource* modelResource,
+        int meshIndex,
+        IBuffer* instanceBuffer, uint32_t instanceStride,
+        IBuffer* argumentBuffer, uint32_t argumentOffsetBytes,
+        uint32_t commandCount, uint32_t commandStride);
 
     ITexture* GetTexture() const { return m_shadowTexture.get(); }
     ISampler* GetSamplerState() const { return samplerState.get(); }

@@ -3,15 +3,15 @@
     "baseColor": {
         "w": 1.0,
         "x": 1.0,
-        "y": 0.0,
-        "z": 0.0
+        "y": 1.0,
+        "z": 1.0
     },
-    "diffuseTexturePath": "Data/Effect/Effect/aura3_type2.png",
+    "diffuseTexturePath": "Data\\Texture\\skybox\\torii20220706.jpg",
     "emissive": 10.0,
-    "emissiveTexturePath": "Data/Effect/Effect/7iro.png",
+    "emissiveTexturePath": "",
     "metallic": 1.0,
     "metallicRoughnessTexturePath": "",
-    "normalTexturePath": "Data/Effect/Effect/Normal01.png",
+    "normalTexturePath": "Data\\Model\\TrainingStage\\Grid_Normals.png",
     "roughness": 1.0,
     "shaderId": 1
 }

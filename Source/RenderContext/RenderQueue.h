@@ -13,11 +13,15 @@ class MaterialAsset;
 
 struct RenderQueueMetrics {
     double meshExtractMs = 0.0;
+    double batchSortMs = 0.0;
     uint32_t materialResolveCount = 0;
+    uint32_t materialGroupCount = 0;
     uint32_t opaquePacketCount = 0;
     uint32_t transparentPacketCount = 0;
     uint32_t opaqueBatchCount = 0;
     uint32_t maxInstancesPerBatch = 0;
+    uint32_t nonSkinnedOpaquePacketCount = 0;
+    uint32_t skinnedOpaquePacketCount = 0;
     uint32_t opaquePacketVectorGrowths = 0;
     uint32_t transparentPacketVectorGrowths = 0;
     uint32_t opaqueBatchVectorGrowths = 0;
@@ -34,7 +38,8 @@ struct DrawBatchKey {
     float metallic = 0.0f;
     float roughness = 1.0f;
     float emissive = 0.0f;
-    std::shared_ptr<MaterialAsset> materialAsset;
+    MaterialAsset* materialAsset = nullptr;
+    uint64_t materialGroupHash = 0;
 
     bool operator==(const DrawBatchKey& other) const {
         return modelResource == other.modelResource
@@ -50,7 +55,7 @@ struct DrawBatchKey {
             && metallic == other.metallic
             && roughness == other.roughness
             && emissive == other.emissive
-            && materialAsset.get() == other.materialAsset.get();
+            && materialGroupHash == other.materialGroupHash;
     }
 };
 
@@ -74,7 +79,7 @@ struct DrawBatchKeyHash {
         combine(std::hash<float>()(key.metallic));
         combine(std::hash<float>()(key.roughness));
         combine(std::hash<float>()(key.emissive));
-        combine(std::hash<MaterialAsset*>()(key.materialAsset.get()));
+        combine(std::hash<uint64_t>()(key.materialGroupHash));
         return seed;
     }
 };
@@ -108,6 +113,7 @@ struct RenderPacket {
     float roughness = 1.0f;
     float emissive = 0.0f;
     std::shared_ptr<MaterialAsset> materialAsset;
+    uint64_t materialGroupHash = 0;
 };
 
 class RenderQueue {

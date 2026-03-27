@@ -11,7 +11,7 @@ public:
 
     virtual std::string GetName() const { return "UnknownPass"; }
 
-    virtual void Setup(FrameGraphBuilder& builder) {}
+    virtual void Setup(FrameGraphBuilder& builder, const RenderContext& rc) {}
 
     virtual void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) = 0;
 

@@ -34,7 +34,7 @@ GTAOPass::GTAOPass(IResourceFactory* factory)
     m_pso = factory->CreatePipelineState(desc);
 }
 
-void GTAOPass::Setup(FrameGraphBuilder& builder)
+void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -44,9 +44,13 @@ void GTAOPass::Setup(FrameGraphBuilder& builder)
 
     // =========================================================
     // =========================================================
-    float renderScale = Graphics::Instance().GetRenderScale();
-    uint32_t renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
-    uint32_t renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    uint32_t renderW = rc.renderWidth;
+    uint32_t renderH = rc.renderHeight;
+    if (renderW == 0 || renderH == 0) {
+        float renderScale = Graphics::Instance().GetRenderScale();
+        renderW = (uint32_t)(Graphics::Instance().GetScreenWidth() * renderScale);
+        renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
+    }
 
     TextureDesc desc{};
     desc.width = renderW;
@@ -62,6 +66,10 @@ void GTAOPass::Setup(FrameGraphBuilder& builder)
 
 void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    if (!rc.enableGTAO) {
+        return;
+    }
+
     ITexture* gtaoTex = resources.GetTexture(m_hGTAO);
     ITexture* gbuffer1 = resources.GetTexture(m_hGBuffer1);
     ITexture* gbuffer2 = resources.GetTexture(m_hGBuffer2);

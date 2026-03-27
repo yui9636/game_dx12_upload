@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <chrono>
 
-void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder)
+void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     (void)builder;
 }
@@ -79,9 +79,8 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     const uint32_t requiredBytes = static_cast<uint32_t>(rc.preparedInstanceData.size() * sizeof(InstanceData));
 
     if (requiredBytes == 0) {
-        rc.preparedInstanceBuffer.reset();
-        rc.preparedVisibleInstanceStructuredBuffer.reset();
-        rc.preparedInstanceCapacity = 0;
+        rc.activeInstanceBuffer = nullptr;
+        rc.preparedVisibleInstanceCount = 0;
         rc.prepMetrics.preparedBatchCount = static_cast<uint32_t>(rc.preparedOpaqueInstanceBatches.size());
         rc.prepMetrics.instanceBuildMs =
             std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
@@ -90,9 +89,7 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
 
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) {
-        rc.preparedInstanceBuffer.reset();
-        rc.preparedVisibleInstanceStructuredBuffer.reset();
-        rc.preparedInstanceCapacity = 0;
+        rc.activeInstanceBuffer = nullptr;
         rc.preparedVisibleInstanceCount = 0;
         rc.prepMetrics.instanceBuildMs =
             std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();

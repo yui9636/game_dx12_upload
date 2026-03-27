@@ -687,6 +687,7 @@
 #include "RHI/IPipelineState.h"
 #include "RHI/DX11/DX11Texture.h"
 #include "RHI/DX11/DX11Sampler.h"
+#include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
 #include "Graphics.h"
 #include "Console/Logger.h"
@@ -891,8 +892,13 @@ void ShadowMap::BeginCascade(const RenderContext& rc, int cascadeIndex)
 
     CbScene cbScene{};
     cbScene.lightViewProjection = shadowMatrices[cascadeIndex];
-    rc.commandList->UpdateBuffer(sceneConstantBuffer.get(), &cbScene, sizeof(cbScene));
-    rc.commandList->VSSetConstantBuffer(0, sceneConstantBuffer.get());
+    if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+        dx12Cmd->VSSetDynamicConstantBuffer(0, &cbScene, sizeof(cbScene));
+    }
+    else {
+        rc.commandList->UpdateBuffer(sceneConstantBuffer.get(), &cbScene, sizeof(cbScene));
+        rc.commandList->VSSetConstantBuffer(0, sceneConstantBuffer.get());
+    }
 }
 
 void ShadowMap::End(const RenderContext& rc)
@@ -936,8 +942,13 @@ void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource
             XMStoreFloat4x4(&cbSkeleton.boneTransforms[0], nodeTransform * actorWorld);
         }
 
-        rc.commandList->VSSetConstantBuffer(6, skeletonConstantBuffer.get());
-        rc.commandList->UpdateBuffer(skeletonConstantBuffer.get(), &cbSkeleton, sizeof(cbSkeleton));
+        if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+            dx12Cmd->VSSetDynamicConstantBuffer(6, &cbSkeleton, sizeof(cbSkeleton));
+        }
+        else {
+            rc.commandList->VSSetConstantBuffer(6, skeletonConstantBuffer.get());
+            rc.commandList->UpdateBuffer(skeletonConstantBuffer.get(), &cbSkeleton, sizeof(cbSkeleton));
+        }
         rc.commandList->DrawIndexed(modelResource->GetMeshIndexCount(meshIndex), 0, 0);
     }
 }
@@ -966,6 +977,28 @@ void ShadowMap::DrawInstanced(const RenderContext& rc, const ModelResource* mode
     } else {
         rc.commandList->DrawIndexedInstanced(modelResource->GetMeshIndexCount(meshIndex), instanceCount, 0, 0, firstInstance);
     }
+}
+
+void ShadowMap::DrawInstancedMulti(const RenderContext& rc, const ModelResource* modelResource,
+    int meshIndex,
+    IBuffer* instanceBuffer, uint32_t instanceStride,
+    IBuffer* argumentBuffer, uint32_t argumentOffsetBytes,
+    uint32_t commandCount, uint32_t commandStride)
+{
+    if (!modelResource || !instanceBuffer || !argumentBuffer || commandCount == 0) return;
+
+    const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
+    if (!mesh || !mesh->bones.empty()) {
+        return;
+    }
+    if (!modelResource->BindMeshBuffers(rc.commandList, meshIndex)) {
+        return;
+    }
+
+    rc.commandList->SetPipelineState(m_instancedPso ? m_instancedPso.get() : m_pso.get());
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    rc.commandList->SetVertexBuffer(1, instanceBuffer, instanceStride, 0);
+    rc.commandList->ExecuteIndexedIndirectMulti(argumentBuffer, argumentOffsetBytes, commandCount, commandStride);
 }
 
 void ShadowMap::DrawSceneImmediate(const RenderContext& rc, const std::vector<std::shared_ptr<Actor>>& actors)

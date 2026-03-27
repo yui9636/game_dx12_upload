@@ -13,6 +13,10 @@
 #include "Component/EnvironmentComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Console/Console.h"
+#include "RHI/ITexture.h"
+#include "ImGuiRenderer.h"
+#include <algorithm>
+#include <cmath>
 
 namespace {
     template <typename T>
@@ -137,6 +141,50 @@ void EditorLayer::Finalize()
 
 void EditorLayer::Update(const EngineTime& time)
 {
+    ImGuiIO& io = ImGui::GetIO();
+    using namespace DirectX;
+
+    XMVECTOR pos = XMLoadFloat3(&m_editorCameraPosition);
+    const XMVECTOR rot = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
+    const XMVECTOR forward = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot));
+    const XMVECTOR right = XMVector3Normalize(XMVector3Rotate(XMVectorSet(1, 0, 0, 0), rot));
+    const XMVECTOR up = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 1, 0, 0), rot));
+
+    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
+        m_editorCameraUserOverride = true;
+        m_editorCameraYaw += io.MouseDelta.x * 0.005f;
+        m_editorCameraPitch += io.MouseDelta.y * 0.005f;
+        m_editorCameraPitch = std::clamp(m_editorCameraPitch, -1.55f, 1.55f);
+
+        float speed = 20.0f * io.DeltaTime;
+        if (io.KeyShift) speed *= 3.0f;
+
+        const XMVECTOR moveRot = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
+        const XMVECTOR moveForward = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 0, 1, 0), moveRot));
+        const XMVECTOR moveRight = XMVector3Normalize(XMVector3Rotate(XMVectorSet(1, 0, 0, 0), moveRot));
+        const XMVECTOR moveUp = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 1, 0, 0), moveRot));
+
+        if (ImGui::IsKeyDown(ImGuiKey_W)) pos += moveForward * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_S)) pos -= moveForward * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_D)) pos += moveRight * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_A)) pos -= moveRight * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_E)) pos += moveUp * speed;
+        if (ImGui::IsKeyDown(ImGuiKey_Q)) pos -= moveUp * speed;
+    }
+
+    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Middle]) {
+        m_editorCameraUserOverride = true;
+        const float panSpeed = 10.0f * io.DeltaTime;
+        pos -= right * io.MouseDelta.x * panSpeed;
+        pos += up * io.MouseDelta.y * panSpeed;
+    }
+
+    if (m_sceneViewHovered && io.MouseWheel != 0.0f) {
+        m_editorCameraUserOverride = true;
+        pos += forward * (io.MouseWheel * 10.0f);
+    }
+
+    XMStoreFloat3(&m_editorCameraPosition, pos);
 }
 
 void EditorLayer::RenderUI()
@@ -312,7 +360,7 @@ void EditorLayer::DrawDockSpace()
         ImGui::DockBuilderDockWindow(ICON_FA_FOLDER_OPEN " Asset Browser", dock_down);
         ImGui::DockBuilderDockWindow("Console", dock_down); // ★ 追加：コンソールを下のエリアに重ねる（タブ化）
 
-        ImGui::DockBuilderDockWindow("Scene View", dock_main_id); // 中央
+        ImGui::DockBuilderDockWindow("Scene View", dock_main_id);
 
         ImGui::DockBuilderFinish(dockspace_id);
     }
@@ -334,16 +382,16 @@ void EditorLayer::DrawSceneView()
         // =========================================================
         bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
-        // レジストリからカメラ制御コンポーネントを探してフラグを更新
-        auto& registry = m_gameLayer->GetRegistry();
-        auto archetypes = registry.GetAllArchetypes();
-        for (auto* arch : archetypes) {
-            // CameraFreeControlComponent を持つアーキタイプかチェック
-            if (arch->GetSignature().test(TypeManager::GetComponentTypeID<CameraFreeControlComponent>())) {
-                auto* ctrlCol = arch->GetColumn(TypeManager::GetComponentTypeID<CameraFreeControlComponent>());
-                // アーキタイプ内の全カメラエンティティにホバー状態を伝える
-                for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-                    static_cast<CameraFreeControlComponent*>(ctrlCol->Get(i))->isHovered = hovered;
+        m_sceneViewHovered = hovered;
+        if (m_gameLayer) {
+            auto& registry = m_gameLayer->GetRegistry();
+            auto archetypes = registry.GetAllArchetypes();
+            for (auto* arch : archetypes) {
+                if (arch->GetSignature().test(TypeManager::GetComponentTypeID<CameraFreeControlComponent>())) {
+                    auto* ctrlCol = arch->GetColumn(TypeManager::GetComponentTypeID<CameraFreeControlComponent>());
+                    for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                        static_cast<CameraFreeControlComponent*>(ctrlCol->Get(i))->isHovered = hovered;
+                    }
                 }
             }
         }
@@ -354,14 +402,110 @@ void EditorLayer::DrawSceneView()
         }
 
         ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-        Graphics& graphics = Graphics::Instance();
-        FrameBufferId sceneViewBufferId =
-            (graphics.GetAPI() == GraphicsAPI::DX12) ? FrameBufferId::Scene : FrameBufferId::Display;
-        FrameBuffer* sceneViewBuffer = graphics.GetFrameBuffer(sceneViewBufferId);
-        if (sceneViewBuffer) {
-            if (void* sceneViewTexture = sceneViewBuffer->GetImGuiTextureID()) {
-                // DX11 ?????? SRV?DX12 ? ImGui ?????????? SRV ??????
+        m_sceneViewSize = { viewportSize.x, viewportSize.y };
+        ImVec2 imageMin = ImGui::GetCursorScreenPos();
+        m_sceneViewRect = { imageMin.x, imageMin.y, viewportSize.x, viewportSize.y };
+        if (m_sceneViewTexture) {
+            if (void* sceneViewTexture = ImGuiRenderer::GetTextureID(m_sceneViewTexture)) {
                 ImGui::Image((ImTextureID)sceneViewTexture, viewportSize);
+            }
+        } else if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+            Graphics& graphics = Graphics::Instance();
+            FrameBuffer* sceneViewBuffer = graphics.GetFrameBuffer(FrameBufferId::Display);
+            if (sceneViewBuffer) {
+                if (ITexture* color = sceneViewBuffer->GetColorTexture(0)) {
+                    if (void* sceneViewTexture = sceneViewBuffer->GetImGuiTextureID()) {
+                        ImGui::Image((ImTextureID)sceneViewTexture, viewportSize);
+                    }
+                }
+            }
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
+
+DirectX::XMFLOAT3 EditorLayer::GetEditorCameraDirection() const
+{
+    using namespace DirectX;
+    const XMVECTOR rot = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
+    const XMVECTOR forward = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot));
+    DirectX::XMFLOAT3 out{};
+    XMStoreFloat3(&out, forward);
+    return out;
+}
+
+DirectX::XMFLOAT4X4 EditorLayer::GetEditorViewMatrix() const
+{
+    using namespace DirectX;
+    const XMVECTOR eye = XMLoadFloat3(&m_editorCameraPosition);
+    const XMFLOAT3 dirFloat = GetEditorCameraDirection();
+    const XMVECTOR dir = XMLoadFloat3(&dirFloat);
+    const XMMATRIX view = XMMatrixLookToLH(eye, dir, XMVectorSet(0, 1, 0, 0));
+    DirectX::XMFLOAT4X4 out{};
+    XMStoreFloat4x4(&out, view);
+    return out;
+}
+
+DirectX::XMFLOAT4X4 EditorLayer::BuildEditorProjectionMatrix(float aspect) const
+{
+    using namespace DirectX;
+    const float safeAspect = aspect > 0.0f ? aspect : (16.0f / 9.0f);
+    const XMMATRIX proj = XMMatrixPerspectiveFovLH(m_editorCameraFovY, safeAspect, 0.1f, 100000.0f);
+    DirectX::XMFLOAT4X4 out{};
+    XMStoreFloat4x4(&out, proj);
+    return out;
+}
+
+void EditorLayer::SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target)
+{
+    using namespace DirectX;
+    m_editorCameraPosition = position;
+    m_editorCameraAutoFramed = true;
+
+    const XMVECTOR pos = XMLoadFloat3(&position);
+    const XMVECTOR tgt = XMLoadFloat3(&target);
+    XMVECTOR dir = XMVector3Normalize(tgt - pos);
+
+    DirectX::XMFLOAT3 dir3{};
+    XMStoreFloat3(&dir3, dir);
+    m_editorCameraYaw = std::atan2(dir3.x, dir3.z);
+    const float xzLen = std::sqrt(dir3.x * dir3.x + dir3.z * dir3.z);
+    m_editorCameraPitch = std::atan2(dir3.y, xzLen);
+}
+
+void EditorLayer::DrawGameView()
+{
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+    if (ImGui::Begin("Game View", nullptr, window_flags))
+    {
+        const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+        if (m_gameLayer) {
+            auto& registry = m_gameLayer->GetRegistry();
+            auto archetypes = registry.GetAllArchetypes();
+            for (auto* arch : archetypes) {
+                if (arch->GetSignature().test(TypeManager::GetComponentTypeID<CameraFreeControlComponent>())) {
+                    auto* ctrlCol = arch->GetColumn(TypeManager::GetComponentTypeID<CameraFreeControlComponent>());
+                    for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                        static_cast<CameraFreeControlComponent*>(ctrlCol->Get(i))->isHovered = hovered;
+                    }
+                }
+            }
+        }
+
+        ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+        m_gameViewSize = { viewportSize.x, viewportSize.y };
+        if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+            Graphics& graphics = Graphics::Instance();
+            FrameBuffer* gameViewBuffer = graphics.GetFrameBuffer(FrameBufferId::Display);
+            if (gameViewBuffer) {
+                if (ITexture* color = gameViewBuffer->GetColorTexture(0)) {
+                    if (void* gameViewTexture = gameViewBuffer->GetImGuiTextureID()) {
+                        ImGui::Image((ImTextureID)gameViewTexture, viewportSize);
+                    }
+                }
             }
         }
     }
@@ -411,9 +555,13 @@ void EditorLayer::DrawGBufferDebugWindow()
 
     if (ImGui::Begin(ICON_FA_IMAGES " G-Buffer Debug", &m_showGBufferDebug))
     {
-        // GBufferを取得
-        FrameBuffer* gbuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::GBuffer);
-        if (gbuffer)
+        ITexture* textures[4] = { m_gbufferTexture0, m_gbufferTexture1, m_gbufferTexture2, m_gbufferTexture3 };
+        bool hasViewTextures = textures[0] || textures[1] || textures[2] || textures[3];
+        FrameBuffer* gbuffer =
+            (hasViewTextures || Graphics::Instance().GetAPI() == GraphicsAPI::DX12)
+            ? nullptr
+            : Graphics::Instance().GetFrameBuffer(FrameBufferId::GBuffer);
+        if (hasViewTextures || gbuffer)
         {
             // ウィンドウ幅に合わせてアスペクト比を計算
             float w = ImGui::GetContentRegionAvail().x;
@@ -421,24 +569,28 @@ void EditorLayer::DrawGBufferDebugWindow()
             ImVec2 size(w, h);
 
             ImGui::TextDisabled("Target 0: Albedo (RGB) + Metallic (A)");
-            if (void* tex0 = gbuffer->GetImGuiTextureID(0)) {
+            void* tex0 = hasViewTextures ? (textures[0] ? ImGuiRenderer::GetTextureID(textures[0]) : nullptr) : gbuffer->GetImGuiTextureID(0);
+            if (tex0) {
                 ImGui::Image((ImTextureID)tex0, size);
             }
 
             ImGui::Spacing();
             ImGui::TextDisabled("Target 1: Normal (RGB) + Roughness (A)");
-            if (void* tex1 = gbuffer->GetImGuiTextureID(1)) {
+            void* tex1 = hasViewTextures ? (textures[1] ? ImGuiRenderer::GetTextureID(textures[1]) : nullptr) : gbuffer->GetImGuiTextureID(1);
+            if (tex1) {
                 ImGui::Image((ImTextureID)tex1, size);
             }
 
             ImGui::Spacing();
             ImGui::TextDisabled("Target 2: World Position (RGB) + Depth (A)");
-            if (void* tex2 = gbuffer->GetImGuiTextureID(2)) {
+            void* tex2 = hasViewTextures ? (textures[2] ? ImGuiRenderer::GetTextureID(textures[2]) : nullptr) : gbuffer->GetImGuiTextureID(2);
+            if (tex2) {
                 ImGui::Image((ImTextureID)tex2, size);
             }
             ImGui::Spacing();
             ImGui::TextDisabled("Target 3: Velocity (RG)");
-            if (void* tex3 = gbuffer->GetImGuiTextureID(3)) {
+            void* tex3 = hasViewTextures ? (textures[3] ? ImGuiRenderer::GetTextureID(textures[3]) : nullptr) : gbuffer->GetImGuiTextureID(3);
+            if (tex3) {
                 ImGui::Image((ImTextureID)tex3, size);
             }
 

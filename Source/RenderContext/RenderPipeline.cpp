@@ -22,14 +22,67 @@
 #include "RenderPass/BuildInstanceBufferPass.h"
 #include "RenderPass/BuildIndirectCommandPass.h"
 #include "RenderPass/ComputeCullingPass.h"
+#include "RenderPass/ShadowPass.h"
+#include "RenderPass/GBufferPass.h"
+#include "RenderPass/GTAOPass.h"
+#include "RenderPass/SSGIPass.h"
+#include "RenderPass/VolumetricFogPass.h"
+#include "RenderPass/SSRPass.h"
+#include "RenderPass/DeferredLightingPass.h"
+#include "RenderPass/SkyboxPass.h"
+#include "RenderPass/ForwardTransparentPass.h"
+#include "RenderPass/PostProcessPass.h"
 #include "Console/Logger.h"
 #include "System/TaskSystem.h"
 #include <chrono>
+#include <unordered_set>
+
+namespace
+{
+    uint64_t ResolveHistoryKey(const RenderContext::ViewState& viewState)
+    {
+        if (viewState.historyKey != 0) {
+            return viewState.historyKey;
+        }
+
+        if (viewState.mainRenderTarget) {
+            return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(viewState.mainRenderTarget));
+        }
+        if (viewState.sceneColorTexture) {
+            return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(viewState.sceneColorTexture));
+        }
+        return 1;
+    }
+
+    std::shared_ptr<IRenderPass> ClonePassForView(const std::shared_ptr<IRenderPass>& pass, IResourceFactory* factory)
+    {
+        if (dynamic_cast<ExtractVisibleInstancesPass*>(pass.get())) return std::make_shared<ExtractVisibleInstancesPass>();
+        if (dynamic_cast<BuildInstanceBufferPass*>(pass.get())) return std::make_shared<BuildInstanceBufferPass>();
+        if (dynamic_cast<BuildIndirectCommandPass*>(pass.get())) return std::make_shared<BuildIndirectCommandPass>();
+        if (dynamic_cast<ComputeCullingPass*>(pass.get())) return std::make_shared<ComputeCullingPass>();
+        if (dynamic_cast<ShadowPass*>(pass.get())) return std::make_shared<ShadowPass>();
+        if (dynamic_cast<GBufferPass*>(pass.get())) return std::make_shared<GBufferPass>();
+        if (dynamic_cast<GTAOPass*>(pass.get())) return std::make_shared<GTAOPass>(factory);
+        if (dynamic_cast<SSGIPass*>(pass.get())) return std::make_shared<SSGIPass>(factory);
+        if (dynamic_cast<VolumetricFogPass*>(pass.get())) return std::make_shared<VolumetricFogPass>(factory);
+        if (dynamic_cast<SSRPass*>(pass.get())) return std::make_shared<SSRPass>(factory);
+        if (dynamic_cast<DeferredLightingPass*>(pass.get())) return std::make_shared<DeferredLightingPass>(factory);
+        if (dynamic_cast<SkyboxPass*>(pass.get())) return std::make_shared<SkyboxPass>();
+        if (dynamic_cast<ForwardTransparentPass*>(pass.get())) return std::make_shared<ForwardTransparentPass>();
+        if (dynamic_cast<FinalBlitPass*>(pass.get())) return std::make_shared<FinalBlitPass>(factory);
+        if (dynamic_cast<PostProcessPass*>(pass.get())) return std::make_shared<PostProcessPass>();
+        return nullptr;
+    }
+}
 
 
 RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* targetBuffer)
 {
     Graphics& g = Graphics::Instance();
+    ++m_frameSerial;
+    const int frameSlotIndex = m_inFlightIndex % kMaxInFlight;
+    auto& recordedListSlot = m_inFlightRecordedDx12Lists[frameSlotIndex];
+    recordedListSlot.clear();
 
     // 1. ターゲットバッファの決定
     FrameBuffer* fb = targetBuffer ? targetBuffer : g.GetFrameBuffer(FrameBufferId::GBuffer);
@@ -62,16 +115,39 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
     RenderContext rc = {};
     rc.commandList = m_commandList.get();
     rc.renderState = g.GetRenderState();
+    rc.dx12RootSignature = m_dx12RootSig.get();
+    rc.recordedDx12CommandLists = &recordedListSlot;
+    if (g.GetAPI() == GraphicsAPI::DX12) {
+        const size_t workerCount = TaskSystem::Instance().GetWorkerCount();
+        auto& workerPoolSlot = m_workerDx12CommandListPools[frameSlotIndex];
+        if (workerPoolSlot.size() != workerCount) {
+            workerPoolSlot.clear();
+            workerPoolSlot.reserve(workerCount);
+            for (size_t i = 0; i < workerCount; ++i) {
+                workerPoolSlot.push_back(
+                    std::make_shared<DX12CommandList>(g.GetDX12Device(), m_dx12RootSig.get(), false));
+            }
+        }
+        rc.workerDx12CommandListPool = &workerPoolSlot;
+    }
     rc.time = (float)EngineKernel::Instance().GetTime().totalTime;
     rc.shadowMap = g.GetShadowMap();
 
+    const bool isDx12 = (g.GetAPI() == GraphicsAPI::DX12);
+    const uint32_t defaultRenderWidth = static_cast<uint32_t>(g.GetScreenWidth() * g.GetRenderScale());
+    const uint32_t defaultRenderHeight = static_cast<uint32_t>(g.GetScreenHeight() * g.GetRenderScale());
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)g.GetScreenWidth(), (float)g.GetScreenHeight());
-    rc.mainRenderTarget = fb->GetColorTexture(0);
-    rc.mainDepthStencil = fb->GetDepthTexture();
+    rc.mainRenderTarget = (!isDx12 && fb) ? fb->GetColorTexture(0) : nullptr;
+    rc.mainDepthStencil = (!isDx12 && fb) ? fb->GetDepthTexture() : nullptr;
+    rc.renderWidth = (!isDx12 && fb) ? fb->GetWidth() : defaultRenderWidth;
+    rc.renderHeight = (!isDx12 && fb) ? fb->GetHeight() : defaultRenderHeight;
+    rc.displayWidth = static_cast<uint32_t>(g.GetScreenWidth());
+    rc.displayHeight = static_cast<uint32_t>(g.GetScreenHeight());
+    rc.panelWidth = rc.displayWidth;
+    rc.panelHeight = rc.displayHeight;
 
-    // ↓ これを追加しないとポストエフェクトに深度が伝わりません！
-    rc.sceneColorTexture = fb->GetColorTexture(0);
-    rc.sceneDepthTexture = fb->GetDepthTexture();
+    rc.sceneColorTexture = (!isDx12 && fb) ? fb->GetColorTexture(0) : nullptr;
+    rc.sceneDepthTexture = (!isDx12 && fb) ? fb->GetDepthTexture() : nullptr;
 
     // ====================================================
     // 4. ECSから「メインカメラ」を探すロジック
@@ -98,6 +174,16 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
         DirectX::XMStoreFloat4x4(&rc.viewMatrix, DirectX::XMMatrixIdentity());
         DirectX::XMStoreFloat4x4(&rc.projectionMatrix, DirectX::XMMatrixIdentity());
         rc.cameraPosition = { 0.0f, 0.0f, 0.0f };
+    }
+
+    static bool s_loggedCameraState = false;
+    if (!s_loggedCameraState) {
+        LOG_INFO("[RenderPipeline] cameraFound=%d pos=(%.3f, %.3f, %.3f) dir=(%.3f, %.3f, %.3f) proj11=%.3f proj22=%.3f",
+            cameraFound ? 1 : 0,
+            rc.cameraPosition.x, rc.cameraPosition.y, rc.cameraPosition.z,
+            rc.cameraDirection.x, rc.cameraDirection.y, rc.cameraDirection.z,
+            rc.projectionMatrix._11, rc.projectionMatrix._22);
+        s_loggedCameraState = true;
     }
 
     // 5. ライト情報の抽出
@@ -151,8 +237,8 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
     // ====================================================
     // 8. アスペクト比・FOV・Near/Far の計算
     // ====================================================
-    float screenH_Safe = g.GetScreenHeight() > 1.0f ? g.GetScreenHeight() : 1.0f;
-    rc.aspect = g.GetScreenWidth() / screenH_Safe;
+    float renderH_Safe = rc.renderHeight > 0 ? static_cast<float>(rc.renderHeight) : 1.0f;
+    rc.aspect = static_cast<float>(rc.renderWidth) / renderH_Safe;
 
     float m22 = rc.projectionMatrix._22;
     float m33 = rc.projectionMatrix._33;
@@ -180,12 +266,24 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
 
 void RenderPipeline::Execute(const RenderQueue& queue, RenderContext& rc)
 {
-    std::vector<RenderContext::ViewState> views;
-    views.push_back(BuildPrimaryViewState(rc));
+    std::vector<RenderViewContext> views;
+    views.push_back(BuildPrimaryViewContext(rc));
     ExecuteViews(queue, rc, views);
 }
 
 void RenderPipeline::ExecuteViews(const RenderQueue& queue, RenderContext& rc, const std::vector<RenderContext::ViewState>& views)
+{
+    std::vector<RenderViewContext> wrappedViews;
+    wrappedViews.reserve(views.size());
+    for (const auto& view : views) {
+        RenderViewContext wrapped{};
+        wrapped.state = view;
+        wrappedViews.push_back(std::move(wrapped));
+    }
+    ExecuteViews(queue, rc, wrappedViews);
+}
+
+void RenderPipeline::ExecuteViews(const RenderQueue& queue, RenderContext& rc, std::vector<RenderViewContext>& views)
 {
     PROFILE_SCOPE("Total RenderPipeline");
 
@@ -193,51 +291,229 @@ void RenderPipeline::ExecuteViews(const RenderQueue& queue, RenderContext& rc, c
         return;
     }
 
-    for (const auto& viewState : views) {
-        ExecuteSingleView(queue, rc, viewState);
+    rc.allowParallelRecording = views.size() <= 1;
+
+    for (size_t viewIndex = 0; viewIndex < views.size(); ++viewIndex) {
+        auto& viewContext = views[viewIndex];
+        ExecuteView(queue, rc, viewContext);
+
+        const bool hasMoreViews = (viewIndex + 1) < views.size();
+        if (hasMoreViews && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+            auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+            dx12Cmd->End();
+            dx12Cmd->Submit();
+            if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
+                dx12Device->WaitForGPU();
+            }
+            dx12Cmd->Begin();
+        }
+    }
+
+    PruneInactiveViews(views);
+}
+
+void RenderPipeline::EnsureViewFrameBuffers(ViewHistoryState& history, const RenderContext::ViewState& viewState, IResourceFactory* factory)
+{
+    if (!factory) {
+        return;
+    }
+
+    const uint32_t renderWidth = viewState.renderWidth;
+    const uint32_t renderHeight = viewState.renderHeight;
+    const uint32_t displayWidth = viewState.displayWidth > 0 ? viewState.displayWidth : renderWidth;
+    const uint32_t displayHeight = viewState.displayHeight > 0 ? viewState.displayHeight : renderHeight;
+
+    const bool renderSizeChanged =
+        history.frameBuffers.renderWidth != renderWidth ||
+        history.frameBuffers.renderHeight != renderHeight;
+    if (renderWidth > 0 && renderHeight > 0 &&
+        (!history.frameBuffers.scene || !history.frameBuffers.prevScene || renderSizeChanged)) {
+        std::vector<TextureFormat> hdr = { TextureFormat::R16G16B16A16_FLOAT };
+        history.frameBuffers.scene = std::make_unique<FrameBuffer>(factory, renderWidth, renderHeight, hdr);
+        history.frameBuffers.prevScene = std::make_unique<FrameBuffer>(factory, renderWidth, renderHeight, hdr);
+        history.frameBuffers.renderWidth = renderWidth;
+        history.frameBuffers.renderHeight = renderHeight;
+    }
+
+    const bool displaySizeChanged =
+        history.frameBuffers.displayWidth != displayWidth ||
+        history.frameBuffers.displayHeight != displayHeight;
+    if (displayWidth > 0 && displayHeight > 0 &&
+        (!history.frameBuffers.display || displaySizeChanged)) {
+        std::vector<TextureFormat> ldr = { TextureFormat::RGBA8_UNORM };
+        history.frameBuffers.display = std::make_unique<FrameBuffer>(factory, displayWidth, displayHeight, ldr);
+        history.frameBuffers.displayWidth = displayWidth;
+        history.frameBuffers.displayHeight = displayHeight;
     }
 }
 
-void RenderPipeline::ExecuteSingleView(const RenderQueue& queue, RenderContext& baseRc, const RenderContext::ViewState& viewState)
+void RenderPipeline::PruneInactiveViews(const std::vector<RenderViewContext>& views)
+{
+    if (m_viewHistory.empty()) {
+        return;
+    }
+
+    std::unordered_set<uint64_t> activeKeys;
+    activeKeys.reserve(views.size());
+    for (const auto& view : views) {
+        activeKeys.insert(ResolveHistoryKey(view.state));
+    }
+
+    for (auto it = m_viewHistory.begin(); it != m_viewHistory.end();) {
+        if (activeKeys.find(it->first) == activeKeys.end()) {
+            it = m_viewHistory.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc, RenderViewContext& viewContext)
 {
     using Clock = std::chrono::high_resolution_clock;
+    RenderContext rc = baseRc;
+    const auto& viewState = viewContext.state;
+    const uint64_t historyKey = ResolveHistoryKey(viewState);
+    const bool usePreparedPath = rc.allowParallelRecording && viewState.enableComputeCulling;
 
-    baseRc.mainViewport = viewState.viewport;
-    baseRc.mainRenderTarget = viewState.mainRenderTarget;
-    baseRc.mainDepthStencil = viewState.mainDepthStencil;
-    baseRc.sceneColorTexture = viewState.sceneColorTexture;
-    baseRc.sceneDepthTexture = viewState.sceneDepthTexture;
-    baseRc.viewMatrix = viewState.viewMatrix;
-    baseRc.projectionMatrix = viewState.projectionMatrix;
-    baseRc.viewProjectionUnjittered = viewState.viewProjectionUnjittered;
-    baseRc.prevViewProjectionMatrix = viewState.prevViewProjectionMatrix;
-    baseRc.cameraPosition = viewState.cameraPosition;
-    baseRc.cameraDirection = viewState.cameraDirection;
-    baseRc.fovY = viewState.fovY;
-    baseRc.aspect = viewState.aspect;
-    baseRc.nearZ = viewState.nearZ;
-    baseRc.farZ = viewState.farZ;
-    baseRc.jitterOffset = viewState.jitterOffset;
+    auto& history = m_viewHistory[historyKey];
+    auto* factory = Graphics::Instance().GetResourceFactory();
+    EnsureViewFrameBuffers(history, viewState, factory);
+
+    ITexture* mainRenderTarget = viewState.mainRenderTarget;
+    ITexture* mainDepthStencil = viewState.mainDepthStencil;
+    ITexture* sceneColorTexture = viewState.sceneColorTexture;
+    ITexture* sceneDepthTexture = viewState.sceneDepthTexture;
+    ITexture* prevSceneTexture = viewState.prevSceneTexture;
+    ITexture* displayColorTexture = viewState.displayColorTexture;
+
+    if (!sceneColorTexture && history.frameBuffers.scene) {
+        sceneColorTexture = history.frameBuffers.scene->GetColorTexture(0);
+        sceneDepthTexture = history.frameBuffers.scene->GetDepthTexture();
+    }
+    if (!prevSceneTexture && history.frameBuffers.prevScene) {
+        prevSceneTexture = history.frameBuffers.prevScene->GetColorTexture(0);
+    }
+    if (!displayColorTexture && history.frameBuffers.display) {
+        displayColorTexture = history.frameBuffers.display->GetColorTexture(0);
+    }
+    if (!mainRenderTarget) {
+        mainRenderTarget = sceneColorTexture;
+    }
+    if (!mainDepthStencil) {
+        mainDepthStencil = sceneDepthTexture;
+    }
+
+    rc.mainRenderTarget = mainRenderTarget;
+    rc.mainDepthStencil = mainDepthStencil;
+    rc.sceneColorTexture = sceneColorTexture;
+    rc.sceneDepthTexture = sceneDepthTexture;
+    rc.renderWidth = viewState.renderWidth;
+    rc.renderHeight = viewState.renderHeight;
+    rc.displayWidth = viewState.displayWidth;
+    rc.displayHeight = viewState.displayHeight;
+    rc.panelWidth = viewState.panelWidth;
+    rc.panelHeight = viewState.panelHeight;
+    if (rc.sceneColorTexture) {
+        rc.mainViewport = RhiViewport(
+            0.0f,
+            0.0f,
+            static_cast<float>(rc.sceneColorTexture->GetWidth()),
+            static_cast<float>(rc.sceneColorTexture->GetHeight()));
+    } else if (rc.mainRenderTarget) {
+        rc.mainViewport = RhiViewport(
+            0.0f,
+            0.0f,
+            static_cast<float>(rc.mainRenderTarget->GetWidth()),
+            static_cast<float>(rc.mainRenderTarget->GetHeight()));
+    } else {
+        rc.mainViewport = viewState.viewport;
+    }
+    rc.allowGpuDrivenCompute = viewState.enableComputeCulling;
+    rc.allowAsyncCompute = viewState.enableAsyncCompute;
+    rc.enableGTAO = viewState.enableGTAO;
+    rc.enableSSGI = viewState.enableSSGI;
+    rc.enableVolumetricFog = viewState.enableVolumetricFog;
+    rc.enableSSR = viewState.enableSSR;
+    rc.viewMatrix = viewState.viewMatrix;
+    rc.projectionMatrix = viewState.projectionMatrix;
+    rc.viewProjectionUnjittered = viewState.viewProjectionUnjittered;
+    rc.prevViewProjectionMatrix = viewState.prevViewProjectionMatrix;
+    rc.cameraPosition = viewState.cameraPosition;
+    rc.cameraDirection = viewState.cameraDirection;
+    rc.fovY = viewState.fovY;
+    rc.aspect = viewState.aspect;
+    rc.nearZ = viewState.nearZ;
+    rc.farZ = viewState.farZ;
+    rc.jitterOffset = viewState.jitterOffset;
     {
-        auto& history = m_viewHistory[viewState.historyKey];
         if (!history.initialized) {
             history.prevViewProjection = viewState.viewProjectionUnjittered;
             history.prevJitterOffset = viewState.prevJitterOffset;
             history.initialized = true;
         }
-        baseRc.prevViewProjectionMatrix = history.prevViewProjection;
-        baseRc.prevJitterOffset = history.prevJitterOffset;
+        if (!history.frameGraph) {
+            history.frameGraph = std::make_unique<FrameGraph>();
+        }
+        history.frameGraph->SetFrameIndex(m_frameSerial);
+        if (history.passes.empty()) {
+            history.passes.reserve(m_passes.size());
+            for (const auto& pass : m_passes) {
+                if (auto clone = ClonePassForView(pass, factory)) {
+                    history.passes.push_back(std::move(clone));
+                }
+            }
+        }
+        if (!history.sceneBuffer && factory) {
+            history.sceneBuffer = factory->CreateBuffer(sizeof(CbScene), BufferType::Constant);
+        }
+        if (!history.shadowBuffer && factory) {
+            history.shadowBuffer = factory->CreateBuffer(sizeof(CbShadowMap), BufferType::Constant);
+        }
+        if (!history.shadowMap && factory) {
+            history.shadowMap = std::make_shared<ShadowMap>(factory);
+        }
+        if (!history.modelRenderer && factory) {
+            history.modelRenderer = std::make_unique<ModelRenderer>(factory);
+        }
+        rc.sceneConstantBufferOverride = history.sceneBuffer.get();
+        rc.shadowConstantBufferOverride = history.shadowBuffer.get();
+        rc.shadowMap = history.shadowMap ? history.shadowMap.get() : rc.shadowMap;
+        rc.modelRendererOverride = history.modelRenderer ? history.modelRenderer.get() : rc.modelRendererOverride;
+        if (usePreparedPath) {
+            rc.preparedInstanceBuffer = history.preparedInstanceBuffer;
+            rc.preparedVisibleInstanceStructuredBuffer = history.preparedVisibleInstanceStructuredBuffer;
+            rc.preparedIndirectArgumentBuffer = history.preparedIndirectArgumentBuffer;
+            rc.preparedIndirectCommandMetadataBuffer = history.preparedIndirectCommandMetadataBuffer;
+            rc.preparedInstanceCapacity = history.preparedInstanceCapacity;
+            rc.preparedIndirectArgumentCapacity = history.preparedIndirectArgumentCapacity;
+            rc.preparedIndirectCommandMetadataCapacity = history.preparedIndirectCommandMetadataCapacity;
+        } else {
+            rc.preparedInstanceBuffer.reset();
+            rc.preparedVisibleInstanceStructuredBuffer.reset();
+            rc.preparedIndirectArgumentBuffer.reset();
+            rc.preparedIndirectCommandMetadataBuffer.reset();
+            rc.preparedInstanceCapacity = 0;
+            rc.preparedIndirectArgumentCapacity = 0;
+            rc.preparedIndirectCommandMetadataCapacity = 0;
+        }
+        rc.prevViewProjectionMatrix = history.prevViewProjection;
+        rc.prevJitterOffset = history.prevJitterOffset;
         history.prevViewProjection = viewState.viewProjectionUnjittered;
         history.prevJitterOffset = viewState.jitterOffset;
     }
+
+    FrameGraph& frameGraph = *history.frameGraph;
+    auto& viewPasses = history.passes;
 
     ExtractVisibleInstancesPass* visiblePass = nullptr;
     BuildInstanceBufferPass* instancePass = nullptr;
     BuildIndirectCommandPass* indirectPass = nullptr;
     ComputeCullingPass* computePass = nullptr;
-    std::vector<IRenderPass*> graphPasses;
-    graphPasses.reserve(m_passes.size());
-    for (const auto& pass : m_passes) {
+    auto& graphPasses = m_graphPassScratch;
+    graphPasses.clear();
+    graphPasses.reserve(viewPasses.size());
+    for (const auto& pass : viewPasses) {
         if (!pass) {
             continue;
         }
@@ -260,9 +536,10 @@ void RenderPipeline::ExecuteSingleView(const RenderQueue& queue, RenderContext& 
         graphPasses.push_back(pass.get());
     }
 
-    if (visiblePass || instancePass || indirectPass || computePass) {
-        FrameGraphResources prepResources(m_frameGraph);
-        std::vector<TaskSystem::TaskGraphNode> prepGraph;
+    if (usePreparedPath && (visiblePass || instancePass || indirectPass || computePass)) {
+        FrameGraphResources prepResources(frameGraph);
+        auto& prepGraph = m_prepGraphScratch;
+        prepGraph.clear();
         auto addNode = [&](std::function<void()> task, std::vector<size_t> deps = {}) {
             TaskSystem::TaskGraphNode node{};
             node.task = std::move(task);
@@ -276,86 +553,222 @@ void RenderPipeline::ExecuteSingleView(const RenderQueue& queue, RenderContext& 
         size_t indirectNode = static_cast<size_t>(-1);
 
         if (visiblePass) {
-            visibleNode = addNode([&]() { visiblePass->Execute(prepResources, queue, baseRc); });
+            visibleNode = addNode([&]() { visiblePass->Execute(prepResources, queue, rc); });
         }
         if (instancePass) {
             std::vector<size_t> deps;
             if (visibleNode != static_cast<size_t>(-1)) deps.push_back(visibleNode);
-            instanceNode = addNode([&]() { instancePass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+            instanceNode = addNode([&]() { instancePass->Execute(prepResources, queue, rc); }, std::move(deps));
         }
         if (indirectPass) {
             std::vector<size_t> deps;
             if (instanceNode != static_cast<size_t>(-1)) deps.push_back(instanceNode);
-            indirectNode = addNode([&]() { indirectPass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+            indirectNode = addNode([&]() { indirectPass->Execute(prepResources, queue, rc); }, std::move(deps));
         }
         if (computePass) {
             std::vector<size_t> deps;
             if (indirectNode != static_cast<size_t>(-1)) deps.push_back(indirectNode);
-            addNode([&]() { computePass->Execute(prepResources, queue, baseRc); }, std::move(deps));
+            addNode([&]() { computePass->Execute(prepResources, queue, rc); }, std::move(deps));
         }
 
         if (!prepGraph.empty()) {
             TaskSystem::Instance().RunTaskGraph(prepGraph);
         }
+
+        history.preparedInstanceBuffer = rc.preparedInstanceBuffer;
+        history.preparedVisibleInstanceStructuredBuffer = rc.preparedVisibleInstanceStructuredBuffer;
+        history.preparedIndirectArgumentBuffer = rc.preparedIndirectArgumentBuffer;
+        history.preparedIndirectCommandMetadataBuffer = rc.preparedIndirectCommandMetadataBuffer;
+        history.preparedInstanceCapacity = rc.preparedInstanceCapacity;
+        history.preparedIndirectArgumentCapacity = rc.preparedIndirectArgumentCapacity;
+        history.preparedIndirectCommandMetadataCapacity = rc.preparedIndirectCommandMetadataCapacity;
+    } else {
+        rc.visibleOpaqueInstanceBatches.clear();
+        rc.preparedInstanceData.clear();
+        rc.preparedOpaqueInstanceBatches.clear();
+        rc.preparedIndirectCommands.clear();
+        rc.preparedSkinnedCommands.clear();
+        rc.gpuDrivenDispatchGroups.clear();
+        rc.activeDrawCommands.clear();
+        rc.activeSkinnedCommands.clear();
+        rc.activeInstanceBuffer = nullptr;
+        rc.activeDrawArgsBuffer = nullptr;
+        rc.activeCountBuffer = nullptr;
+        rc.useGpuCulling = false;
+        rc.pendingAsyncComputeFenceValue = 0;
     }
 
     const auto uploadStart = Clock::now();
+    if (auto* shadowMap = const_cast<ShadowMap*>(rc.shadowMap)) {
+        shadowMap->UpdateCascades(rc);
+    }
     SceneDataUploadSystem uploadSystem;
-    uploadSystem.Upload(baseRc, GlobalRootSignature::Instance());
-    baseRc.prepMetrics.sceneUploadMs =
+    uploadSystem.Upload(rc, GlobalRootSignature::Instance());
+    rc.prepMetrics.sceneUploadMs =
         std::chrono::duration<double, std::milli>(Clock::now() - uploadStart).count();
 
     GlobalRootSignature::Instance().BindAll(
-        baseRc.commandList,
-        baseRc.renderState,
-        baseRc.shadowMap
+        rc.commandList,
+        rc.renderState,
+        rc.shadowMap,
+        rc.sceneConstantBufferOverride,
+        rc.shadowConstantBufferOverride
     );
 
     for (auto* pass : graphPasses) {
         if (pass) {
-            m_frameGraph.AddPass(pass);
+            frameGraph.AddPass(pass);
         }
     }
 
     Graphics& g = Graphics::Instance();
-    FrameBuffer* sceneBuffer = g.GetFrameBuffer(FrameBufferId::Scene);
-    FrameBuffer* prevSceneFB = g.GetFrameBuffer(FrameBufferId::PrevScene);
-    FrameBuffer* displayBuffer = g.GetFrameBuffer(FrameBufferId::Display);
+    ITexture* sceneColor = sceneColorTexture;
+    ITexture* prevScene = prevSceneTexture;
+    ITexture* displayColor = displayColorTexture;
 
-    if (sceneBuffer) m_frameGraph.ImportTexture("SceneColor", sceneBuffer->GetColorTexture(0));
-    if (prevSceneFB) m_frameGraph.ImportTexture("PrevScene", prevSceneFB->GetColorTexture(0));
-    if (displayBuffer) m_frameGraph.ImportTexture("DisplayColor", displayBuffer->GetColorTexture(0));
+    if (!sceneColor) {
+        sceneColor = history.frameBuffers.scene ? history.frameBuffers.scene->GetColorTexture(0) : nullptr;
+    }
+    if (!prevScene) {
+        prevScene = history.frameBuffers.prevScene ? history.frameBuffers.prevScene->GetColorTexture(0) : nullptr;
+    }
+    if (!displayColor) {
+        displayColor = history.frameBuffers.display ? history.frameBuffers.display->GetColorTexture(0) : nullptr;
+    }
 
-    m_frameGraph.Execute(queue, baseRc);
+    if (sceneColor) frameGraph.ImportTexture("SceneColor", sceneColor);
+    if (prevScene) frameGraph.ImportTexture("PrevScene", prevScene);
+    if (displayColor) frameGraph.ImportTexture("DisplayColor", displayColor);
 
-    Graphics::Instance().CopyFrameBuffer(
-        Graphics::Instance().GetFrameBuffer(FrameBufferId::Scene),
-        Graphics::Instance().GetFrameBuffer(FrameBufferId::PrevScene)
-    );
+    frameGraph.Execute(queue, rc);
+
+    if (sceneColor && prevScene) {
+        if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+            auto* sceneDx12 = dynamic_cast<DX12Texture*>(sceneColor);
+            auto* prevDx12 = dynamic_cast<DX12Texture*>(prevScene);
+            if (sceneDx12 && prevDx12) {
+                rc.commandList->TransitionBarrier(sceneColor, ResourceState::CopySource);
+                rc.commandList->TransitionBarrier(prevScene, ResourceState::CopyDest);
+                if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+                    dx12Cmd->FlushResourceBarriers();
+                    dx12Cmd->GetNativeCommandList()->CopyResource(
+                        prevDx12->GetNativeResource(),
+                        sceneDx12->GetNativeResource());
+                }
+                rc.commandList->TransitionBarrier(prevScene, ResourceState::ShaderResource);
+                rc.commandList->TransitionBarrier(sceneColor, ResourceState::ShaderResource);
+            }
+        } else {
+            FrameBuffer* sourceFB = history.frameBuffers.scene.get();
+            FrameBuffer* destFB = history.frameBuffers.prevScene.get();
+            if (sourceFB && destFB) {
+                Graphics::Instance().CopyFrameBuffer(sourceFB, destFB);
+            }
+        }
+    }
+
+    baseRc.prepMetrics = rc.prepMetrics;
+    baseRc.mainRenderTarget = rc.mainRenderTarget;
+    baseRc.mainDepthStencil = rc.mainDepthStencil;
+    baseRc.sceneColorTexture = rc.sceneColorTexture;
+    baseRc.sceneDepthTexture = rc.sceneDepthTexture;
+    baseRc.renderWidth = rc.renderWidth;
+    baseRc.renderHeight = rc.renderHeight;
+    baseRc.displayWidth = rc.displayWidth;
+    baseRc.displayHeight = rc.displayHeight;
+    baseRc.panelWidth = rc.panelWidth;
+    baseRc.panelHeight = rc.panelHeight;
+    baseRc.mainViewport = rc.mainViewport;
+    baseRc.preparedInstanceBuffer = rc.preparedInstanceBuffer;
+    baseRc.preparedVisibleInstanceStructuredBuffer = rc.preparedVisibleInstanceStructuredBuffer;
+    baseRc.preparedIndirectArgumentBuffer = rc.preparedIndirectArgumentBuffer;
+    baseRc.preparedIndirectCommandMetadataBuffer = rc.preparedIndirectCommandMetadataBuffer;
+    baseRc.preparedInstanceCapacity = rc.preparedInstanceCapacity;
+    baseRc.preparedIndirectArgumentCapacity = rc.preparedIndirectArgumentCapacity;
+    baseRc.preparedIndirectCommandMetadataCapacity = rc.preparedIndirectCommandMetadataCapacity;
+    baseRc.preparedVisibleInstanceCount = rc.preparedVisibleInstanceCount;
+    baseRc.gpuDrivenDispatchGroups = rc.gpuDrivenDispatchGroups;
+    baseRc.activeDrawCommands = rc.activeDrawCommands;
+    baseRc.activeSkinnedCommands = rc.activeSkinnedCommands;
+    baseRc.activeInstanceBuffer = rc.activeInstanceBuffer;
+    baseRc.activeDrawArgsBuffer = rc.activeDrawArgsBuffer;
+    baseRc.activeCountBuffer = rc.activeCountBuffer;
+    baseRc.useGpuCulling = rc.useGpuCulling;
+    baseRc.pendingAsyncComputeFenceValue = rc.pendingAsyncComputeFenceValue;
+    baseRc.debugGBuffer0 = rc.debugGBuffer0;
+    baseRc.debugGBuffer1 = rc.debugGBuffer1;
+    baseRc.debugGBuffer2 = rc.debugGBuffer2;
+    baseRc.debugGBufferDepth = rc.debugGBufferDepth;
+    viewContext.sceneViewTexture = rc.sceneColorTexture;
+    viewContext.prevSceneTexture = prevScene;
+    viewContext.displayTexture = displayColor;
+    viewContext.sceneDepthTexture = rc.sceneDepthTexture;
+    viewContext.debugGBuffer0 = rc.debugGBuffer0;
+    viewContext.debugGBuffer1 = rc.debugGBuffer1;
+    viewContext.debugGBuffer2 = rc.debugGBuffer2;
+    viewContext.debugDepth = rc.debugGBufferDepth;
 }
 
-RenderContext::ViewState RenderPipeline::BuildPrimaryViewState(const RenderContext& rc) const
+RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const RenderContext& rc, uint32_t panelWidth, uint32_t panelHeight) const
 {
-    RenderContext::ViewState view{};
-    view.historyKey = 0;
-    view.viewport = rc.mainViewport;
-    view.mainRenderTarget = rc.mainRenderTarget;
-    view.mainDepthStencil = rc.mainDepthStencil;
-    view.sceneColorTexture = rc.sceneColorTexture;
-    view.sceneDepthTexture = rc.sceneDepthTexture;
+    RenderViewContext viewContext{};
+    auto& view = viewContext.state;
+    view.mainRenderTarget = nullptr;
+    view.mainDepthStencil = nullptr;
+    view.sceneColorTexture = nullptr;
+    view.sceneDepthTexture = nullptr;
+    view.prevSceneTexture = nullptr;
+    view.displayColorTexture = nullptr;
+
+    view.panelWidth = panelWidth;
+    view.panelHeight = panelHeight;
+    view.renderWidth = rc.renderWidth;
+    view.renderHeight = rc.renderHeight;
+    view.displayWidth = rc.displayWidth > 0 ? rc.displayWidth : rc.renderWidth;
+    view.displayHeight = rc.displayHeight > 0 ? rc.displayHeight : rc.renderHeight;
+    view.viewport = RhiViewport(
+        0.0f,
+        0.0f,
+        static_cast<float>(view.renderWidth),
+        static_cast<float>(view.renderHeight));
+    view.historyKey = 1;
     view.viewMatrix = rc.viewMatrix;
-    view.projectionMatrix = rc.projectionMatrix;
-    view.viewProjectionUnjittered = rc.viewProjectionUnjittered;
+    view.aspect = (view.renderHeight > 0)
+        ? (static_cast<float>(view.renderWidth) / static_cast<float>(view.renderHeight))
+        : rc.aspect;
+    view.fovY = rc.fovY;
+    view.nearZ = rc.nearZ;
+    view.farZ = rc.farZ;
+    if (view.fovY > 0.0f && view.nearZ > 0.0f && view.farZ > view.nearZ) {
+        DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
+            view.fovY,
+            view.aspect,
+            view.nearZ,
+            view.farZ);
+        DirectX::XMStoreFloat4x4(&view.projectionMatrix, projection);
+        DirectX::XMMATRIX viewMatrix = DirectX::XMLoadFloat4x4(&view.viewMatrix);
+        DirectX::XMStoreFloat4x4(&view.viewProjectionUnjittered, viewMatrix * projection);
+    } else {
+        view.projectionMatrix = rc.projectionMatrix;
+        view.viewProjectionUnjittered = rc.viewProjectionUnjittered;
+    }
     view.prevViewProjectionMatrix = rc.prevViewProjectionMatrix;
     view.cameraPosition = rc.cameraPosition;
     view.cameraDirection = rc.cameraDirection;
-    view.fovY = rc.fovY;
-    view.aspect = rc.aspect;
-    view.nearZ = rc.nearZ;
-    view.farZ = rc.farZ;
     view.jitterOffset = rc.jitterOffset;
     view.prevJitterOffset = rc.prevJitterOffset;
-    return view;
+    view.enableComputeCulling = rc.allowGpuDrivenCompute;
+    view.enableAsyncCompute = rc.allowAsyncCompute;
+    view.enableGTAO = rc.enableGTAO;
+    view.enableSSGI = rc.enableSSGI;
+    view.enableVolumetricFog = rc.enableVolumetricFog;
+    view.enableSSR = rc.enableSSR;
+    return viewContext;
+}
+
+RenderContext::ViewState RenderPipeline::BuildPrimaryViewState(const RenderContext& rc, uint32_t panelWidth, uint32_t panelHeight) const
+{
+    return BuildPrimaryViewContext(rc, panelWidth, panelHeight).state;
 }
 
 void RenderPipeline::BlitSceneToDisplay(RenderContext& rc)

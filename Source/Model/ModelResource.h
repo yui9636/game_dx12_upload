@@ -55,8 +55,10 @@ public:
 
     const std::vector<MeshResource>& GetMeshResources() const { return m_meshResources; }
     const DirectX::BoundingBox& GetLocalBounds() const { return m_localBounds; }
+    bool HasSkinnedMeshes() const { return m_hasSkinnedMeshes; }
 
 private:
     std::vector<MeshResource> m_meshResources;
     DirectX::BoundingBox m_localBounds = {};
+    bool m_hasSkinnedMeshes = false;
 };

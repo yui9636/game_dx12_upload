@@ -34,7 +34,7 @@ namespace
     }
 }
 
-void ExtractVisibleInstancesPass::Setup(FrameGraphBuilder& builder)
+void ExtractVisibleInstancesPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     (void)builder;
 }
@@ -49,6 +49,8 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
     rc.visibleOpaqueInstanceBatches.reserve(queue.opaqueInstanceBatches.size());
     rc.prepMetrics.visibleBatchCount = 0;
     rc.prepMetrics.visibleInstanceCount = 0;
+    rc.prepMetrics.gpuDrivenCandidateBatchCount = 0;
+    rc.prepMetrics.gpuDrivenCandidateInstanceCount = 0;
 
     if (queue.opaqueInstanceBatches.empty()) {
         rc.prepMetrics.visibleExtractMs =
@@ -82,6 +84,20 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
             visibleBatch.modelResource = batch.modelResource;
             visibleBatch.instances.reserve(batch.instances.size());
 
+            const bool bypassCpuCulling =
+                rc.allowGpuDrivenCompute &&
+                batch.modelResource &&
+                !batch.modelResource->HasSkinnedMeshes();
+
+            if (bypassCpuCulling) {
+                visibleBatch.instances = batch.instances;
+                if (!visibleBatch.instances.empty()) {
+                    m_candidateBatches[batchIndex] = std::move(visibleBatch);
+                    m_nonEmptyFlags[batchIndex] = 1;
+                }
+                return;
+            }
+
             for (const auto& instance : batch.instances) {
                 if (IsInstanceVisible(worldFrustum, *batch.modelResource, instance)) {
                     visibleBatch.instances.push_back(instance);
@@ -106,6 +122,22 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
 
     rc.prepMetrics.visibleBatchCount = static_cast<uint32_t>(rc.visibleOpaqueInstanceBatches.size());
     rc.prepMetrics.visibleInstanceCount = visibleInstanceCount;
+    for (const auto& batch : rc.visibleOpaqueInstanceBatches) {
+        if (batch.modelResource && !batch.modelResource->HasSkinnedMeshes()) {
+            ++rc.prepMetrics.gpuDrivenCandidateBatchCount;
+            rc.prepMetrics.gpuDrivenCandidateInstanceCount += static_cast<uint32_t>(batch.instances.size());
+        }
+    }
+    uint32_t totalSourceInstanceCount = 0;
+    for (const auto& batch : queue.opaqueInstanceBatches) {
+        totalSourceInstanceCount += static_cast<uint32_t>(batch.instances.size());
+    }
+    rc.prepMetrics.visibleInstanceHitRate = totalSourceInstanceCount > 0
+        ? static_cast<float>(visibleInstanceCount) / static_cast<float>(totalSourceInstanceCount)
+        : 0.0f;
+    rc.prepMetrics.averageInstancesPerVisibleBatch = !rc.visibleOpaqueInstanceBatches.empty()
+        ? static_cast<float>(visibleInstanceCount) / static_cast<float>(rc.visibleOpaqueInstanceBatches.size())
+        : 0.0f;
     rc.prepMetrics.visibleExtractMs =
         std::chrono::duration<double, std::milli>(Clock::now() - startTime).count();
 }

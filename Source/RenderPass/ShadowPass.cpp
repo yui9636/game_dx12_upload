@@ -6,8 +6,9 @@
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "RenderContext/IndirectDrawCommon.h"
+#include "RHI/DX12/DX12Device.h"
 
-void ShadowPass::Setup(FrameGraphBuilder& builder)
+void ShadowPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hShadowMap = builder.GetHandle("ShadowMap");
 
@@ -17,6 +18,14 @@ void ShadowPass::Setup(FrameGraphBuilder& builder)
 }
 
 void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) {
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12 && rc.pendingAsyncComputeFenceValue != 0) {
+        if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
+            dx12Device->QueueGraphicsWaitForCompute(rc.pendingAsyncComputeFenceValue);
+            rc.prepMetrics.asyncComputeWaitCount++;
+        }
+        rc.pendingAsyncComputeFenceValue = 0;
+    }
+
     auto shadowMap = const_cast<ShadowMap*>(rc.shadowMap);
     if (!shadowMap) return;
 
@@ -40,29 +49,50 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         };
         shadow.shadowColor = { rc.shadowColor.x, rc.shadowColor.y, rc.shadowColor.z, 1.0f };
         shadow.shadowBias = { 0.005f, 0.0f, 0.0f, 0.0f };
-        rc.commandList->UpdateBuffer(GlobalRootSignature::Instance().GetShadowBuffer(), &shadow, sizeof(shadow));
+        IBuffer* shadowBuffer = rc.shadowConstantBufferOverride
+            ? rc.shadowConstantBufferOverride
+            : GlobalRootSignature::Instance().GetShadowBuffer();
+        rc.commandList->UpdateBuffer(shadowBuffer, &shadow, sizeof(shadow));
     }
 
     for (int i = 0; i < ShadowMap::CASCADE_COUNT; ++i) {
         shadowMap->BeginCascade(rc, i);
 
         if (!rc.activeDrawCommands.empty() || !rc.activeSkinnedCommands.empty()) {
-            for (const auto& cmd : rc.activeDrawCommands) {
-                if (!cmd.modelResource || !cmd.key.castShadow) {
-                    continue;
-                }
-                if (rc.activeInstanceBuffer && cmd.instanceCount > 0) {
-                    uint32_t offsetBytes = cmd.drawArgsIndex * DRAW_ARGS_STRIDE;
-                    shadowMap->DrawInstanced(
+            if (rc.activeInstanceBuffer && rc.activeDrawArgsBuffer && !rc.gpuDrivenDispatchGroups.empty()) {
+                for (const auto& group : rc.gpuDrivenDispatchGroups) {
+                    if (!group.modelResource || !group.key.castShadow || !group.supportsInstancing) {
+                        continue;
+                    }
+                    shadowMap->DrawInstancedMulti(
                         rc,
-                        cmd.modelResource.get(),
-                        static_cast<int>(cmd.meshIndex),
+                        group.modelResource.get(),
+                        static_cast<int>(group.meshIndex),
                         rc.activeInstanceBuffer,
                         rc.activeInstanceStride,
-                        cmd.firstInstance,
-                        cmd.instanceCount,
                         rc.activeDrawArgsBuffer,
-                        offsetBytes);
+                        group.firstArgumentOffsetBytes,
+                        group.commandCount,
+                        DRAW_ARGS_STRIDE);
+                }
+            } else {
+                for (const auto& cmd : rc.activeDrawCommands) {
+                    if (!cmd.modelResource || !cmd.key.castShadow) {
+                        continue;
+                    }
+                    if (rc.activeInstanceBuffer && cmd.instanceCount > 0) {
+                        uint32_t offsetBytes = cmd.drawArgsIndex * DRAW_ARGS_STRIDE;
+                        shadowMap->DrawInstanced(
+                            rc,
+                            cmd.modelResource.get(),
+                            static_cast<int>(cmd.meshIndex),
+                            rc.activeInstanceBuffer,
+                            rc.activeInstanceStride,
+                            cmd.firstInstance,
+                            cmd.instanceCount,
+                            rc.activeDrawArgsBuffer,
+                            offsetBytes);
+                    }
                 }
             }
             for (const auto& cmd : rc.activeSkinnedCommands) {

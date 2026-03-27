@@ -34,7 +34,7 @@ void FreeCameraSystem::Update(Registry& registry, float dt) {
 
             // =========================================================
             // =========================================================
-            if (io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
+            if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
                 ctrl.yaw += io.MouseDelta.x * ctrl.rotateSpeed;
                 ctrl.pitch += io.MouseDelta.y * ctrl.rotateSpeed;
                 ctrl.pitch = std::clamp(ctrl.pitch, -1.55f, 1.55f);
@@ -59,7 +59,7 @@ void FreeCameraSystem::Update(Registry& registry, float dt) {
 
             // =========================================================
             // =========================================================
-            if (io.MouseDown[ImGuiMouseButton_Middle]) {
+            if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Middle]) {
                 float panSpeed = ctrl.moveSpeed * io.DeltaTime * 0.5f;
                 pos -= right * io.MouseDelta.x * panSpeed;
                 pos += up * io.MouseDelta.y * panSpeed;
@@ -68,7 +68,7 @@ void FreeCameraSystem::Update(Registry& registry, float dt) {
             // =========================================================
             // =========================================================
 
-            if (io.MouseWheel != 0.0f) {
+            if (ctrl.isHovered && io.MouseWheel != 0.0f) {
                 float zoomDist = io.MouseWheel * (ctrl.moveSpeed * 0.5f);
                 pos += forward * zoomDist;
                 trans.isDirty = true;

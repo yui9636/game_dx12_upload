@@ -14,7 +14,7 @@ public:
 
     std::string GetName() const override { return "GTAOPass"; }
 
-    void Setup(FrameGraphBuilder& builder) override;
+    void Setup(FrameGraphBuilder& builder, const RenderContext& rc) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:

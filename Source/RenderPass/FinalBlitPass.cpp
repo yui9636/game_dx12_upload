@@ -34,7 +34,7 @@ FinalBlitPass::FinalBlitPass(IResourceFactory* factory)
     m_pso = factory->CreatePipelineState(desc);
 }
 
-void FinalBlitPass::Setup(FrameGraphBuilder& builder)
+void FinalBlitPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDisplayColor = builder.GetHandle("DisplayColor");
@@ -50,4 +50,21 @@ void FinalBlitPass::Setup(FrameGraphBuilder& builder)
 
 void FinalBlitPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
+    ITexture* sceneColor = resources.GetTexture(m_hSceneColor);
+    ITexture* displayColor = resources.GetTexture(m_hDisplayColor);
+    if (!sceneColor || !displayColor || !m_pso) {
+        return;
+    }
+
+    rc.commandList->TransitionBarrier(sceneColor, ResourceState::ShaderResource);
+    rc.commandList->TransitionBarrier(displayColor, ResourceState::RenderTarget);
+    rc.commandList->SetPipelineState(m_pso.get());
+    rc.commandList->SetRenderTarget(displayColor, nullptr);
+    rc.commandList->SetViewport(0.0f, 0.0f,
+        static_cast<float>(displayColor->GetWidth()),
+        static_cast<float>(displayColor->GetHeight()));
+    rc.commandList->PSSetTexture(0, sceneColor);
+    rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
+    rc.commandList->Draw(4, 0);
+    rc.commandList->PSSetTexture(0, nullptr);
 }

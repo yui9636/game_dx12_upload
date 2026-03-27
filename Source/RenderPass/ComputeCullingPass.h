@@ -17,7 +17,7 @@ public:
     std::string GetName() const override { return "ComputeCullingPass"; }
     bool HasSideEffects() const override { return true; }
 
-    void Setup(FrameGraphBuilder& builder) override;
+    void Setup(FrameGraphBuilder& builder, const RenderContext& rc) override;
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
@@ -26,9 +26,15 @@ private:
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
         uint64_t fenceValue = 0;
+        uint32_t timingSlot = UINT32_MAX;
+        uint32_t commandCount = 0;
+        uint32_t instanceCount = 0;
     };
 
     void InitGpuResources(DX12Device* device);
+    void InitTimingResources(DX12Device* device);
+    void RetireCompletedSubmissions(DX12Device* device);
+    uint32_t AcquireTimingSlot() const;
     void ExtractFrustumPlanes(const DirectX::XMFLOAT4X4& viewProj, DirectX::XMFLOAT4 planesOut[6]);
 
     bool m_initialized = false;
@@ -47,9 +53,6 @@ private:
     std::shared_ptr<IBuffer> m_stagingBuffer;
     uint32_t m_stagingCapacity = 0;
 
-    // CullCommandMeta upload buffer (IBuffer, UPLOAD)
-    std::shared_ptr<IBuffer> m_cullMetaBuffer;
-    uint32_t m_cullMetaCapacity = 0;
     std::shared_ptr<IBuffer> m_paramsBuffer;
 
     // Count buffer for multi-draw ExecuteIndirect
@@ -62,4 +65,9 @@ private:
     bool m_countInIndirectState = false;
     bool m_needsGrow = false;
     std::vector<InFlightComputeSubmission> m_inFlightSubmissions;
+
+    static constexpr uint32_t kTimingSlotCount = 16;
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> m_computeTimestampHeap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_computeTimestampReadback;
+    double m_lastAsyncGpuMs = 0.0;
 };
