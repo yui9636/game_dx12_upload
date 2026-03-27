@@ -4,12 +4,26 @@
 #include "Asset/AssetBrowser.h"
 #include <memory>
 #include <DirectXMath.h>
+#include <string>
 
 class ITexture;
 
 class EditorLayer : public Layer
 {
 public:
+    enum class GizmoOperation
+    {
+        Translate,
+        Rotate,
+        Scale
+    };
+
+    enum class GizmoSpace
+    {
+        Local,
+        World
+    };
+
     EditorLayer(GameLayer* gameLayer);
     ~EditorLayer() override = default;
 
@@ -53,6 +67,7 @@ private:
     float m_editorCameraPitch = 0.0f;
     float m_editorCameraFovY = 0.785398f;
     bool m_sceneViewHovered = false;
+    bool m_sceneViewToolbarHovered = false;
     ITexture* m_sceneViewTexture = nullptr;
     ITexture* m_gbufferTexture0 = nullptr;
     ITexture* m_gbufferTexture1 = nullptr;
@@ -61,6 +76,16 @@ private:
     ITexture* m_gbufferDepthTexture = nullptr;
     bool m_editorCameraUserOverride = false;
     bool m_editorCameraAutoFramed = false;
+    GizmoOperation m_gizmoOperation = GizmoOperation::Translate;
+    GizmoSpace m_gizmoSpace = GizmoSpace::Local;
+    bool m_gizmoWasUsing = false;
+    bool m_gizmoIsOver = false;
+    EntityID m_gizmoUndoEntity = Entity::NULL_ID;
+    bool m_hasGizmoBeforeTransform = false;
+    bool m_scenePickPending = false;
+    bool m_scenePickBlockedByGizmo = false;
+    DirectX::XMFLOAT2 m_scenePickStart = { 0.0f, 0.0f };
+    std::string m_sceneSavePath;
     // ==========================================
     // ==========================================
     void DrawDockSpace();
@@ -72,4 +97,12 @@ private:
     void DrawInspector();
     void DrawLightingWindow();
     void DrawGBufferDebugWindow();
+    void HandleEditorShortcuts();
+    void DrawSceneViewToolbar();
+    void DrawTransformGizmo();
+    void HandleScenePicking();
+    void FocusSelectedEntity();
+    void FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius);
+    void SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance);
+    bool SaveCurrentScene();
 };

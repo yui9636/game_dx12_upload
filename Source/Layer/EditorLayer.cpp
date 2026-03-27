@@ -5,6 +5,19 @@
 #include "Inspector/InspectorECSUI.h" // インスペクターUI
 #include "Component/NameComponent.h"  // 名前表示用
 #include "Archetype/Archetype.h"      // エンティティ走査用
+#include "System/UndoSystem.h"
+#include "Undo/EntitySnapshot.h"
+#include "Undo/EntityUndoActions.h"
+#include "Undo/ComponentUndoAction.h"
+#include "Asset/PrefabSystem.h"
+#include "Component/HierarchyComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/MeshComponent.h"
+#include "Component/ColliderComponent.h"
+#include "Console/Logger.h"
+#include "Hierarchy/HierarchySystem.h"
+#include "Physics/PhysicsManager.h"
+#include "ImGuizmo.h"
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "Hierarchy/HierarchyECSUI.h"
@@ -17,8 +30,22 @@
 #include "ImGuiRenderer.h"
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <cfloat>
+#include <nlohmann/json.hpp>
+#include <optional>
 
 namespace {
+    std::optional<EntitySnapshot::Snapshot> s_entityClipboard;
+    constexpr float kSceneViewPickDragThreshold = 4.0f;
+    constexpr float kEditorFocusMinDistance = 1.5f;
+    constexpr float kMinScaleValue = 0.001f;
+    constexpr const char* kDefaultSceneSavePath = "Data/Scene/EditorScene.scene.json";
+
+    using json = nlohmann::json;
+
     template <typename T>
     bool DrawSettingWidget(std::string_view name, T& value) {
         bool changed = false;
@@ -76,6 +103,152 @@ namespace {
         }
         ImGui::PopID();
     }
+
+    bool HasMeaningfulTransformChange(const TransformComponent& before, const TransformComponent& after)
+    {
+        auto diff3 = [](const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b) {
+            return std::fabs(a.x - b.x) + std::fabs(a.y - b.y) + std::fabs(a.z - b.z);
+        };
+        auto diff4 = [](const DirectX::XMFLOAT4& a, const DirectX::XMFLOAT4& b) {
+            return std::fabs(a.x - b.x) + std::fabs(a.y - b.y) + std::fabs(a.z - b.z) + std::fabs(a.w - b.w);
+        };
+        return diff3(before.localPosition, after.localPosition) > 0.0001f ||
+               diff3(before.localScale, after.localScale) > 0.0001f ||
+               diff4(before.localRotation, after.localRotation) > 0.0001f;
+    }
+
+    void NormalizeQuaternion(DirectX::XMFLOAT4& rotation)
+    {
+        using namespace DirectX;
+        XMVECTOR q = XMLoadFloat4(&rotation);
+        if (XMVector4Equal(q, XMVectorZero())) {
+            rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+            return;
+        }
+        q = XMQuaternionNormalize(q);
+        XMStoreFloat4(&rotation, q);
+    }
+
+    DirectX::XMFLOAT3 ClampScale(const DirectX::XMFLOAT3& scale)
+    {
+        DirectX::XMFLOAT3 out = scale;
+        auto clampComponent = [](float value) {
+            if (!std::isfinite(value)) {
+                return 1.0f;
+            }
+            const float sign = value < 0.0f ? -1.0f : 1.0f;
+            return sign * (std::max)(std::fabs(value), kMinScaleValue);
+        };
+        out.x = clampComponent(out.x);
+        out.y = clampComponent(out.y);
+        out.z = clampComponent(out.z);
+        return out;
+    }
+
+    bool RayIntersectsBoundingBox(const DirectX::BoundingBox& box,
+                                  const DirectX::XMFLOAT3& origin,
+                                  const DirectX::XMFLOAT3& direction,
+                                  float& distance)
+    {
+        using namespace DirectX;
+        const XMVECTOR rayOrigin = XMLoadFloat3(&origin);
+        const XMVECTOR rayDir = XMVector3Normalize(XMLoadFloat3(&direction));
+        return box.Intersects(rayOrigin, rayDir, distance);
+    }
+
+    EntityID PickRenderableFallback(Registry& registry,
+                                    const DirectX::XMFLOAT3& origin,
+                                    const DirectX::XMFLOAT3& direction,
+                                    float maxDistance)
+    {
+        EntityID bestEntity = Entity::NULL_ID;
+        float bestDistance = maxDistance;
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<MeshComponent>()) ||
+                !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
+                continue;
+            }
+
+            auto* meshColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<MeshComponent>());
+            const auto& entities = archetype->GetEntities();
+            for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                EntityID entity = entities[i];
+                auto* mesh = static_cast<MeshComponent*>(meshColumn->Get(i));
+                if (!mesh || !mesh->model || !mesh->isVisible) {
+                    continue;
+                }
+
+                RaycastHit hit;
+                if (mesh->model->Raycast(origin, direction, hit) && hit.distance < bestDistance) {
+                    bestDistance = hit.distance;
+                    bestEntity = entity;
+                    continue;
+                }
+
+                float boundsDistance = FLT_MAX;
+                if (RayIntersectsBoundingBox(mesh->model->GetWorldBounds(), origin, direction, boundsDistance) &&
+                    boundsDistance < bestDistance) {
+                    bestDistance = boundsDistance;
+                    bestEntity = entity;
+                }
+            }
+        }
+
+        return bestEntity;
+    }
+
+    bool BuildWorldRay(const DirectX::XMFLOAT4& rect,
+                       const DirectX::XMFLOAT4X4& view,
+                       const DirectX::XMFLOAT4X4& projection,
+                       const ImVec2& mousePos,
+                       DirectX::XMFLOAT3& outOrigin,
+                       DirectX::XMFLOAT3& outDirection)
+    {
+        using namespace DirectX;
+        if (rect.z <= 1.0f || rect.w <= 1.0f) {
+            return false;
+        }
+
+        const float localX = (mousePos.x - rect.x) / rect.z;
+        const float localY = (mousePos.y - rect.y) / rect.w;
+        if (localX < 0.0f || localX > 1.0f || localY < 0.0f || localY > 1.0f) {
+            return false;
+        }
+
+        const float ndcX = localX * 2.0f - 1.0f;
+        const float ndcY = 1.0f - localY * 2.0f;
+
+        const XMMATRIX viewMatrix = XMLoadFloat4x4(&view);
+        const XMMATRIX projectionMatrix = XMLoadFloat4x4(&projection);
+        const XMMATRIX inverseViewProj = XMMatrixInverse(nullptr, viewMatrix * projectionMatrix);
+
+        const XMVECTOR nearPoint = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 0.0f, 1.0f), inverseViewProj);
+        const XMVECTOR farPoint = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), inverseViewProj);
+        const XMVECTOR direction = XMVector3Normalize(farPoint - nearPoint);
+
+        XMStoreFloat3(&outOrigin, nearPoint);
+        XMStoreFloat3(&outDirection, direction);
+        return true;
+    }
+
+    float ComputeFocusDistance(float radius, float fovY)
+    {
+        const float safeRadius = (std::max)(radius, 0.5f);
+        const float halfFov = (std::max)(fovY * 0.5f, 0.1f);
+        return (std::max)(kEditorFocusMinDistance, safeRadius / std::tan(halfFov));
+    }
+
+    float Max3(float a, float b, float c)
+    {
+        return (std::max)((std::max)(a, b), c);
+    }
+
+    std::string SanitizeSceneDefaultPath(const std::string& path)
+    {
+        return path.empty() ? std::string(kDefaultSceneSavePath) : path;
+    }
 }
 void ApplyUnityTheme()
 {
@@ -123,6 +296,7 @@ void ApplyUnityTheme()
 
 EditorLayer::EditorLayer(GameLayer* gameLayer)
     : m_gameLayer(gameLayer)
+    , m_sceneSavePath(kDefaultSceneSavePath)
 {
 }
 
@@ -144,13 +318,106 @@ void EditorLayer::Update(const EngineTime& time)
     ImGuiIO& io = ImGui::GetIO();
     using namespace DirectX;
 
+    HandleEditorShortcuts();
+
+    if (!io.WantTextInput && m_gameLayer) {
+        Registry& registry = m_gameLayer->GetRegistry();
+        auto& selection = EditorSelection::Instance();
+
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z, false)) {
+            if (io.KeyShift) {
+                UndoSystem::Instance().Redo(registry);
+            } else {
+                UndoSystem::Instance().Undo(registry);
+            }
+        } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y, false)) {
+            UndoSystem::Instance().Redo(registry);
+        }
+
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
+            if (selection.GetType() == SelectionType::Entity) {
+                const EntityID selectedEntity = selection.GetEntity();
+                if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+                    if (!PrefabSystem::CanDuplicate(selectedEntity, registry)) {
+                        LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
+                        return;
+                    }
+                    EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedEntity, registry);
+                    if (!snapshot.nodes.empty()) {
+                        EntityID parentEntity = Entity::NULL_ID;
+                        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedEntity)) {
+                            parentEntity = hierarchy->parent;
+                        }
+
+                        EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
+                        auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
+                        auto* actionPtr = action.get();
+                        UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+                        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
+                            selection.SelectEntity(actionPtr->GetLiveRoot());
+                        }
+                    }
+                }
+            }
+        }
+
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C, false)) {
+            if (selection.GetType() == SelectionType::Entity) {
+                const EntityID selectedEntity = selection.GetEntity();
+                if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+                    s_entityClipboard = EntitySnapshot::CaptureSubtree(selectedEntity, registry);
+                }
+            }
+        }
+
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V, false) && s_entityClipboard.has_value()) {
+            EntitySnapshot::Snapshot snapshot = *s_entityClipboard;
+            if (!snapshot.nodes.empty()) {
+                EntityID parentEntity = Entity::NULL_ID;
+                if (selection.GetType() == SelectionType::Entity) {
+                    const EntityID selectedEntity = selection.GetEntity();
+                    if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+                        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedEntity)) {
+                            parentEntity = hierarchy->parent;
+                        }
+                    }
+                }
+
+                EntitySnapshot::AppendRootNameSuffix(snapshot, " (Copy)");
+                auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), parentEntity, "Paste Entity");
+                auto* actionPtr = action.get();
+                UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+                if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
+                    selection.SelectEntity(actionPtr->GetLiveRoot());
+                }
+            }
+        }
+
+        if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && selection.GetType() == SelectionType::Entity) {
+            const EntityID selectedEntity = selection.GetEntity();
+            if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+                if (!PrefabSystem::CanDelete(selectedEntity, registry)) {
+                    LOG_WARN("[Prefab] Prefab instance children cannot be deleted directly. Use Unpack first.");
+                    return;
+                }
+                EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedEntity, registry);
+                if (!snapshot.nodes.empty()) {
+                    UndoSystem::Instance().ExecuteAction(
+                        std::make_unique<DeleteEntityAction>(std::move(snapshot), selectedEntity),
+                        registry);
+                    selection.Clear();
+                }
+            }
+        }
+    }
+
     XMVECTOR pos = XMLoadFloat3(&m_editorCameraPosition);
     const XMVECTOR rot = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
     const XMVECTOR forward = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot));
     const XMVECTOR right = XMVector3Normalize(XMVector3Rotate(XMVectorSet(1, 0, 0, 0), rot));
     const XMVECTOR up = XMVector3Normalize(XMVector3Rotate(XMVectorSet(0, 1, 0, 0), rot));
 
-    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
+    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt && !m_gizmoWasUsing) {
         m_editorCameraUserOverride = true;
         m_editorCameraYaw += io.MouseDelta.x * 0.005f;
         m_editorCameraPitch += io.MouseDelta.y * 0.005f;
@@ -172,14 +439,14 @@ void EditorLayer::Update(const EngineTime& time)
         if (ImGui::IsKeyDown(ImGuiKey_Q)) pos -= moveUp * speed;
     }
 
-    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Middle]) {
+    if (m_sceneViewHovered && io.MouseDown[ImGuiMouseButton_Middle] && !m_gizmoWasUsing) {
         m_editorCameraUserOverride = true;
         const float panSpeed = 10.0f * io.DeltaTime;
         pos -= right * io.MouseDelta.x * panSpeed;
         pos += up * io.MouseDelta.y * panSpeed;
     }
 
-    if (m_sceneViewHovered && io.MouseWheel != 0.0f) {
+    if (m_sceneViewHovered && io.MouseWheel != 0.0f && !m_gizmoWasUsing) {
         m_editorCameraUserOverride = true;
         pos += forward * (io.MouseWheel * 10.0f);
     }
@@ -202,7 +469,10 @@ void EditorLayer::RenderUI()
     DrawLightingWindow();
     DrawGBufferDebugWindow();
     Console::Instance().Draw();
-    if (m_assetBrowser) m_assetBrowser->RenderUI();
+    if (m_assetBrowser) {
+        m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
+        m_assetBrowser->RenderUI();
+    }
 }
 
 void EditorLayer::DrawMenuBar()
@@ -255,11 +525,19 @@ void EditorLayer::DrawMainToolbar()
     if (ImGui::Begin("##MainToolbar", nullptr, flags))
     {
         // 左側: ファイル操作
-        if (ifm.IconButton(ICON_FA_FLOPPY_DISK, IconSemantic::Default, IconFontSize::Medium, nullptr)) { /* Save */ }
+        if (ifm.IconButton(ICON_FA_FLOPPY_DISK, IconSemantic::Default, IconFontSize::Medium, nullptr)) { SaveCurrentScene(); }
         ImGui::SameLine();
-        if (ifm.IconButton(ICON_FA_ARROW_ROTATE_LEFT, IconSemantic::Default, IconFontSize::Medium, nullptr)) { /* Undo */ }
+        if (ifm.IconButton(ICON_FA_ARROW_ROTATE_LEFT, IconSemantic::Default, IconFontSize::Medium, nullptr)) {
+            if (m_gameLayer) {
+                UndoSystem::Instance().Undo(m_gameLayer->GetRegistry());
+            }
+        }
         ImGui::SameLine();
-        if (ifm.IconButton(ICON_FA_ARROW_ROTATE_RIGHT, IconSemantic::Default, IconFontSize::Medium, nullptr)) { /* Redo */ }
+        if (ifm.IconButton(ICON_FA_ARROW_ROTATE_RIGHT, IconSemantic::Default, IconFontSize::Medium, nullptr)) {
+            if (m_gameLayer) {
+                UndoSystem::Instance().Redo(m_gameLayer->GetRegistry());
+            }
+        }
 
         ImGui::SameLine();
         ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -377,6 +655,7 @@ void EditorLayer::DrawSceneView()
 
     if (ImGui::Begin("Scene View", nullptr, window_flags))
     {
+        m_sceneViewToolbarHovered = false;
         // =========================================================
         // ★ 判定の強化：子ウィンドウやアイテム（画像）の上でもホバーとみなす
         // =========================================================
@@ -420,6 +699,11 @@ void EditorLayer::DrawSceneView()
                 }
             }
         }
+
+        ImGuizmo::BeginFrame();
+        DrawSceneViewToolbar();
+        DrawTransformGizmo();
+        HandleScenePicking();
     }
     ImGui::End();
     ImGui::PopStyleVar();
@@ -472,6 +756,406 @@ void EditorLayer::SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const
     m_editorCameraYaw = std::atan2(dir3.x, dir3.z);
     const float xzLen = std::sqrt(dir3.x * dir3.x + dir3.z * dir3.z);
     m_editorCameraPitch = std::atan2(dir3.y, xzLen);
+}
+
+void EditorLayer::HandleEditorShortcuts()
+{
+    if (!m_gameLayer) {
+        return;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.WantTextInput) {
+        return;
+    }
+
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        SaveCurrentScene();
+    }
+
+    if (!m_sceneViewHovered || io.KeyCtrl || io.KeyAlt || io.MouseDown[ImGuiMouseButton_Right]) {
+        return;
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_W, false)) {
+        m_gizmoOperation = GizmoOperation::Translate;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_E, false)) {
+        m_gizmoOperation = GizmoOperation::Rotate;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+        m_gizmoOperation = GizmoOperation::Scale;
+    } else if (ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+        FocusSelectedEntity();
+    }
+}
+
+void EditorLayer::DrawSceneViewToolbar()
+{
+    if (m_sceneViewRect.z <= 1.0f || m_sceneViewRect.w <= 1.0f) {
+        return;
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 0.82f));
+    ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.22f, 0.26f, 0.90f));
+
+    ImGui::SetNextWindowPos(ImVec2(m_sceneViewRect.x + m_sceneViewRect.z - 12.0f, m_sceneViewRect.y + 12.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoNav;
+
+    if (ImGui::Begin("##SceneViewToolbarOverlay", nullptr, flags)) {
+        m_sceneViewToolbarHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+
+        auto drawOpButton = [&](const char* label, GizmoOperation op) {
+            const bool selected = (m_gizmoOperation == op);
+            if (selected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.21f, 0.47f, 0.82f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.53f, 0.90f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.40f, 0.72f, 1.0f));
+            }
+            if (ImGui::Button(label)) {
+                m_gizmoOperation = op;
+            }
+            if (selected) {
+                ImGui::PopStyleColor(3);
+            }
+            ImGui::SameLine();
+        };
+
+        ImGui::TextDisabled("Transform");
+        ImGui::SameLine();
+        drawOpButton("W", GizmoOperation::Translate);
+        drawOpButton("E", GizmoOperation::Rotate);
+        drawOpButton("R", GizmoOperation::Scale);
+
+        if (ImGui::Button(m_gizmoSpace == GizmoSpace::Local ? "Local" : "World")) {
+            m_gizmoSpace = (m_gizmoSpace == GizmoSpace::Local) ? GizmoSpace::World : GizmoSpace::Local;
+        }
+        ImGui::SameLine();
+
+        if (ImGui::Button("F")) {
+            FocusSelectedEntity();
+        }
+        ImGui::Separator();
+        ImGui::TextDisabled("View");
+        ImGui::SameLine();
+
+        auto viewButton = [&](const char* label, const DirectX::XMFLOAT3& forward) {
+            if (ImGui::Button(label)) {
+                DirectX::XMFLOAT3 target = m_editorCameraPosition;
+                float distance = 10.0f;
+                auto& selection = EditorSelection::Instance();
+                if (selection.GetType() == SelectionType::Entity && m_gameLayer) {
+                    Registry& registry = m_gameLayer->GetRegistry();
+                    const EntityID entity = selection.GetEntity();
+                    if (!Entity::IsNull(entity) && registry.IsAlive(entity)) {
+                        if (auto* mesh = registry.GetComponent<MeshComponent>(entity); mesh && mesh->model) {
+                            const auto& bounds = mesh->model->GetWorldBounds();
+                            target = bounds.Center;
+                            distance = (std::max)(ComputeFocusDistance(Max3(bounds.Extents.x, bounds.Extents.y, bounds.Extents.z), m_editorCameraFovY), 5.0f);
+                        } else if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                            target = transform->worldPosition;
+                        }
+                    }
+                } else {
+                    const DirectX::XMFLOAT3 currentForward = GetEditorCameraDirection();
+                    target.x = m_editorCameraPosition.x + currentForward.x * distance;
+                    target.y = m_editorCameraPosition.y + currentForward.y * distance;
+                    target.z = m_editorCameraPosition.z + currentForward.z * distance;
+                }
+                SetEditorCameraDirection(forward, target, distance);
+            }
+        };
+
+        viewButton("Front", { 0.0f, 0.0f, 1.0f }); ImGui::SameLine();
+        viewButton("Back", { 0.0f, 0.0f, -1.0f }); ImGui::SameLine();
+        viewButton("Left", { -1.0f, 0.0f, 0.0f }); ImGui::SameLine();
+        viewButton("Right", { 1.0f, 0.0f, 0.0f }); ImGui::SameLine();
+        viewButton("Top", { 0.0f, -1.0f, 0.0f }); ImGui::SameLine();
+        viewButton("Bottom", { 0.0f, 1.0f, 0.0f });
+    }
+    ImGui::End();
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(4);
+}
+
+void EditorLayer::DrawTransformGizmo()
+{
+    static std::optional<TransformComponent> s_gizmoBeforeState;
+
+    m_gizmoIsOver = false;
+
+    if (!m_gameLayer || m_sceneViewRect.z <= 1.0f || m_sceneViewRect.w <= 1.0f) {
+        m_gizmoWasUsing = false;
+        m_hasGizmoBeforeTransform = false;
+        m_gizmoUndoEntity = Entity::NULL_ID;
+        s_gizmoBeforeState.reset();
+        return;
+    }
+
+    if (EngineKernel::Instance().GetMode() != EngineMode::Editor) {
+        m_gizmoWasUsing = false;
+        m_hasGizmoBeforeTransform = false;
+        m_gizmoUndoEntity = Entity::NULL_ID;
+        s_gizmoBeforeState.reset();
+        return;
+    }
+
+    auto& selection = EditorSelection::Instance();
+    if (selection.GetType() != SelectionType::Entity) {
+        m_gizmoWasUsing = false;
+        m_hasGizmoBeforeTransform = false;
+        m_gizmoUndoEntity = Entity::NULL_ID;
+        s_gizmoBeforeState.reset();
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    const EntityID entity = selection.GetEntity();
+    auto* transform = registry.GetComponent<TransformComponent>(entity);
+    if (!transform) {
+        m_gizmoWasUsing = false;
+        m_hasGizmoBeforeTransform = false;
+        m_gizmoUndoEntity = Entity::NULL_ID;
+        s_gizmoBeforeState.reset();
+        return;
+    }
+
+    using namespace DirectX;
+    XMFLOAT4X4 view = GetEditorViewMatrix();
+    const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
+    XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
+    XMFLOAT4X4 world = transform->worldMatrix;
+
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetDrawlist();
+    ImGuizmo::SetRect(m_sceneViewRect.x, m_sceneViewRect.y, m_sceneViewRect.z, m_sceneViewRect.w);
+
+    ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
+    switch (m_gizmoOperation) {
+    case GizmoOperation::Rotate: operation = ImGuizmo::ROTATE; break;
+    case GizmoOperation::Scale: operation = ImGuizmo::SCALE; break;
+    default: break;
+    }
+
+    ImGuizmo::MODE mode = (m_gizmoOperation == GizmoOperation::Scale)
+        ? ImGuizmo::LOCAL
+        : (m_gizmoSpace == GizmoSpace::Local ? ImGuizmo::LOCAL : ImGuizmo::WORLD);
+
+    ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], operation, mode, &world.m[0][0]);
+    const bool isUsing = ImGuizmo::IsUsing();
+    m_gizmoIsOver = ImGuizmo::IsOver();
+
+    if (isUsing && !m_gizmoWasUsing) {
+        m_gizmoUndoEntity = entity;
+        s_gizmoBeforeState = *transform;
+    }
+
+    if (isUsing) {
+        const XMMATRIX worldMatrix = XMLoadFloat4x4(&world);
+        XMMATRIX localMatrix = worldMatrix;
+
+        EntityID parentEntity = Entity::NULL_ID;
+        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
+            parentEntity = hierarchy->parent;
+        } else if (transform->parent != 0) {
+            parentEntity = transform->parent;
+        }
+
+        if (!Entity::IsNull(parentEntity)) {
+            if (auto* parentTransform = registry.GetComponent<TransformComponent>(parentEntity)) {
+                const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
+                localMatrix = worldMatrix * XMMatrixInverse(nullptr, parentWorld);
+            }
+        }
+
+        XMVECTOR scale;
+        XMVECTOR rotation;
+        XMVECTOR translation;
+        if (XMMatrixDecompose(&scale, &rotation, &translation, localMatrix)) {
+            XMStoreFloat3(&transform->localPosition, translation);
+            XMStoreFloat4(&transform->localRotation, rotation);
+            NormalizeQuaternion(transform->localRotation);
+            XMStoreFloat3(&transform->localScale, scale);
+            transform->localScale = ClampScale(transform->localScale);
+            transform->isDirty = true;
+            HierarchySystem::MarkDirtyRecursive(entity, registry);
+            PrefabSystem::MarkPrefabOverride(entity, registry);
+        }
+    }
+
+    if (isUsing && !m_gizmoWasUsing) {
+        m_hasGizmoBeforeTransform = true;
+    }
+    if (!isUsing && m_gizmoWasUsing) {
+        if (m_hasGizmoBeforeTransform && s_gizmoBeforeState.has_value() && m_gizmoUndoEntity == entity) {
+            if (auto* currentTransform = registry.GetComponent<TransformComponent>(entity)) {
+                if (HasMeaningfulTransformChange(*s_gizmoBeforeState, *currentTransform)) {
+                    UndoSystem::Instance().RecordAction(
+                        std::make_unique<ComponentUndoAction<TransformComponent>>(entity,
+                                                                                  *s_gizmoBeforeState,
+                                                                                  *currentTransform));
+                }
+            }
+        }
+        s_gizmoBeforeState.reset();
+        m_hasGizmoBeforeTransform = false;
+        m_gizmoUndoEntity = Entity::NULL_ID;
+    }
+
+    m_gizmoWasUsing = isUsing;
+}
+
+void EditorLayer::HandleScenePicking()
+{
+    if (!m_gameLayer) {
+        m_scenePickPending = false;
+        return;
+    }
+
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_sceneViewHovered && !m_sceneViewToolbarHovered) {
+        const ImVec2 mousePos = ImGui::GetMousePos();
+        m_scenePickPending = true;
+        m_scenePickBlockedByGizmo = m_gizmoIsOver || m_gizmoWasUsing;
+        m_scenePickStart = { mousePos.x, mousePos.y };
+    }
+
+    if (!m_scenePickPending) {
+        return;
+    }
+
+    if (m_gizmoIsOver || m_gizmoWasUsing) {
+        m_scenePickBlockedByGizmo = true;
+    }
+
+    if (!ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        return;
+    }
+
+    const ImVec2 mousePos = ImGui::GetMousePos();
+    const float dx = mousePos.x - m_scenePickStart.x;
+    const float dy = mousePos.y - m_scenePickStart.y;
+    const bool treatAsClick = (dx * dx + dy * dy) <= (kSceneViewPickDragThreshold * kSceneViewPickDragThreshold);
+    const bool blockedByGizmo = m_scenePickBlockedByGizmo;
+    m_scenePickPending = false;
+    m_scenePickBlockedByGizmo = false;
+
+    if (!m_sceneViewHovered || m_sceneViewToolbarHovered || blockedByGizmo || !treatAsClick) {
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    using namespace DirectX;
+    const XMFLOAT4X4 view = GetEditorViewMatrix();
+    const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
+    const XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
+
+    XMFLOAT3 rayOrigin{};
+    XMFLOAT3 rayDirection{};
+    if (!BuildWorldRay(m_sceneViewRect, view, projection, ImGui::GetMousePos(), rayOrigin, rayDirection)) {
+        return;
+    }
+
+    EntityID selectedEntity = Entity::NULL_ID;
+    float maxDistance = 100000.0f;
+
+    PhysicsRaycastResult hit = PhysicsManager::Instance().CastRay(rayOrigin, rayDirection, maxDistance);
+    if (hit.hasHit && registry.IsAlive(hit.entityID)) {
+        selectedEntity = hit.entityID;
+        maxDistance = hit.distance;
+    }
+
+    const EntityID fallbackEntity = PickRenderableFallback(registry, rayOrigin, rayDirection, maxDistance);
+    if (!Entity::IsNull(fallbackEntity)) {
+        selectedEntity = fallbackEntity;
+    }
+
+    if (!Entity::IsNull(selectedEntity)) {
+        EditorSelection::Instance().SelectEntity(selectedEntity);
+    } else {
+        EditorSelection::Instance().Clear();
+    }
+}
+
+void EditorLayer::FocusSelectedEntity()
+{
+    if (!m_gameLayer) {
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    auto& selection = EditorSelection::Instance();
+    if (selection.GetType() != SelectionType::Entity) {
+        return;
+    }
+
+    const EntityID entity = selection.GetEntity();
+    if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+        return;
+    }
+
+    if (auto* mesh = registry.GetComponent<MeshComponent>(entity); mesh && mesh->model) {
+        const auto& bounds = mesh->model->GetWorldBounds();
+        FocusEditorCameraOnTarget(bounds.Center, Max3(bounds.Extents.x, bounds.Extents.y, bounds.Extents.z));
+        return;
+    }
+
+    if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+        FocusEditorCameraOnTarget(transform->worldPosition, 1.0f);
+    }
+}
+
+void EditorLayer::FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius)
+{
+    const DirectX::XMFLOAT3 forward = GetEditorCameraDirection();
+    const float distance = ComputeFocusDistance(radius, m_editorCameraFovY);
+    DirectX::XMFLOAT3 position{
+        target.x - forward.x * distance,
+        target.y - forward.y * distance,
+        target.z - forward.z * distance
+    };
+
+    m_editorCameraPosition = position;
+    m_editorCameraUserOverride = true;
+    m_editorCameraAutoFramed = true;
+}
+
+void EditorLayer::SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance)
+{
+    using namespace DirectX;
+    XMFLOAT3 normalized = forward;
+    XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&normalized));
+    XMStoreFloat3(&normalized, dir);
+
+    m_editorCameraYaw = std::atan2(normalized.x, normalized.z);
+    const float xzLen = std::sqrt(normalized.x * normalized.x + normalized.z * normalized.z);
+    m_editorCameraPitch = std::atan2(normalized.y, xzLen);
+    m_editorCameraPosition = {
+        target.x - normalized.x * distance,
+        target.y - normalized.y * distance,
+        target.z - normalized.z * distance
+    };
+    m_editorCameraUserOverride = true;
+}
+
+bool EditorLayer::SaveCurrentScene()
+{
+    if (!m_gameLayer) {
+        return false;
+    }
+
+    const std::filesystem::path scenePath = SanitizeSceneDefaultPath(m_sceneSavePath);
+    const bool success = PrefabSystem::SaveRegistryAsScene(m_gameLayer->GetRegistry(), scenePath);
+    if (success) {
+        LOG_INFO("[Editor] Scene saved: %s", scenePath.string().c_str());
+        m_sceneSavePath = scenePath.string();
+    } else {
+        LOG_WARN("[Editor] Failed to save scene: %s", scenePath.string().c_str());
+    }
+    return success;
 }
 
 void EditorLayer::DrawGameView()

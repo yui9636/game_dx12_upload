@@ -13,6 +13,8 @@
 #include "Component/TransformComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
+#include "Component/LightComponent.h"
+#include "Component/ReflectionProbeComponent.h"
 
 #include "System/ResourceManager.h"
 #include "Model/Model.h"
@@ -26,7 +28,9 @@
 namespace
 {
     EntitySnapshot::Snapshot BuildSingleEntitySnapshot(const std::string& name,
-                                                       const MeshComponent* meshComponent = nullptr)
+                                                       const MeshComponent* meshComponent = nullptr,
+                                                       const LightComponent* lightComponent = nullptr,
+                                                       const ReflectionProbeComponent* probeComponent = nullptr)
     {
         EntitySnapshot::Snapshot snapshot;
         snapshot.rootLocalID = 0;
@@ -43,9 +47,53 @@ namespace
         if (meshComponent) {
             std::get<std::optional<MeshComponent>>(node.components) = *meshComponent;
         }
+        if (lightComponent) {
+            std::get<std::optional<LightComponent>>(node.components) = *lightComponent;
+        }
+        if (probeComponent) {
+            std::get<std::optional<ReflectionProbeComponent>>(node.components) = *probeComponent;
+        }
 
         snapshot.nodes.push_back(std::move(node));
         return snapshot;
+    }
+
+    bool IsSupportedModelAsset(const std::string& path)
+    {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf";
+    }
+
+    EntitySnapshot::Snapshot BuildDirectionalLightSnapshot()
+    {
+        LightComponent directionalLight;
+        directionalLight.type = LightType::Directional;
+        directionalLight.castShadow = true;
+
+        auto snapshot = BuildSingleEntitySnapshot("Directional Light", nullptr, &directionalLight, nullptr);
+        auto& transform = std::get<std::optional<TransformComponent>>(snapshot.nodes[0].components);
+        if (transform.has_value()) {
+            using namespace DirectX;
+            XMVECTOR rot = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(45.0f), XMConvertToRadians(45.0f), 0.0f);
+            XMStoreFloat4(&transform->localRotation, rot);
+        }
+        return snapshot;
+    }
+
+    bool CreateEntityFromSnapshot(Registry* registry,
+                                  EntitySnapshot::Snapshot snapshot,
+                                  EntityID parentEntity,
+                                  const char* actionName)
+    {
+        if (!registry || snapshot.nodes.empty()) {
+            return false;
+        }
+        auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), parentEntity, actionName);
+        auto* actionPtr = action.get();
+        UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+        EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+        return true;
     }
 }
 
@@ -83,13 +131,45 @@ void HierarchyECSUI::Render(Registry* registry) {
 
     if (ImGui::BeginPopupContextWindow("HierarchyContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem("Create Empty Entity")) {
-            auto action = std::make_unique<CreateEntityAction>(
-                BuildSingleEntitySnapshot("Empty Entity"),
-                Entity::NULL_ID,
-                "Create Entity");
-            auto* actionPtr = action.get();
-            UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            CreateEntityFromSnapshot(registry, BuildSingleEntitySnapshot("Empty Entity"), Entity::NULL_ID, "Create Entity");
+        }
+
+        LightComponent pointLight;
+        pointLight.type = LightType::Point;
+        pointLight.range = 10.0f;
+        pointLight.castShadow = false;
+        if (ImGui::MenuItem("Create Point Light")) {
+            CreateEntityFromSnapshot(registry,
+                                     BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
+                                     Entity::NULL_ID,
+                                     "Create Point Light");
+        }
+
+        if (ImGui::MenuItem("Create Directional Light")) {
+            CreateEntityFromSnapshot(registry, BuildDirectionalLightSnapshot(), Entity::NULL_ID, "Create Directional Light");
+        }
+
+        ReflectionProbeComponent probe;
+        probe.needsBake = true;
+        if (ImGui::MenuItem("Create Reflection Probe")) {
+            CreateEntityFromSnapshot(registry,
+                                     BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
+                                     Entity::NULL_ID,
+                                     "Create Reflection Probe");
+        }
+
+        const auto& selection = EditorSelection::Instance();
+        if (selection.GetType() == SelectionType::Asset && IsSupportedModelAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create From Selected Model")) {
+                MeshComponent meshComp;
+                meshComp.modelFilePath = selection.GetAssetPath();
+                meshComp.model = ResourceManager::Instance().CreateModelInstance(selection.GetAssetPath());
+                const std::string name = std::filesystem::path(meshComp.modelFilePath).stem().string();
+                CreateEntityFromSnapshot(registry,
+                                         BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
+                                         Entity::NULL_ID,
+                                         "Create Entity From Model");
+            }
         }
         ImGui::EndPopup();
     }
@@ -164,13 +244,61 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
             } else {
-                auto action = std::make_unique<CreateEntityAction>(
-                    BuildSingleEntitySnapshot("Empty Entity"),
-                    entity,
-                    "Create Child Entity");
-                auto* actionPtr = action.get();
-                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+                CreateEntityFromSnapshot(registry, BuildSingleEntitySnapshot("Empty Entity"), entity, "Create Child Entity");
+            }
+        }
+
+        LightComponent pointLight;
+        pointLight.type = LightType::Point;
+        pointLight.range = 10.0f;
+        pointLight.castShadow = false;
+        if (ImGui::MenuItem("Create Point Light Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry,
+                                         BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
+                                         entity,
+                                         "Create Point Light Child");
+            }
+        }
+
+        if (ImGui::MenuItem("Create Directional Light Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildDirectionalLightSnapshot(), entity, "Create Directional Light Child");
+            }
+        }
+
+        ReflectionProbeComponent probe;
+        probe.needsBake = true;
+        if (ImGui::MenuItem("Create Reflection Probe Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry,
+                                         BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
+                                         entity,
+                                         "Create Reflection Probe Child");
+            }
+        }
+
+        const auto& selection = EditorSelection::Instance();
+        if (selection.GetType() == SelectionType::Asset && IsSupportedModelAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Model Child")) {
+                if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                } else {
+                    MeshComponent meshComp;
+                    meshComp.modelFilePath = selection.GetAssetPath();
+                    meshComp.model = ResourceManager::Instance().CreateModelInstance(selection.GetAssetPath());
+                    const std::string name = std::filesystem::path(meshComp.modelFilePath).stem().string();
+                    CreateEntityFromSnapshot(registry,
+                                             BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
+                                             entity,
+                                             "Create Model Child");
+                }
             }
         }
 
