@@ -20,6 +20,7 @@ public:
     void Clear();
 
     std::shared_ptr<Model> GetModel(const std::string& path, float scaling = 1.0f, bool sourceOnly = false);
+    std::shared_ptr<Model> CreateModelInstance(const std::string& path, float scaling = 1.0f, bool sourceOnly = false);
 
     std::shared_ptr<ITexture> GetTexture(const std::string& path);
 

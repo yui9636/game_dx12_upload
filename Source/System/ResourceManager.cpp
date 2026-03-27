@@ -204,6 +204,14 @@ std::shared_ptr<Model> ResourceManager::GetModel(const std::string& path, float 
     return model;
 }
 
+std::shared_ptr<Model> ResourceManager::CreateModelInstance(const std::string& path, float scaling, bool sourceOnly)
+{
+    if (path.empty()) return nullptr;
+
+    std::string resolved = PathResolver::Resolve(path);
+    return std::make_shared<Model>(resolved.c_str(), scaling, sourceOnly);
+}
+
 std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
 {
     if (path.empty()) return nullptr;

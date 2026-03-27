@@ -76,7 +76,7 @@ void GameLayer::Initialize()
 
     MeshComponent meshComp;
     meshComp.modelFilePath = "Data/Model/Actor/A5.gltf";
-    meshComp.model = ResourceManager::Instance().GetModel(meshComp.modelFilePath);
+    meshComp.model = ResourceManager::Instance().CreateModelInstance(meshComp.modelFilePath);
     meshComp.isVisible = true;
     meshComp.castShadow = true;
     m_registry.AddComponent(actorEntity, meshComp);
