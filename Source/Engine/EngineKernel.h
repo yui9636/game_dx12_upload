@@ -29,6 +29,7 @@ public:
     void Play();
     void Stop();
     void Pause();
+    void ResetRenderStateForSceneChange();
 
     EngineMode GetMode() const { return mode; }
     const EngineTime& GetTime() const { return time; }

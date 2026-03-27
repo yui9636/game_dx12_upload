@@ -33,10 +33,13 @@
 #include "RHI/ITexture.h"
 #include "ImGuiRenderer.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 #include <cfloat>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -48,6 +51,8 @@ namespace {
     constexpr float kMinScaleValue = 0.001f;
     constexpr const char* kDefaultSceneSavePath = "Data/Scene/EditorScene.scene";
     constexpr const char* kSceneDialogFilter = "Scene Files (*.scene)\0*.scene\0Legacy Scene Files (*.scene.json)\0*.scene.json\0All Files\0*.*\0\0";
+    constexpr double kAutosaveIntervalSeconds = 120.0;
+    constexpr size_t kAutosaveKeepGenerations = 5;
 
     using json = nlohmann::json;
 
@@ -238,6 +243,33 @@ namespace {
         return true;
     }
 
+    bool ProjectWorldToSceneScreen(const DirectX::XMFLOAT4& rect,
+                                   const DirectX::XMFLOAT4X4& view,
+                                   const DirectX::XMFLOAT4X4& projection,
+                                   const DirectX::XMFLOAT3& worldPosition,
+                                   ImVec2& outScreen)
+    {
+        using namespace DirectX;
+        if (rect.z <= 1.0f || rect.w <= 1.0f) {
+            return false;
+        }
+
+        const XMMATRIX viewMatrix = XMLoadFloat4x4(&view);
+        const XMMATRIX projectionMatrix = XMLoadFloat4x4(&projection);
+        const XMVECTOR world = XMLoadFloat3(&worldPosition);
+        XMVECTOR clip = XMVector3TransformCoord(world, viewMatrix * projectionMatrix);
+
+        XMFLOAT3 ndc{};
+        XMStoreFloat3(&ndc, clip);
+        if (!std::isfinite(ndc.x) || !std::isfinite(ndc.y)) {
+            return false;
+        }
+
+        outScreen.x = rect.x + ((ndc.x * 0.5f) + 0.5f) * rect.z;
+        outScreen.y = rect.y + ((-ndc.y * 0.5f) + 0.5f) * rect.w;
+        return true;
+    }
+
     float ComputeFocusDistance(float radius, float fovY)
     {
         const float safeRadius = (std::max)(radius, 0.5f);
@@ -253,6 +285,109 @@ namespace {
     std::string SanitizeSceneDefaultPath(const std::string& path)
     {
         return path.empty() ? std::string(kDefaultSceneSavePath) : path;
+    }
+
+    std::filesystem::path GetAutosaveRootDirectory()
+    {
+        return std::filesystem::path("Saved/Autosave");
+    }
+
+    std::string GetSceneAutosaveKey(const std::filesystem::path& scenePath)
+    {
+        const std::string stem = scenePath.stem().string();
+        return stem.empty() ? "Untitled" : stem;
+    }
+
+    std::filesystem::path GetAutosaveDirectoryForScene(const std::filesystem::path& scenePath)
+    {
+        return GetAutosaveRootDirectory() / GetSceneAutosaveKey(scenePath);
+    }
+
+    std::string BuildAutosaveTimestamp()
+    {
+        const auto now = std::chrono::system_clock::now();
+        const std::time_t tt = std::chrono::system_clock::to_time_t(now);
+        std::tm localTime{};
+        localtime_s(&localTime, &tt);
+        std::ostringstream oss;
+        oss << std::put_time(&localTime, "%Y%m%d_%H%M%S");
+        return oss.str();
+    }
+
+    std::filesystem::path BuildAutosaveScenePath(const std::filesystem::path& scenePath)
+    {
+        const std::string key = GetSceneAutosaveKey(scenePath);
+        return GetAutosaveDirectoryForScene(scenePath) / (key + "_autosave_" + BuildAutosaveTimestamp() + ".scene");
+    }
+
+    void TrimAutosaveGenerations(const std::filesystem::path& autosaveDir)
+    {
+        std::error_code ec;
+        std::vector<std::filesystem::directory_entry> entries;
+        if (!std::filesystem::exists(autosaveDir, ec)) {
+            return;
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(autosaveDir, ec)) {
+            if (ec) {
+                break;
+            }
+            if (entry.is_regular_file(ec) && entry.path().extension() == ".scene") {
+                entries.push_back(entry);
+            }
+        }
+        std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+            std::error_code sortEcA, sortEcB;
+            return a.last_write_time(sortEcA) > b.last_write_time(sortEcB);
+        });
+        for (size_t i = kAutosaveKeepGenerations; i < entries.size(); ++i) {
+            std::filesystem::remove(entries[i].path(), ec);
+        }
+    }
+
+    std::filesystem::path FindLatestAutosaveForScene(const std::filesystem::path& scenePath)
+    {
+        const std::filesystem::path autosaveDir = GetAutosaveDirectoryForScene(scenePath);
+        std::error_code ec;
+        if (!std::filesystem::exists(autosaveDir, ec)) {
+            return {};
+        }
+
+        std::filesystem::path latestPath;
+        std::filesystem::file_time_type latestTime{};
+        bool hasLatest = false;
+        for (const auto& entry : std::filesystem::directory_iterator(autosaveDir, ec)) {
+            if (ec || !entry.is_regular_file(ec) || entry.path().extension() != ".scene") {
+                continue;
+            }
+            std::error_code timeEc;
+            const auto time = entry.last_write_time(timeEc);
+            if (!hasLatest || (!timeEc && time > latestTime)) {
+                latestPath = entry.path();
+                latestTime = time;
+                hasLatest = !timeEc;
+            }
+        }
+        return latestPath;
+    }
+
+    bool IsAutosaveNewerThanScene(const std::filesystem::path& autosavePath, const std::filesystem::path& scenePath)
+    {
+        std::error_code ec;
+        if (autosavePath.empty() || !std::filesystem::exists(autosavePath, ec)) {
+            return false;
+        }
+        if (!std::filesystem::exists(scenePath, ec)) {
+            return true;
+        }
+        const auto autosaveTime = std::filesystem::last_write_time(autosavePath, ec);
+        if (ec) {
+            return false;
+        }
+        const auto sceneTime = std::filesystem::last_write_time(scenePath, ec);
+        if (ec) {
+            return true;
+        }
+        return autosaveTime > sceneTime;
     }
 
     bool HasSelectedAncestor(EntityID entity, Registry& registry, const EditorSelection& selection)
@@ -501,6 +636,7 @@ void EditorLayer::Initialize()
 
     ApplyUnityTheme();
     MarkSceneSaved();
+    CheckRecoveryCandidate();
 }
 
 void EditorLayer::Finalize()
@@ -514,6 +650,7 @@ void EditorLayer::Update(const EngineTime& time)
 
     HandleEditorShortcuts();
     ProcessDeferredEditorActions();
+    UpdateAutosave(time.unscaledDt);
 
     if (!io.WantTextInput && m_gameLayer) {
         Registry& registry = m_gameLayer->GetRegistry();
@@ -652,6 +789,7 @@ void EditorLayer::RenderUI()
     DrawGBufferDebugWindow();
     DrawStatusBar();
     DrawUnsavedChangesPopup();
+    DrawRecoveryPopup();
     Console::Instance().Draw();
     if (m_assetBrowser) {
         m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
@@ -886,6 +1024,47 @@ void EditorLayer::DrawUnsavedChangesPopup()
     }
 }
 
+void EditorLayer::DrawRecoveryPopup()
+{
+    if (m_openRecoveryPopup) {
+        ImGui::OpenPopup("Autosave Recovery");
+        m_openRecoveryPopup = false;
+    }
+
+    if (ImGui::BeginPopupModal("Autosave Recovery", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%s A newer autosave was found for this scene.", ICON_FA_TRIANGLE_EXCLAMATION);
+        if (!m_pendingRecoveryScenePath.empty()) {
+            ImGui::TextWrapped("Scene: %s", m_pendingRecoveryScenePath.string().c_str());
+        }
+        if (!m_pendingRecoveryAutosavePath.empty()) {
+            ImGui::TextWrapped("Autosave: %s", m_pendingRecoveryAutosavePath.string().c_str());
+        }
+        ImGui::Separator();
+
+        if (ImGui::Button("Recover", ImVec2(140, 0))) {
+            const std::filesystem::path autosavePath = m_pendingRecoveryAutosavePath;
+            const std::filesystem::path scenePath = m_pendingRecoveryScenePath;
+            const bool recovered = !autosavePath.empty() && LoadSceneFromPath(autosavePath);
+            if (recovered) {
+                m_sceneSavePath = scenePath.empty() ? autosavePath.string() : scenePath.string();
+                const uint64_t revision = UndoSystem::Instance().GetECSRevision();
+                m_savedSceneRevision = (revision == (std::numeric_limits<uint64_t>::max)()) ? revision : revision + 1;
+                LOG_INFO("[Editor] Recovered autosave: %s", autosavePath.string().c_str());
+            }
+            m_pendingRecoveryAutosavePath.clear();
+            m_pendingRecoveryScenePath.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(140, 0))) {
+            m_pendingRecoveryAutosavePath.clear();
+            m_pendingRecoveryScenePath.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 void EditorLayer::DrawDockSpace()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -1078,6 +1257,60 @@ void EditorLayer::ProcessDeferredEditorActions()
     if (hasPendingSceneFromAssetBrowser) {
         RequestSceneAction(PendingSceneAction::LoadScenePath, pendingScenePath);
     }
+}
+
+void EditorLayer::UpdateAutosave(float deltaSeconds)
+{
+    if (!m_gameLayer || deltaSeconds <= 0.0f) {
+        return;
+    }
+
+    if (!IsSceneDirty()) {
+        m_autosaveAccumulator = 0.0;
+        return;
+    }
+
+    m_autosaveAccumulator += static_cast<double>(deltaSeconds);
+    if (m_autosaveAccumulator < kAutosaveIntervalSeconds) {
+        return;
+    }
+
+    const std::filesystem::path scenePath = SanitizeSceneDefaultPath(m_sceneSavePath);
+    const std::filesystem::path autosavePath = BuildAutosaveScenePath(scenePath);
+    std::error_code ec;
+    std::filesystem::create_directories(autosavePath.parent_path(), ec);
+    if (ec) {
+        LOG_WARN("[Editor] Failed to create autosave directory: %s", autosavePath.parent_path().string().c_str());
+        m_autosaveAccumulator = 0.0;
+        return;
+    }
+
+    if (PrefabSystem::SaveRegistryAsScene(m_gameLayer->GetRegistry(), autosavePath)) {
+        TrimAutosaveGenerations(autosavePath.parent_path());
+        LOG_INFO("[Editor] Autosaved scene: %s", autosavePath.string().c_str());
+    } else {
+        LOG_WARN("[Editor] Failed to autosave scene: %s", autosavePath.string().c_str());
+    }
+
+    m_autosaveAccumulator = 0.0;
+}
+
+void EditorLayer::CheckRecoveryCandidate()
+{
+    if (m_hasCheckedRecovery) {
+        return;
+    }
+    m_hasCheckedRecovery = true;
+
+    const std::filesystem::path scenePath = SanitizeSceneDefaultPath(m_sceneSavePath);
+    const std::filesystem::path autosavePath = FindLatestAutosaveForScene(scenePath);
+    if (autosavePath.empty() || !IsAutosaveNewerThanScene(autosavePath, scenePath)) {
+        return;
+    }
+
+    m_pendingRecoveryAutosavePath = autosavePath;
+    m_pendingRecoveryScenePath = scenePath;
+    m_openRecoveryPopup = true;
 }
 
 bool EditorLayer::IsSceneDirty() const
@@ -1551,7 +1784,7 @@ void EditorLayer::HandleSceneAssetDrop()
         return;
     }
 
-    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET");
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET", ImGuiDragDropFlags_AcceptBeforeDelivery);
     if (!payload) {
         ImGui::EndDragDropTarget();
         return;
@@ -1578,6 +1811,30 @@ void EditorLayer::HandleSceneAssetDrop()
         }
     } else {
         placementPosition = { 0.0f, 0.0f, 0.0f };
+    }
+
+    if (ext == ".prefab" || IsSupportedModelAsset(assetPath)) {
+        ImVec2 screenPos{};
+        if (ProjectWorldToSceneScreen(m_sceneViewRect, view, projection, placementPosition, screenPos)) {
+            ImDrawList* drawList = ImGui::GetForegroundDrawList();
+            const ImU32 ringColor = IM_COL32(96, 196, 255, 220);
+            const ImU32 fillColor = IM_COL32(96, 196, 255, 48);
+            drawList->AddCircleFilled(screenPos, 10.0f, fillColor, 24);
+            drawList->AddCircle(screenPos, 10.0f, ringColor, 24, 2.0f);
+            drawList->AddLine(ImVec2(screenPos.x - 14.0f, screenPos.y), ImVec2(screenPos.x + 14.0f, screenPos.y), ringColor, 2.0f);
+            drawList->AddLine(ImVec2(screenPos.x, screenPos.y - 14.0f), ImVec2(screenPos.x, screenPos.y + 14.0f), ringColor, 2.0f);
+
+            const bool isOriginPlacement = std::fabs(placementPosition.x) < 0.0001f &&
+                                           std::fabs(placementPosition.y) < 0.0001f &&
+                                           std::fabs(placementPosition.z) < 0.0001f;
+            const std::string previewText = isOriginPlacement ? "Place at Origin" : "Place on Surface";
+            drawList->AddText(ImVec2(screenPos.x + 16.0f, screenPos.y - 8.0f), IM_COL32(255, 255, 255, 230), previewText.c_str());
+        }
+    }
+
+    if (!payload->IsDelivery()) {
+        ImGui::EndDragDropTarget();
+        return;
     }
 
     Registry& registry = m_gameLayer->GetRegistry();
@@ -1690,6 +1947,11 @@ void EditorLayer::NewScene()
     m_gizmoIsOver = false;
     m_gizmoUndoEntity = Entity::NULL_ID;
     m_hasGizmoBeforeTransform = false;
+    m_pendingRecoveryAutosavePath.clear();
+    m_pendingRecoveryScenePath.clear();
+    m_openRecoveryPopup = false;
+    m_autosaveAccumulator = 0.0;
+    m_hasCheckedRecovery = true;
 
     ClearRegistryEntities(registry);
     CreateDefaultSceneEntities(registry);
@@ -1714,6 +1976,11 @@ bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
     UndoSystem::Instance().ClearECSHistory();
     EditorSelection::Instance().Clear();
     m_sceneSavePath = scenePath.string();
+    m_pendingRecoveryAutosavePath.clear();
+    m_pendingRecoveryScenePath.clear();
+    m_openRecoveryPopup = false;
+    m_autosaveAccumulator = 0.0;
+    m_hasCheckedRecovery = true;
     MarkSceneSaved();
     LOG_INFO("[Editor] Scene loaded: %s", scenePath.string().c_str());
     return true;
@@ -1746,6 +2013,9 @@ bool EditorLayer::SaveCurrentScene()
     if (success) {
         LOG_INFO("[Editor] Scene saved: %s", scenePath.string().c_str());
         m_sceneSavePath = scenePath.string();
+        m_pendingRecoveryAutosavePath.clear();
+        m_pendingRecoveryScenePath.clear();
+        m_autosaveAccumulator = 0.0;
         MarkSceneSaved();
     } else {
         LOG_WARN("[Editor] Failed to save scene: %s", scenePath.string().c_str());

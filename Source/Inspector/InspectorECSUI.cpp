@@ -4,6 +4,7 @@
 #include "Material/MaterialPreviewStudio.h"
 #include "Material/MaterialAsset.h"
 #include "Asset/ThumbnailGenerator.h"
+#include "Asset/PrefabSystem.h"
 #include "Asset/AssetManager.h"
 #include "ImGuiRenderer.h"
 #include "Graphics.h"
@@ -15,17 +16,24 @@
 #include "Component/LightComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MaterialComponent.h"
+#include "Component/PrefabInstanceComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/EnvironmentComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/ShadowSettingsComponent.h"
 #include "Registry/Registry.h"
+#include "System/UndoSystem.h"
+#include "Undo/ComponentUndoAction.h"
+#include "Undo/EntitySnapshot.h"
+#include "Undo/EntityUndoActions.h"
 #include <imgui.h>
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
 #include <memory>
 #include <type_traits>
+#include <unordered_map>
 
 namespace {
     template <typename T>
@@ -88,7 +96,54 @@ namespace {
     }
 
     template <typename T>
-    void DrawComponentBlock(const char* label, T& component) {
+    struct EditSession {
+        T before{};
+        bool dirty = false;
+    };
+
+    template <typename T>
+    std::unordered_map<uint64_t, EditSession<T>>& GetEditSessions() {
+        static std::unordered_map<uint64_t, EditSession<T>> sessions;
+        return sessions;
+    }
+
+    template <typename T>
+    uint64_t MakeEditSessionKey(EntityID entity) {
+        return (static_cast<uint64_t>(Entity::GetIndex(entity)) << 32) | Entity::GetGeneration(entity);
+    }
+
+    template <typename TComponent, typename TValue>
+    bool DrawUndoableValueWidget(Registry* registry, EntityID entity, TComponent& component, const char* label, TValue& value) {
+        const TComponent beforeWidget = component;
+        const bool changed = DrawValueWidget(label, value);
+
+        auto& sessions = GetEditSessions<TComponent>();
+        const uint64_t key = MakeEditSessionKey<TComponent>(entity);
+        auto it = sessions.find(key);
+
+        if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
+            it = sessions.emplace(key, EditSession<TComponent>{ beforeWidget, false }).first;
+        }
+
+        if (changed && it != sessions.end()) {
+            it->second.dirty = true;
+        }
+
+        if (it != sessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
+            if (it->second.dirty) {
+                UndoSystem::Instance().ExecuteAction(
+                    std::make_unique<ComponentUndoAction<TComponent>>(entity, it->second.before, component),
+                    *registry);
+                PrefabSystem::MarkPrefabOverride(entity, *registry);
+            }
+            sessions.erase(it);
+        }
+
+        return changed;
+    }
+
+    template <typename T>
+    void DrawComponentBlock(Registry* registry, EntityID entity, const char* label, T& component) {
         if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen)) {
             return;
         }
@@ -99,7 +154,7 @@ namespace {
             ImGui::TableNextColumn();
 
             std::apply([&](auto... fields) {
-                ((DrawValueWidget(fields.name.data(), component.*(fields.ptr))), ...);
+                ((DrawUndoableValueWidget(registry, entity, component, fields.name.data(), component.*(fields.ptr))), ...);
             }, ComponentMeta<T>::Fields);
 
             ImGui::EndTable();
@@ -109,7 +164,7 @@ namespace {
     template <typename T>
     void DrawComponentIfPresent(Registry* registry, EntityID entity) {
         if (T* component = registry->GetComponent<T>(entity)) {
-            DrawComponentBlock(ComponentMeta<T>::Name.data(), *component);
+            DrawComponentBlock(registry, entity, ComponentMeta<T>::Name.data(), *component);
         }
     }
 
@@ -381,6 +436,35 @@ namespace {
         DrawMaterialEditor(material.get());
     }
 
+    std::string ReadAllText(const std::filesystem::path& path) {
+        std::ifstream ifs(path, std::ios::binary);
+        if (!ifs.is_open()) {
+            return {};
+        }
+        return std::string((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    }
+
+    EntitySnapshot::Snapshot BuildPrefabInstanceSnapshot(const std::filesystem::path& prefabPath) {
+        EntitySnapshot::Snapshot snapshot;
+        if (!PrefabSystem::LoadPrefabSnapshot(prefabPath, snapshot)) {
+            return snapshot;
+        }
+
+        for (auto& node : snapshot.nodes) {
+            if (node.localID != snapshot.rootLocalID) {
+                continue;
+            }
+
+            PrefabInstanceComponent prefabInstance;
+            prefabInstance.prefabAssetPath = prefabPath.generic_string();
+            prefabInstance.hasOverrides = false;
+            std::get<std::optional<PrefabInstanceComponent>>(node.components) = prefabInstance;
+            break;
+        }
+
+        return snapshot;
+    }
+
     void DrawAssetInspector(const std::string& assetPath) {
         std::filesystem::path path(assetPath);
         const std::string filename = path.filename().string();
@@ -437,6 +521,7 @@ void InspectorECSUI::Render(Registry* registry) {
                 if (ImGui::CollapsingHeader("MaterialComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
                     char matBuf[512];
                     strcpy_s(matBuf, matComp->materialAssetPath.c_str());
+                    const MaterialComponent beforeWidget = *matComp;
                     if (ImGui::InputText("Material Path", matBuf, sizeof(matBuf))) {
                         matComp->materialAssetPath = matBuf;
                         if (!matComp->materialAssetPath.empty()) {
@@ -445,10 +530,82 @@ void InspectorECSUI::Render(Registry* registry) {
                             matComp->materialAsset = nullptr;
                         }
                     }
+                    static std::unordered_map<uint64_t, EditSession<MaterialComponent>> s_materialSessions;
+                    const uint64_t materialKey = MakeEditSessionKey<MaterialComponent>(entity);
+                    auto materialIt = s_materialSessions.find(materialKey);
+                    if ((ImGui::IsItemActivated() || ImGui::IsItemDeactivatedAfterEdit()) && materialIt == s_materialSessions.end()) {
+                        materialIt = s_materialSessions.emplace(materialKey, EditSession<MaterialComponent>{ beforeWidget, false }).first;
+                    }
+                    if (matComp->materialAssetPath != beforeWidget.materialAssetPath && materialIt != s_materialSessions.end()) {
+                        materialIt->second.dirty = true;
+                    }
+                    if (materialIt != s_materialSessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
+                        if (materialIt->second.dirty) {
+                            UndoSystem::Instance().ExecuteAction(
+                                std::make_unique<ComponentUndoAction<MaterialComponent>>(entity, materialIt->second.before, *matComp),
+                                *registry);
+                            PrefabSystem::MarkPrefabOverride(entity, *registry);
+                        }
+                        s_materialSessions.erase(materialIt);
+                    }
                     if (matComp->materialAsset) {
                         ImGui::Indent();
                         DrawMaterialEditor(matComp->materialAsset.get());
                         ImGui::Unindent();
+                    }
+                }
+            }
+            if (auto* prefabInstance = registry->GetComponent<PrefabInstanceComponent>(entity)) {
+                if (ImGui::CollapsingHeader("Prefab", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    ImGui::TextWrapped("Source: %s", prefabInstance->prefabAssetPath.c_str());
+                    ImGui::Text("Overrides: %s", prefabInstance->hasOverrides ? "Yes" : "No");
+
+                    if (ImGui::Button("Apply Prefab")) {
+                        const std::filesystem::path prefabPath = prefabInstance->prefabAssetPath;
+                        const std::string beforeText = ReadAllText(prefabPath);
+                        const bool oldHasOverrides = prefabInstance->hasOverrides;
+                        if (PrefabSystem::ApplyPrefab(entity, *registry)) {
+                            const std::string afterText = ReadAllText(prefabPath);
+                            UndoSystem::Instance().RecordAction(
+                                std::make_unique<ApplyPrefabAction>(
+                                    entity,
+                                    prefabPath,
+                                    beforeText,
+                                    afterText,
+                                    oldHasOverrides,
+                                    prefabInstance->hasOverrides));
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Revert Prefab")) {
+                        EntityID parentEntity = Entity::NULL_ID;
+                        if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(entity)) {
+                            parentEntity = hierarchy->parent;
+                        }
+
+                        EntitySnapshot::Snapshot beforeSnapshot = EntitySnapshot::CaptureSubtree(entity, *registry);
+                        EntitySnapshot::Snapshot afterSnapshot = BuildPrefabInstanceSnapshot(prefabInstance->prefabAssetPath);
+                        if (!beforeSnapshot.nodes.empty() && !afterSnapshot.nodes.empty()) {
+                            auto action = std::make_unique<ReplaceEntitySubtreeAction>(
+                                std::move(beforeSnapshot),
+                                std::move(afterSnapshot),
+                                entity,
+                                parentEntity,
+                                "Revert Prefab");
+                            auto* actionPtr = action.get();
+                            UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+                            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Unpack Prefab")) {
+                        UndoSystem::Instance().ExecuteAction(
+                            std::make_unique<OptionalComponentUndoAction<PrefabInstanceComponent>>(
+                                entity,
+                                std::optional<PrefabInstanceComponent>(*prefabInstance),
+                                std::nullopt,
+                                "Unpack Prefab"),
+                            *registry);
                     }
                 }
             }

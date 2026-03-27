@@ -144,6 +144,7 @@
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
     <ClInclude Include="Source\Asset\AssetManager.h" />
+    <ClInclude Include="Source\Asset\PrefabSystem.h" />
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h" />
     <ClInclude Include="Source\AssimpImporter.h" />
     <ClInclude Include="Source\Audio\Audio.h" />
@@ -376,6 +377,8 @@
     <ClInclude Include="Source\UI\UIScreen.h" />
     <ClInclude Include="Source\UI\UIWorld.h" />
     <ClInclude Include="Source\Undo\ComponentUndoAction.h" />
+    <ClInclude Include="Source\Undo\EntitySnapshot.h" />
+    <ClInclude Include="Source\Undo\EntityUndoActions.h" />
     <ClInclude Include="Source\Undo\IUndoAction.h" />
     <ClInclude Include="Source\Utils\TransformUtils.h" />
   </ItemGroup>
@@ -418,6 +421,7 @@
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
     <ClCompile Include="Source\Asset\AssetManager.cpp" />
+    <ClCompile Include="Source\Asset\PrefabSystem.cpp" />
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp" />
     <ClCompile Include="Source\AssimpImporter.cpp" />
     <ClCompile Include="Source\Audio\Audio.cpp" />

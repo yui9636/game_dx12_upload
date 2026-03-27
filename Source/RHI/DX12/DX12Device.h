@@ -1,6 +1,6 @@
 #pragma once
 #include <d3d12.h>
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <wrl.h>
 #include <cstdint>
 #include <vector>
@@ -50,6 +50,7 @@ public:
     void FlushDebugMessages();
     uint64_t ExecuteComputeCommandLists(ID3D12CommandList* const* lists, uint32_t count);
     void QueueGraphicsWaitForCompute(uint64_t fenceValue);
+    bool IsTearingSupported() const { return m_allowTearing; }
 
     static constexpr uint32_t FRAME_COUNT = 2;
 
@@ -92,6 +93,7 @@ private:
     uint64_t                         m_fenceValues[FRAME_COUNT] = {};
     uint64_t                         m_computeFenceValue = 1;
     uint32_t                         m_frameIndex = 0;
+    bool                             m_allowTearing = false;
 
     // Deferred descriptor free
     struct DeferredDescriptorFree {

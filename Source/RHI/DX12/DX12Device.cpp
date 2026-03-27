@@ -112,6 +112,13 @@ void DX12Device::CreateCommandQueue() {
 }
 
 void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
+    BOOL allowTearing = FALSE;
+    ComPtr<IDXGIFactory5> factory5;
+    if (SUCCEEDED(m_dxgiFactory.As(&factory5))) {
+        factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &allowTearing, sizeof(allowTearing));
+    }
+    m_allowTearing = (allowTearing == TRUE);
+
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = FRAME_COUNT;
     swapChainDesc.Width = width;
@@ -120,6 +127,7 @@ void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swapChainDesc.SampleDesc.Count = 1;
+    swapChainDesc.Flags = m_allowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
 
     ComPtr<IDXGISwapChain1> swapChain1;
     HRESULT hr = m_dxgiFactory->CreateSwapChainForHwnd(

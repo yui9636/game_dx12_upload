@@ -666,6 +666,12 @@
     <ClInclude Include="Source\Undo\ComponentUndoAction.h">
       <Filter>Source\Undo</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Undo\EntitySnapshot.h">
+      <Filter>Source\Undo</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Undo\EntityUndoActions.h">
+      <Filter>Source\Undo</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Undo\IUndoAction.h">
       <Filter>Source\Undo</Filter>
     </ClInclude>
@@ -715,6 +721,9 @@
       <Filter>Source\Asset</Filter>
     </ClInclude>
     <ClInclude Include="Source\Asset\AssetManager.h">
+      <Filter>Source\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Asset\PrefabSystem.h">
       <Filter>Source\Asset</Filter>
     </ClInclude>
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h">
@@ -1351,6 +1360,9 @@
       <Filter>Source\Asset</Filter>
     </ClCompile>
     <ClCompile Include="Source\Asset\AssetManager.cpp">
+      <Filter>Source\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Asset\PrefabSystem.cpp">
       <Filter>Source\Asset</Filter>
     </ClCompile>
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp">

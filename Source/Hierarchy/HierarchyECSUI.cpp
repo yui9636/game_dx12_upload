@@ -173,6 +173,26 @@ namespace
         return {};
     }
 
+    std::vector<EntityID> GetActivationTargets(Registry& registry, EntityID entity)
+    {
+        auto& selection = EditorSelection::Instance();
+        if (selection.IsEntitySelected(entity) && selection.GetSelectedEntityCount() > 1) {
+            std::vector<EntityID> targets;
+            for (EntityID selected : selection.GetSelectedEntities()) {
+                if (registry.IsAlive(selected) && registry.GetComponent<HierarchyComponent>(selected)) {
+                    targets.push_back(selected);
+                }
+            }
+            if (!targets.empty()) {
+                return targets;
+            }
+        }
+        if (registry.GetComponent<HierarchyComponent>(entity)) {
+            return { entity };
+        }
+        return {};
+    }
+
     void SetVisibilityForTargets(Registry& registry, const std::vector<EntityID>& targets, bool visible)
     {
         auto composite = std::make_unique<CompositeUndoAction>(visible ? "Show Entities" : "Hide Entities");
@@ -186,6 +206,26 @@ namespace
             mesh->isVisible = visible;
             MeshComponent after = *mesh;
             composite->Add(std::make_unique<ComponentUndoAction<MeshComponent>>(target, before, after));
+        }
+
+        if (!composite->Empty()) {
+            UndoSystem::Instance().RecordAction(std::move(composite));
+        }
+    }
+
+    void SetActiveForTargets(Registry& registry, const std::vector<EntityID>& targets, bool active)
+    {
+        auto composite = std::make_unique<CompositeUndoAction>(active ? "Activate Entities" : "Deactivate Entities");
+        for (EntityID target : targets) {
+            auto* hierarchy = registry.GetComponent<HierarchyComponent>(target);
+            if (!hierarchy || hierarchy->isActive == active) {
+                continue;
+            }
+
+            HierarchyComponent before = *hierarchy;
+            hierarchy->isActive = active;
+            HierarchyComponent after = *hierarchy;
+            composite->Add(std::make_unique<ComponentUndoAction<HierarchyComponent>>(target, before, after));
         }
 
         if (!composite->Empty()) {
@@ -351,16 +391,34 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     }
 
     ImGui::PushID(static_cast<int>(Entity::GetIndex(entity)));
+    if (hierComp && !hierComp->isActive) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
+    }
     bool isOpen = ImGui::TreeNodeEx((entityName + idStr).c_str(), flags, "%s %s", ICON_FA_CUBE, entityName.c_str());
+    if (hierComp && !hierComp->isActive) {
+        ImGui::PopStyleColor();
+    }
     const ImVec2 itemRectMin = ImGui::GetItemRectMin();
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         HandleEntitySelectionClick(entity);
     }
 
+    float buttonX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight() - 4.0f;
+    if (hierComp) {
+        const char* activeIcon = hierComp->isActive ? ICON_FA_POWER_OFF : ICON_FA_BOLT;
+        ImGui::SetCursorScreenPos(ImVec2(buttonX, itemRectMin.y));
+        if (ImGui::SmallButton(activeIcon)) {
+            SetActiveForTargets(*registry, GetActivationTargets(*registry, entity), !hierComp->isActive);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(hierComp->isActive ? "Deactivate" : "Activate");
+        }
+        buttonX -= ImGui::GetFrameHeight() + 4.0f;
+    }
+
     if (auto* mesh = registry->GetComponent<MeshComponent>(entity)) {
         const float buttonSize = ImGui::GetFrameHeight();
-        const float buttonX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - buttonSize - 4.0f;
         ImGui::SetCursorScreenPos(ImVec2(buttonX, itemRectMin.y));
         const char* icon = mesh->isVisible ? ICON_FA_EYE : ICON_FA_EYE_SLASH;
         if (ImGui::SmallButton(icon)) {
@@ -380,6 +438,25 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
 
     const std::string popupId = "HierarchyEntityContext##" + std::to_string(static_cast<unsigned long long>(entity));
     if (ImGui::BeginPopupContextItem(popupId.c_str())) {
+        const std::vector<EntityID> activationTargets = GetActivationTargets(*registry, entity);
+        if (!activationTargets.empty()) {
+            bool anyActive = false;
+            bool anyInactive = false;
+            for (EntityID target : activationTargets) {
+                if (auto* targetHierarchy = registry->GetComponent<HierarchyComponent>(target)) {
+                    anyActive |= targetHierarchy->isActive;
+                    anyInactive |= !targetHierarchy->isActive;
+                }
+            }
+            if (anyActive && ImGui::MenuItem(ICON_FA_POWER_OFF " Deactivate")) {
+                SetActiveForTargets(*registry, activationTargets, false);
+            }
+            if (anyInactive && ImGui::MenuItem(ICON_FA_BOLT " Activate")) {
+                SetActiveForTargets(*registry, activationTargets, true);
+            }
+            ImGui::Separator();
+        }
+
         const std::vector<EntityID> visibilityTargets = GetVisibilityTargets(*registry, entity);
         if (!visibilityTargets.empty()) {
             bool anyVisible = false;

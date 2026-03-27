@@ -104,8 +104,13 @@ private:
     float m_scaleSnapStep = 0.1f;
     uint64_t m_savedSceneRevision = 0;
     bool m_openUnsavedChangesPopup = false;
+    bool m_openRecoveryPopup = false;
     PendingSceneAction m_pendingSceneAction = PendingSceneAction::None;
     std::filesystem::path m_pendingSceneLoadPath;
+    std::filesystem::path m_pendingRecoveryAutosavePath;
+    std::filesystem::path m_pendingRecoveryScenePath;
+    bool m_hasCheckedRecovery = false;
+    double m_autosaveAccumulator = 0.0;
     // ==========================================
     // ==========================================
     void DrawDockSpace();
@@ -119,6 +124,7 @@ private:
     void DrawGBufferDebugWindow();
     void DrawStatusBar();
     void DrawUnsavedChangesPopup();
+    void DrawRecoveryPopup();
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();
@@ -130,6 +136,8 @@ private:
     void ProcessDeferredEditorActions();
     bool IsSceneDirty() const;
     void MarkSceneSaved();
+    void UpdateAutosave(float deltaSeconds);
+    void CheckRecoveryCandidate();
     void RequestSceneAction(PendingSceneAction action, std::filesystem::path scenePath = {});
     bool ExecutePendingSceneAction();
     void NewScene();

@@ -6,8 +6,10 @@
  * ・ｽA・ｽ[・ｽL・ｽ^・ｽC・ｽvECS・ｽ・ｽ・ｽ・ｽ・ｽﾉ、std::vector・ｽ・ｽg・ｽ・ｽﾈゑｿｽ・ｽo・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽ・ｽN・ｽ・ｽ・ｽX・ｽg・ｽ・ｽ・ｽ・ｽ・ｽ・ｽﾌ用
  */
 struct HierarchyComponent {
+    bool isActive = true;
     EntityID parent = Entity::NULL_ID;
     EntityID firstChild = Entity::NULL_ID;
     EntityID prevSibling = Entity::NULL_ID;
     EntityID nextSibling = Entity::NULL_ID;
 };
+

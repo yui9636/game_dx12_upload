@@ -11,7 +11,7 @@
 #include "RHI/DX11/DX11CommandList.h"
 #include "Console/Logger.h"
 
-static const int syncInterval = 0; // VSync設定 (0:オフ, 1:オン)
+static const int syncInterval = 1; // エディタは 60fps 前提で扱いたいので VSync を有効化
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 

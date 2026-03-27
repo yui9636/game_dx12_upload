@@ -36,6 +36,7 @@ bool Graphics::IsShuttingDown()
 void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 {
 	m_api = api;
+	m_windowHandle = hWnd;
 	RECT rc;
 	GetClientRect(hWnd, &rc);
 	UINT w = rc.right - rc.left;
@@ -289,7 +290,8 @@ static void DumpDRED(ID3D12Device* device) {
 void Graphics::Present(UINT syncInterval)
 {
 	if (m_api == GraphicsAPI::DX12) {
-		HRESULT hr = m_dx12Device->GetSwapChain()->Present(syncInterval, 0);
+		const UINT presentFlags = (syncInterval == 0 && m_dx12Device->IsTearingSupported()) ? DXGI_PRESENT_ALLOW_TEARING : 0;
+		HRESULT hr = m_dx12Device->GetSwapChain()->Present(syncInterval, presentFlags);
 		if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
 			HRESULT reason = m_dx12Device->GetDevice()->GetDeviceRemovedReason();
 			char buf[256];

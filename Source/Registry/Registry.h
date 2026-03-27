@@ -17,6 +17,10 @@ public:
 
     void DestroyEntity(EntityID entity);
 
+    bool IsAlive(EntityID entity) const {
+        return m_entityManager.IsAlive(entity);
+    }
+
     template<typename T>
     void AddComponent(EntityID entity, const T& component) {
         const uint32_t entityIndex = Entity::GetIndex(entity);

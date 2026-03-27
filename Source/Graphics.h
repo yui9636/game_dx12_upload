@@ -62,6 +62,7 @@ public:
 
 	void Initialize(HWND hWnd, GraphicsAPI api = GraphicsAPI::DX11);
 	void Present(UINT syncInterval);
+	HWND GetWindowHandle() const { return m_windowHandle; }
 
 	GraphicsAPI GetAPI() const { return m_api; }
 
@@ -132,4 +133,5 @@ private:
 	float screenWidth;
 	float screenHeight;
 	float m_renderScale = 0.67f;
+	HWND m_windowHandle = nullptr;
 };

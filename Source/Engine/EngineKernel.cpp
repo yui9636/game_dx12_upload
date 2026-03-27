@@ -1282,3 +1282,18 @@ void EngineKernel::Pause()
     if (mode == EngineMode::Play) mode = EngineMode::Pause;
     else if (mode == EngineMode::Pause) mode = EngineMode::Play;
 }
+
+void EngineKernel::ResetRenderStateForSceneChange()
+{
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        if (auto* dx12 = Graphics::Instance().GetDX12Device()) {
+            dx12->WaitForGPU();
+        }
+    }
+
+    if (m_renderPipeline) {
+        m_renderPipeline->ResetForSceneChange();
+    }
+
+    m_renderQueue.Clear();
+}

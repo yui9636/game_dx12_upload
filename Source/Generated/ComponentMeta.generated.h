@@ -36,6 +36,7 @@ struct ComponentMeta;
 #include "Component/NameComponent.h"
 #include "Component/PhysicsComponent.h"
 #include "Component/PostEffectComponent.h"
+#include "Component/PrefabInstanceComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/ShadowSettingsComponent.h"
 #include "Component/TransformComponent.h"
@@ -164,6 +165,7 @@ template <>
 struct ComponentMeta<HierarchyComponent> {
     static constexpr std::string_view Name = "HierarchyComponent";
     static constexpr auto Fields = std::make_tuple(
+        MakeField("isActive", &HierarchyComponent::isActive),
         MakeField("firstChild", &HierarchyComponent::firstChild),
         MakeField("prevSibling", &HierarchyComponent::prevSibling),
         MakeField("nextSibling", &HierarchyComponent::nextSibling)
@@ -241,6 +243,15 @@ struct ComponentMeta<PostEffectComponent> {
 };
 
 template <>
+struct ComponentMeta<PrefabInstanceComponent> {
+    static constexpr std::string_view Name = "PrefabInstanceComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("prefabAssetPath", &PrefabInstanceComponent::prefabAssetPath),
+        MakeField("hasOverrides", &PrefabInstanceComponent::hasOverrides)
+    );
+};
+
+template <>
 struct ComponentMeta<ReflectionProbeComponent> {
     static constexpr std::string_view Name = "ReflectionProbeComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -292,6 +303,7 @@ using AllComponentTypes = std::tuple<
     NameComponent,
     PhysicsComponent,
     PostEffectComponent,
+    PrefabInstanceComponent,
     ReflectionProbeComponent,
     ShadowSettingsComponent,
     TransformComponent

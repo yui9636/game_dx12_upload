@@ -264,6 +264,26 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
     return rc;
 }
 
+void RenderPipeline::ResetForSceneChange()
+{
+    m_viewHistory.clear();
+    m_graphPassScratch.clear();
+    m_prepGraphScratch.clear();
+    for (auto& pool : m_workerDx12CommandListPools) {
+        pool.clear();
+    }
+    for (auto& slot : m_inFlightRecordedDx12Lists) {
+        slot.clear();
+    }
+    for (auto& slot : m_inFlightResources) {
+        slot.instanceBuffer.reset();
+        slot.instanceStructuredBuffer.reset();
+        slot.drawArgsBuffer.reset();
+        slot.metadataBuffer.reset();
+    }
+    m_inFlightIndex = 0;
+}
+
 void RenderPipeline::Execute(const RenderQueue& queue, RenderContext& rc)
 {
     std::vector<RenderViewContext> views;

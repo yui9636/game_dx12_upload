@@ -49,6 +49,7 @@ public:
 
     void EndFrame(RenderContext& rc);
     void SubmitFrame(RenderContext& rc);
+    void ResetForSceneChange();
 
     void BlitSceneToDisplay(RenderContext& rc);
     RenderViewContext BuildPrimaryViewContext(const RenderContext& rc, uint32_t panelWidth = 0, uint32_t panelHeight = 0) const;
