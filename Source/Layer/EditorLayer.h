@@ -123,6 +123,7 @@ private:
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();
     void HandleScenePicking();
+    void HandleSceneAssetDrop();
     void FocusSelectedEntity();
     void FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius);
     void SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance);

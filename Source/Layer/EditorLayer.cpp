@@ -283,6 +283,112 @@ namespace {
         return roots;
     }
 
+    std::vector<EntityID> DuplicateSelectionRoots(Registry& registry, const EditorSelection& selection)
+    {
+        std::vector<EntityID> selectedRoots = GetSelectedRootEntities(registry, selection);
+        auto composite = std::make_unique<CompositeUndoAction>("Alt Drag Duplicate");
+        std::vector<DuplicateEntityAction*> duplicateActions;
+
+        for (EntityID selectedRoot : selectedRoots) {
+            if (!PrefabSystem::CanDuplicate(selectedRoot, registry)) {
+                LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
+                continue;
+            }
+
+            EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, registry);
+            if (snapshot.nodes.empty()) {
+                continue;
+            }
+
+            EntityID parentEntity = Entity::NULL_ID;
+            if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedRoot)) {
+                parentEntity = hierarchy->parent;
+            }
+
+            EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
+            auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
+            auto* actionPtr = action.get();
+            composite->Add(std::move(action));
+            duplicateActions.push_back(actionPtr);
+        }
+
+        if (composite->Empty()) {
+            return {};
+        }
+
+        UndoSystem::Instance().ExecuteAction(std::move(composite), registry);
+
+        std::vector<EntityID> liveRoots;
+        liveRoots.reserve(duplicateActions.size());
+        for (DuplicateEntityAction* action : duplicateActions) {
+            if (!Entity::IsNull(action->GetLiveRoot())) {
+                liveRoots.push_back(action->GetLiveRoot());
+            }
+        }
+        return liveRoots;
+    }
+
+    bool IsSupportedModelAsset(const std::filesystem::path& path)
+    {
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf";
+    }
+
+    EntitySnapshot::Snapshot BuildSingleEntitySnapshot(const std::string& name,
+                                                       const MeshComponent* meshComponent = nullptr)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = TransformComponent{};
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        if (meshComponent) {
+            std::get<std::optional<MeshComponent>>(node.components) = *meshComponent;
+        }
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
+    bool ApplyPlacementToSnapshot(EntitySnapshot::Snapshot& snapshot, const DirectX::XMFLOAT3& worldPosition)
+    {
+        for (auto& node : snapshot.nodes) {
+            if (node.localID == snapshot.rootLocalID) {
+                auto& transform = std::get<std::optional<TransformComponent>>(node.components);
+                if (!transform.has_value()) {
+                    transform = TransformComponent{};
+                }
+                transform->localPosition = worldPosition;
+                transform->isDirty = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    DirectX::XMFLOAT3 AdjustPlacementForModelBounds(const MeshComponent& meshComponent,
+                                                    const DirectX::XMFLOAT3& placementPosition)
+    {
+        DirectX::XMFLOAT3 adjusted = placementPosition;
+        if (!meshComponent.model) {
+            return adjusted;
+        }
+
+        const auto& bounds = meshComponent.model->GetWorldBounds();
+        adjusted.x -= bounds.Center.x;
+        adjusted.y -= (bounds.Center.y - bounds.Extents.y);
+        adjusted.z -= bounds.Center.z;
+        return adjusted;
+    }
+
     void ClearRegistryEntities(Registry& registry)
     {
         std::vector<EntityID> entities;
@@ -425,38 +531,9 @@ void EditorLayer::Update(const EngineTime& time)
 
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false)) {
             if (selection.GetType() == SelectionType::Entity) {
-                const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(registry, selection);
-                auto composite = std::make_unique<CompositeUndoAction>("Duplicate Entities");
-                std::vector<DuplicateEntityAction*> duplicateActions;
-                for (EntityID selectedRoot : selectedRoots) {
-                    if (!PrefabSystem::CanDuplicate(selectedRoot, registry)) {
-                        LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
-                        continue;
-                    }
-                    EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, registry);
-                    if (!snapshot.nodes.empty()) {
-                        EntityID parentEntity = Entity::NULL_ID;
-                        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(selectedRoot)) {
-                            parentEntity = hierarchy->parent;
-                        }
-                        EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
-                        auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
-                        auto* actionPtr = action.get();
-                        composite->Add(std::move(action));
-                        duplicateActions.push_back(actionPtr);
-                    }
-                }
-                if (!composite->Empty()) {
-                    UndoSystem::Instance().ExecuteAction(std::move(composite), registry);
-                    std::vector<EntityID> liveRoots;
-                    for (DuplicateEntityAction* action : duplicateActions) {
-                        if (!Entity::IsNull(action->GetLiveRoot())) {
-                            liveRoots.push_back(action->GetLiveRoot());
-                        }
-                    }
-                    if (!liveRoots.empty()) {
-                        selection.SetEntitySelection(liveRoots, liveRoots.back());
-                    }
+                const std::vector<EntityID> liveRoots = DuplicateSelectionRoots(registry, selection);
+                if (!liveRoots.empty()) {
+                    selection.SetEntitySelection(liveRoots, liveRoots.back());
                 }
             }
         }
@@ -833,12 +910,14 @@ void EditorLayer::DrawDockSpace()
     // 中央ノードのパススルー設定
     ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
 
-    static bool isLayoutInitialized = false;
-    if (!isLayoutInitialized)
+    static int s_layoutVersionApplied = 0;
+    constexpr int kDockLayoutVersion = 2;
+    if (s_layoutVersionApplied != kDockLayoutVersion)
     {
-        isLayoutInitialized = true;
+        s_layoutVersionApplied = kDockLayoutVersion;
         ImGui::DockBuilderRemoveNode(dockspace_id);
         ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+        ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
 
         // 画面を分割していく
         ImGuiID dock_main_id = dockspace_id;
@@ -850,8 +929,8 @@ void EditorLayer::DrawDockSpace()
         ImGui::DockBuilderDockWindow("Hierarchy", dock_left);
         ImGui::DockBuilderDockWindow(ICON_FA_CIRCLE_INFO " Inspector", dock_right);
 
+        ImGui::DockBuilderDockWindow("Console", dock_down); // 先に dock して、Asset Browser を手前タブにする
         ImGui::DockBuilderDockWindow(ICON_FA_FOLDER_OPEN " Asset Browser", dock_down);
-        ImGui::DockBuilderDockWindow("Console", dock_down); // ★ 追加：コンソールを下のエリアに重ねる（タブ化）
 
         ImGui::DockBuilderDockWindow("Scene View", dock_main_id);
 
@@ -916,6 +995,7 @@ void EditorLayer::DrawSceneView()
         }
 
         ImGuizmo::BeginFrame();
+        HandleSceneAssetDrop();
         DrawSceneViewToolbar();
         DrawTransformGizmo();
         HandleScenePicking();
@@ -1214,6 +1294,7 @@ void EditorLayer::DrawSceneViewToolbar()
 void EditorLayer::DrawTransformGizmo()
 {
     static std::optional<TransformComponent> s_gizmoBeforeState;
+    const bool wasOverLastFrame = m_gizmoIsOver;
 
     m_gizmoIsOver = false;
 
@@ -1243,7 +1324,7 @@ void EditorLayer::DrawTransformGizmo()
     }
 
     Registry& registry = m_gameLayer->GetRegistry();
-    const EntityID entity = selection.GetEntity();
+    EntityID entity = selection.GetEntity();
     auto* transform = registry.GetComponent<TransformComponent>(entity);
     if (!transform) {
         m_gizmoWasUsing = false;
@@ -1262,6 +1343,22 @@ void EditorLayer::DrawTransformGizmo()
     ImGuizmo::SetOrthographic(false);
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_sceneViewRect.x, m_sceneViewRect.y, m_sceneViewRect.z, m_sceneViewRect.w);
+
+    if (!m_gizmoWasUsing && wasOverLastFrame && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImGui::GetIO().KeyAlt) {
+        const std::vector<EntityID> duplicatedRoots = DuplicateSelectionRoots(registry, selection);
+        if (!duplicatedRoots.empty()) {
+            selection.SetEntitySelection(duplicatedRoots, duplicatedRoots.back());
+            entity = selection.GetEntity();
+            transform = registry.GetComponent<TransformComponent>(entity);
+            if (!transform) {
+                m_gizmoWasUsing = false;
+                m_hasGizmoBeforeTransform = false;
+                m_gizmoUndoEntity = Entity::NULL_ID;
+                s_gizmoBeforeState.reset();
+                return;
+            }
+        }
+    }
 
     ImGuizmo::OPERATION operation = ImGuizmo::TRANSLATE;
     switch (m_gizmoOperation) {
@@ -1417,8 +1514,14 @@ void EditorLayer::HandleScenePicking()
 
     PhysicsRaycastResult hit = PhysicsManager::Instance().CastRay(rayOrigin, rayDirection, maxDistance);
     if (hit.hasHit && registry.IsAlive(hit.entityID)) {
-        selectedEntity = hit.entityID;
-        maxDistance = hit.distance;
+        bool pickable = true;
+        if (auto* mesh = registry.GetComponent<MeshComponent>(hit.entityID)) {
+            pickable = mesh->isVisible;
+        }
+        if (pickable) {
+            selectedEntity = hit.entityID;
+            maxDistance = hit.distance;
+        }
     }
 
     const EntityID fallbackEntity = PickRenderableFallback(registry, rayOrigin, rayDirection, maxDistance);
@@ -1436,6 +1539,77 @@ void EditorLayer::HandleScenePicking()
     } else if (!ImGui::GetIO().KeyCtrl) {
         selection.Clear();
     }
+}
+
+void EditorLayer::HandleSceneAssetDrop()
+{
+    if (!m_gameLayer || m_sceneViewRect.z <= 1.0f || m_sceneViewRect.w <= 1.0f) {
+        return;
+    }
+
+    if (!ImGui::BeginDragDropTarget()) {
+        return;
+    }
+
+    const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET");
+    if (!payload) {
+        ImGui::EndDragDropTarget();
+        return;
+    }
+
+    std::filesystem::path assetPath(static_cast<const char*>(payload->Data));
+    std::string ext = assetPath.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    using namespace DirectX;
+    const XMFLOAT4X4 view = GetEditorViewMatrix();
+    const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
+    const XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
+
+    XMFLOAT3 placementPosition{};
+    XMFLOAT3 rayOrigin{};
+    XMFLOAT3 rayDirection{};
+    if (BuildWorldRay(m_sceneViewRect, view, projection, ImGui::GetMousePos(), rayOrigin, rayDirection)) {
+        PhysicsRaycastResult hit = PhysicsManager::Instance().CastRay(rayOrigin, rayDirection, 100000.0f);
+        if (hit.hasHit) {
+            placementPosition = hit.position;
+        } else {
+            placementPosition = { 0.0f, 0.0f, 0.0f };
+        }
+    } else {
+        placementPosition = { 0.0f, 0.0f, 0.0f };
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+
+    if (ext == ".prefab") {
+        EntitySnapshot::Snapshot snapshot;
+        if (PrefabSystem::LoadPrefabSnapshot(assetPath, snapshot) && !snapshot.nodes.empty()) {
+            ApplyPlacementToSnapshot(snapshot, placementPosition);
+            auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Prefab");
+            auto* actionPtr = action.get();
+            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+            if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
+                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            }
+        }
+    } else if (IsSupportedModelAsset(assetPath)) {
+        MeshComponent meshComp;
+        meshComp.modelFilePath = assetPath.string();
+        meshComp.model = ResourceManager::Instance().CreateModelInstance(meshComp.modelFilePath);
+        placementPosition = AdjustPlacementForModelBounds(meshComp, placementPosition);
+        EntitySnapshot::Snapshot snapshot = BuildSingleEntitySnapshot(assetPath.stem().string(), &meshComp);
+        if (ApplyPlacementToSnapshot(snapshot, placementPosition)) {
+            auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Model");
+            auto* actionPtr = action.get();
+            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+            if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
+                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            }
+        }
+    }
+
+    ImGui::EndDragDropTarget();
 }
 
 void EditorLayer::FocusSelectedEntity()

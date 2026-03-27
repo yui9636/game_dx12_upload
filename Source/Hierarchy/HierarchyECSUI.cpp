@@ -153,6 +153,46 @@ namespace
         return ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf";
     }
 
+    std::vector<EntityID> GetVisibilityTargets(Registry& registry, EntityID entity)
+    {
+        auto& selection = EditorSelection::Instance();
+        if (selection.IsEntitySelected(entity) && selection.GetSelectedEntityCount() > 1) {
+            std::vector<EntityID> targets;
+            for (EntityID selected : selection.GetSelectedEntities()) {
+                if (registry.IsAlive(selected) && registry.GetComponent<MeshComponent>(selected)) {
+                    targets.push_back(selected);
+                }
+            }
+            if (!targets.empty()) {
+                return targets;
+            }
+        }
+        if (registry.GetComponent<MeshComponent>(entity)) {
+            return { entity };
+        }
+        return {};
+    }
+
+    void SetVisibilityForTargets(Registry& registry, const std::vector<EntityID>& targets, bool visible)
+    {
+        auto composite = std::make_unique<CompositeUndoAction>(visible ? "Show Entities" : "Hide Entities");
+        for (EntityID target : targets) {
+            auto* mesh = registry.GetComponent<MeshComponent>(target);
+            if (!mesh || mesh->isVisible == visible) {
+                continue;
+            }
+
+            MeshComponent before = *mesh;
+            mesh->isVisible = visible;
+            MeshComponent after = *mesh;
+            composite->Add(std::make_unique<ComponentUndoAction<MeshComponent>>(target, before, after));
+        }
+
+        if (!composite->Empty()) {
+            UndoSystem::Instance().RecordAction(std::move(composite));
+        }
+    }
+
     EntitySnapshot::Snapshot BuildDirectionalLightSnapshot()
     {
         LightComponent directionalLight;
@@ -310,10 +350,25 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
+    ImGui::PushID(static_cast<int>(Entity::GetIndex(entity)));
     bool isOpen = ImGui::TreeNodeEx((entityName + idStr).c_str(), flags, "%s %s", ICON_FA_CUBE, entityName.c_str());
+    const ImVec2 itemRectMin = ImGui::GetItemRectMin();
 
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         HandleEntitySelectionClick(entity);
+    }
+
+    if (auto* mesh = registry->GetComponent<MeshComponent>(entity)) {
+        const float buttonSize = ImGui::GetFrameHeight();
+        const float buttonX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - buttonSize - 4.0f;
+        ImGui::SetCursorScreenPos(ImVec2(buttonX, itemRectMin.y));
+        const char* icon = mesh->isVisible ? ICON_FA_EYE : ICON_FA_EYE_SLASH;
+        if (ImGui::SmallButton(icon)) {
+            SetVisibilityForTargets(*registry, { entity }, !mesh->isVisible);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(mesh->isVisible ? "Hide" : "Show");
+        }
     }
 
     if (ImGui::BeginDragDropSource()) {
@@ -325,6 +380,25 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
 
     const std::string popupId = "HierarchyEntityContext##" + std::to_string(static_cast<unsigned long long>(entity));
     if (ImGui::BeginPopupContextItem(popupId.c_str())) {
+        const std::vector<EntityID> visibilityTargets = GetVisibilityTargets(*registry, entity);
+        if (!visibilityTargets.empty()) {
+            bool anyVisible = false;
+            bool anyHidden = false;
+            for (EntityID target : visibilityTargets) {
+                if (auto* mesh = registry->GetComponent<MeshComponent>(target)) {
+                    anyVisible |= mesh->isVisible;
+                    anyHidden |= !mesh->isVisible;
+                }
+            }
+            if (anyVisible && ImGui::MenuItem(ICON_FA_EYE_SLASH " Hide")) {
+                SetVisibilityForTargets(*registry, visibilityTargets, false);
+            }
+            if (anyHidden && ImGui::MenuItem(ICON_FA_EYE " Show")) {
+                SetVisibilityForTargets(*registry, visibilityTargets, true);
+            }
+            ImGui::Separator();
+        }
+
         if (ImGui::MenuItem("Duplicate")) {
             auto& selection = EditorSelection::Instance();
             if (!selection.IsEntitySelected(entity)) {
@@ -463,6 +537,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         }
         ImGui::TreePop();
     }
+    ImGui::PopID();
 }
 
 void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEntity) {
