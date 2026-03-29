@@ -2440,8 +2440,15 @@ void EditorLayer::DrawRecoveryPopup()
 void EditorLayer::DrawDockSpace()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->Pos);
-    ImGui::SetNextWindowSize(viewport->Size);
+    const float toolbarHeight = m_showMainToolbar ? 32.0f : 0.0f;
+    const float statusBarHeight = m_showStatusBar ? 26.0f : 0.0f;
+    const ImVec2 dockspacePos(viewport->WorkPos.x, viewport->WorkPos.y + toolbarHeight);
+    const ImVec2 dockspaceSize(
+        viewport->WorkSize.x,
+        (std::max)(1.0f, viewport->WorkSize.y - toolbarHeight - statusBarHeight));
+
+    ImGui::SetNextWindowPos(dockspacePos);
+    ImGui::SetNextWindowSize(dockspaceSize);
 
     // 背景を描画しないフラグ（残像防止のため背景を塗る設定にします）
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
@@ -2472,7 +2479,7 @@ void EditorLayer::DrawDockSpace()
         s_layoutVersionApplied = kDockLayoutVersion;
         ImGui::DockBuilderRemoveNode(dockspace_id);
         ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-        ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+        ImGui::DockBuilderSetNodeSize(dockspace_id, dockspaceSize);
 
         if (m_maximizedWindow != WindowFocusTarget::None) {
             ImGui::DockBuilderDockWindow(GetWindowTitleForFocus(m_maximizedWindow), dockspace_id);
@@ -2869,11 +2876,11 @@ void EditorLayer::DrawSceneViewToolbar()
         return;
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f, 8.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4.0f);
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 0.82f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0f);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.09f, 0.11f, 0.68f));
     ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.20f, 0.22f, 0.26f, 0.90f));
 
     ImGui::SetNextWindowPos(ImVec2(m_sceneViewRect.x + m_sceneViewRect.z - 12.0f, m_sceneViewRect.y + 12.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
@@ -2883,7 +2890,13 @@ void EditorLayer::DrawSceneViewToolbar()
     if (ImGui::Begin("##SceneViewToolbarOverlay", nullptr, flags)) {
         m_sceneViewToolbarHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
-        auto drawModeButton = [&](const char* label, SceneViewMode mode) {
+        auto showCompactTooltip = [](const char* text) {
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                ImGui::SetTooltip("%s", text);
+            }
+        };
+
+        auto drawModeButton = [&](const char* label, SceneViewMode mode, const char* tooltip) {
             const bool selected = (m_sceneViewMode == mode);
             if (selected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.21f, 0.47f, 0.82f, 1.0f));
@@ -2893,13 +2906,13 @@ void EditorLayer::DrawSceneViewToolbar()
             if (ImGui::Button(label)) {
                 m_sceneViewMode = mode;
             }
+            showCompactTooltip(tooltip);
             if (selected) {
                 ImGui::PopStyleColor(3);
             }
-            ImGui::SameLine();
         };
 
-        auto drawOpButton = [&](const char* label, GizmoOperation op) {
+        auto drawOpButton = [&](const char* label, GizmoOperation op, const char* tooltip) {
             const bool selected = (m_gizmoOperation == op);
             if (selected) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.21f, 0.47f, 0.82f, 1.0f));
@@ -2909,96 +2922,129 @@ void EditorLayer::DrawSceneViewToolbar()
             if (ImGui::Button(label)) {
                 m_gizmoOperation = op;
             }
+            showCompactTooltip(tooltip);
             if (selected) {
                 ImGui::PopStyleColor(3);
             }
-            ImGui::SameLine();
         };
 
-        ImGui::TextDisabled("Mode");
-        ImGui::SameLine();
-        drawModeButton("3D", SceneViewMode::Mode3D);
-        drawModeButton("2D", SceneViewMode::Mode2D);
-        ImGui::Separator();
-        ImGui::TextDisabled("Transform");
-        ImGui::SameLine();
-        drawOpButton("W", GizmoOperation::Translate);
-        drawOpButton("E", GizmoOperation::Rotate);
-        drawOpButton("R", GizmoOperation::Scale);
+        auto drawToggleButton = [&](const char* label, bool active, const char* tooltip) {
+            if (active) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.21f, 0.47f, 0.82f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.53f, 0.90f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.40f, 0.72f, 1.0f));
+            }
+            const bool pressed = ImGui::Button(label);
+            showCompactTooltip(tooltip);
+            if (active) {
+                ImGui::PopStyleColor(3);
+            }
+            return pressed;
+        };
 
-        if (ImGui::Button(m_gizmoSpace == GizmoSpace::Local ? "Local" : "World")) {
+        auto drawViewPresetButton = [&](const char* label, const DirectX::XMFLOAT3& forward) {
+            if (ImGui::Selectable(label, false, 0, ImVec2(70.0f, 0.0f))) {
+                DirectX::XMFLOAT3 target = m_editorCameraPosition;
+                float distance = 10.0f;
+                auto& selection = EditorSelection::Instance();
+                if (selection.GetType() == SelectionType::Entity && m_gameLayer) {
+                    Registry& registry = m_gameLayer->GetRegistry();
+                    const EntityID entity = selection.GetEntity();
+                    if (!Entity::IsNull(entity) && registry.IsAlive(entity)) {
+                        if (auto* mesh = registry.GetComponent<MeshComponent>(entity); mesh && mesh->model) {
+                            const auto& bounds = mesh->model->GetWorldBounds();
+                            target = bounds.Center;
+                            distance = (std::max)(ComputeFocusDistance(Max3(bounds.Extents.x, bounds.Extents.y, bounds.Extents.z), m_editorCameraFovY), 5.0f);
+                        } else if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                            target = transform->worldPosition;
+                        }
+                    }
+                } else {
+                    const DirectX::XMFLOAT3 currentForward = GetEditorCameraDirection();
+                    target.x = m_editorCameraPosition.x + currentForward.x * distance;
+                    target.y = m_editorCameraPosition.y + currentForward.y * distance;
+                    target.z = m_editorCameraPosition.z + currentForward.z * distance;
+                }
+                SetEditorCameraDirection(forward, target, distance);
+                ImGui::CloseCurrentPopup();
+            }
+        };
+
+        drawModeButton("3D", SceneViewMode::Mode3D, "3D mode");
+        ImGui::SameLine();
+        drawModeButton("2D", SceneViewMode::Mode2D, "2D mode");
+        ImGui::SameLine(0.0f, 8.0f);
+
+        drawOpButton("W", GizmoOperation::Translate, "Move");
+        ImGui::SameLine();
+        drawOpButton("E", GizmoOperation::Rotate, "Rotate");
+        ImGui::SameLine();
+        drawOpButton("R", GizmoOperation::Scale, "Scale");
+        ImGui::SameLine();
+
+        if (ImGui::Button(m_gizmoSpace == GizmoSpace::Local ? "Lcl" : "Wld")) {
             m_gizmoSpace = (m_gizmoSpace == GizmoSpace::Local) ? GizmoSpace::World : GizmoSpace::Local;
         }
+        showCompactTooltip(m_gizmoSpace == GizmoSpace::Local ? "Local gizmo space" : "World gizmo space");
         ImGui::SameLine();
 
         if (ImGui::Button("F")) {
             FocusSelectedEntity();
         }
-        ImGui::Separator();
-        ImGui::TextDisabled("Snap");
+        showCompactTooltip("Frame selected");
+        ImGui::SameLine(0.0f, 8.0f);
+
+        if (drawToggleButton("T", m_translateSnapEnabled, "Move snap")) {
+            m_translateSnapEnabled = !m_translateSnapEnabled;
+        }
         ImGui::SameLine();
-        ImGui::Checkbox("Move##SnapMove", &m_translateSnapEnabled);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(56.0f);
+        ImGui::SetNextItemWidth(48.0f);
         ImGui::DragFloat("##MoveSnapStep", &m_translateSnapStep, 0.05f, 0.05f, 1000.0f, "%.2f");
+        showCompactTooltip("Move snap step");
         ImGui::SameLine();
-        ImGui::Checkbox("Rot##SnapRotate", &m_rotateSnapEnabled);
+
+        if (drawToggleButton("R", m_rotateSnapEnabled, "Rotate snap")) {
+            m_rotateSnapEnabled = !m_rotateSnapEnabled;
+        }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(56.0f);
+        ImGui::SetNextItemWidth(42.0f);
         ImGui::DragFloat("##RotateSnapStep", &m_rotateSnapStep, 1.0f, 1.0f, 180.0f, "%.0f");
+        showCompactTooltip("Rotate snap step");
         ImGui::SameLine();
-        ImGui::Checkbox("Scale##SnapScale", &m_scaleSnapEnabled);
+
+        if (drawToggleButton("S", m_scaleSnapEnabled, "Scale snap")) {
+            m_scaleSnapEnabled = !m_scaleSnapEnabled;
+        }
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(56.0f);
+        ImGui::SetNextItemWidth(48.0f);
         ImGui::DragFloat("##ScaleSnapStep", &m_scaleSnapStep, 0.05f, 0.01f, 100.0f, "%.2f");
+        showCompactTooltip("Scale snap step");
+
         if (m_sceneViewMode == SceneViewMode::Mode2D) {
-            ImGui::Separator();
+            ImGui::SameLine(0.0f, 8.0f);
             ImGui::TextDisabled("Zoom");
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(90.0f);
+            ImGui::SetNextItemWidth(80.0f);
             ImGui::SliderFloat("##Scene2DZoom", &m_editor2DZoom, 1.0f, 200.0f, "%.1f");
         } else {
-            ImGui::Separator();
-            ImGui::TextDisabled("View");
+            ImGui::SameLine(0.0f, 8.0f);
+            if (ImGui::Button("View")) {
+                ImGui::OpenPopup("##SceneViewPresetPopup");
+            }
+            showCompactTooltip("Camera view presets");
+            if (ImGui::BeginPopup("##SceneViewPresetPopup")) {
+                drawViewPresetButton("Front", { 0.0f, 0.0f, 1.0f });
+                drawViewPresetButton("Back", { 0.0f, 0.0f, -1.0f });
+                drawViewPresetButton("Left", { -1.0f, 0.0f, 0.0f });
+                drawViewPresetButton("Right", { 1.0f, 0.0f, 0.0f });
+                drawViewPresetButton("Top", { 0.0f, -1.0f, 0.0f });
+                drawViewPresetButton("Bottom", { 0.0f, 1.0f, 0.0f });
+                ImGui::EndPopup();
+            }
             ImGui::SameLine();
-
-            auto viewButton = [&](const char* label, const DirectX::XMFLOAT3& forward) {
-                if (ImGui::Button(label)) {
-                    DirectX::XMFLOAT3 target = m_editorCameraPosition;
-                    float distance = 10.0f;
-                    auto& selection = EditorSelection::Instance();
-                    if (selection.GetType() == SelectionType::Entity && m_gameLayer) {
-                        Registry& registry = m_gameLayer->GetRegistry();
-                        const EntityID entity = selection.GetEntity();
-                        if (!Entity::IsNull(entity) && registry.IsAlive(entity)) {
-                            if (auto* mesh = registry.GetComponent<MeshComponent>(entity); mesh && mesh->model) {
-                                const auto& bounds = mesh->model->GetWorldBounds();
-                                target = bounds.Center;
-                                distance = (std::max)(ComputeFocusDistance(Max3(bounds.Extents.x, bounds.Extents.y, bounds.Extents.z), m_editorCameraFovY), 5.0f);
-                            } else if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
-                                target = transform->worldPosition;
-                            }
-                        }
-                    } else {
-                        const DirectX::XMFLOAT3 currentForward = GetEditorCameraDirection();
-                        target.x = m_editorCameraPosition.x + currentForward.x * distance;
-                        target.y = m_editorCameraPosition.y + currentForward.y * distance;
-                        target.z = m_editorCameraPosition.z + currentForward.z * distance;
-                    }
-                    SetEditorCameraDirection(forward, target, distance);
-                }
-            };
-
-            viewButton("Front", { 0.0f, 0.0f, 1.0f }); ImGui::SameLine();
-            viewButton("Back", { 0.0f, 0.0f, -1.0f }); ImGui::SameLine();
-            viewButton("Left", { -1.0f, 0.0f, 0.0f }); ImGui::SameLine();
-            viewButton("Right", { 1.0f, 0.0f, 0.0f }); ImGui::SameLine();
-            viewButton("Top", { 0.0f, -1.0f, 0.0f }); ImGui::SameLine();
-            viewButton("Bottom", { 0.0f, 1.0f, 0.0f });
-            ImGui::Separator();
-            ImGui::TextDisabled("Camera");
+            ImGui::TextDisabled("Cam");
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(80.0f);
+            ImGui::SetNextItemWidth(84.0f);
             ImGui::SliderFloat("##SceneCameraSpeed", &m_cameraMoveSpeed, 1.0f, 100.0f, "%.1f");
         }
     }
@@ -3877,13 +3923,16 @@ void EditorLayer::DrawGameView()
         ImVec2 viewportSize = ImGui::GetContentRegionAvail();
         m_gameViewSize = { viewportSize.x, viewportSize.y };
 
-        ITexture* gameTexture = m_gameViewTexture;
+        ITexture* gameTexture = m_gameViewTexture ? m_gameViewTexture : m_sceneViewTexture;
         void* gameTextureId = nullptr;
         if (gameTexture) {
             gameTextureId = ImGuiRenderer::GetTextureID(gameTexture);
         } else if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
             Graphics& graphics = Graphics::Instance();
-            FrameBuffer* gameViewBuffer = graphics.GetFrameBuffer(FrameBufferId::Display);
+            FrameBuffer* gameViewBuffer = graphics.GetFrameBuffer(FrameBufferId::Scene);
+            if ((!gameViewBuffer || !gameViewBuffer->GetColorTexture(0))) {
+                gameViewBuffer = graphics.GetFrameBuffer(FrameBufferId::Display);
+            }
             if (gameViewBuffer && gameViewBuffer->GetColorTexture(0)) {
                 gameTextureId = gameViewBuffer->GetImGuiTextureID();
                 gameTexture = gameViewBuffer->GetColorTexture(0);

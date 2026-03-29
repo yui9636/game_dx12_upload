@@ -1070,7 +1070,8 @@ void EngineKernel::Render()
     if (m_editorLayer) {
         const auto& primaryView = views.front();
         m_editorLayer->SetSceneViewTexture(primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture);
-        m_editorLayer->SetGameViewTexture(primaryView.displayTexture ? primaryView.displayTexture : primaryView.sceneViewTexture);
+        m_editorLayer->SetGameViewTexture(primaryView.sceneViewTexture ? primaryView.sceneViewTexture :
+            (primaryView.displayTexture ? primaryView.displayTexture : rc.sceneColorTexture));
         m_editorLayer->SetGBufferDebugTextures(
             primaryView.debugGBuffer0 ? primaryView.debugGBuffer0 : rc.debugGBuffer0,
             primaryView.debugGBuffer1 ? primaryView.debugGBuffer1 : rc.debugGBuffer1,
