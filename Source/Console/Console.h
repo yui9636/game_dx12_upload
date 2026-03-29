@@ -4,7 +4,7 @@ class Console {
 public:
     static Console& Instance();
 
-    void Draw(const char* title = "Console", bool* p_open = nullptr);
+    void Draw(const char* title = "Console", bool* p_open = nullptr, bool* outFocused = nullptr);
 
 private:
     Console() = default;

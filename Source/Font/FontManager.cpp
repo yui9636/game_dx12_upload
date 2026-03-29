@@ -1,9 +1,22 @@
 #include "FontManager.h"
+#include "ImGuiRenderer.h"
 #include <cstdarg>
+#include <filesystem>
+#include <imgui.h>
+#include <imgui_internal.h>
+#include <algorithm>
 #include <vector>
 
 
 using namespace DirectX;
+
+namespace
+{
+    std::string NormalizeFontAssetPath(const std::string& path)
+    {
+        return std::filesystem::path(path).lexically_normal().string();
+    }
+}
 
 void FontManager::Clear()
 {
@@ -128,4 +141,75 @@ void FontManager::DrawFormat3D(
     font->Begin(dc);
     font->Draw3D(World, view, projection, buffer.data());
     font->End(dc);
+}
+
+void FontManager::QueueEditorPreviewFont(const std::string& assetPath, float previewSize)
+{
+    if (assetPath.empty()) {
+        return;
+    }
+    const std::string normalized = NormalizeFontAssetPath(assetPath);
+    if (m_editorPreviewFonts.find(normalized) != m_editorPreviewFonts.end() ||
+        m_editorPreviewFontFailures.find(normalized) != m_editorPreviewFontFailures.end()) {
+        return;
+    }
+    m_editorPreviewFontSize = previewSize;
+    m_pendingEditorPreviewFonts.insert(normalized);
+}
+
+ImFont* FontManager::GetEditorPreviewFont(const std::string& assetPath) const
+{
+    if (assetPath.empty()) {
+        return nullptr;
+    }
+    const std::string normalized = NormalizeFontAssetPath(assetPath);
+    auto it = m_editorPreviewFonts.find(normalized);
+    return it != m_editorPreviewFonts.end() ? it->second : nullptr;
+}
+
+void FontManager::ProcessEditorPreviewFonts()
+{
+    if (m_pendingEditorPreviewFonts.empty()) {
+        return;
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    bool rebuildRequired = false;
+    std::vector<std::string> pending(m_pendingEditorPreviewFonts.begin(), m_pendingEditorPreviewFonts.end());
+    m_pendingEditorPreviewFonts.clear();
+
+    for (const std::string& path : pending) {
+        if (m_editorPreviewFonts.find(path) != m_editorPreviewFonts.end() ||
+            m_editorPreviewFontFailures.find(path) != m_editorPreviewFontFailures.end()) {
+            continue;
+        }
+
+        if (!std::filesystem::exists(path)) {
+            m_editorPreviewFontFailures.insert(path);
+            continue;
+        }
+
+        ImFontConfig config{};
+        config.OversampleH = 2;
+        config.OversampleV = 2;
+        config.PixelSnapH = false;
+        ImFont* font = io.Fonts->AddFontFromFileTTF(path.c_str(), m_editorPreviewFontSize, &config, io.Fonts->GetGlyphRangesJapanese());
+        if (font) {
+            m_editorPreviewFonts.emplace(path, font);
+            rebuildRequired = true;
+        } else {
+            m_editorPreviewFontFailures.insert(path);
+        }
+    }
+
+    if (rebuildRequired) {
+        ImGuiRenderer::RebuildFontAtlas();
+    }
+}
+
+void FontManager::ClearEditorPreviewFonts()
+{
+    m_editorPreviewFonts.clear();
+    m_editorPreviewFontFailures.clear();
+    m_pendingEditorPreviewFonts.clear();
 }

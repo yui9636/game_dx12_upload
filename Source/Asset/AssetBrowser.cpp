@@ -40,8 +40,18 @@ void AssetBrowser::Initialize() {
     m_currentDirectory = AssetManager::Instance().GetRootDirectory();
 }
 
-void AssetBrowser::RenderUI() {
-    ImGui::Begin(ICON_FA_FOLDER_OPEN " Asset Browser", nullptr, ImGuiWindowFlags_MenuBar);
+void AssetBrowser::RenderUI(bool* p_open, bool* outFocused) {
+    if (!ImGui::Begin(ICON_FA_FOLDER_OPEN " Asset Browser", p_open, ImGuiWindowFlags_MenuBar)) {
+        if (outFocused) {
+            *outFocused = false;
+        }
+        ImGui::End();
+        return;
+    }
+
+    if (outFocused) {
+        *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    }
 
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("View(V)")) { ImGui::EndMenu(); }

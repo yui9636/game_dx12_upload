@@ -17,6 +17,7 @@
 #include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
 #include "RHI/DX11/DX11Texture.h"
+
 void GameLayer::Initialize()
 {
     // エディタ起動直後でも最低限の描画情報が成立するように、
@@ -64,22 +65,9 @@ void GameLayer::Initialize()
 
     m_registry.AddComponent(probeEntity, probeComp);
 
-    // A5.gltfモデルを常時ロード
-    EntityID actorEntity = m_registry.CreateEntity();
-    m_registry.AddComponent(actorEntity, NameComponent{ "Actor (A5)" });
-
-    TransformComponent actorTrans;
-    actorTrans.localPosition = { 0.0f, 0.0f, 0.0f };
-    actorTrans.localScale = { 1.0f, 1.0f, 1.0f };
-    m_registry.AddComponent(actorEntity, actorTrans);
-    m_registry.AddComponent(actorEntity, HierarchyComponent{});
-
-    MeshComponent meshComp;
-    meshComp.modelFilePath = "Data/Model/Actor/A5.gltf";
-    meshComp.model = ResourceManager::Instance().CreateModelInstance(meshComp.modelFilePath);
-    meshComp.isVisible = true;
-    meshComp.castShadow = true;
-    m_registry.AddComponent(actorEntity, meshComp);
+    EntityID environmentEntity = m_registry.CreateEntity();
+    m_registry.AddComponent(environmentEntity, NameComponent{ "Environment" });
+    m_registry.AddComponent(environmentEntity, EnvironmentComponent{});
 }
 
 void GameLayer::Finalize()
@@ -102,10 +90,8 @@ void GameLayer::Update(const EngineTime& time)
 
 void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
 {
-
-    rc.environment.skyboxPath = m_environment.skyboxPath;
-    rc.environment.diffuseIBLPath = m_environment.diffuseIBLPath;
-    rc.environment.specularIBLPath = m_environment.specularIBLPath;
+    EnvironmentExtractSystem environmentExtractSystem;
+    environmentExtractSystem.Extract(m_registry, rc);
 
     rc.bloomData.luminanceLowerEdge = m_postEffect.luminanceLowerEdge;
     rc.bloomData.luminanceHigherEdge = m_postEffect.luminanceHigherEdge;

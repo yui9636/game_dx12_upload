@@ -114,6 +114,16 @@ public:
         return m_ecsRevision;
     }
 
+    bool CanUndoECS() const
+    {
+        return !ecsUndoStack.empty();
+    }
+
+    bool CanRedoECS() const
+    {
+        return !ecsRedoStack.empty();
+    }
+
 private:
     std::vector<std::shared_ptr<ICommand>> undoStack;
     std::vector<std::shared_ptr<ICommand>> redoStack;

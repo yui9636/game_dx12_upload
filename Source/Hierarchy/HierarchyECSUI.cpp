@@ -14,7 +14,13 @@
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/LightComponent.h"
+#include "Component/Camera2DComponent.h"
+#include "Component/CanvasItemComponent.h"
+#include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TextComponent.h"
+#include "Component/EnvironmentComponent.h"
 
 #include "System/ResourceManager.h"
 #include "Model/Model.h"
@@ -30,6 +36,8 @@
 namespace
 {
     std::string s_hierarchyFilterLower;
+    bool s_requestHierarchySearchFocus = false;
+    constexpr const char* kDefault2DFontAssetPath = "Data/Font/ArialUni.ttf";
 
     std::string ToLowerCopy(std::string value)
     {
@@ -57,6 +65,10 @@ namespace
 
     bool SubtreeMatchesFilter(Registry& registry, EntityID entity)
     {
+        if (registry.GetComponent<EnvironmentComponent>(entity) ||
+            registry.GetComponent<ReflectionProbeComponent>(entity)) {
+            return false;
+        }
         if (s_hierarchyFilterLower.empty()) {
             return true;
         }
@@ -151,6 +163,174 @@ namespace
         std::string ext = std::filesystem::path(path).extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         return ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf";
+    }
+
+    bool IsSupportedSpriteAsset(const std::string& path)
+    {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".bmp";
+    }
+
+    bool IsSupportedFontAsset(const std::string& path)
+    {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".ttf" || ext == ".otf" || ext == ".fnt";
+    }
+
+    EntitySnapshot::Snapshot BuildSingleSpriteSnapshot(const std::string& name,
+                                                       const std::string& texturePath)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        RectTransformComponent rect{};
+        rect.sizeDelta = { 128.0f, 128.0f };
+
+        CanvasItemComponent canvas{};
+        SpriteComponent sprite{};
+        sprite.textureAssetPath = texturePath;
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<RectTransformComponent>>(node.components) = rect;
+        std::get<std::optional<CanvasItemComponent>>(node.components) = canvas;
+        std::get<std::optional<SpriteComponent>>(node.components) = sprite;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
+    EntitySnapshot::Snapshot BuildSingleEmpty2DSnapshot(const std::string& name)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        RectTransformComponent rect{};
+        rect.sizeDelta = { 128.0f, 128.0f };
+
+        CanvasItemComponent canvas{};
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<RectTransformComponent>>(node.components) = rect;
+        std::get<std::optional<CanvasItemComponent>>(node.components) = canvas;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
+    void TryApplyTextureSize(EntitySnapshot::Snapshot& snapshot, const std::string& texturePath)
+    {
+        if (snapshot.nodes.empty()) {
+            return;
+        }
+        auto texture = ResourceManager::Instance().GetTexture(texturePath);
+        if (!texture) {
+            return;
+        }
+        auto& rect = std::get<std::optional<RectTransformComponent>>(snapshot.nodes[0].components);
+        if (rect.has_value()) {
+            rect->sizeDelta = {
+                static_cast<float>(texture->GetWidth()),
+                static_cast<float>(texture->GetHeight())
+            };
+        }
+    }
+
+    EntitySnapshot::Snapshot BuildSingleTextSnapshot(const std::string& name,
+                                                     const std::string& fontPath)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        RectTransformComponent rect{};
+        rect.sizeDelta = { 320.0f, 80.0f };
+
+        CanvasItemComponent canvas{};
+        TextComponent text{};
+        text.text = name;
+        text.fontAssetPath = fontPath;
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<RectTransformComponent>>(node.components) = rect;
+        std::get<std::optional<CanvasItemComponent>>(node.components) = canvas;
+        std::get<std::optional<TextComponent>>(node.components) = text;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
+    EntitySnapshot::Snapshot BuildDefaultSpriteSnapshot()
+    {
+        return BuildSingleSpriteSnapshot("Sprite", "");
+    }
+
+    EntitySnapshot::Snapshot BuildDefaultTextSnapshot()
+    {
+        return BuildSingleTextSnapshot("Text", kDefault2DFontAssetPath);
+    }
+
+    EntitySnapshot::Snapshot BuildCamera2DSnapshot()
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localPosition = { 0.0f, 0.0f, -100.0f };
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        Camera2DComponent camera2D{};
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ "Camera 2D" };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<Camera2DComponent>>(node.components) = camera2D;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
     }
 
     std::vector<EntityID> GetVisibilityTargets(Registry& registry, EntityID entity)
@@ -265,8 +445,23 @@ namespace
     }
 }
 
-void HierarchyECSUI::Render(Registry* registry) {
-    ImGui::Begin(ICON_FA_LIST " Hierarchy");
+void HierarchyECSUI::RequestSearchFocus()
+{
+    s_requestHierarchySearchFocus = true;
+}
+
+void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) {
+    if (!ImGui::Begin(ICON_FA_LIST " Hierarchy", p_open)) {
+        if (outFocused) {
+            *outFocused = false;
+        }
+        ImGui::End();
+        return;
+    }
+
+    if (outFocused) {
+        *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    }
 
     if (!registry) {
         ImGui::TextDisabled("No Active Scene");
@@ -277,6 +472,10 @@ void HierarchyECSUI::Render(Registry* registry) {
     static std::array<char, 256> searchBuffer{};
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
     ImGui::SetNextItemWidth(-1.0f);
+    if (s_requestHierarchySearchFocus) {
+        ImGui::SetKeyboardFocusHere();
+        s_requestHierarchySearchFocus = false;
+    }
     if (ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_MAGNIFYING_GLASS " Search hierarchy", searchBuffer.data(), searchBuffer.size())) {
         s_hierarchyFilterLower = ToLowerCopy(searchBuffer.data());
     }
@@ -298,6 +497,10 @@ void HierarchyECSUI::Render(Registry* registry) {
         for (EntityID entity : entities) {
             HierarchyComponent* hier = registry->GetComponent<HierarchyComponent>(entity);
             if (!hier || Entity::IsNull(hier->parent)) {
+                if (registry->GetComponent<EnvironmentComponent>(entity) ||
+                    registry->GetComponent<ReflectionProbeComponent>(entity)) {
+                    continue;
+                }
                 if (!SubtreeMatchesFilter(*registry, entity)) {
                     continue;
                 }
@@ -319,6 +522,15 @@ void HierarchyECSUI::Render(Registry* registry) {
     if (ImGui::BeginPopupContextWindow("HierarchyContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems)) {
         if (ImGui::MenuItem("Create Empty Entity")) {
             CreateEntityFromSnapshot(registry, BuildSingleEntitySnapshot("Empty Entity"), Entity::NULL_ID, "Create Entity");
+        }
+        if (ImGui::MenuItem("Create Empty (2D)")) {
+            CreateEntityFromSnapshot(registry, BuildSingleEmpty2DSnapshot("Empty 2D"), Entity::NULL_ID, "Create Empty 2D");
+        }
+        if (ImGui::MenuItem("Create Sprite")) {
+            CreateEntityFromSnapshot(registry, BuildDefaultSpriteSnapshot(), Entity::NULL_ID, "Create Sprite");
+        }
+        if (ImGui::MenuItem("Create Text")) {
+            CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), Entity::NULL_ID, "Create Text");
         }
 
         LightComponent pointLight;
@@ -358,6 +570,26 @@ void HierarchyECSUI::Render(Registry* registry) {
                                          "Create Entity From Model");
             }
         }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedSpriteAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Sprite From Selected Texture")) {
+                const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                auto snapshot = BuildSingleSpriteSnapshot(name, selection.GetAssetPath());
+                TryApplyTextureSize(snapshot, selection.GetAssetPath());
+                CreateEntityFromSnapshot(registry, std::move(snapshot), Entity::NULL_ID, "Create Sprite");
+            }
+        }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedFontAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Text From Selected Font")) {
+                const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                CreateEntityFromSnapshot(registry,
+                                         BuildSingleTextSnapshot(name, selection.GetAssetPath()),
+                                         Entity::NULL_ID,
+                                         "Create Text");
+            }
+        }
+        if (ImGui::MenuItem("Create 2D Camera")) {
+            CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), Entity::NULL_ID, "Create 2D Camera");
+        }
         ImGui::EndPopup();
     }
 
@@ -365,7 +597,10 @@ void HierarchyECSUI::Render(Registry* registry) {
 }
 
 void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
-    if (!registry || !SubtreeMatchesFilter(*registry, entity)) {
+    if (!registry ||
+        registry->GetComponent<EnvironmentComponent>(entity) ||
+        registry->GetComponent<ReflectionProbeComponent>(entity) ||
+        !SubtreeMatchesFilter(*registry, entity)) {
         return;
     }
 
@@ -544,6 +779,27 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                 CreateEntityFromSnapshot(registry, BuildSingleEntitySnapshot("Empty Entity"), entity, "Create Child Entity");
             }
         }
+        if (ImGui::MenuItem("Create Empty Child (2D)")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildSingleEmpty2DSnapshot("Empty 2D"), entity, "Create 2D Child");
+            }
+        }
+        if (ImGui::MenuItem("Create Sprite Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildDefaultSpriteSnapshot(), entity, "Create Sprite Child");
+            }
+        }
+        if (ImGui::MenuItem("Create Text Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), entity, "Create Text Child");
+            }
+        }
 
         LightComponent pointLight;
         pointLight.type = LightType::Point;
@@ -596,6 +852,38 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                                              entity,
                                              "Create Model Child");
                 }
+            }
+        }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedSpriteAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Sprite Child From Selected Texture")) {
+                if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                } else {
+                    const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                    auto snapshot = BuildSingleSpriteSnapshot(name, selection.GetAssetPath());
+                    TryApplyTextureSize(snapshot, selection.GetAssetPath());
+                    CreateEntityFromSnapshot(registry, std::move(snapshot), entity, "Create Sprite Child");
+                }
+            }
+        }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedFontAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Text Child From Selected Font")) {
+                if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                } else {
+                    const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                    CreateEntityFromSnapshot(registry,
+                                             BuildSingleTextSnapshot(name, selection.GetAssetPath()),
+                                             entity,
+                                             "Create Text Child");
+                }
+            }
+        }
+        if (ImGui::MenuItem("Create 2D Camera Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), entity, "Create 2D Camera Child");
             }
         }
 
@@ -706,6 +994,40 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                     BuildSingleEntitySnapshot(path.stem().string(), &meshComp),
                     parentEntity,
                     "Create Entity From Asset");
+                auto* actionPtr = action.get();
+                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            }
+            else if (IsSupportedSpriteAsset(sourcePathStr)) {
+                if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                    ImGui::EndDragDropTarget();
+                    return;
+                }
+
+                auto action = std::make_unique<CreateEntityAction>(
+                    [&, sourcePathStr]() {
+                        auto snapshot = BuildSingleSpriteSnapshot(path.stem().string(), sourcePathStr);
+                        TryApplyTextureSize(snapshot, sourcePathStr);
+                        return snapshot;
+                    }(),
+                    parentEntity,
+                    "Create Sprite From Asset");
+                auto* actionPtr = action.get();
+                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            }
+            else if (IsSupportedFontAsset(sourcePathStr)) {
+                if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                    ImGui::EndDragDropTarget();
+                    return;
+                }
+
+                auto action = std::make_unique<CreateEntityAction>(
+                    BuildSingleTextSnapshot(path.stem().string(), sourcePathStr),
+                    parentEntity,
+                    "Create Text From Asset");
                 auto* actionPtr = action.get();
                 UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());

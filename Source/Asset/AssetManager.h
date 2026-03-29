@@ -24,7 +24,7 @@ class ITexture;
 
 
 
-enum class AssetType { Folder, Model, Texture, Prefab, Script, Audio, Material, Unknown };
+enum class AssetType { Folder, Model, Texture, Font, Prefab, Script, Audio, Material, Unknown };
 
 
 

@@ -9,11 +9,18 @@ Console& Console::Instance() {
     return instance;
 }
 
-void Console::Draw(const char* title, bool* p_open) {
+void Console::Draw(const char* title, bool* p_open, bool* outFocused) {
     if (!ImGui::Begin(title, p_open)) {
+        if (outFocused) {
+            *outFocused = false;
+        }
         ImGui::End();
         Profiler::Instance().Clear();
         return;
+    }
+
+    if (outFocused) {
+        *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     }
 
     if (ImGui::BeginTabBar("ConsoleTabs")) {

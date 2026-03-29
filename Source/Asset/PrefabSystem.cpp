@@ -4,6 +4,8 @@
 #include <type_traits>
 #include <unordered_map>
 
+#include "Component/Camera2DComponent.h"
+#include "Component/CanvasItemComponent.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/CameraEffectComponent.h"
@@ -18,7 +20,10 @@
 #include "Component/PrefabInstanceComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/ReflectionProbeComponent.h"
+#include "Component/RectTransformComponent.h"
 #include "Component/ShadowSettingsComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
 #include "JSONManager.h"
@@ -73,6 +78,58 @@ namespace
                 {"localPosition", transform->localPosition},
                 {"localRotation", transform->localRotation},
                 {"localScale", transform->localScale}
+            });
+        }
+
+        if (const auto& rect = std::get<std::optional<RectTransformComponent>>(node.components); rect.has_value()) {
+            writeComponent("RectTransformComponent", json{
+                {"anchoredPosition", rect->anchoredPosition},
+                {"sizeDelta", rect->sizeDelta},
+                {"anchorMin", rect->anchorMin},
+                {"anchorMax", rect->anchorMax},
+                {"pivot", rect->pivot},
+                {"rotationZ", rect->rotationZ},
+                {"scale2D", rect->scale2D}
+            });
+        }
+
+        if (const auto& canvas = std::get<std::optional<CanvasItemComponent>>(node.components); canvas.has_value()) {
+            writeComponent("CanvasItemComponent", json{
+                {"sortingLayer", canvas->sortingLayer},
+                {"orderInLayer", canvas->orderInLayer},
+                {"visible", canvas->visible},
+                {"interactable", canvas->interactable},
+                {"pixelSnap", canvas->pixelSnap},
+                {"lockAspect", canvas->lockAspect}
+            });
+        }
+
+        if (const auto& sprite = std::get<std::optional<SpriteComponent>>(node.components); sprite.has_value()) {
+            writeComponent("SpriteComponent", json{
+                {"textureAssetPath", sprite->textureAssetPath},
+                {"tint", sprite->tint}
+            });
+        }
+
+        if (const auto& text = std::get<std::optional<TextComponent>>(node.components); text.has_value()) {
+            writeComponent("TextComponent", json{
+                {"text", text->text},
+                {"fontAssetPath", text->fontAssetPath},
+                {"fontSize", text->fontSize},
+                {"color", text->color},
+                {"alignment", static_cast<int>(text->alignment)},
+                {"lineSpacing", text->lineSpacing},
+                {"wrapping", text->wrapping}
+            });
+        }
+
+        if (const auto& camera2D = std::get<std::optional<Camera2DComponent>>(node.components); camera2D.has_value()) {
+            writeComponent("Camera2DComponent", json{
+                {"orthographicSize", camera2D->orthographicSize},
+                {"zoom", camera2D->zoom},
+                {"nearZ", camera2D->nearZ},
+                {"farZ", camera2D->farZ},
+                {"backgroundColor", camera2D->backgroundColor}
             });
         }
 
@@ -283,6 +340,63 @@ namespace
             component.localScale = value.value("localScale", component.localScale);
             component.parent = 0;
             component.isDirty = true;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("RectTransformComponent")) {
+            RectTransformComponent component;
+            const json& value = components["RectTransformComponent"];
+            component.anchoredPosition = value.value("anchoredPosition", component.anchoredPosition);
+            component.sizeDelta = value.value("sizeDelta", component.sizeDelta);
+            component.anchorMin = value.value("anchorMin", component.anchorMin);
+            component.anchorMax = value.value("anchorMax", component.anchorMax);
+            component.pivot = value.value("pivot", component.pivot);
+            component.rotationZ = value.value("rotationZ", component.rotationZ);
+            component.scale2D = value.value("scale2D", component.scale2D);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("CanvasItemComponent")) {
+            CanvasItemComponent component;
+            const json& value = components["CanvasItemComponent"];
+            component.sortingLayer = value.value("sortingLayer", component.sortingLayer);
+            component.orderInLayer = value.value("orderInLayer", component.orderInLayer);
+            component.visible = value.value("visible", component.visible);
+            component.interactable = value.value("interactable", component.interactable);
+            component.pixelSnap = value.value("pixelSnap", component.pixelSnap);
+            component.lockAspect = value.value("lockAspect", component.lockAspect);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("SpriteComponent")) {
+            SpriteComponent component;
+            const json& value = components["SpriteComponent"];
+            component.textureAssetPath = value.value("textureAssetPath", component.textureAssetPath);
+            component.tint = value.value("tint", component.tint);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("TextComponent")) {
+            TextComponent component;
+            const json& value = components["TextComponent"];
+            component.text = value.value("text", component.text);
+            component.fontAssetPath = value.value("fontAssetPath", component.fontAssetPath);
+            component.fontSize = value.value("fontSize", component.fontSize);
+            component.color = value.value("color", component.color);
+            component.alignment = static_cast<TextAlignment>(value.value("alignment", static_cast<int>(component.alignment)));
+            component.lineSpacing = value.value("lineSpacing", component.lineSpacing);
+            component.wrapping = value.value("wrapping", component.wrapping);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("Camera2DComponent")) {
+            Camera2DComponent component;
+            const json& value = components["Camera2DComponent"];
+            component.orthographicSize = value.value("orthographicSize", component.orthographicSize);
+            component.zoom = value.value("zoom", component.zoom);
+            component.nearZ = value.value("nearZ", component.nearZ);
+            component.farZ = value.value("farZ", component.farZ);
+            component.backgroundColor = value.value("backgroundColor", component.backgroundColor);
             SetOptional(node.components, component);
         }
 
@@ -604,7 +718,9 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
     return true;
 }
 
-bool PrefabSystem::SaveRegistryAsScene(Registry& registry, const std::filesystem::path& scenePath)
+bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
+                                       const std::filesystem::path& scenePath,
+                                       const SceneFileMetadata* metadata)
 {
     std::vector<EntityID> roots = GatherSceneRoots(registry);
     if (roots.empty()) {
@@ -655,6 +771,9 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry, const std::filesystem
     json document;
     document["version"] = 1;
     document["type"] = "scene";
+    document["editor"] = {
+        { "sceneViewMode", metadata ? metadata->sceneViewMode : "3D" }
+    };
     document["rootLocalIds"] = rootLocalIDs;
     document["nodes"] = json::array();
 
@@ -672,7 +791,8 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry, const std::filesystem
 }
 
 bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
-                                         Registry& registry)
+                                         Registry& registry,
+                                         SceneFileMetadata* outMetadata)
 {
     std::ifstream ifs(scenePath, std::ios::binary);
     if (!ifs.is_open()) {
@@ -686,6 +806,13 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
     } catch (const std::exception& e) {
         LOG_WARN("[Scene] Failed to parse scene '%s' what='%s'", scenePath.string().c_str(), e.what());
         return false;
+    }
+
+    if (outMetadata) {
+        outMetadata->sceneViewMode = "3D";
+        if (document.contains("editor") && document["editor"].is_object()) {
+            outMetadata->sceneViewMode = document["editor"].value("sceneViewMode", outMetadata->sceneViewMode);
+        }
     }
 
     EntitySnapshot::Snapshot snapshot;

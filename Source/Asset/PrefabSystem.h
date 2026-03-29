@@ -1,11 +1,17 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 #include "Entity/Entity.h"
 #include "Undo/EntitySnapshot.h"
 
 class Registry;
+
+struct SceneFileMetadata
+{
+    std::string sceneViewMode = "3D";
+};
 
 class PrefabSystem
 {
@@ -23,9 +29,11 @@ public:
                                        Registry& registry,
                                        const std::filesystem::path& prefabPath);
     static bool SaveRegistryAsScene(Registry& registry,
-                                    const std::filesystem::path& scenePath);
+                                    const std::filesystem::path& scenePath,
+                                    const SceneFileMetadata* metadata = nullptr);
     static bool LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
-                                      Registry& registry);
+                                      Registry& registry,
+                                      SceneFileMetadata* outMetadata = nullptr);
 
     static bool LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
                                    EntitySnapshot::Snapshot& outSnapshot);

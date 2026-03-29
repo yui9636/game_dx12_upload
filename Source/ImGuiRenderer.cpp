@@ -257,6 +257,20 @@ void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
     }
 }
 
+bool ImGuiRenderer::RebuildFontAtlas()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Build();
+
+    if (s_isDX12) {
+        ImGui_ImplDX12_InvalidateDeviceObjects();
+        return ImGui_ImplDX12_CreateDeviceObjects();
+    }
+
+    ImGui_ImplDX11_InvalidateDeviceObjects();
+    return ImGui_ImplDX11_CreateDeviceObjects();
+}
+
 void ImGuiRenderer::ResetTextureCache()
 {
     s_textureSlots.clear();

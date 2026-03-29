@@ -22,9 +22,11 @@ template <typename T>
 struct ComponentMeta;
 
 // --- Component Includes ---
+#include "Component/Camera2DComponent.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/CameraEffectComponent.h"
+#include "Component/CanvasItemComponent.h"
 #include "Component/ColliderComponent.h"
 #include "Component/EnvironmentComponent.h"
 #include "Component/GizmoComponent.h"
@@ -37,9 +39,24 @@ struct ComponentMeta;
 #include "Component/PhysicsComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/PrefabInstanceComponent.h"
+#include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/ShadowSettingsComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
+
+template <>
+struct ComponentMeta<Camera2DComponent> {
+    static constexpr std::string_view Name = "Camera2DComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("orthographicSize", &Camera2DComponent::orthographicSize),
+        MakeField("zoom", &Camera2DComponent::zoom),
+        MakeField("nearZ", &Camera2DComponent::nearZ),
+        MakeField("farZ", &Camera2DComponent::farZ),
+        MakeField("backgroundColor", &Camera2DComponent::backgroundColor)
+    );
+};
 
 template <>
 struct ComponentMeta<CameraFreeControlComponent> {
@@ -113,6 +130,19 @@ struct ComponentMeta<CameraShakeComponent> {
         MakeField("timer", &CameraShakeComponent::timer),
         MakeField("decay", &CameraShakeComponent::decay),
         MakeField("currentOffset", &CameraShakeComponent::currentOffset)
+    );
+};
+
+template <>
+struct ComponentMeta<CanvasItemComponent> {
+    static constexpr std::string_view Name = "CanvasItemComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("sortingLayer", &CanvasItemComponent::sortingLayer),
+        MakeField("orderInLayer", &CanvasItemComponent::orderInLayer),
+        MakeField("visible", &CanvasItemComponent::visible),
+        MakeField("interactable", &CanvasItemComponent::interactable),
+        MakeField("pixelSnap", &CanvasItemComponent::pixelSnap),
+        MakeField("lockAspect", &CanvasItemComponent::lockAspect)
     );
 };
 
@@ -252,6 +282,20 @@ struct ComponentMeta<PrefabInstanceComponent> {
 };
 
 template <>
+struct ComponentMeta<RectTransformComponent> {
+    static constexpr std::string_view Name = "RectTransformComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("anchoredPosition", &RectTransformComponent::anchoredPosition),
+        MakeField("sizeDelta", &RectTransformComponent::sizeDelta),
+        MakeField("anchorMin", &RectTransformComponent::anchorMin),
+        MakeField("anchorMax", &RectTransformComponent::anchorMax),
+        MakeField("pivot", &RectTransformComponent::pivot),
+        MakeField("rotationZ", &RectTransformComponent::rotationZ),
+        MakeField("scale2D", &RectTransformComponent::scale2D)
+    );
+};
+
+template <>
 struct ComponentMeta<ReflectionProbeComponent> {
     static constexpr std::string_view Name = "ReflectionProbeComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -273,6 +317,29 @@ struct ComponentMeta<ShadowSettingsComponent> {
 };
 
 template <>
+struct ComponentMeta<SpriteComponent> {
+    static constexpr std::string_view Name = "SpriteComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("textureAssetPath", &SpriteComponent::textureAssetPath),
+        MakeField("tint", &SpriteComponent::tint)
+    );
+};
+
+template <>
+struct ComponentMeta<TextComponent> {
+    static constexpr std::string_view Name = "TextComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("text", &TextComponent::text),
+        MakeField("fontAssetPath", &TextComponent::fontAssetPath),
+        MakeField("fontSize", &TextComponent::fontSize),
+        MakeField("color", &TextComponent::color),
+        MakeField("alignment", &TextComponent::alignment),
+        MakeField("lineSpacing", &TextComponent::lineSpacing),
+        MakeField("wrapping", &TextComponent::wrapping)
+    );
+};
+
+template <>
 struct ComponentMeta<TransformComponent> {
     static constexpr std::string_view Name = "TransformComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -285,6 +352,7 @@ struct ComponentMeta<TransformComponent> {
 
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
+    Camera2DComponent,
     CameraFreeControlComponent,
     CameraTPVControlComponent,
     CameraLookAtComponent,
@@ -292,6 +360,7 @@ using AllComponentTypes = std::tuple<
     CameraMatricesComponent,
     CameraMainTagComponent,
     CameraShakeComponent,
+    CanvasItemComponent,
     ColliderComponent,
     EnvironmentComponent,
     GizmoComponent,
@@ -304,7 +373,10 @@ using AllComponentTypes = std::tuple<
     PhysicsComponent,
     PostEffectComponent,
     PrefabInstanceComponent,
+    RectTransformComponent,
     ReflectionProbeComponent,
     ShadowSettingsComponent,
+    SpriteComponent,
+    TextComponent,
     TransformComponent
 >;

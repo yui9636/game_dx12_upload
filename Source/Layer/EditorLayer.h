@@ -3,6 +3,7 @@
 #include "GameLayer.h"
 #include "Asset/AssetBrowser.h"
 #include <memory>
+#include <array>
 #include <DirectXMath.h>
 #include <string>
 #include <filesystem>
@@ -25,12 +26,58 @@ public:
         World
     };
 
+    enum class SceneViewMode
+    {
+        Mode3D,
+        Mode2D
+    };
+
+    enum class GameViewResolutionPreset
+    {
+        Free,
+        HD1080,
+        HD720,
+        Portrait1080x1920,
+        Portrait750x1334
+    };
+
+    enum class SceneShadingMode
+    {
+        Lit,
+        Unlit,
+        Wireframe
+    };
+
     enum class PendingSceneAction
     {
         None,
         NewScene,
         OpenSceneDialog,
         LoadScenePath
+    };
+
+    enum class WindowFocusTarget
+    {
+        None,
+        SceneView,
+        GameView,
+        Hierarchy,
+        Inspector,
+        AssetBrowser,
+        Console,
+        Lighting,
+        GBufferDebug
+    };
+
+    struct CameraBookmark
+    {
+        bool valid = false;
+        SceneViewMode mode = SceneViewMode::Mode3D;
+        DirectX::XMFLOAT3 cameraPosition = { 0.0f, 12.0f, -80.0f };
+        float cameraYaw = 0.0f;
+        float cameraPitch = 0.0f;
+        DirectX::XMFLOAT2 center2D = { 0.0f, 0.0f };
+        float zoom2D = 10.0f;
     };
 
     EditorLayer(GameLayer* gameLayer);
@@ -45,7 +92,11 @@ public:
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
     DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
     DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
-    DirectX::XMFLOAT3 GetEditorCameraPosition() const { return m_editorCameraPosition; }
+    DirectX::XMFLOAT3 GetEditorCameraPosition() const {
+        return (m_sceneViewMode == SceneViewMode::Mode2D)
+            ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
+            : m_editorCameraPosition;
+    }
     DirectX::XMFLOAT3 GetEditorCameraDirection() const;
     DirectX::XMFLOAT4X4 GetEditorViewMatrix() const;
     DirectX::XMFLOAT4X4 BuildEditorProjectionMatrix(float aspect) const;
@@ -54,6 +105,8 @@ public:
     bool HasEditorCameraAutoFramed() const { return m_editorCameraAutoFramed; }
     void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
     void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
+    void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
+    SceneViewMode GetSceneViewMode() const { return m_sceneViewMode; }
     void SetGBufferDebugTextures(ITexture* g0, ITexture* g1, ITexture* g2, ITexture* g3, ITexture* depth) {
         m_gbufferTexture0 = g0;
         m_gbufferTexture1 = g1;
@@ -66,11 +119,29 @@ private:
     std::unique_ptr<AssetBrowser> m_assetBrowser;
 
     EntityID m_selectedEntity = Entity::NULL_ID;
+    bool m_showSceneView = true;
+    bool m_showGameView = true;
+    bool m_showHierarchy = true;
+    bool m_showInspector = true;
+    bool m_showAssetBrowser = true;
+    bool m_showConsole = true;
     bool m_showLightingWindow = false;
     bool m_showGBufferDebug = false;
+    bool m_showStatusBar = true;
+    bool m_showMainToolbar = true;
+    bool m_showSceneGrid = true;
+    bool m_showSceneGizmo = true;
+    bool m_showSceneStatsOverlay = false;
+    bool m_showSceneSelectionOutline = true;
+    bool m_showSceneLightIcons = true;
+    bool m_showSceneCameraIcons = true;
+    bool m_showSceneBounds = false;
+    bool m_showSceneCollision = false;
+    SceneShadingMode m_sceneShadingMode = SceneShadingMode::Lit;
     DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };
     DirectX::XMFLOAT2 m_gameViewSize = { 0.0f, 0.0f };
     DirectX::XMFLOAT4 m_sceneViewRect = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 m_gameViewRect = { 0.0f, 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 m_editorCameraPosition = { 0.0f, 12.0f, -80.0f };
     float m_editorCameraYaw = 0.0f;
     float m_editorCameraPitch = 0.0f;
@@ -78,6 +149,7 @@ private:
     bool m_sceneViewHovered = false;
     bool m_sceneViewToolbarHovered = false;
     ITexture* m_sceneViewTexture = nullptr;
+    ITexture* m_gameViewTexture = nullptr;
     ITexture* m_gbufferTexture0 = nullptr;
     ITexture* m_gbufferTexture1 = nullptr;
     ITexture* m_gbufferTexture2 = nullptr;
@@ -85,6 +157,9 @@ private:
     ITexture* m_gbufferDepthTexture = nullptr;
     bool m_editorCameraUserOverride = false;
     bool m_editorCameraAutoFramed = false;
+    SceneViewMode m_sceneViewMode = SceneViewMode::Mode3D;
+    DirectX::XMFLOAT2 m_editor2DCenter = { 0.0f, 0.0f };
+    float m_editor2DZoom = 10.0f;
     GizmoOperation m_gizmoOperation = GizmoOperation::Translate;
     GizmoSpace m_gizmoSpace = GizmoSpace::Local;
     bool m_gizmoWasUsing = false;
@@ -128,6 +203,13 @@ private:
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();
+    void Draw2DOverlay();
+    void Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
+                              const DirectX::XMFLOAT4X4& view,
+                              const DirectX::XMFLOAT4X4& projection,
+                              bool drawSelection);
+    bool TryBuildGameView2DViewProjection(DirectX::XMFLOAT4X4& outView,
+                                          DirectX::XMFLOAT4X4& outProjection) const;
     void HandleScenePicking();
     void HandleSceneAssetDrop();
     void FocusSelectedEntity();
@@ -149,4 +231,55 @@ private:
     bool m_requestNewScene = false;
     bool m_requestOpenScene = false;
     bool m_requestSaveSceneAs = false;
+    GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
+    bool m_gameViewShowSafeArea = false;
+    bool m_gameViewShowPixelPreview = false;
+    bool m_forceDockLayoutReset = false;
+    bool m_requestRenamePopup = false;
+    char m_renameBuffer[256] = {};
+    WindowFocusTarget m_pendingWindowFocus = WindowFocusTarget::None;
+    WindowFocusTarget m_lastFocusedWindow = WindowFocusTarget::None;
+    WindowFocusTarget m_maximizedWindow = WindowFocusTarget::None;
+    std::array<CameraBookmark, 3> m_cameraBookmarks{};
+
+    void ExecuteUndo();
+    void ExecuteRedo();
+    void ExecuteDuplicateSelection();
+    void ExecuteDeleteSelection();
+    void ExecuteFrameSelected();
+    void ExecuteSelectAll();
+    void ExecuteDeselect();
+    void ExecuteRenameSelection();
+    void ExecuteCopySelection();
+    void ExecutePasteSelection();
+    void ExecuteResetTransform();
+    void ExecuteCreateEmptyParent();
+    void ExecuteUnpackPrefab();
+    void ExecuteFocusSearch();
+    void ExecuteResetView();
+    void ExecuteCloseSecondaryWindows();
+    void ExecuteResetLayout();
+    void ExecuteMaximizeActivePanel();
+    void RequestWindowFocus(WindowFocusTarget target);
+    void ApplyPendingWindowFocus(WindowFocusTarget target);
+    void SetLastFocusedWindow(WindowFocusTarget target, bool focused);
+    void SaveCameraBookmark(size_t slot);
+    void LoadCameraBookmark(size_t slot);
+    void DrawRenamePopup();
+    void DrawSceneGridOverlay(const DirectX::XMFLOAT4& viewRect,
+                              const DirectX::XMFLOAT4X4& view,
+                              const DirectX::XMFLOAT4X4& projection) const;
+    void DrawSelectionOutlineOverlay(const DirectX::XMFLOAT4& viewRect,
+                                     const DirectX::XMFLOAT4X4& view,
+                                     const DirectX::XMFLOAT4X4& projection) const;
+    void DrawStatsOverlay(const DirectX::XMFLOAT4& viewRect, const char* label) const;
+    void DrawSceneIconOverlay(const DirectX::XMFLOAT4& viewRect,
+                              const DirectX::XMFLOAT4X4& view,
+                              const DirectX::XMFLOAT4X4& projection) const;
+    void DrawSceneBoundsOverlay(const DirectX::XMFLOAT4& viewRect,
+                                const DirectX::XMFLOAT4X4& view,
+                                const DirectX::XMFLOAT4X4& projection) const;
+    void DrawSceneCollisionOverlay(const DirectX::XMFLOAT4& viewRect,
+                                   const DirectX::XMFLOAT4X4& view,
+                                   const DirectX::XMFLOAT4X4& projection) const;
 };

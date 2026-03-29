@@ -2,10 +2,13 @@
 #include <map>
 #include <string>
 #include <memory>
+#include <unordered_map>
+#include <unordered_set>
 #include <d3d11.h>
 #include <DirectXMath.h>
 #include "Font.h"
 
+struct ImFont;
 
 enum class FontAlign
 {
@@ -67,9 +70,18 @@ public:
         ...
     );
 
+    void QueueEditorPreviewFont(const std::string& assetPath, float previewSize = 48.0f);
+    ImFont* GetEditorPreviewFont(const std::string& assetPath) const;
+    void ProcessEditorPreviewFonts();
+    void ClearEditorPreviewFonts();
+
 
 
 
 private:
     std::map<std::string, std::shared_ptr<Font>> fonts;
+    std::unordered_map<std::string, ImFont*> m_editorPreviewFonts;
+    std::unordered_set<std::string> m_editorPreviewFontFailures;
+    std::unordered_set<std::string> m_pendingEditorPreviewFonts;
+    float m_editorPreviewFontSize = 48.0f;
 };

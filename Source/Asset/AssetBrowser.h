@@ -7,7 +7,7 @@ class Registry;
 class AssetBrowser {
 public:
     void Initialize();
-    void RenderUI();
+    void RenderUI(bool* p_open = nullptr, bool* outFocused = nullptr);
     void SetRegistry(Registry* registry) { m_registry = registry; }
     bool ConsumePendingSceneLoad(std::filesystem::path& outPath);
 

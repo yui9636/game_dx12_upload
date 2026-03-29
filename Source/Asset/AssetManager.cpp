@@ -157,7 +157,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     // ==========================================
 
-    else if (ext == ".bin" || ext == ".json") {
+    else if (ext == ".prefab" || ext == ".bin" || ext == ".json") {
 
 
         entry.type = AssetType::Prefab;
@@ -205,13 +205,13 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     }
 
-    else if (ext == ".json") {
+    else if (ext == ".ttf" || ext == ".otf" || ext == ".fnt") {
 
-        entry.type = AssetType::Prefab;
+        entry.type = AssetType::Font;
 
-        entry.iconStr = ICON_FA_BOXES_STACKED;
+        entry.iconStr = ICON_FA_FONT;
 
-        entry.iconColor = ImVec4(0.6f, 0.4f, 0.9f, 1.0f);
+        entry.iconColor = ImVec4(0.95f, 0.85f, 0.45f, 1.0f);
 
     }
 
@@ -541,5 +541,6 @@ bool AssetManager::CopyAsset(const std::filesystem::path& sourcePath, const std:
     return !ec;
 
 }
+
 
 

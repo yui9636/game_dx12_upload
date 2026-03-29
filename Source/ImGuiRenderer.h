@@ -38,6 +38,7 @@ public:
     static void* GetTextureID(ITexture* texture);
     static void DeferUnregisterTexture(ITexture* texture, uint64_t fenceValue);
     static void ProcessDeferredUnregisters(uint64_t completedFenceValue);
+    static bool RebuildFontAtlas();
 
 private:
     static void NewFrame();

@@ -18,10 +18,15 @@
 #include "Component/MaterialComponent.h"
 #include "Component/PrefabInstanceComponent.h"
 #include "Component/CameraComponent.h"
+#include "Component/Camera2DComponent.h"
+#include "Component/CanvasItemComponent.h"
 #include "Component/EnvironmentComponent.h"
 #include "Component/PostEffectComponent.h"
+#include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/ShadowSettingsComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TextComponent.h"
 #include "Registry/Registry.h"
 #include "System/UndoSystem.h"
 #include "Undo/ComponentUndoAction.h"
@@ -70,6 +75,8 @@ namespace {
                 value = buffer;
                 changed = true;
             }
+        } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT2>) {
+            changed = ImGui::DragFloat2("##value", &value.x, 0.01f);
         } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT3>) {
             changed = ImGui::DragFloat3("##value", &value.x, 0.01f);
         } else if constexpr (std::is_same_v<T, DirectX::XMFLOAT4>) {
@@ -490,8 +497,18 @@ namespace {
     }
 }
 
-void InspectorECSUI::Render(Registry* registry) {
-    ImGui::Begin(ICON_FA_CIRCLE_INFO " Inspector");
+void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) {
+    if (!ImGui::Begin(ICON_FA_CIRCLE_INFO " Inspector", p_open)) {
+        if (outFocused) {
+            *outFocused = false;
+        }
+        ImGui::End();
+        return;
+    }
+
+    if (outFocused) {
+        *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    }
 
     auto& selection = EditorSelection::Instance();
     switch (selection.GetType()) {
@@ -516,6 +533,10 @@ void InspectorECSUI::Render(Registry* registry) {
             ImGui::Spacing();
             DrawComponentIfPresent<NameComponent>(registry, entity);
             DrawComponentIfPresent<TransformComponent>(registry, entity);
+            DrawComponentIfPresent<RectTransformComponent>(registry, entity);
+            DrawComponentIfPresent<CanvasItemComponent>(registry, entity);
+            DrawComponentIfPresent<SpriteComponent>(registry, entity);
+            DrawComponentIfPresent<TextComponent>(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
             if (auto* matComp = registry->GetComponent<MaterialComponent>(entity)) {
                 if (ImGui::CollapsingHeader("MaterialComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -613,6 +634,7 @@ void InspectorECSUI::Render(Registry* registry) {
             DrawComponentIfPresent<LightComponent>(registry, entity);
             DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);
             DrawComponentIfPresent<CameraLensComponent>(registry, entity);
+            DrawComponentIfPresent<Camera2DComponent>(registry, entity);
             DrawComponentIfPresent<EnvironmentComponent>(registry, entity);
             DrawComponentIfPresent<PostEffectComponent>(registry, entity);
             DrawComponentIfPresent<ReflectionProbeComponent>(registry, entity);
