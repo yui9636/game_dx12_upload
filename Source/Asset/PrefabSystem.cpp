@@ -196,6 +196,15 @@ namespace
 
         if (const auto& post = std::get<std::optional<PostEffectComponent>>(node.components); post.has_value()) {
             writeComponent("PostEffectComponent", json{
+                {"enableComputeCulling", post->enableComputeCulling},
+                {"enableAsyncCompute", post->enableAsyncCompute},
+                {"enableGTAO", post->enableGTAO},
+                {"enableSSGI", post->enableSSGI},
+                {"enableVolumetricFog", post->enableVolumetricFog},
+                {"enableSSR", post->enableSSR},
+                {"enableBloom", post->enableBloom},
+                {"enableColorFilter", post->enableColorFilter},
+                {"enableMotionBlur", post->enableMotionBlur},
                 {"luminanceLowerEdge", post->luminanceLowerEdge},
                 {"luminanceHigherEdge", post->luminanceHigherEdge},
                 {"bloomIntensity", post->bloomIntensity},
@@ -470,6 +479,15 @@ namespace
         if (components.contains("PostEffectComponent")) {
             PostEffectComponent component;
             const json& value = components["PostEffectComponent"];
+            component.enableComputeCulling = value.value("enableComputeCulling", component.enableComputeCulling);
+            component.enableAsyncCompute = value.value("enableAsyncCompute", component.enableAsyncCompute);
+            component.enableGTAO = value.value("enableGTAO", component.enableGTAO);
+            component.enableSSGI = value.value("enableSSGI", component.enableSSGI);
+            component.enableVolumetricFog = value.value("enableVolumetricFog", component.enableVolumetricFog);
+            component.enableSSR = value.value("enableSSR", component.enableSSR);
+            component.enableBloom = value.value("enableBloom", component.enableBloom);
+            component.enableColorFilter = value.value("enableColorFilter", component.enableColorFilter);
+            component.enableMotionBlur = value.value("enableMotionBlur", component.enableMotionBlur);
             component.luminanceLowerEdge = value.value("luminanceLowerEdge", component.luminanceLowerEdge);
             component.luminanceHigherEdge = value.value("luminanceHigherEdge", component.luminanceHigherEdge);
             component.bloomIntensity = value.value("bloomIntensity", component.bloomIntensity);

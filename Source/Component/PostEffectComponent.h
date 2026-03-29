@@ -2,6 +2,17 @@
 
 
 struct PostEffectComponent {
+    bool enableComputeCulling = true;
+    bool enableAsyncCompute = true;
+    bool enableGTAO = true;
+    bool enableSSGI = false;
+    bool enableVolumetricFog = false;
+    bool enableSSR = false;
+
+    bool enableBloom = true;
+    bool enableColorFilter = true;
+    bool enableMotionBlur = true;
+
     float luminanceLowerEdge = 0.0f;
     float luminanceHigherEdge = 0.0f;
     float bloomIntensity = 0.0f;

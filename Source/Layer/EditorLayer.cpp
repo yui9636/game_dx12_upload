@@ -78,6 +78,7 @@ namespace {
     constexpr const char* kInspectorWindowTitle = ICON_FA_CIRCLE_INFO " Inspector";
     constexpr const char* kAssetBrowserWindowTitle = ICON_FA_FOLDER_OPEN " Asset Browser";
     constexpr const char* kLightingWindowTitle = ICON_FA_SUN " Lighting Settings";
+    constexpr const char* kRenderPassesWindowTitle = "Render Passes";
     constexpr const char* kGridSettingsWindowTitle = "Grid Settings";
     constexpr const char* kGBufferWindowTitle = ICON_FA_IMAGES " G-Buffer Debug";
     constexpr const char* kConsoleWindowTitle = "Console";
@@ -92,6 +93,7 @@ namespace {
         case EditorLayer::WindowFocusTarget::AssetBrowser: return kAssetBrowserWindowTitle;
         case EditorLayer::WindowFocusTarget::Console: return kConsoleWindowTitle;
         case EditorLayer::WindowFocusTarget::Lighting: return kLightingWindowTitle;
+        case EditorLayer::WindowFocusTarget::RenderPasses: return kRenderPassesWindowTitle;
         case EditorLayer::WindowFocusTarget::GridSettings: return kGridSettingsWindowTitle;
         case EditorLayer::WindowFocusTarget::GBufferDebug: return kGBufferWindowTitle;
         default: return nullptr;
@@ -1585,9 +1587,11 @@ void EditorLayer::ExecuteGameResetPreview()
 void EditorLayer::ExecuteCloseSecondaryWindows()
 {
     m_showLightingWindow = false;
+    m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
     if (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug) {
         m_maximizedWindow = WindowFocusTarget::None;
@@ -1603,6 +1607,7 @@ void EditorLayer::ExecuteResetLayout()
     m_showAssetBrowser = true;
     m_showConsole = true;
     m_showLightingWindow = false;
+    m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
     m_showStatusBar = true;
@@ -1642,6 +1647,7 @@ void EditorLayer::RequestWindowFocus(WindowFocusTarget target)
     case WindowFocusTarget::AssetBrowser: m_showAssetBrowser = true; break;
     case WindowFocusTarget::Console: m_showConsole = true; break;
     case WindowFocusTarget::Lighting: m_showLightingWindow = true; break;
+    case WindowFocusTarget::RenderPasses: m_showRenderPassesWindow = true; break;
     case WindowFocusTarget::GridSettings: m_showGridSettingsWindow = true; break;
     case WindowFocusTarget::GBufferDebug: m_showGBufferDebug = true; break;
     default: break;
@@ -1812,6 +1818,7 @@ void EditorLayer::RenderUI()
     const bool maximizeBottomAsset = (m_maximizedWindow == WindowFocusTarget::AssetBrowser);
     const bool maximizeBottomConsole = (m_maximizedWindow == WindowFocusTarget::Console);
     const bool maximizeTool = (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug);
 
@@ -1830,6 +1837,9 @@ void EditorLayer::RenderUI()
 
     if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {
         DrawLightingWindow();
+    }
+    if (m_showRenderPassesWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::RenderPasses || maximizeTool)) {
+        DrawRenderPassesWindow();
     }
     if (m_showGridSettingsWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GridSettings || maximizeTool)) {
         DrawGridSettingsWindow();
@@ -2104,6 +2114,7 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
+            ImGui::MenuItem("Render Passes", nullptr, &m_showRenderPassesWindow);
             ImGui::MenuItem("Grid Settings", nullptr, &m_showGridSettingsWindow);
             ImGui::MenuItem(ICON_FA_IMAGES " G-Buffer Debug", nullptr, &m_showGBufferDebug);
             ImGui::Separator();
@@ -2111,6 +2122,7 @@ void EditorLayer::DrawMenuBar()
             if (ImGui::MenuItem("Focus Inspector")) RequestWindowFocus(WindowFocusTarget::Inspector);
             if (ImGui::MenuItem("Focus Asset Browser")) RequestWindowFocus(WindowFocusTarget::AssetBrowser);
             if (ImGui::MenuItem("Focus Console")) RequestWindowFocus(WindowFocusTarget::Console);
+            if (ImGui::MenuItem("Focus Render Passes", nullptr, false, m_showRenderPassesWindow)) RequestWindowFocus(WindowFocusTarget::RenderPasses);
             if (ImGui::MenuItem("Focus Grid Settings", nullptr, false, m_showGridSettingsWindow)) RequestWindowFocus(WindowFocusTarget::GridSettings);
             ImGui::Separator();
             if (ImGui::MenuItem("Maximize Active Panel", nullptr, false, m_lastFocusedWindow != WindowFocusTarget::None)) {
@@ -4690,6 +4702,96 @@ void EditorLayer::DrawLightingWindow()
         // 2. PostEffect の自動生成UI
         auto& post = m_gameLayer->GetPostEffect();
         DrawGlobalSettingsUI(post);
+    }
+    ImGui::End();
+}
+
+void EditorLayer::DrawRenderPassesWindow()
+{
+    if (!m_showRenderPassesWindow || !m_gameLayer) {
+        return;
+    }
+
+    auto resetPassDefaults = [](PostEffectComponent& post) {
+        post.enableComputeCulling = true;
+        post.enableAsyncCompute = true;
+        post.enableGTAO = true;
+        post.enableSSGI = false;
+        post.enableVolumetricFog = false;
+        post.enableSSR = false;
+        post.enableBloom = true;
+        post.enableColorFilter = true;
+        post.enableDoF = false;
+        post.enableMotionBlur = true;
+    };
+
+    auto disableOptionalPasses = [](PostEffectComponent& post) {
+        post.enableComputeCulling = false;
+        post.enableAsyncCompute = false;
+        post.enableGTAO = false;
+        post.enableSSGI = false;
+        post.enableVolumetricFog = false;
+        post.enableSSR = false;
+        post.enableBloom = false;
+        post.enableColorFilter = false;
+        post.enableDoF = false;
+        post.enableMotionBlur = false;
+    };
+
+    PostEffectComponent& post = m_gameLayer->GetPostEffect();
+
+    ApplyPendingWindowFocus(WindowFocusTarget::RenderPasses);
+    if (ImGui::Begin(kRenderPassesWindowTitle, &m_showRenderPassesWindow)) {
+        SetLastFocusedWindow(WindowFocusTarget::RenderPasses, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
+
+        ImGui::TextDisabled("Heavy render features");
+        ImGui::Separator();
+
+        if (ImGui::BeginTable("RenderPassToggleTable", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 170.0f);
+            ImGui::TableSetupColumn("Toggle", ImGuiTableColumnFlags_WidthStretch);
+
+            auto drawBoolRow = [](const char* label, bool* value, const char* help) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextDisabled("%s", label);
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                    ImGui::SetTooltip("%s", help);
+                }
+                ImGui::TableSetColumnIndex(1);
+                std::string id = std::string("##") + label;
+                ImGui::Checkbox(id.c_str(), value);
+            };
+
+            drawBoolRow("Compute Culling", &post.enableComputeCulling, "GPU driven visible instance culling");
+            drawBoolRow("Async Compute", &post.enableAsyncCompute, "Use async compute queue when compute culling is enabled");
+            drawBoolRow("GTAO", &post.enableGTAO, "Ground-truth ambient occlusion pass");
+            drawBoolRow("SSGI", &post.enableSSGI, "Screen space global illumination");
+            drawBoolRow("SSR", &post.enableSSR, "Screen space reflections");
+            drawBoolRow("Volumetric Fog", &post.enableVolumetricFog, "Half resolution volumetric fog");
+            drawBoolRow("Bloom", &post.enableBloom, "Bloom extraction and bloom blend");
+            drawBoolRow("Color Filter", &post.enableColorFilter, "Exposure / hue / vignette / flash adjustments");
+            drawBoolRow("Depth of Field", &post.enableDoF, "Depth of field blur");
+            drawBoolRow("Motion Blur", &post.enableMotionBlur, "Velocity-based motion blur");
+
+            ImGui::EndTable();
+        }
+
+        if (!post.enableComputeCulling) {
+            post.enableAsyncCompute = false;
+        }
+
+        ImGui::Spacing();
+        if (ImGui::Button("Disable All Optional Passes")) {
+            disableOptionalPasses(post);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Restore Defaults")) {
+            resetPassDefaults(post);
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Main GBuffer / Lighting / Shadow / PostProcess output are always required and are not disabled here.");
     }
     ImGui::End();
 }

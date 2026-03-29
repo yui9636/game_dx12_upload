@@ -48,6 +48,12 @@ void SSRPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     if (m_hGBuffer2.IsValid())  builder.Read(m_hGBuffer2);
     if (m_hPrevScene.IsValid()) builder.Read(m_hPrevScene);
 
+    if (!rc.enableSSR) {
+        m_hSSR = {};
+        m_hSSRBlur = {};
+        return;
+    }
+
     // =========================================================
     // =========================================================
     uint32_t renderW = rc.renderWidth;

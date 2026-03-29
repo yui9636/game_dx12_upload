@@ -43,6 +43,12 @@ void VolumetricFogPass::Setup(FrameGraphBuilder& builder, const RenderContext& r
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
     if (m_hGBuffer2.IsValid()) builder.Read(m_hGBuffer2);
 
+    if (!rc.enableVolumetricFog) {
+        m_hVolumetricFog = {};
+        m_hVolumetricFogBlur = {};
+        return;
+    }
+
     // =========================================================
     // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
     // =========================================================

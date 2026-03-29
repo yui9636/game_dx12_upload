@@ -42,6 +42,11 @@ void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     if (m_hGBuffer1.IsValid()) builder.Read(m_hGBuffer1);
     if (m_hGBuffer2.IsValid()) builder.Read(m_hGBuffer2);
 
+    if (!rc.enableGTAO) {
+        m_hGTAO = {};
+        return;
+    }
+
     // =========================================================
     // =========================================================
     uint32_t renderW = rc.renderWidth;

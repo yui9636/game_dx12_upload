@@ -93,25 +93,32 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     EnvironmentExtractSystem environmentExtractSystem;
     environmentExtractSystem.Extract(m_registry, rc);
 
-    rc.bloomData.luminanceLowerEdge = m_postEffect.luminanceLowerEdge;
-    rc.bloomData.luminanceHigherEdge = m_postEffect.luminanceHigherEdge;
-    rc.bloomData.bloomIntensity = m_postEffect.bloomIntensity;
-    rc.bloomData.gaussianSigma = m_postEffect.gaussianSigma;
+    rc.allowGpuDrivenCompute = m_postEffect.enableComputeCulling;
+    rc.allowAsyncCompute = m_postEffect.enableComputeCulling && m_postEffect.enableAsyncCompute;
+    rc.enableGTAO = m_postEffect.enableGTAO;
+    rc.enableSSGI = m_postEffect.enableSSGI;
+    rc.enableVolumetricFog = m_postEffect.enableVolumetricFog;
+    rc.enableSSR = m_postEffect.enableSSR;
+
+    rc.bloomData.luminanceLowerEdge = m_postEffect.enableBloom ? m_postEffect.luminanceLowerEdge : 0.0f;
+    rc.bloomData.luminanceHigherEdge = m_postEffect.enableBloom ? m_postEffect.luminanceHigherEdge : 0.0f;
+    rc.bloomData.bloomIntensity = m_postEffect.enableBloom ? m_postEffect.bloomIntensity : 0.0f;
+    rc.bloomData.gaussianSigma = m_postEffect.enableBloom ? m_postEffect.gaussianSigma : 0.0f;
 
     // カラーフィルター設定
-    rc.colorFilterData.exposure = m_postEffect.exposure; // ★追加
-    rc.colorFilterData.monoBlend = m_postEffect.monoBlend;
-    rc.colorFilterData.hueShift = m_postEffect.hueShift;
-    rc.colorFilterData.flashAmount = m_postEffect.flashAmount;
-    rc.colorFilterData.vignetteAmount = m_postEffect.vignetteAmount;
+    rc.colorFilterData.exposure = m_postEffect.enableColorFilter ? m_postEffect.exposure : 0.0f;
+    rc.colorFilterData.monoBlend = m_postEffect.enableColorFilter ? m_postEffect.monoBlend : 0.0f;
+    rc.colorFilterData.hueShift = m_postEffect.enableColorFilter ? m_postEffect.hueShift : 0.0f;
+    rc.colorFilterData.flashAmount = m_postEffect.enableColorFilter ? m_postEffect.flashAmount : 0.0f;
+    rc.colorFilterData.vignetteAmount = m_postEffect.enableColorFilter ? m_postEffect.vignetteAmount : 0.0f;
 
     rc.dofData.enable = m_postEffect.enableDoF;
     rc.dofData.focusDistance = m_postEffect.focusDistance;
     rc.dofData.focusRange = m_postEffect.focusRange;
     rc.dofData.bokehRadius = m_postEffect.bokehRadius;
 
-    rc.motionBlurData.intensity = m_postEffect.motionBlurIntensity;
-    rc.motionBlurData.samples = static_cast<float>(m_postEffect.motionBlurSamples);
+    rc.motionBlurData.intensity = m_postEffect.enableMotionBlur ? m_postEffect.motionBlurIntensity : 0.0f;
+    rc.motionBlurData.samples = m_postEffect.enableMotionBlur ? static_cast<float>(m_postEffect.motionBlurSamples) : 0.0f;
     
     rc.reflectionProbeTexture = nullptr;
 

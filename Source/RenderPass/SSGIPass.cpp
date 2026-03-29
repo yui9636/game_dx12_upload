@@ -46,6 +46,12 @@ void SSGIPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     if (m_hGBuffer2.IsValid())  builder.Read(m_hGBuffer2);
     if (m_hPrevScene.IsValid()) builder.Read(m_hPrevScene);
 
+    if (!rc.enableSSGI) {
+        m_hSSGI = {};
+        m_hSSGIBlur = {};
+        return;
+    }
+
     // =========================================================
     // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
     // =========================================================
