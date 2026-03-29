@@ -41,6 +41,21 @@ public:
         Portrait750x1334
     };
 
+    enum class GameViewAspectPolicy
+    {
+        Fit,
+        Fill,
+        PixelPerfect
+    };
+
+    enum class GameViewScalePolicy
+    {
+        AutoFit,
+        Scale1x,
+        Scale2x,
+        Scale3x
+    };
+
     enum class SceneShadingMode
     {
         Lit,
@@ -66,6 +81,7 @@ public:
         AssetBrowser,
         Console,
         Lighting,
+        GridSettings,
         GBufferDebug
     };
 
@@ -92,6 +108,7 @@ public:
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
     DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
     DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
+    bool ShouldRenderSceneGrid3D() const { return m_showSceneGrid && m_sceneViewMode == SceneViewMode::Mode3D; }
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
         return (m_sceneViewMode == SceneViewMode::Mode2D)
             ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
@@ -107,6 +124,8 @@ public:
     void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
     void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
     SceneViewMode GetSceneViewMode() const { return m_sceneViewMode; }
+    float GetSceneGridCellSize() const { return m_sceneGridCellSize; }
+    int GetSceneGridHalfLineCount() const { return m_sceneGridHalfLineCount; }
     void SetGBufferDebugTextures(ITexture* g0, ITexture* g1, ITexture* g2, ITexture* g3, ITexture* depth) {
         m_gbufferTexture0 = g0;
         m_gbufferTexture1 = g1;
@@ -126,13 +145,16 @@ private:
     bool m_showAssetBrowser = true;
     bool m_showConsole = true;
     bool m_showLightingWindow = false;
+    bool m_showGridSettingsWindow = false;
     bool m_showGBufferDebug = false;
     bool m_showStatusBar = true;
     bool m_showMainToolbar = true;
     bool m_showSceneGrid = true;
+    float m_sceneGridCellSize = 20.0f;
+    int m_sceneGridHalfLineCount = 32;
     bool m_showSceneGizmo = true;
     bool m_showSceneStatsOverlay = false;
-    bool m_showSceneSelectionOutline = true;
+    bool m_showSceneSelectionOutline = false;
     bool m_showSceneLightIcons = true;
     bool m_showSceneCameraIcons = true;
     bool m_showSceneBounds = false;
@@ -196,6 +218,7 @@ private:
     void DrawHierarchy();
     void DrawInspector();
     void DrawLightingWindow();
+    void DrawGridSettingsWindow();
     void DrawGBufferDebugWindow();
     void DrawStatusBar();
     void DrawUnsavedChangesPopup();
@@ -232,8 +255,13 @@ private:
     bool m_requestOpenScene = false;
     bool m_requestSaveSceneAs = false;
     GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
+    GameViewAspectPolicy m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
+    GameViewScalePolicy m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;
     bool m_gameViewShowSafeArea = false;
     bool m_gameViewShowPixelPreview = false;
+    bool m_gameViewShowStatsOverlay = false;
+    bool m_gameViewShowUIOverlay = true;
+    bool m_gameViewShow2DOverlay = true;
     bool m_forceDockLayoutReset = false;
     bool m_requestRenamePopup = false;
     char m_renameBuffer[256] = {};
@@ -257,6 +285,11 @@ private:
     void ExecuteUnpackPrefab();
     void ExecuteFocusSearch();
     void ExecuteResetView();
+    void ExecuteGamePlay();
+    void ExecuteGamePauseToggle();
+    void ExecuteGameStop();
+    void ExecuteGameStep();
+    void ExecuteGameResetPreview();
     void ExecuteCloseSecondaryWindows();
     void ExecuteResetLayout();
     void ExecuteMaximizeActivePanel();

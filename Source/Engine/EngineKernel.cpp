@@ -24,6 +24,7 @@
 #include <Material\MaterialPreviewStudio.h>
 #include "RHI/IResourceFactory.h"
 #include "ImGuiRenderer.h"
+#include "RHI/DX11/DX11Texture.h"
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
 #include "Console/Logger.h"
@@ -52,6 +53,42 @@ namespace {
         std::vector<float> prevRgb;
         std::vector<float> latestRgb;
     };
+
+    bool CopyTextureResource(ICommandList* commandList, ITexture* source, ITexture* destination)
+    {
+        if (!commandList || !source || !destination) {
+            return false;
+        }
+
+        if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+            auto* dx12Source = dynamic_cast<DX12Texture*>(source);
+            auto* dx12Destination = dynamic_cast<DX12Texture*>(destination);
+            auto* dx12CommandList = dynamic_cast<DX12CommandList*>(commandList);
+            if (!dx12Source || !dx12Destination || !dx12CommandList) {
+                return false;
+            }
+
+            commandList->TransitionBarrier(source, ResourceState::CopySource);
+            commandList->TransitionBarrier(destination, ResourceState::CopyDest);
+            dx12CommandList->FlushResourceBarriers();
+            dx12CommandList->GetNativeCommandList()->CopyResource(
+                dx12Destination->GetNativeResource(),
+                dx12Source->GetNativeResource());
+            return true;
+        }
+
+        auto* dx11Source = dynamic_cast<DX11Texture*>(source);
+        auto* dx11Destination = dynamic_cast<DX11Texture*>(destination);
+        ID3D11DeviceContext* deviceContext = commandList->GetNativeContext();
+        if (!dx11Source || !dx11Destination || !deviceContext) {
+            return false;
+        }
+
+        deviceContext->CopyResource(
+            dx11Destination->GetNativeResource(),
+            dx11Source->GetNativeResource());
+        return true;
+    }
 
     float HalfToFloat(uint16_t value) {
         const uint32_t sign = static_cast<uint32_t>(value & 0x8000u) << 16;
@@ -938,7 +975,8 @@ void EngineKernel::Update(float rawDt)
 
     if (m_editorLayer) m_editorLayer->Update(time);
 
-    if (mode == EngineMode::Play)
+    const bool stepThisFrame = m_stepFrameRequested;
+    if (mode == EngineMode::Play || stepThisFrame)
         time.dt = rawDt * time.timeScale;
     else
         time.dt = 0.0f;
@@ -946,6 +984,10 @@ void EngineKernel::Update(float rawDt)
     if (m_gameLayer) m_gameLayer->Update(time);
 
     time.totalTime += time.dt;
+    if (stepThisFrame) {
+        m_stepFrameRequested = false;
+        mode = EngineMode::Pause;
+    }
 }
 
 void EngineKernel::Render()
@@ -1067,11 +1109,64 @@ void EngineKernel::Render()
         views.push_back(m_renderPipeline->BuildPrimaryViewContext(rc));
     }
     m_renderPipeline->ExecuteViews(m_renderQueue, rc, views);
+    ITexture* editorScenePreviewTexture = nullptr;
     if (m_editorLayer) {
-        const auto& primaryView = views.front();
-        m_editorLayer->SetSceneViewTexture(primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture);
-        m_editorLayer->SetGameViewTexture(primaryView.sceneViewTexture ? primaryView.sceneViewTexture :
-            (primaryView.displayTexture ? primaryView.displayTexture : rc.sceneColorTexture));
+        auto& primaryView = views.front();
+        ITexture* sceneViewTexture = primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture;
+        ITexture* sceneDepthTexture = primaryView.sceneDepthTexture ? primaryView.sceneDepthTexture : rc.sceneDepthTexture;
+        ITexture* gameViewTexture = primaryView.sceneViewTexture ? primaryView.sceneViewTexture :
+            (primaryView.displayTexture ? primaryView.displayTexture : rc.sceneColorTexture);
+
+        if (m_editorLayer->ShouldRenderSceneGrid3D() && sceneViewTexture && sceneDepthTexture) {
+            FrameBuffer* editorSceneFrameBuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::EditorScene);
+            ITexture* editorSceneColor = editorSceneFrameBuffer ? editorSceneFrameBuffer->GetColorTexture(0) : nullptr;
+            if (editorSceneColor &&
+                editorSceneColor->GetWidth() == sceneViewTexture->GetWidth() &&
+                editorSceneColor->GetHeight() == sceneViewTexture->GetHeight() &&
+                CopyTextureResource(rc.commandList, sceneViewTexture, editorSceneColor)) {
+                RenderContext gridRc = rc;
+                gridRc.mainRenderTarget = editorSceneColor;
+                gridRc.sceneColorTexture = editorSceneColor;
+                gridRc.mainDepthStencil = sceneDepthTexture;
+                gridRc.sceneDepthTexture = sceneDepthTexture;
+                gridRc.mainViewport = RhiViewport(
+                    0.0f,
+                    0.0f,
+                    static_cast<float>(editorSceneColor->GetWidth()),
+                    static_cast<float>(editorSceneColor->GetHeight()));
+                gridRc.renderWidth = editorSceneColor->GetWidth();
+                gridRc.renderHeight = editorSceneColor->GetHeight();
+                gridRc.viewMatrix = primaryView.state.viewMatrix;
+                gridRc.projectionMatrix = primaryView.state.projectionMatrix;
+                gridRc.viewProjectionUnjittered = primaryView.state.viewProjectionUnjittered;
+                gridRc.prevViewProjectionMatrix = primaryView.state.prevViewProjectionMatrix;
+                gridRc.cameraPosition = primaryView.state.cameraPosition;
+                gridRc.cameraDirection = primaryView.state.cameraDirection;
+                gridRc.fovY = primaryView.state.fovY;
+                gridRc.aspect = primaryView.state.aspect;
+                gridRc.nearZ = primaryView.state.nearZ;
+                gridRc.farZ = primaryView.state.farZ;
+                gridRc.jitterOffset = primaryView.state.jitterOffset;
+                gridRc.prevJitterOffset = primaryView.state.prevJitterOffset;
+
+                rc.commandList->TransitionBarrier(editorSceneColor, ResourceState::RenderTarget);
+                rc.commandList->TransitionBarrier(sceneDepthTexture, ResourceState::DepthRead);
+                rc.commandList->SetRenderTarget(editorSceneColor, sceneDepthTexture);
+                rc.commandList->SetViewport(gridRc.mainViewport);
+                GridRenderSystem::EditorGridSettings gridSettings{};
+                gridSettings.cellSize = m_editorLayer->GetSceneGridCellSize();
+                gridSettings.halfLineCount = m_editorLayer->GetSceneGridHalfLineCount();
+                m_editorGridRenderSystem.RenderEditorGrid(gridRc, gridSettings);
+                rc.commandList->TransitionBarrier(editorSceneColor, ResourceState::ShaderResource);
+                rc.commandList->TransitionBarrier(sceneViewTexture, ResourceState::ShaderResource);
+                rc.commandList->TransitionBarrier(sceneDepthTexture, ResourceState::ShaderResource);
+                editorScenePreviewTexture = editorSceneColor;
+                sceneViewTexture = editorSceneColor;
+            }
+        }
+
+        m_editorLayer->SetSceneViewTexture(sceneViewTexture);
+        m_editorLayer->SetGameViewTexture(gameViewTexture);
         m_editorLayer->SetGBufferDebugTextures(
             primaryView.debugGBuffer0 ? primaryView.debugGBuffer0 : rc.debugGBuffer0,
             primaryView.debugGBuffer1 ? primaryView.debugGBuffer1 : rc.debugGBuffer1,
@@ -1150,6 +1245,7 @@ void EngineKernel::Render()
         transitionTextureForUi(rc.debugGBuffer1);
         transitionTextureForUi(rc.debugGBuffer2);
         transitionTextureForUi(rc.debugGBufferDepth);
+        transitionTextureForUi(editorScenePreviewTexture);
     }
 
     if (m_editorLayer) m_editorLayer->RenderUI();
@@ -1285,6 +1381,10 @@ void EngineKernel::Play()
     if (mode == EngineMode::Editor) {
         mode = EngineMode::Play;
     }
+    else if (mode == EngineMode::Pause) {
+        mode = EngineMode::Play;
+    }
+    m_stepFrameRequested = false;
 }
 
 void EngineKernel::Stop()
@@ -1292,12 +1392,21 @@ void EngineKernel::Stop()
     if (mode == EngineMode::Play || mode == EngineMode::Pause) {
         mode = EngineMode::Editor;
     }
+    m_stepFrameRequested = false;
 }
 
 void EngineKernel::Pause()
 {
     if (mode == EngineMode::Play) mode = EngineMode::Pause;
     else if (mode == EngineMode::Pause) mode = EngineMode::Play;
+    m_stepFrameRequested = false;
+}
+
+void EngineKernel::Step()
+{
+    if (mode == EngineMode::Pause) {
+        m_stepFrameRequested = true;
+    }
 }
 
 void EngineKernel::ResetRenderStateForSceneChange()

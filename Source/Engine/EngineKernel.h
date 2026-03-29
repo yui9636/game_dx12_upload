@@ -5,6 +5,7 @@
 #include "RenderContext/RenderQueue.h"
 #include "ReflectionProbe/ReflectionProbeBaker.h"
 #include "Render/OffscreenRenderer.h"
+#include "Grid/GridRenderSystem.h"
 #include "Registry/Registry.h"
 #include <memory>
 
@@ -29,6 +30,7 @@ public:
     void Play();
     void Stop();
     void Pause();
+    void Step();
     void ResetRenderStateForSceneChange();
 
     EngineMode GetMode() const { return mode; }
@@ -40,10 +42,12 @@ private:
 
     EngineTime time;
     EngineMode mode = EngineMode::Editor;
+    bool m_stepFrameRequested = false;
 
     std::unique_ptr<RenderPipeline> m_renderPipeline;
     std::unique_ptr<ReflectionProbeBaker> m_probeBaker;
     RenderQueue m_renderQueue;
+    GridRenderSystem m_editorGridRenderSystem;
 
     std::unique_ptr<GameLayer> m_gameLayer;
     std::unique_ptr<EditorLayer> m_editorLayer;

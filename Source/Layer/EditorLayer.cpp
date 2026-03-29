@@ -78,6 +78,7 @@ namespace {
     constexpr const char* kInspectorWindowTitle = ICON_FA_CIRCLE_INFO " Inspector";
     constexpr const char* kAssetBrowserWindowTitle = ICON_FA_FOLDER_OPEN " Asset Browser";
     constexpr const char* kLightingWindowTitle = ICON_FA_SUN " Lighting Settings";
+    constexpr const char* kGridSettingsWindowTitle = "Grid Settings";
     constexpr const char* kGBufferWindowTitle = ICON_FA_IMAGES " G-Buffer Debug";
     constexpr const char* kConsoleWindowTitle = "Console";
 
@@ -91,6 +92,7 @@ namespace {
         case EditorLayer::WindowFocusTarget::AssetBrowser: return kAssetBrowserWindowTitle;
         case EditorLayer::WindowFocusTarget::Console: return kConsoleWindowTitle;
         case EditorLayer::WindowFocusTarget::Lighting: return kLightingWindowTitle;
+        case EditorLayer::WindowFocusTarget::GridSettings: return kGridSettingsWindowTitle;
         case EditorLayer::WindowFocusTarget::GBufferDebug: return kGBufferWindowTitle;
         default: return nullptr;
         }
@@ -322,6 +324,91 @@ namespace {
         return true;
     }
 
+    bool ProjectWorldToSceneScreenDepth(const DirectX::XMFLOAT4& rect,
+                                        const DirectX::XMFLOAT4X4& view,
+                                        const DirectX::XMFLOAT4X4& projection,
+                                        const DirectX::XMFLOAT3& worldPosition,
+                                        ImVec2& outScreen,
+                                        float& outDepth)
+    {
+        using namespace DirectX;
+        if (rect.z <= 1.0f || rect.w <= 1.0f) {
+            return false;
+        }
+
+        const XMMATRIX viewMatrix = XMLoadFloat4x4(&view);
+        const XMMATRIX projectionMatrix = XMLoadFloat4x4(&projection);
+        const XMVECTOR world = XMVectorSet(worldPosition.x, worldPosition.y, worldPosition.z, 1.0f);
+        const XMVECTOR viewPos = XMVector4Transform(world, viewMatrix);
+        const float viewZ = XMVectorGetZ(viewPos);
+        if (!std::isfinite(viewZ) || viewZ <= 0.01f) {
+            return false;
+        }
+
+        const XMVECTOR clip = XMVector4Transform(viewPos, projectionMatrix);
+        const float clipW = XMVectorGetW(clip);
+        if (!std::isfinite(clipW) || clipW <= 0.0001f) {
+            return false;
+        }
+
+        const XMVECTOR ndcVec = XMVectorScale(clip, 1.0f / clipW);
+        XMFLOAT3 ndc{};
+        XMStoreFloat3(&ndc, ndcVec);
+        if (!std::isfinite(ndc.x) || !std::isfinite(ndc.y) || !std::isfinite(ndc.z) || ndc.z < 0.0f || ndc.z > 1.0f) {
+            return false;
+        }
+
+        outScreen.x = rect.x + ((ndc.x * 0.5f) + 0.5f) * rect.z;
+        outScreen.y = rect.y + ((-ndc.y * 0.5f) + 0.5f) * rect.w;
+        outDepth = ndc.z;
+        return true;
+    }
+
+    struct GridOccluder
+    {
+        ImVec2 min;
+        ImVec2 max;
+        float minDepth = 1.0f;
+    };
+
+    bool IntersectRayWithGroundPlane(const DirectX::XMFLOAT3& origin,
+                                     const DirectX::XMFLOAT3& direction,
+                                     DirectX::XMFLOAT3& outPoint)
+    {
+        const float denom = direction.y;
+        if (std::fabs(denom) < 0.0001f) {
+            return false;
+        }
+
+        const float t = -origin.y / denom;
+        if (!std::isfinite(t) || t <= 0.0f) {
+            return false;
+        }
+
+        outPoint = {
+            origin.x + direction.x * t,
+            0.0f,
+            origin.z + direction.z * t
+        };
+        return true;
+    }
+
+    bool IsPointInsideOccluder(const ImVec2& point, float depth, const std::vector<GridOccluder>& occluders)
+    {
+        constexpr float kGridDepthBias = 0.0005f;
+        for (const GridOccluder& occluder : occluders) {
+            if (point.x < occluder.min.x || point.x > occluder.max.x ||
+                point.y < occluder.min.y || point.y > occluder.max.y) {
+                continue;
+            }
+
+            if (depth >= occluder.minDepth - kGridDepthBias) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     float ComputeFocusDistance(float radius, float fovY)
     {
         const float safeRadius = (std::max)(radius, 0.5f);
@@ -407,6 +494,26 @@ namespace {
         corners[5] = { c.x + e.x, c.y - e.y, c.z + e.z };
         corners[6] = { c.x + e.x, c.y + e.y, c.z + e.z };
         corners[7] = { c.x - e.x, c.y + e.y, c.z + e.z };
+    }
+
+    bool TryGetLiveMeshWorldBounds(const MeshComponent& mesh,
+                                   const TransformComponent* transform,
+                                   DirectX::BoundingBox& outBounds)
+    {
+        if (!mesh.model) {
+            return false;
+        }
+
+        if (transform) {
+            if (const std::shared_ptr<ModelResource> modelResource = mesh.model->GetModelResource()) {
+                const DirectX::XMMATRIX world = DirectX::XMLoadFloat4x4(&transform->worldMatrix);
+                modelResource->GetLocalBounds().Transform(outBounds, world);
+                return true;
+            }
+        }
+
+        outBounds = mesh.model->GetWorldBounds();
+        return true;
     }
 
     std::string GetEntityLabel(Registry& registry, EntityID entity)
@@ -601,6 +708,34 @@ namespace {
         }
     }
 
+    const char* GetGameViewAspectPolicyLabel(EditorLayer::GameViewAspectPolicy policy)
+    {
+        switch (policy) {
+        case EditorLayer::GameViewAspectPolicy::Fill:
+            return "Fill";
+        case EditorLayer::GameViewAspectPolicy::PixelPerfect:
+            return "1:1";
+        case EditorLayer::GameViewAspectPolicy::Fit:
+        default:
+            return "Fit";
+        }
+    }
+
+    const char* GetGameViewScalePolicyLabel(EditorLayer::GameViewScalePolicy policy)
+    {
+        switch (policy) {
+        case EditorLayer::GameViewScalePolicy::Scale1x:
+            return "1x";
+        case EditorLayer::GameViewScalePolicy::Scale2x:
+            return "2x";
+        case EditorLayer::GameViewScalePolicy::Scale3x:
+            return "3x";
+        case EditorLayer::GameViewScalePolicy::AutoFit:
+        default:
+            return "Auto";
+        }
+    }
+
     ImVec2 FitSizeKeepingAspect(const ImVec2& available, float aspect)
     {
         if (available.x <= 0.0f || available.y <= 0.0f || aspect <= 0.0f) {
@@ -615,6 +750,22 @@ namespace {
             fitted.y = available.x / aspect;
         }
         return fitted;
+    }
+
+    ImVec2 FillSizeKeepingAspect(const ImVec2& available, float aspect)
+    {
+        if (available.x <= 0.0f || available.y <= 0.0f || aspect <= 0.0f) {
+            return available;
+        }
+
+        ImVec2 filled = available;
+        const float currentAspect = available.x / available.y;
+        if (currentAspect > aspect) {
+            filled.y = available.x / aspect;
+        } else {
+            filled.x = available.y * aspect;
+        }
+        return filled;
     }
 
     bool HasSelectedAncestor(EntityID entity, Registry& registry, const EditorSelection& selection)
@@ -1387,11 +1538,58 @@ void EditorLayer::ExecuteResetView()
     }
 }
 
+void EditorLayer::ExecuteGamePlay()
+{
+    EngineKernel& kernel = EngineKernel::Instance();
+    if (kernel.GetMode() == EngineMode::Editor || kernel.GetMode() == EngineMode::Pause) {
+        kernel.Play();
+    }
+}
+
+void EditorLayer::ExecuteGamePauseToggle()
+{
+    EngineKernel& kernel = EngineKernel::Instance();
+    if (kernel.GetMode() == EngineMode::Play || kernel.GetMode() == EngineMode::Pause) {
+        kernel.Pause();
+    }
+}
+
+void EditorLayer::ExecuteGameStop()
+{
+    EngineKernel& kernel = EngineKernel::Instance();
+    if (kernel.GetMode() != EngineMode::Editor) {
+        kernel.Stop();
+    }
+}
+
+void EditorLayer::ExecuteGameStep()
+{
+    EngineKernel& kernel = EngineKernel::Instance();
+    if (kernel.GetMode() == EngineMode::Pause) {
+        kernel.Step();
+    }
+}
+
+void EditorLayer::ExecuteGameResetPreview()
+{
+    m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
+    m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
+    m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;
+    m_gameViewShowSafeArea = false;
+    m_gameViewShowPixelPreview = false;
+    m_gameViewShowStatsOverlay = false;
+    m_gameViewShowUIOverlay = true;
+    m_gameViewShow2DOverlay = true;
+}
+
 void EditorLayer::ExecuteCloseSecondaryWindows()
 {
     m_showLightingWindow = false;
+    m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
-    if (m_maximizedWindow == WindowFocusTarget::Lighting || m_maximizedWindow == WindowFocusTarget::GBufferDebug) {
+    if (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::GridSettings ||
+        m_maximizedWindow == WindowFocusTarget::GBufferDebug) {
         m_maximizedWindow = WindowFocusTarget::None;
     }
 }
@@ -1405,6 +1603,7 @@ void EditorLayer::ExecuteResetLayout()
     m_showAssetBrowser = true;
     m_showConsole = true;
     m_showLightingWindow = false;
+    m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
     m_showStatusBar = true;
     m_showMainToolbar = true;
@@ -1443,6 +1642,7 @@ void EditorLayer::RequestWindowFocus(WindowFocusTarget target)
     case WindowFocusTarget::AssetBrowser: m_showAssetBrowser = true; break;
     case WindowFocusTarget::Console: m_showConsole = true; break;
     case WindowFocusTarget::Lighting: m_showLightingWindow = true; break;
+    case WindowFocusTarget::GridSettings: m_showGridSettingsWindow = true; break;
     case WindowFocusTarget::GBufferDebug: m_showGBufferDebug = true; break;
     default: break;
     }
@@ -1611,7 +1811,9 @@ void EditorLayer::RenderUI()
     const bool maximizeRight = (m_maximizedWindow == WindowFocusTarget::Inspector);
     const bool maximizeBottomAsset = (m_maximizedWindow == WindowFocusTarget::AssetBrowser);
     const bool maximizeBottomConsole = (m_maximizedWindow == WindowFocusTarget::Console);
-    const bool maximizeTool = (m_maximizedWindow == WindowFocusTarget::Lighting || m_maximizedWindow == WindowFocusTarget::GBufferDebug);
+    const bool maximizeTool = (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::GridSettings ||
+        m_maximizedWindow == WindowFocusTarget::GBufferDebug);
 
     if (m_showSceneView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::SceneView)) {
         DrawSceneView();
@@ -1628,6 +1830,9 @@ void EditorLayer::RenderUI()
 
     if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {
         DrawLightingWindow();
+    }
+    if (m_showGridSettingsWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GridSettings || maximizeTool)) {
+        DrawGridSettingsWindow();
     }
     if (m_showGBufferDebug && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GBufferDebug || maximizeTool)) {
         DrawGBufferDebugWindow();
@@ -1752,6 +1957,20 @@ void EditorLayer::DrawMenuBar()
                 ImGui::MenuItem("Show Pixel Preview", nullptr, &m_gameViewShowPixelPreview);
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Grid")) {
+                ImGui::SetNextItemWidth(180.0f);
+                if (ImGui::DragFloat("Cell Size", &m_sceneGridCellSize, 0.5f, 1.0f, 500.0f, "%.1f")) {
+                    m_sceneGridCellSize = (std::clamp)(m_sceneGridCellSize, 1.0f, 500.0f);
+                }
+                if (ImGui::SliderInt("Half Line Count", &m_sceneGridHalfLineCount, 4, 128)) {
+                    m_sceneGridHalfLineCount = (std::clamp)(m_sceneGridHalfLineCount, 4, 128);
+                }
+                if (ImGui::MenuItem("Open Grid Settings...")) {
+                    m_showGridSettingsWindow = true;
+                    RequestWindowFocus(WindowFocusTarget::GridSettings);
+                }
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Shading")) {
                 if (ImGui::MenuItem("Lit", nullptr, m_sceneShadingMode == SceneShadingMode::Lit)) {
                     m_sceneShadingMode = SceneShadingMode::Lit;
@@ -1803,7 +2022,79 @@ void EditorLayer::DrawMenuBar()
             }
             ImGui::EndMenu();
         }
-        if (ImGui::BeginMenu("Game(G)")) { ImGui::EndMenu(); }
+        if (ImGui::BeginMenu("Game(G)")) {
+            const EngineMode mode = EngineKernel::Instance().GetMode();
+            if (ImGui::MenuItem("Play", nullptr, mode == EngineMode::Play, mode == EngineMode::Editor || mode == EngineMode::Pause)) {
+                ExecuteGamePlay();
+            }
+            if (ImGui::MenuItem("Pause", nullptr, mode == EngineMode::Pause, mode == EngineMode::Play || mode == EngineMode::Pause)) {
+                ExecuteGamePauseToggle();
+            }
+            if (ImGui::MenuItem("Step", nullptr, false, mode == EngineMode::Pause)) {
+                ExecuteGameStep();
+            }
+            if (ImGui::MenuItem("Stop", nullptr, false, mode != EngineMode::Editor)) {
+                ExecuteGameStop();
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Focus Game View")) {
+                RequestWindowFocus(WindowFocusTarget::GameView);
+            }
+            ImGui::Separator();
+            if (ImGui::BeginMenu("Resolution Preset")) {
+                const GameViewResolutionPreset presets[] = {
+                    GameViewResolutionPreset::Free,
+                    GameViewResolutionPreset::HD1080,
+                    GameViewResolutionPreset::HD720,
+                    GameViewResolutionPreset::Portrait1080x1920,
+                    GameViewResolutionPreset::Portrait750x1334
+                };
+                for (GameViewResolutionPreset preset : presets) {
+                    if (ImGui::MenuItem(GetGameViewPresetLabel(preset), nullptr, m_gameViewResolutionPreset == preset)) {
+                        m_gameViewResolutionPreset = preset;
+                    }
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Aspect Policy")) {
+                if (ImGui::MenuItem("Fit", nullptr, m_gameViewAspectPolicy == GameViewAspectPolicy::Fit)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
+                }
+                if (ImGui::MenuItem("Fill", nullptr, m_gameViewAspectPolicy == GameViewAspectPolicy::Fill)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::Fill;
+                }
+                if (ImGui::MenuItem("1:1 Pixel", nullptr, m_gameViewAspectPolicy == GameViewAspectPolicy::PixelPerfect)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::PixelPerfect;
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Scale")) {
+                if (ImGui::MenuItem("Auto", nullptr, m_gameViewScalePolicy == GameViewScalePolicy::AutoFit)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;
+                }
+                if (ImGui::MenuItem("1x", nullptr, m_gameViewScalePolicy == GameViewScalePolicy::Scale1x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale1x;
+                }
+                if (ImGui::MenuItem("2x", nullptr, m_gameViewScalePolicy == GameViewScalePolicy::Scale2x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale2x;
+                }
+                if (ImGui::MenuItem("3x", nullptr, m_gameViewScalePolicy == GameViewScalePolicy::Scale3x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale3x;
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::Separator();
+            ImGui::MenuItem("Safe Area", nullptr, &m_gameViewShowSafeArea);
+            ImGui::MenuItem("Pixel Preview", nullptr, &m_gameViewShowPixelPreview);
+            ImGui::MenuItem("Stats Overlay", nullptr, &m_gameViewShowStatsOverlay);
+            ImGui::MenuItem("UI Overlay", nullptr, &m_gameViewShowUIOverlay);
+            ImGui::MenuItem("2D Overlay", nullptr, &m_gameViewShow2DOverlay);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Reset Preview")) {
+                ExecuteGameResetPreview();
+            }
+            ImGui::EndMenu();
+        }
         if (ImGui::BeginMenu("Window(W)")) {
             ImGui::MenuItem(kSceneViewWindowTitle, nullptr, &m_showSceneView);
             ImGui::MenuItem(kGameViewWindowTitle, nullptr, &m_showGameView);
@@ -1813,12 +2104,14 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
+            ImGui::MenuItem("Grid Settings", nullptr, &m_showGridSettingsWindow);
             ImGui::MenuItem(ICON_FA_IMAGES " G-Buffer Debug", nullptr, &m_showGBufferDebug);
             ImGui::Separator();
             if (ImGui::MenuItem("Focus Hierarchy")) RequestWindowFocus(WindowFocusTarget::Hierarchy);
             if (ImGui::MenuItem("Focus Inspector")) RequestWindowFocus(WindowFocusTarget::Inspector);
             if (ImGui::MenuItem("Focus Asset Browser")) RequestWindowFocus(WindowFocusTarget::AssetBrowser);
             if (ImGui::MenuItem("Focus Console")) RequestWindowFocus(WindowFocusTarget::Console);
+            if (ImGui::MenuItem("Focus Grid Settings", nullptr, false, m_showGridSettingsWindow)) RequestWindowFocus(WindowFocusTarget::GridSettings);
             ImGui::Separator();
             if (ImGui::MenuItem("Maximize Active Panel", nullptr, false, m_lastFocusedWindow != WindowFocusTarget::None)) {
                 ExecuteMaximizeActivePanel();
@@ -1887,7 +2180,7 @@ void EditorLayer::DrawMainToolbar()
 
         // 中央: 再生コントロール
         float centerX = ImGui::GetWindowWidth() * 0.5f;
-        ImGui::SetCursorPosX(centerX - 45.0f);
+        ImGui::SetCursorPosX(centerX - 58.0f);
 
         // ★現在のモードをカーネルから取得
         EngineMode mode = EngineKernel::Instance().GetMode();
@@ -1898,8 +2191,7 @@ void EditorLayer::DrawMainToolbar()
         ImGui::PushStyleColor(ImGuiCol_Text, playColor);
         if (ifm.IconButton(ICON_FA_PLAY, IconSemantic::Default, IconFontSize::Medium, nullptr))
         {
-            // ★カーネルの関数を直接叩く
-            if (mode == EngineMode::Editor || mode == EngineMode::Pause) EngineKernel::Instance().Play();
+            ExecuteGamePlay();
         }
         ImGui::PopStyleColor();
 
@@ -1911,9 +2203,24 @@ void EditorLayer::DrawMainToolbar()
         ImGui::PushStyleColor(ImGuiCol_Text, pauseColor);
         if (ifm.IconButton(ICON_FA_PAUSE, IconSemantic::Default, IconFontSize::Medium, nullptr))
         {
-            // ★カーネルの関数を直接叩く
-            if (mode == EngineMode::Play) EngineKernel::Instance().Pause();
-            else if (mode == EngineMode::Pause) EngineKernel::Instance().Play();
+            ExecuteGamePauseToggle();
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+
+        const bool canStep = (mode == EngineMode::Pause);
+        ImVec4 stepColor = canStep ? ImVec4(0.70f, 0.85f, 1.00f, 1.00f) : ImVec4(0.4f, 0.4f, 0.4f, 0.6f);
+        ImGui::PushStyleColor(ImGuiCol_Text, stepColor);
+        if (!canStep) {
+            ImGui::BeginDisabled();
+        }
+        if (ifm.IconButton(ICON_FA_FORWARD_STEP, IconSemantic::Default, IconFontSize::Medium, nullptr))
+        {
+            ExecuteGameStep();
+        }
+        if (!canStep) {
+            ImGui::EndDisabled();
         }
         ImGui::PopStyleColor();
 
@@ -1925,8 +2232,7 @@ void EditorLayer::DrawMainToolbar()
         ImGui::PushStyleColor(ImGuiCol_Text, stopColor);
         if (ifm.IconButton(ICON_FA_SQUARE, IconSemantic::Default, IconFontSize::Medium, nullptr))
         {
-            // ★カーネルの関数を直接叩く
-            if (canStop) EngineKernel::Instance().Stop();
+            if (canStop) ExecuteGameStop();
         }
         ImGui::PopStyleColor();
     }
@@ -2073,27 +2379,166 @@ void EditorLayer::DrawSceneGridOverlay(const DirectX::XMFLOAT4& viewRect,
         return;
     }
 
-    const float extent = 100.0f;
     const float step = 10.0f;
     const ImU32 minorColor = IM_COL32(90, 98, 112, 96);
     const ImU32 axisXColor = IM_COL32(210, 80, 80, 180);
     const ImU32 axisZColor = IM_COL32(80, 160, 220, 180);
-    auto drawWorldLine = [&](const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b, ImU32 color, float thickness) {
-        ImVec2 screenA{};
-        ImVec2 screenB{};
-        if (ProjectWorldToSceneScreen(viewRect, view, projection, a, screenA) &&
-            ProjectWorldToSceneScreen(viewRect, view, projection, b, screenB)) {
-            drawList->AddLine(screenA, screenB, color, thickness);
-        }
+    float minX = 0.0f;
+    float maxX = 0.0f;
+    float minZ = 0.0f;
+    float maxZ = 0.0f;
+    bool hasPlaneCoverage = false;
+    const std::array<ImVec2, 5> samplePoints = {
+        ImVec2(viewRect.x, viewRect.y),
+        ImVec2(viewRect.x + viewRect.z, viewRect.y),
+        ImVec2(viewRect.x + viewRect.z, viewRect.y + viewRect.w),
+        ImVec2(viewRect.x, viewRect.y + viewRect.w),
+        ImVec2(viewRect.x + viewRect.z * 0.5f, viewRect.y + viewRect.w * 0.5f)
     };
 
-    for (float x = -extent; x <= extent; x += step) {
-        const ImU32 color = std::fabs(x) < 0.001f ? axisXColor : minorColor;
-        drawWorldLine({ x, 0.0f, -extent }, { x, 0.0f, extent }, color, std::fabs(x) < 0.001f ? 2.0f : 1.0f);
+    for (const ImVec2& samplePoint : samplePoints) {
+        DirectX::XMFLOAT3 rayOrigin{};
+        DirectX::XMFLOAT3 rayDirection{};
+        DirectX::XMFLOAT3 planePoint{};
+        if (!BuildWorldRay(viewRect, view, projection, samplePoint, rayOrigin, rayDirection) ||
+            !IntersectRayWithGroundPlane(rayOrigin, rayDirection, planePoint)) {
+            continue;
+        }
+
+        if (!hasPlaneCoverage) {
+            minX = maxX = planePoint.x;
+            minZ = maxZ = planePoint.z;
+            hasPlaneCoverage = true;
+        } else {
+            minX = (std::min)(minX, planePoint.x);
+            maxX = (std::max)(maxX, planePoint.x);
+            minZ = (std::min)(minZ, planePoint.z);
+            maxZ = (std::max)(maxZ, planePoint.z);
+        }
     }
-    for (float z = -extent; z <= extent; z += step) {
+
+    if (!hasPlaneCoverage) {
+        const float fallbackExtent = (std::max)(200.0f, std::fabs(m_editorCameraPosition.y) * 8.0f);
+        minX = -fallbackExtent;
+        maxX = fallbackExtent;
+        minZ = -fallbackExtent;
+        maxZ = fallbackExtent;
+    } else {
+        const float margin = step * 4.0f;
+        minX -= margin;
+        maxX += margin;
+        minZ -= margin;
+        maxZ += margin;
+        const float minExtent = 120.0f;
+        minX = (std::min)(minX, -minExtent);
+        maxX = (std::max)(maxX, minExtent);
+        minZ = (std::min)(minZ, -minExtent);
+        maxZ = (std::max)(maxZ, minExtent);
+    }
+
+    minX = std::floor(minX / step) * step;
+    maxX = std::ceil(maxX / step) * step;
+    minZ = std::floor(minZ / step) * step;
+    maxZ = std::ceil(maxZ / step) * step;
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    std::vector<GridOccluder> occluders;
+    occluders.reserve(32);
+    for (Archetype* archetype : registry.GetAllArchetypes()) {
+        const auto& signature = archetype->GetSignature();
+        if (!signature.test(TypeManager::GetComponentTypeID<MeshComponent>()) ||
+            !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
+            continue;
+        }
+
+        auto* meshColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<MeshComponent>());
+        auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
+        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+            const auto* mesh = static_cast<MeshComponent*>(meshColumn->Get(i));
+            const auto* transform = static_cast<TransformComponent*>(transformColumn->Get(i));
+            if (!mesh || !mesh->model || !mesh->isVisible || !transform) {
+                continue;
+            }
+
+            DirectX::BoundingBox bounds{};
+            if (!TryGetLiveMeshWorldBounds(*mesh, transform, bounds)) {
+                continue;
+            }
+
+            DirectX::XMFLOAT3 corners[8]{};
+            BuildBoundingBoxCorners(bounds, corners);
+
+            ImVec2 minCorner(viewRect.x + viewRect.z, viewRect.y + viewRect.w);
+            ImVec2 maxCorner(viewRect.x, viewRect.y);
+            float minDepth = 1.0f;
+            bool anyProjected = false;
+            for (const DirectX::XMFLOAT3& corner : corners) {
+                ImVec2 screen{};
+                float depth = 1.0f;
+                if (!ProjectWorldToSceneScreenDepth(viewRect, view, projection, corner, screen, depth)) {
+                    continue;
+                }
+                anyProjected = true;
+                minCorner.x = (std::min)(minCorner.x, screen.x);
+                minCorner.y = (std::min)(minCorner.y, screen.y);
+                maxCorner.x = (std::max)(maxCorner.x, screen.x);
+                maxCorner.y = (std::max)(maxCorner.y, screen.y);
+                minDepth = (std::min)(minDepth, depth);
+            }
+
+            if (!anyProjected) {
+                continue;
+            }
+
+            minCorner.x = (std::max)(minCorner.x, viewRect.x);
+            minCorner.y = (std::max)(minCorner.y, viewRect.y);
+            maxCorner.x = (std::min)(maxCorner.x, viewRect.x + viewRect.z);
+            maxCorner.y = (std::min)(maxCorner.y, viewRect.y + viewRect.w);
+            if (maxCorner.x <= minCorner.x || maxCorner.y <= minCorner.y) {
+                continue;
+            }
+
+            occluders.push_back(GridOccluder{ minCorner, maxCorner, minDepth });
+        }
+    }
+
+    auto drawWorldSegment = [&](const DirectX::XMFLOAT3& a,
+                                const DirectX::XMFLOAT3& b,
+                                const DirectX::XMFLOAT3& samplePoint,
+                                ImU32 color,
+                                float thickness) {
+        ImVec2 screenA{};
+        ImVec2 screenB{};
+        ImVec2 sampleScreen{};
+        float sampleDepth = 1.0f;
+        if (!ProjectWorldToSceneScreen(viewRect, view, projection, a, screenA) ||
+            !ProjectWorldToSceneScreen(viewRect, view, projection, b, screenB) ||
+            !ProjectWorldToSceneScreenDepth(viewRect, view, projection, samplePoint, sampleScreen, sampleDepth)) {
+            return;
+        }
+
+        if (IsPointInsideOccluder(sampleScreen, sampleDepth, occluders)) {
+            return;
+        }
+
+        drawList->AddLine(screenA, screenB, color, thickness);
+    };
+
+    for (float x = minX; x <= maxX; x += step) {
+        const ImU32 color = std::fabs(x) < 0.001f ? axisXColor : minorColor;
+        const float thickness = std::fabs(x) < 0.001f ? 2.0f : 1.0f;
+        for (float z = minZ; z < maxZ; z += step) {
+            const float nextZ = (std::min)(z + step, maxZ);
+            drawWorldSegment({ x, 0.0f, z }, { x, 0.0f, nextZ }, { x, 0.0f, (z + nextZ) * 0.5f }, color, thickness);
+        }
+    }
+    for (float z = minZ; z <= maxZ; z += step) {
         const ImU32 color = std::fabs(z) < 0.001f ? axisZColor : minorColor;
-        drawWorldLine({ -extent, 0.0f, z }, { extent, 0.0f, z }, color, std::fabs(z) < 0.001f ? 2.0f : 1.0f);
+        const float thickness = std::fabs(z) < 0.001f ? 2.0f : 1.0f;
+        for (float x = minX; x < maxX; x += step) {
+            const float nextX = (std::min)(x + step, maxX);
+            drawWorldSegment({ x, 0.0f, z }, { nextX, 0.0f, z }, { (x + nextX) * 0.5f, 0.0f, z }, color, thickness);
+        }
     }
 }
 
@@ -2112,11 +2557,15 @@ void EditorLayer::DrawSelectionOutlineOverlay(const DirectX::XMFLOAT4& viewRect,
     }
 
     auto* mesh = registry.GetComponent<MeshComponent>(entity);
-    if (!mesh || !mesh->model) {
+    auto* transform = registry.GetComponent<TransformComponent>(entity);
+    if (!mesh || !mesh->model || !transform) {
         return;
     }
 
-    const auto& bounds = mesh->model->GetWorldBounds();
+    DirectX::BoundingBox bounds{};
+    if (!TryGetLiveMeshWorldBounds(*mesh, transform, bounds)) {
+        return;
+    }
     DirectX::XMFLOAT3 corners[8]{};
     BuildBoundingBoxCorners(bounds, corners);
     static constexpr int edges[12][2] = {
@@ -2219,18 +2668,25 @@ void EditorLayer::DrawSceneBoundsOverlay(const DirectX::XMFLOAT4& viewRect,
 
     for (Archetype* archetype : registry.GetAllArchetypes()) {
         const auto& signature = archetype->GetSignature();
-        if (!signature.test(TypeManager::GetComponentTypeID<MeshComponent>())) {
+        if (!signature.test(TypeManager::GetComponentTypeID<MeshComponent>()) ||
+            !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
             continue;
         }
         auto* meshColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<MeshComponent>());
+        auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
         for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
             const auto* mesh = static_cast<MeshComponent*>(meshColumn->Get(i));
-            if (!mesh || !mesh->model || !mesh->isVisible) {
+            const auto* transform = static_cast<TransformComponent*>(transformColumn->Get(i));
+            if (!mesh || !mesh->model || !mesh->isVisible || !transform) {
                 continue;
             }
 
+            DirectX::BoundingBox bounds{};
+            if (!TryGetLiveMeshWorldBounds(*mesh, transform, bounds)) {
+                continue;
+            }
             DirectX::XMFLOAT3 corners[8]{};
-            BuildBoundingBoxCorners(mesh->model->GetWorldBounds(), corners);
+            BuildBoundingBoxCorners(bounds, corners);
             for (const auto& edge : edges) {
                 ImVec2 a{};
                 ImVec2 b{};
@@ -2580,7 +3036,7 @@ void EditorLayer::DrawSceneView()
         const DirectX::XMFLOAT4X4 view = GetEditorViewMatrix();
         const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
         const DirectX::XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
-        if (m_showSceneGrid) {
+        if (m_showSceneGrid && m_sceneViewMode == SceneViewMode::Mode2D) {
             DrawSceneGridOverlay(m_sceneViewRect, view, projection);
         }
         ImGuizmo::BeginFrame();
@@ -3400,8 +3856,24 @@ void EditorLayer::DrawTransformGizmo()
                 NormalizeQuaternion(transform->localRotation);
                 transform->localScale = ClampScale(localScale);
             }
+            DirectX::XMStoreFloat4x4(&transform->localMatrix, localMatrix);
+            DirectX::XMStoreFloat4x4(&transform->worldMatrix, worldMatrix);
+            XMVECTOR worldScale;
+            XMVECTOR worldRotation;
+            XMVECTOR worldTranslation;
+            if (XMMatrixDecompose(&worldScale, &worldRotation, &worldTranslation, worldMatrix)) {
+                XMStoreFloat3(&transform->worldPosition, worldTranslation);
+                XMStoreFloat4(&transform->worldRotation, worldRotation);
+                NormalizeQuaternion(transform->worldRotation);
+                XMStoreFloat3(&transform->worldScale, worldScale);
+            }
             transform->isDirty = true;
             HierarchySystem::MarkDirtyRecursive(entity, registry);
+            if (auto* meshComponent = registry.GetComponent<MeshComponent>(entity)) {
+                if (meshComponent->model) {
+                    meshComponent->model->UpdateTransform(transform->worldMatrix);
+                }
+            }
             PrefabSystem::MarkPrefabOverride(entity, registry);
         }
     }
@@ -3873,11 +4345,30 @@ void EditorLayer::DrawGameView()
     {
         SetLastFocusedWindow(WindowFocusTarget::GameView, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 0));
         if (ImGui::BeginChild("##GameViewToolbar", ImVec2(0.0f, 34.0f), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
         {
-            ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled("Preview");
-            ImGui::SameLine();
+            auto tooltip = [](const char* text) {
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                    ImGui::SetTooltip("%s", text);
+                }
+            };
+
+            auto drawMenuLikeToggle = [&](const char* label, bool* value, const char* help) {
+                if (*value) {
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.21f, 0.47f, 0.82f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.53f, 0.90f, 1.0f));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.18f, 0.40f, 0.72f, 1.0f));
+                }
+                if (ImGui::Button(label)) {
+                    *value = !*value;
+                }
+                tooltip(help);
+                if (*value) {
+                    ImGui::PopStyleColor(3);
+                }
+            };
+
             if (ImGui::BeginCombo("##GameViewResolutionPreset", GetGameViewPresetLabel(m_gameViewResolutionPreset)))
             {
                 const GameViewResolutionPreset presets[] = {
@@ -3898,13 +4389,99 @@ void EditorLayer::DrawGameView()
                 }
                 ImGui::EndCombo();
             }
+            tooltip("Resolution preset");
             ImGui::SameLine();
-            ImGui::Checkbox("Safe Area", &m_gameViewShowSafeArea);
+
+            if (ImGui::BeginCombo("##GameViewAspectPolicy", GetGameViewAspectPolicyLabel(m_gameViewAspectPolicy))) {
+                if (ImGui::Selectable("Fit", m_gameViewAspectPolicy == GameViewAspectPolicy::Fit)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
+                }
+                if (ImGui::Selectable("Fill", m_gameViewAspectPolicy == GameViewAspectPolicy::Fill)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::Fill;
+                }
+                if (ImGui::Selectable("1:1 Pixel", m_gameViewAspectPolicy == GameViewAspectPolicy::PixelPerfect)) {
+                    m_gameViewAspectPolicy = GameViewAspectPolicy::PixelPerfect;
+                }
+                ImGui::EndCombo();
+            }
+            tooltip("Aspect policy");
             ImGui::SameLine();
-            ImGui::Checkbox("Pixel", &m_gameViewShowPixelPreview);
+
+            if (ImGui::BeginCombo("##GameViewScalePolicy", GetGameViewScalePolicyLabel(m_gameViewScalePolicy))) {
+                if (ImGui::Selectable("Auto", m_gameViewScalePolicy == GameViewScalePolicy::AutoFit)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;
+                }
+                if (ImGui::Selectable("1x", m_gameViewScalePolicy == GameViewScalePolicy::Scale1x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale1x;
+                }
+                if (ImGui::Selectable("2x", m_gameViewScalePolicy == GameViewScalePolicy::Scale2x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale2x;
+                }
+                if (ImGui::Selectable("3x", m_gameViewScalePolicy == GameViewScalePolicy::Scale3x)) {
+                    m_gameViewScalePolicy = GameViewScalePolicy::Scale3x;
+                }
+                ImGui::EndCombo();
+            }
+            tooltip("Preview scale");
+            ImGui::SameLine(0.0f, 8.0f);
+
+            drawMenuLikeToggle("Safe", &m_gameViewShowSafeArea, "Show safe area");
+            ImGui::SameLine();
+            drawMenuLikeToggle("Pixel", &m_gameViewShowPixelPreview, "Show pixel preview");
+            ImGui::SameLine();
+            drawMenuLikeToggle("Stats", &m_gameViewShowStatsOverlay, "Show stats overlay");
+            ImGui::SameLine();
+            drawMenuLikeToggle("UI", &m_gameViewShowUIOverlay, "Show UI overlay");
+            ImGui::SameLine();
+            drawMenuLikeToggle("2D", &m_gameViewShow2DOverlay, "Show 2D overlay");
+            ImGui::SameLine();
+            if (ImGui::Button("Reset")) {
+                ExecuteGameResetPreview();
+            }
+            tooltip("Reset preview");
+
+            if (m_gameLayer) {
+                Registry& registry = m_gameLayer->GetRegistry();
+                std::string cameraLabel = "No Camera";
+                if (m_sceneViewMode == SceneViewMode::Mode2D) {
+                    for (Archetype* archetype : registry.GetAllArchetypes()) {
+                        if (!archetype->GetSignature().test(TypeManager::GetComponentTypeID<Camera2DComponent>())) {
+                            continue;
+                        }
+                        const auto& entities = archetype->GetEntities();
+                        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                            cameraLabel = "2D";
+                            if (auto* name = registry.GetComponent<NameComponent>(entities[i])) {
+                                cameraLabel = name->name;
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                } else {
+                    for (Archetype* archetype : registry.GetAllArchetypes()) {
+                        const Signature signature = archetype->GetSignature();
+                        if (!signature.test(TypeManager::GetComponentTypeID<CameraMainTagComponent>()) &&
+                            !signature.test(TypeManager::GetComponentTypeID<CameraLensComponent>())) {
+                            continue;
+                        }
+                        const auto& entities = archetype->GetEntities();
+                        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                            cameraLabel = "Camera";
+                            if (auto* name = registry.GetComponent<NameComponent>(entities[i])) {
+                                cameraLabel = name->name;
+                            }
+                            break;
+                        }
+                        break;
+                    }
+                }
+                ImGui::SameLine(0.0f, 8.0f);
+                ImGui::TextDisabled("%s", cameraLabel.c_str());
+            }
         }
         ImGui::EndChild();
-        ImGui::PopStyleVar();
+        ImGui::PopStyleVar(2);
 
         const bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
         if (m_gameLayer) {
@@ -3942,7 +4519,32 @@ void EditorLayer::DrawGameView()
         const DirectX::XMUINT2 presetResolution = GetGameViewPresetResolution(m_gameViewResolutionPreset);
         ImVec2 imageSize = viewportSize;
         if (presetResolution.x > 0 && presetResolution.y > 0) {
-            imageSize = FitSizeKeepingAspect(viewportSize, static_cast<float>(presetResolution.x) / static_cast<float>(presetResolution.y));
+            const float presetAspect = static_cast<float>(presetResolution.x) / static_cast<float>(presetResolution.y);
+            if (m_gameViewScalePolicy == GameViewScalePolicy::AutoFit) {
+                switch (m_gameViewAspectPolicy) {
+                case GameViewAspectPolicy::Fill:
+                    imageSize = FillSizeKeepingAspect(viewportSize, presetAspect);
+                    break;
+                case GameViewAspectPolicy::PixelPerfect:
+                    imageSize = ImVec2(static_cast<float>(presetResolution.x), static_cast<float>(presetResolution.y));
+                    if (imageSize.x > viewportSize.x || imageSize.y > viewportSize.y) {
+                        imageSize = FitSizeKeepingAspect(viewportSize, presetAspect);
+                    }
+                    break;
+                case GameViewAspectPolicy::Fit:
+                default:
+                    imageSize = FitSizeKeepingAspect(viewportSize, presetAspect);
+                    break;
+                }
+            } else {
+                float scale = 1.0f;
+                if (m_gameViewScalePolicy == GameViewScalePolicy::Scale2x) scale = 2.0f;
+                else if (m_gameViewScalePolicy == GameViewScalePolicy::Scale3x) scale = 3.0f;
+                imageSize = ImVec2(static_cast<float>(presetResolution.x) * scale, static_cast<float>(presetResolution.y) * scale);
+                if (imageSize.x > viewportSize.x || imageSize.y > viewportSize.y) {
+                    imageSize = FitSizeKeepingAspect(viewportSize, presetAspect);
+                }
+            }
         }
         const ImVec2 imageCursor(
             ImGui::GetCursorPosX() + (viewportSize.x - imageSize.x) * 0.5f,
@@ -3967,8 +4569,14 @@ void EditorLayer::DrawGameView()
             DirectX::XMFLOAT4X4 gameView{};
             DirectX::XMFLOAT4X4 gameProjection{};
             if (TryBuildGameView2DViewProjection(gameView, gameProjection)) {
-                Draw2DOverlayForRect(m_gameViewRect, gameView, gameProjection, false);
-            } else {
+                if (m_gameViewShowUIOverlay) {
+                    Draw2DOverlayForRect(m_gameViewRect, gameView, gameProjection, false);
+                }
+                if (m_gameViewShow2DOverlay) {
+                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    drawList->AddText(ImVec2(imageMin.x + 12.0f, imageMin.y + 12.0f), IM_COL32(190, 220, 255, 220), "2D Preview");
+                }
+            } else if (m_gameViewShow2DOverlay) {
                 ImDrawList* drawList = ImGui::GetWindowDrawList();
                 drawList->AddText(ImVec2(imageMin.x + 16.0f, imageMin.y + 16.0f), IM_COL32(255, 220, 160, 255), "No active 2D camera");
             }
@@ -3990,7 +4598,7 @@ void EditorLayer::DrawGameView()
             drawList->AddText(ImVec2(imageMin.x + 8.0f, imageMin.y + imageSize.y - 22.0f), IM_COL32(200, 220, 255, 220), label.c_str());
         }
 
-        if (m_showSceneStatsOverlay) {
+        if (m_gameViewShowStatsOverlay) {
             DrawStatsOverlay(m_gameViewRect, "Game");
         }
     }
@@ -4082,6 +4690,70 @@ void EditorLayer::DrawLightingWindow()
         // 2. PostEffect の自動生成UI
         auto& post = m_gameLayer->GetPostEffect();
         DrawGlobalSettingsUI(post);
+    }
+    ImGui::End();
+}
+
+void EditorLayer::DrawGridSettingsWindow()
+{
+    if (!m_showGridSettingsWindow) {
+        return;
+    }
+
+    ApplyPendingWindowFocus(WindowFocusTarget::GridSettings);
+    if (ImGui::Begin(kGridSettingsWindowTitle, &m_showGridSettingsWindow)) {
+        SetLastFocusedWindow(WindowFocusTarget::GridSettings, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
+
+        ImGui::TextDisabled("Scene View 3D grid");
+        ImGui::Spacing();
+
+        if (ImGui::BeginTable("GridSettingsTable", 2, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+            ImGui::TableSetupColumn("Widget", ImGuiTableColumnFlags_WidthStretch);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("showGrid");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Checkbox("##ShowSceneGrid", &m_showSceneGrid);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("cellSize");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::DragFloat("##SceneGridCellSize", &m_sceneGridCellSize, 0.5f, 1.0f, 500.0f, "%.1f")) {
+                m_sceneGridCellSize = (std::clamp)(m_sceneGridCellSize, 1.0f, 500.0f);
+            }
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("halfLineCount");
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1.0f);
+            if (ImGui::SliderInt("##SceneGridHalfLineCount", &m_sceneGridHalfLineCount, 4, 128)) {
+                m_sceneGridHalfLineCount = (std::clamp)(m_sceneGridHalfLineCount, 4, 128);
+            }
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextDisabled("totalSpan");
+            ImGui::TableSetColumnIndex(1);
+            const float totalSpan = static_cast<float>(m_sceneGridHalfLineCount * 2) * m_sceneGridCellSize;
+            ImGui::Text("%.1f units", totalSpan);
+
+            ImGui::EndTable();
+        }
+
+        if (ImGui::Button("Compact Preset")) {
+            m_sceneGridCellSize = 20.0f;
+            m_sceneGridHalfLineCount = 24;
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Default Preset")) {
+            m_sceneGridCellSize = 20.0f;
+            m_sceneGridHalfLineCount = 32;
+        }
     }
     ImGui::End();
 }
