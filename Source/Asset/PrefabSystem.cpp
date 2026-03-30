@@ -6,6 +6,9 @@
 
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
+#include "Component/AudioEmitterComponent.h"
+#include "Component/AudioListenerComponent.h"
+#include "Component/AudioSettingsComponent.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/CameraEffectComponent.h"
@@ -120,6 +123,40 @@ namespace
                 {"alignment", static_cast<int>(text->alignment)},
                 {"lineSpacing", text->lineSpacing},
                 {"wrapping", text->wrapping}
+            });
+        }
+
+        if (const auto& audioEmitter = std::get<std::optional<AudioEmitterComponent>>(node.components); audioEmitter.has_value()) {
+            writeComponent("AudioEmitterComponent", json{
+                {"clipAssetPath", audioEmitter->clipAssetPath},
+                {"playOnStart", audioEmitter->playOnStart},
+                {"loop", audioEmitter->loop},
+                {"is3D", audioEmitter->is3D},
+                {"volume", audioEmitter->volume},
+                {"pitch", audioEmitter->pitch},
+                {"spatialBlend", audioEmitter->spatialBlend},
+                {"minDistance", audioEmitter->minDistance},
+                {"maxDistance", audioEmitter->maxDistance},
+                {"streaming", audioEmitter->streaming},
+                {"bus", static_cast<int>(audioEmitter->bus)}
+            });
+        }
+
+        if (const auto& audioListener = std::get<std::optional<AudioListenerComponent>>(node.components); audioListener.has_value()) {
+            writeComponent("AudioListenerComponent", json{
+                {"isPrimary", audioListener->isPrimary},
+                {"volumeScale", audioListener->volumeScale}
+            });
+        }
+
+        if (const auto& audioSettings = std::get<std::optional<AudioSettingsComponent>>(node.components); audioSettings.has_value()) {
+            writeComponent("AudioSettingsComponent", json{
+                {"masterVolume", audioSettings->masterVolume},
+                {"bgmVolume", audioSettings->bgmVolume},
+                {"sfxVolume", audioSettings->sfxVolume},
+                {"uiVolume", audioSettings->uiVolume},
+                {"muteAll", audioSettings->muteAll},
+                {"debugDraw", audioSettings->debugDraw}
             });
         }
 
@@ -395,6 +432,43 @@ namespace
             component.alignment = static_cast<TextAlignment>(value.value("alignment", static_cast<int>(component.alignment)));
             component.lineSpacing = value.value("lineSpacing", component.lineSpacing);
             component.wrapping = value.value("wrapping", component.wrapping);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("AudioEmitterComponent")) {
+            AudioEmitterComponent component;
+            const json& value = components["AudioEmitterComponent"];
+            component.clipAssetPath = value.value("clipAssetPath", component.clipAssetPath);
+            component.playOnStart = value.value("playOnStart", component.playOnStart);
+            component.loop = value.value("loop", component.loop);
+            component.is3D = value.value("is3D", component.is3D);
+            component.volume = value.value("volume", component.volume);
+            component.pitch = value.value("pitch", component.pitch);
+            component.spatialBlend = value.value("spatialBlend", component.spatialBlend);
+            component.minDistance = value.value("minDistance", component.minDistance);
+            component.maxDistance = value.value("maxDistance", component.maxDistance);
+            component.streaming = value.value("streaming", component.streaming);
+            component.bus = static_cast<AudioBusType>(value.value("bus", static_cast<int>(component.bus)));
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("AudioListenerComponent")) {
+            AudioListenerComponent component;
+            const json& value = components["AudioListenerComponent"];
+            component.isPrimary = value.value("isPrimary", component.isPrimary);
+            component.volumeScale = value.value("volumeScale", component.volumeScale);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("AudioSettingsComponent")) {
+            AudioSettingsComponent component;
+            const json& value = components["AudioSettingsComponent"];
+            component.masterVolume = value.value("masterVolume", component.masterVolume);
+            component.bgmVolume = value.value("bgmVolume", component.bgmVolume);
+            component.sfxVolume = value.value("sfxVolume", component.sfxVolume);
+            component.uiVolume = value.value("uiVolume", component.uiVolume);
+            component.muteAll = value.value("muteAll", component.muteAll);
+            component.debugDraw = value.value("debugDraw", component.debugDraw);
             SetOptional(node.components, component);
         }
 

@@ -1,4 +1,5 @@
 ﻿#include "EngineKernel.h"
+#include "Audio/AudioWorldSystem.h"
 #include "Graphics.h"
 #include "Layer/GameLayer.h"
 #include "Layer/EditorLayer.h"
@@ -889,6 +890,10 @@ namespace {
     }
 }
 
+EngineKernel::EngineKernel() = default;
+
+EngineKernel::~EngineKernel() = default;
+
 EngineKernel& EngineKernel::Instance()
 {
     static EngineKernel instance;
@@ -927,6 +932,11 @@ void EngineKernel::Initialize()
     m_gameLayer = std::make_unique<GameLayer>();
     m_gameLayer->Initialize();
 
+    m_audioWorld = std::make_unique<AudioWorldSystem>();
+    if (!m_audioWorld->Initialize()) {
+        LOG_ERROR("[EngineKernel] Failed to initialize AudioWorldSystem.");
+    }
+
     std::vector<IconFontManager::SizeConfig> configs = {
         { IconFontSize::Mini,   14.0f },
         { IconFontSize::Small,  14.0f },
@@ -964,6 +974,10 @@ void EngineKernel::Initialize()
 
 void EngineKernel::Finalize()
 {
+    if (m_audioWorld) {
+        m_audioWorld->Finalize();
+        m_audioWorld.reset();
+    }
     if (m_editorLayer) m_editorLayer->Finalize();
     if (m_gameLayer) m_gameLayer->Finalize();
 }
@@ -982,6 +996,9 @@ void EngineKernel::Update(float rawDt)
         time.dt = 0.0f;
 
     if (m_gameLayer) m_gameLayer->Update(time);
+    if (m_audioWorld && m_gameLayer) {
+        m_audioWorld->Update(m_gameLayer->GetRegistry(), mode);
+    }
 
     time.totalTime += time.dt;
     if (stepThisFrame) {
@@ -1415,6 +1432,10 @@ void EngineKernel::ResetRenderStateForSceneChange()
         if (auto* dx12 = Graphics::Instance().GetDX12Device()) {
             dx12->WaitForGPU();
         }
+    }
+
+    if (m_audioWorld) {
+        m_audioWorld->ResetForSceneChange();
     }
 
     if (m_renderPipeline) {

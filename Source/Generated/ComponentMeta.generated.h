@@ -22,6 +22,11 @@ template <typename T>
 struct ComponentMeta;
 
 // --- Component Includes ---
+#include "Component/AudioEmitterComponent.h"
+#include "Component/AudioListenerComponent.h"
+#include "Component/AudioOneShotRequestComponent.h"
+#include "Component/AudioSettingsComponent.h"
+#include "Component/AudioStateComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
@@ -45,6 +50,76 @@ struct ComponentMeta;
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
+
+template <>
+struct ComponentMeta<AudioEmitterComponent> {
+    static constexpr std::string_view Name = "AudioEmitterComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("clipAssetPath", &AudioEmitterComponent::clipAssetPath),
+        MakeField("playOnStart", &AudioEmitterComponent::playOnStart),
+        MakeField("loop", &AudioEmitterComponent::loop),
+        MakeField("is3D", &AudioEmitterComponent::is3D),
+        MakeField("volume", &AudioEmitterComponent::volume),
+        MakeField("pitch", &AudioEmitterComponent::pitch),
+        MakeField("spatialBlend", &AudioEmitterComponent::spatialBlend),
+        MakeField("minDistance", &AudioEmitterComponent::minDistance),
+        MakeField("maxDistance", &AudioEmitterComponent::maxDistance),
+        MakeField("streaming", &AudioEmitterComponent::streaming),
+        MakeField("bus", &AudioEmitterComponent::bus)
+    );
+};
+
+template <>
+struct ComponentMeta<AudioListenerComponent> {
+    static constexpr std::string_view Name = "AudioListenerComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("isPrimary", &AudioListenerComponent::isPrimary),
+        MakeField("volumeScale", &AudioListenerComponent::volumeScale)
+    );
+};
+
+template <>
+struct ComponentMeta<AudioOneShotRequestComponent> {
+    static constexpr std::string_view Name = "AudioOneShotRequestComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("clipAssetPath", &AudioOneShotRequestComponent::clipAssetPath),
+        MakeField("volume", &AudioOneShotRequestComponent::volume),
+        MakeField("pitch", &AudioOneShotRequestComponent::pitch),
+        MakeField("is3D", &AudioOneShotRequestComponent::is3D),
+        MakeField("bus", &AudioOneShotRequestComponent::bus),
+        MakeField("lifetimeFrames", &AudioOneShotRequestComponent::lifetimeFrames),
+        MakeField("loop", &AudioOneShotRequestComponent::loop),
+        MakeField("streaming", &AudioOneShotRequestComponent::streaming),
+        MakeField("minDistance", &AudioOneShotRequestComponent::minDistance),
+        MakeField("maxDistance", &AudioOneShotRequestComponent::maxDistance)
+    );
+};
+
+template <>
+struct ComponentMeta<AudioSettingsComponent> {
+    static constexpr std::string_view Name = "AudioSettingsComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("masterVolume", &AudioSettingsComponent::masterVolume),
+        MakeField("bgmVolume", &AudioSettingsComponent::bgmVolume),
+        MakeField("sfxVolume", &AudioSettingsComponent::sfxVolume),
+        MakeField("uiVolume", &AudioSettingsComponent::uiVolume),
+        MakeField("muteAll", &AudioSettingsComponent::muteAll),
+        MakeField("debugDraw", &AudioSettingsComponent::debugDraw)
+    );
+};
+
+template <>
+struct ComponentMeta<AudioStateComponent> {
+    static constexpr std::string_view Name = "AudioStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("isPlaying", &AudioStateComponent::isPlaying),
+        MakeField("isPaused", &AudioStateComponent::isPaused),
+        MakeField("isVirtualized", &AudioStateComponent::isVirtualized),
+        MakeField("playbackTimeSec", &AudioStateComponent::playbackTimeSec),
+        MakeField("lengthSec", &AudioStateComponent::lengthSec),
+        MakeField("activeVoiceHandle", &AudioStateComponent::activeVoiceHandle)
+    );
+};
 
 template <>
 struct ComponentMeta<Camera2DComponent> {
@@ -254,6 +329,15 @@ template <>
 struct ComponentMeta<PostEffectComponent> {
     static constexpr std::string_view Name = "PostEffectComponent";
     static constexpr auto Fields = std::make_tuple(
+        MakeField("enableComputeCulling", &PostEffectComponent::enableComputeCulling),
+        MakeField("enableAsyncCompute", &PostEffectComponent::enableAsyncCompute),
+        MakeField("enableGTAO", &PostEffectComponent::enableGTAO),
+        MakeField("enableSSGI", &PostEffectComponent::enableSSGI),
+        MakeField("enableVolumetricFog", &PostEffectComponent::enableVolumetricFog),
+        MakeField("enableSSR", &PostEffectComponent::enableSSR),
+        MakeField("enableBloom", &PostEffectComponent::enableBloom),
+        MakeField("enableColorFilter", &PostEffectComponent::enableColorFilter),
+        MakeField("enableMotionBlur", &PostEffectComponent::enableMotionBlur),
         MakeField("luminanceLowerEdge", &PostEffectComponent::luminanceLowerEdge),
         MakeField("luminanceHigherEdge", &PostEffectComponent::luminanceHigherEdge),
         MakeField("bloomIntensity", &PostEffectComponent::bloomIntensity),
@@ -352,6 +436,11 @@ struct ComponentMeta<TransformComponent> {
 
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
+    AudioEmitterComponent,
+    AudioListenerComponent,
+    AudioOneShotRequestComponent,
+    AudioSettingsComponent,
+    AudioStateComponent,
     Camera2DComponent,
     CameraFreeControlComponent,
     CameraTPVControlComponent,

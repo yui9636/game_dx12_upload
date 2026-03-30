@@ -14,6 +14,9 @@
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/LightComponent.h"
+#include "Component/AudioEmitterComponent.h"
+#include "Component/AudioSettingsComponent.h"
+#include "Component/AudioListenerComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/RectTransformComponent.h"
@@ -177,6 +180,45 @@ namespace
         std::string ext = std::filesystem::path(path).extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         return ext == ".ttf" || ext == ".otf" || ext == ".fnt";
+    }
+
+    bool IsSupportedAudioAsset(const std::string& path)
+    {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac";
+    }
+
+    EntitySnapshot::Snapshot BuildAudioEmitterSnapshot(const std::string& name,
+                                                       const std::string& clipPath,
+                                                       bool playOnStart)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        AudioEmitterComponent emitter{};
+        emitter.clipAssetPath = clipPath;
+        emitter.playOnStart = playOnStart;
+        emitter.is3D = true;
+        emitter.bus = AudioBusType::SFX;
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<AudioEmitterComponent>>(node.components) = emitter;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
     }
 
     EntitySnapshot::Snapshot BuildSingleSpriteSnapshot(const std::string& name,
@@ -498,7 +540,8 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             HierarchyComponent* hier = registry->GetComponent<HierarchyComponent>(entity);
             if (!hier || Entity::IsNull(hier->parent)) {
                 if (registry->GetComponent<EnvironmentComponent>(entity) ||
-                    registry->GetComponent<ReflectionProbeComponent>(entity)) {
+                    registry->GetComponent<ReflectionProbeComponent>(entity) ||
+                    registry->GetComponent<AudioSettingsComponent>(entity)) {
                     continue;
                 }
                 if (!SubtreeMatchesFilter(*registry, entity)) {
@@ -587,8 +630,20 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                                          "Create Text");
             }
         }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedAudioAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Audio Source From Selected Clip")) {
+                const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                CreateEntityFromSnapshot(registry,
+                                         BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
+                                         Entity::NULL_ID,
+                                         "Create Audio Source");
+            }
+        }
         if (ImGui::MenuItem("Create 2D Camera")) {
             CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), Entity::NULL_ID, "Create 2D Camera");
+        }
+        if (ImGui::MenuItem("Create Audio Source")) {
+            CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), Entity::NULL_ID, "Create Audio Source");
         }
         ImGui::EndPopup();
     }
@@ -600,6 +655,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     if (!registry ||
         registry->GetComponent<EnvironmentComponent>(entity) ||
         registry->GetComponent<ReflectionProbeComponent>(entity) ||
+        registry->GetComponent<AudioSettingsComponent>(entity) ||
         !SubtreeMatchesFilter(*registry, entity)) {
         return;
     }
@@ -879,11 +935,31 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                 }
             }
         }
+        if (selection.GetType() == SelectionType::Asset && IsSupportedAudioAsset(selection.GetAssetPath())) {
+            if (ImGui::MenuItem("Create Audio Source Child From Selected Clip")) {
+                if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                } else {
+                    const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
+                    CreateEntityFromSnapshot(registry,
+                                             BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
+                                             entity,
+                                             "Create Audio Source Child");
+                }
+            }
+        }
         if (ImGui::MenuItem("Create 2D Camera Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
             } else {
                 CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), entity, "Create 2D Camera Child");
+            }
+        }
+        if (ImGui::MenuItem("Create Audio Source Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            } else {
+                CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), entity, "Create Audio Source Child");
             }
         }
 
@@ -1028,6 +1104,21 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                     BuildSingleTextSnapshot(path.stem().string(), sourcePathStr),
                     parentEntity,
                     "Create Text From Asset");
+                auto* actionPtr = action.get();
+                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+            }
+            else if (IsSupportedAudioAsset(sourcePathStr)) {
+                if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
+                    LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+                    ImGui::EndDragDropTarget();
+                    return;
+                }
+
+                auto action = std::make_unique<CreateEntityAction>(
+                    BuildAudioEmitterSnapshot(path.stem().string(), sourcePathStr, true),
+                    parentEntity,
+                    "Create Audio Source From Asset");
                 auto* actionPtr = action.get();
                 UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());

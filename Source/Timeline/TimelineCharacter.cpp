@@ -3,12 +3,11 @@
 #include "Actor/Actor.h"
 #include "Collision/ColliderComponent.h"
 #include "Model.h"
+#include "Engine/EngineKernel.h"
 
 #include "Effect/EffectManager.h"
 #include "Effect/EffectNode.h"
 #include "Effect/EffectLoader.h"
-#include "Audio/Audio.h"
-#include "Audio/AudioSource.h"
 
 #include <cmath>
 
@@ -43,7 +42,8 @@ void TimelineCharacter::OnAnimationChange(int newAnimIndex)
     for (auto& item : activeItems)
     {
         if (item.vfxInstance) item.vfxInstance->Stop(true);
-        if (item.audioSource) item.audioSource->Stop();
+        if (item.audioHandle != 0) EngineKernel::Instance().GetAudioWorld().StopVoice(item.audioHandle);
+        item.audioHandle = 0;
     }
     activeItems.clear();
 
@@ -174,27 +174,27 @@ void TimelineCharacter::Update(float elapsedTime)
                             XMFLOAT4X4 mat; XMStoreFloat4x4(&mat, W);
                             XMFLOAT3 pos = { mat._41, mat._42, mat._43 };
 
-                            it.audioSource = Audio::Instance()->Play3D(
+                            it.audioHandle = EngineKernel::Instance().GetAudioWorld().PlayTransient3D(
                                 it.audio.assetId, pos,
                                 it.audio.volume, it.audio.pitch, it.audio.loop
                             );
                         }
                         else
                         {
-                            Audio::Instance()->Play2D(
+                            EngineKernel::Instance().GetAudioWorld().PlayTransient2D(
                                 it.audio.assetId, it.audio.volume, it.audio.pitch, it.audio.loop
                             );
-                            it.audioSource.reset();
+                            it.audioHandle = 0;
                         }
                     }
                 }
 
-                if (it.audioActive && it.audioSource && it.audio.is3D)
+                if (it.audioActive && it.audioHandle != 0 && it.audio.is3D)
                 {
                     XMMATRIX W = CalcWorldMatrixForItem(it);
                     XMFLOAT4X4 mat; XMStoreFloat4x4(&mat, W);
                     XMFLOAT3 pos = { mat._41, mat._42, mat._43 };
-                    it.audioSource->SetPosition(pos);
+                    EngineKernel::Instance().GetAudioWorld().SetVoicePosition(it.audioHandle, pos);
                 }
             }
             else
@@ -202,9 +202,9 @@ void TimelineCharacter::Update(float elapsedTime)
                 if (it.audioActive)
                 {
                     it.audioActive = false;
-                    if (it.audioSource) {
-                        it.audioSource->Stop();
-                        it.audioSource.reset();
+                    if (it.audioHandle != 0) {
+                        EngineKernel::Instance().GetAudioWorld().StopVoice(it.audioHandle);
+                        it.audioHandle = 0;
                     }
                 }
             }

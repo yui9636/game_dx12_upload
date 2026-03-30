@@ -215,6 +215,16 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
     }
 
+    else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac") {
+
+        entry.type = AssetType::Audio;
+
+        entry.iconStr = ICON_FA_VOLUME_HIGH;
+
+        entry.iconColor = ImVec4(0.45f, 0.85f, 1.0f, 1.0f);
+
+    }
+
     else if (ext == ".mat") {
 
         entry.type = AssetType::Material;

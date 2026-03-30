@@ -234,16 +234,7 @@
     <ClInclude Include="Source\Input\Mouse.h">
       <Filter>Source\Input</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Audio\Audio.h">
-      <Filter>Source\Audio</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Audio\AudioResource.h">
-      <Filter>Source\Audio</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Audio\AudioSource.h">
-      <Filter>Source\Audio</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Character.h">
+                <ClInclude Include="Source\Character\Character.h">
       <Filter>Source\Character</Filter>
     </ClInclude>
     <ClInclude Include="Source\easing.h">
@@ -522,10 +513,7 @@
     <ClInclude Include="Source\Cinematic\CinematicTypes.h">
       <Filter>Source\Cinematic</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Audio\BGMComponent.h">
-      <Filter>Source\Audio</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Cinematic\CinematicPlayComponent.h">
+        <ClInclude Include="Source\Cinematic\CinematicPlayComponent.h">
       <Filter>Source\Cinematic</Filter>
     </ClInclude>
     <ClInclude Include="Source\Animator\AnimatorComponent.h">
@@ -729,7 +717,13 @@
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h">
       <Filter>Source\Asset</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Audio\AudioWorldSystem.h">
+      <Filter>Source\Audio</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Engine\EditorSelection.h">
+      <Filter>Source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Engine\EngineMode.h">
       <Filter>Source\Engine</Filter>
     </ClInclude>
     <ClInclude Include="Source\Inspector\InspectorECSUI.h">
@@ -748,6 +742,15 @@
       <Filter>Source\Layer</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\CameraBehaviorComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\AudioEmitterComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\AudioListenerComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\AudioSettingsComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\CameraComponent.h">
@@ -975,16 +978,7 @@
     <ClCompile Include="Source\Input\Mouse.cpp">
       <Filter>Source\Input</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Audio\Audio.cpp">
-      <Filter>Source\Audio</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Audio\AudioResource.cpp">
-      <Filter>Source\Audio</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Audio\AudioSource.cpp">
-      <Filter>Source\Audio</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Character.cpp">
+                <ClCompile Include="Source\Character\Character.cpp">
       <Filter>Source\Character</Filter>
     </ClCompile>
     <ClCompile Include="Source\Stage\Stage.cpp">
@@ -1251,10 +1245,7 @@
     <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp">
       <Filter>Source\Cinematic</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Audio\BGMComponent.cpp">
-      <Filter>Source\Audio</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Cinematic\CinematicPlayComponent.cpp">
+        <ClCompile Include="Source\Cinematic\CinematicPlayComponent.cpp">
       <Filter>Source\Cinematic</Filter>
     </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorComponent.cpp">
@@ -1367,6 +1358,12 @@
     </ClCompile>
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp">
       <Filter>Source\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Audio\AudioWorldSystem.cpp">
+      <Filter>Source\Audio</Filter>
+    </ClCompile>
+    <ClCompile Include="External\miniaudio-master\miniaudio.c">
+      <Filter>External</Filter>
     </ClCompile>
     <ClCompile Include="Source\Inspector\InspectorECSUI.cpp">
       <Filter>Source\Inspector</Filter>

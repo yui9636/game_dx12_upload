@@ -81,6 +81,7 @@ public:
         AssetBrowser,
         Console,
         Lighting,
+        Audio,
         RenderPasses,
         GridSettings,
         GBufferDebug
@@ -146,6 +147,7 @@ private:
     bool m_showAssetBrowser = true;
     bool m_showConsole = true;
     bool m_showLightingWindow = false;
+    bool m_showAudioWindow = false;
     bool m_showRenderPassesWindow = false;
     bool m_showGridSettingsWindow = false;
     bool m_showGBufferDebug = false;
@@ -220,6 +222,7 @@ private:
     void DrawHierarchy();
     void DrawInspector();
     void DrawLightingWindow();
+    void DrawAudioWindow();
     void DrawRenderPassesWindow();
     void DrawGridSettingsWindow();
     void DrawGBufferDebugWindow();

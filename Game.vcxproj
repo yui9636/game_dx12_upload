@@ -68,7 +68,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;xaudio2.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MD\x64\Debug;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
@@ -103,7 +103,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;xaudio2.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MT\x64\Debug;.\External\Effekseer170e\lib\vs2022\MT\x64\Release;.\External\Effekseer170e\lib\vs2022\MD\x64\Release;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
@@ -146,12 +146,9 @@
     <ClInclude Include="Source\Asset\AssetManager.h" />
     <ClInclude Include="Source\Asset\PrefabSystem.h" />
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h" />
+    <ClInclude Include="Source\Audio\AudioWorldSystem.h" />
     <ClInclude Include="Source\AssimpImporter.h" />
-    <ClInclude Include="Source\Audio\Audio.h" />
-    <ClInclude Include="Source\Audio\AudioResource.h" />
-    <ClInclude Include="Source\Audio\AudioSource.h" />
-    <ClInclude Include="Source\Audio\BGMComponent.h" />
-    <ClInclude Include="Source\BT\BehaviorTree.h" />
+                    <ClInclude Include="Source\BT\BehaviorTree.h" />
     <ClInclude Include="Source\BT\BTBuilder.h" />
     <ClInclude Include="Source\BT\BTCommands.h" />
     <ClInclude Include="Source\BT\BTEditorComponent.h" />
@@ -220,6 +217,7 @@
     <ClInclude Include="Source\Effect\HologramManager.h" />
     <ClInclude Include="Source\Effect\MeshEmitter.h" />
     <ClInclude Include="Source\Engine\EditorSelection.h" />
+    <ClInclude Include="Source\Engine\EngineMode.h" />
     <ClInclude Include="Source\Engine\EngineKernel.h" />
     <ClInclude Include="Source\Engine\EngineTime.h" />
     <ClInclude Include="Source\Entity\Entity.h" />
@@ -423,12 +421,10 @@
     <ClCompile Include="Source\Asset\AssetManager.cpp" />
     <ClCompile Include="Source\Asset\PrefabSystem.cpp" />
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp" />
+    <ClCompile Include="Source\Audio\AudioWorldSystem.cpp" />
+    <ClCompile Include="External\miniaudio-master\miniaudio.c" />
     <ClCompile Include="Source\AssimpImporter.cpp" />
-    <ClCompile Include="Source\Audio\Audio.cpp" />
-    <ClCompile Include="Source\Audio\AudioResource.cpp" />
-    <ClCompile Include="Source\Audio\AudioSource.cpp" />
-    <ClCompile Include="Source\Audio\BGMComponent.cpp" />
-    <ClCompile Include="Source\BT\BTBuilder.cpp" />
+                    <ClCompile Include="Source\BT\BTBuilder.cpp" />
     <ClCompile Include="Source\BT\BTEditorComponent.cpp" />
     <ClCompile Include="Source\Camera\Camera.cpp" />
     <ClCompile Include="Source\Camera\CameraController.cpp" />

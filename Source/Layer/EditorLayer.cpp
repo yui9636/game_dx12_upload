@@ -10,6 +10,10 @@
 #include "Undo/EntityUndoActions.h"
 #include "Undo/ComponentUndoAction.h"
 #include "Asset/PrefabSystem.h"
+#include "Audio/AudioWorldSystem.h"
+#include "Component/AudioEmitterComponent.h"
+#include "Component/AudioListenerComponent.h"
+#include "Component/AudioSettingsComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/HierarchyComponent.h"
@@ -78,6 +82,7 @@ namespace {
     constexpr const char* kInspectorWindowTitle = ICON_FA_CIRCLE_INFO " Inspector";
     constexpr const char* kAssetBrowserWindowTitle = ICON_FA_FOLDER_OPEN " Asset Browser";
     constexpr const char* kLightingWindowTitle = ICON_FA_SUN " Lighting Settings";
+    constexpr const char* kAudioWindowTitle = ICON_FA_VOLUME_HIGH " Audio";
     constexpr const char* kRenderPassesWindowTitle = "Render Passes";
     constexpr const char* kGridSettingsWindowTitle = "Grid Settings";
     constexpr const char* kGBufferWindowTitle = ICON_FA_IMAGES " G-Buffer Debug";
@@ -93,6 +98,7 @@ namespace {
         case EditorLayer::WindowFocusTarget::AssetBrowser: return kAssetBrowserWindowTitle;
         case EditorLayer::WindowFocusTarget::Console: return kConsoleWindowTitle;
         case EditorLayer::WindowFocusTarget::Lighting: return kLightingWindowTitle;
+        case EditorLayer::WindowFocusTarget::Audio: return kAudioWindowTitle;
         case EditorLayer::WindowFocusTarget::RenderPasses: return kRenderPassesWindowTitle;
         case EditorLayer::WindowFocusTarget::GridSettings: return kGridSettingsWindowTitle;
         case EditorLayer::WindowFocusTarget::GBufferDebug: return kGBufferWindowTitle;
@@ -616,7 +622,8 @@ namespace {
     bool IsUtilityEntity(Registry& registry, EntityID entity)
     {
         return registry.GetComponent<EnvironmentComponent>(entity) ||
-               registry.GetComponent<ReflectionProbeComponent>(entity);
+               registry.GetComponent<ReflectionProbeComponent>(entity) ||
+               registry.GetComponent<AudioSettingsComponent>(entity);
     }
 
     EntityID FindEnvironmentEntity(Registry& registry)
@@ -673,6 +680,34 @@ namespace {
             registry.RemoveComponent<HierarchyComponent>(probeEntity);
         }
         return *registry.GetComponent<ReflectionProbeComponent>(probeEntity);
+    }
+
+    EntityID FindAudioSettingsEntity(Registry& registry)
+    {
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<AudioSettingsComponent>())) {
+                continue;
+            }
+            const auto& entities = archetype->GetEntities();
+            if (!entities.empty()) {
+                return entities.front();
+            }
+        }
+        return Entity::NULL_ID;
+    }
+
+    AudioSettingsComponent& GetOrCreateAudioSettingsComponent(Registry& registry)
+    {
+        EntityID audioEntity = FindAudioSettingsEntity(registry);
+        if (Entity::IsNull(audioEntity)) {
+            audioEntity = registry.CreateEntity();
+            registry.AddComponent(audioEntity, NameComponent{ "Audio Settings" });
+            registry.AddComponent(audioEntity, AudioSettingsComponent{});
+        } else if (registry.GetComponent<HierarchyComponent>(audioEntity)) {
+            registry.RemoveComponent<HierarchyComponent>(audioEntity);
+        }
+        return *registry.GetComponent<AudioSettingsComponent>(audioEntity);
     }
 
     DirectX::XMUINT2 GetGameViewPresetResolution(EditorLayer::GameViewResolutionPreset preset)
@@ -1137,6 +1172,7 @@ namespace {
         registry.AddComponent(cameraEntity, CameraLensComponent{});
         registry.AddComponent(cameraEntity, CameraMatricesComponent{});
         registry.AddComponent(cameraEntity, CameraMainTagComponent{});
+        registry.AddComponent(cameraEntity, AudioListenerComponent{});
 
         EntityID lightEntity = registry.CreateEntity();
         registry.AddComponent(lightEntity, NameComponent{ "Directional Light" });
@@ -1163,6 +1199,10 @@ namespace {
         EntityID environmentEntity = registry.CreateEntity();
         registry.AddComponent(environmentEntity, NameComponent{ "Environment" });
         registry.AddComponent(environmentEntity, EnvironmentComponent{});
+
+        EntityID audioSettingsEntity = registry.CreateEntity();
+        registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
+        registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
     }
 }
 void ApplyUnityTheme()
@@ -1587,10 +1627,12 @@ void EditorLayer::ExecuteGameResetPreview()
 void EditorLayer::ExecuteCloseSecondaryWindows()
 {
     m_showLightingWindow = false;
+    m_showAudioWindow = false;
     m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
     if (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::Audio ||
         m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug) {
@@ -1607,6 +1649,7 @@ void EditorLayer::ExecuteResetLayout()
     m_showAssetBrowser = true;
     m_showConsole = true;
     m_showLightingWindow = false;
+    m_showAudioWindow = false;
     m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
@@ -1615,7 +1658,7 @@ void EditorLayer::ExecuteResetLayout()
     m_showSceneGrid = true;
     m_showSceneGizmo = true;
     m_showSceneStatsOverlay = false;
-    m_showSceneSelectionOutline = true;
+    m_showSceneSelectionOutline = false;
     m_showSceneLightIcons = true;
     m_showSceneCameraIcons = true;
     m_showSceneBounds = false;
@@ -1647,6 +1690,7 @@ void EditorLayer::RequestWindowFocus(WindowFocusTarget target)
     case WindowFocusTarget::AssetBrowser: m_showAssetBrowser = true; break;
     case WindowFocusTarget::Console: m_showConsole = true; break;
     case WindowFocusTarget::Lighting: m_showLightingWindow = true; break;
+    case WindowFocusTarget::Audio: m_showAudioWindow = true; break;
     case WindowFocusTarget::RenderPasses: m_showRenderPassesWindow = true; break;
     case WindowFocusTarget::GridSettings: m_showGridSettingsWindow = true; break;
     case WindowFocusTarget::GBufferDebug: m_showGBufferDebug = true; break;
@@ -1818,6 +1862,7 @@ void EditorLayer::RenderUI()
     const bool maximizeBottomAsset = (m_maximizedWindow == WindowFocusTarget::AssetBrowser);
     const bool maximizeBottomConsole = (m_maximizedWindow == WindowFocusTarget::Console);
     const bool maximizeTool = (m_maximizedWindow == WindowFocusTarget::Lighting ||
+        m_maximizedWindow == WindowFocusTarget::Audio ||
         m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug);
@@ -1837,6 +1882,9 @@ void EditorLayer::RenderUI()
 
     if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {
         DrawLightingWindow();
+    }
+    if (m_showAudioWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Audio || maximizeTool)) {
+        DrawAudioWindow();
     }
     if (m_showRenderPassesWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::RenderPasses || maximizeTool)) {
         DrawRenderPassesWindow();
@@ -2114,6 +2162,7 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
+            ImGui::MenuItem(kAudioWindowTitle, nullptr, &m_showAudioWindow);
             ImGui::MenuItem("Render Passes", nullptr, &m_showRenderPassesWindow);
             ImGui::MenuItem("Grid Settings", nullptr, &m_showGridSettingsWindow);
             ImGui::MenuItem(ICON_FA_IMAGES " G-Buffer Debug", nullptr, &m_showGBufferDebug);
@@ -2122,6 +2171,7 @@ void EditorLayer::DrawMenuBar()
             if (ImGui::MenuItem("Focus Inspector")) RequestWindowFocus(WindowFocusTarget::Inspector);
             if (ImGui::MenuItem("Focus Asset Browser")) RequestWindowFocus(WindowFocusTarget::AssetBrowser);
             if (ImGui::MenuItem("Focus Console")) RequestWindowFocus(WindowFocusTarget::Console);
+            if (ImGui::MenuItem("Focus Audio", nullptr, false, m_showAudioWindow)) RequestWindowFocus(WindowFocusTarget::Audio);
             if (ImGui::MenuItem("Focus Render Passes", nullptr, false, m_showRenderPassesWindow)) RequestWindowFocus(WindowFocusTarget::RenderPasses);
             if (ImGui::MenuItem("Focus Grid Settings", nullptr, false, m_showGridSettingsWindow)) RequestWindowFocus(WindowFocusTarget::GridSettings);
             ImGui::Separator();
@@ -4703,6 +4753,109 @@ void EditorLayer::DrawLightingWindow()
         auto& post = m_gameLayer->GetPostEffect();
         DrawGlobalSettingsUI(post);
     }
+    ImGui::End();
+}
+
+void EditorLayer::DrawAudioWindow()
+{
+    if (!m_showAudioWindow || !m_gameLayer) {
+        return;
+    }
+
+    ApplyPendingWindowFocus(WindowFocusTarget::Audio);
+    if (!ImGui::Begin(kAudioWindowTitle, &m_showAudioWindow)) {
+        ImGui::End();
+        return;
+    }
+
+    SetLastFocusedWindow(WindowFocusTarget::Audio, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    AudioSettingsComponent& settings = GetOrCreateAudioSettingsComponent(registry);
+    DrawGlobalSettingsUI(settings);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    auto& audio = EngineKernel::Instance().GetAudioWorld();
+    const EntityID listenerEntity = audio.GetActiveListenerEntity();
+    ImGui::TextDisabled("Active Listener:");
+    ImGui::SameLine();
+    if (Entity::IsNull(listenerEntity)) {
+        ImGui::TextUnformatted("None");
+    } else {
+        const std::string listenerLabel = GetEntityLabel(registry, listenerEntity);
+        ImGui::TextWrapped("%s", listenerLabel.c_str());
+    }
+
+    const std::string previewPath = audio.GetPreviewClipPath();
+    ImGui::TextDisabled("Preview:");
+    ImGui::SameLine();
+    if (previewPath.empty()) {
+        ImGui::TextUnformatted("None");
+    } else {
+        const std::string previewName = std::filesystem::path(previewPath).filename().string();
+        ImGui::TextWrapped("%s", previewName.c_str());
+        ImGui::SameLine();
+        if (ImGui::SmallButton(ICON_FA_STOP " Stop Preview")) {
+            audio.StopPreview();
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextDisabled("Active Voices");
+
+    auto voices = audio.GetDebugVoices();
+    if (voices.empty()) {
+        ImGui::TextDisabled("No active voices.");
+    } else if (ImGui::BeginTable("AudioVoices", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 260.0f))) {
+        ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Clip");
+        ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+        ImGui::TableSetupColumn("Entity", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+        ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("3D", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+        ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableHeadersRow();
+
+        for (const auto& voice : voices) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%llu", static_cast<unsigned long long>(voice.handle));
+            ImGui::TableSetColumnIndex(1);
+            const std::string clipName = std::filesystem::path(voice.clipPath).filename().string();
+            ImGui::TextWrapped("%s", clipName.c_str());
+            ImGui::TableSetColumnIndex(2);
+            ImGui::TextUnformatted(GetAudioBusTypeLabel(voice.bus));
+            ImGui::TableSetColumnIndex(3);
+            if (Entity::IsNull(voice.entity)) {
+                ImGui::TextDisabled("Transient");
+            } else {
+                const std::string entityLabel = GetEntityLabel(registry, voice.entity);
+                ImGui::TextWrapped("%s", entityLabel.c_str());
+            }
+            ImGui::TableSetColumnIndex(4);
+            if (voice.preview) {
+                ImGui::TextColored(ImVec4(0.45f, 0.85f, 1.0f, 1.0f), "Preview");
+            } else if (voice.playing) {
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Playing");
+            } else {
+                ImGui::TextDisabled("Stopped");
+            }
+            ImGui::TableSetColumnIndex(5);
+            ImGui::TextUnformatted(voice.is3D ? "Yes" : "No");
+            ImGui::TableSetColumnIndex(6);
+            ImGui::TextUnformatted(voice.loop ? "Yes" : "No");
+            ImGui::TableSetColumnIndex(7);
+            ImGui::Text("%.2f / %.2f", voice.cursorSeconds, voice.lengthSeconds);
+        }
+
+        ImGui::EndTable();
+    }
+
     ImGui::End();
 }
 

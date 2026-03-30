@@ -1,5 +1,7 @@
 #pragma once
 #include "EngineTime.h"
+#include "EngineMode.h"
+#include "Audio/AudioWorldSystem.h"
 #include "RenderContext/RenderContext.h"
 #include "RenderContext/RenderPipeline.h"
 #include "RenderContext/RenderQueue.h"
@@ -12,14 +14,12 @@
 class GameLayer;
 class EditorLayer;
 
-enum class EngineMode { Editor, Play, Pause };
-
 class EngineKernel
 {
     friend class Framework;
 private:
-    EngineKernel() = default;
-    ~EngineKernel() = default;
+    EngineKernel();
+    ~EngineKernel();
 
 public:
     static EngineKernel& Instance();
@@ -35,6 +35,8 @@ public:
 
     EngineMode GetMode() const { return mode; }
     const EngineTime& GetTime() const { return time; }
+    AudioWorldSystem& GetAudioWorld() { return *m_audioWorld; }
+    const AudioWorldSystem& GetAudioWorld() const { return *m_audioWorld; }
 
 private:
     void Initialize();
@@ -48,6 +50,7 @@ private:
     std::unique_ptr<ReflectionProbeBaker> m_probeBaker;
     RenderQueue m_renderQueue;
     GridRenderSystem m_editorGridRenderSystem;
+    std::unique_ptr<AudioWorldSystem> m_audioWorld;
 
     std::unique_ptr<GameLayer> m_gameLayer;
     std::unique_ptr<EditorLayer> m_editorLayer;

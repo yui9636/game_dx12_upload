@@ -1,3 +1,4 @@
+#include "Engine/EngineKernel.h"
 #include "TimelineSequencerComponent.h"
 #include "Runner/RunnerComponent.h"
 #include "Actor/Actor.h"
@@ -22,8 +23,6 @@
 #include "Storage/GameplayAsset.h"
 #include <System/Dialog.h>
 #include "Camera/CameraController.h"
-#include "Audio/Audio.h"
-#include "Audio/AudioSource.h"
 
 #define PI 3.14159265358979323846f
 #define DEG_TO_RAD (PI / 180.0f)
@@ -309,22 +308,22 @@ void TimelineSequencerComponent::Update(float dt)
                                     }
                                 }
                             }
-                            it.audioSource = Audio::Instance()->Play3D(
+                            it.audioHandle = EngineKernel::Instance().GetAudioWorld().PlayTransient3D(
                                 it.audio.assetId, pos,
                                 it.audio.volume, it.audio.pitch, it.audio.loop
                             );
                         }
                         else
                         {
-                            Audio::Instance()->Play2D(
+                            EngineKernel::Instance().GetAudioWorld().PlayTransient2D(
                                 it.audio.assetId, it.audio.volume, it.audio.pitch, it.audio.loop
                             );
-                            it.audioSource.reset();
+                            it.audioHandle = 0;
                         }
                     }
                 }
 
-                if (it.audioActive && it.audioSource && it.audio.is3D)
+                if (it.audioActive && it.audioHandle != 0 && it.audio.is3D)
                 {
                     DirectX::XMFLOAT3 pos = owner->GetPosition();
                     if (it.audio.nodeIndex >= 0) {
@@ -340,7 +339,7 @@ void TimelineSequencerComponent::Update(float dt)
                             }
                         }
                     }
-                    it.audioSource->SetPosition(pos);
+                    EngineKernel::Instance().GetAudioWorld().SetVoicePosition(it.audioHandle, pos);
                 }
             }
             else
@@ -348,10 +347,10 @@ void TimelineSequencerComponent::Update(float dt)
                 if (it.audioActive)
                 {
                     it.audioActive = false;
-                    if (it.audioSource)
+                    if (it.audioHandle != 0)
                     {
-                        it.audioSource->Stop();
-                        it.audioSource.reset();
+                        EngineKernel::Instance().GetAudioWorld().StopVoice(it.audioHandle);
+                        it.audioHandle = 0;
                     }
                 }
             }
@@ -463,7 +462,7 @@ namespace {
         void Del(int index) override {
             if (items && index >= 0) {
                 if ((*items)[index].vfxActive && (*items)[index].vfxInstance) (*items)[index].vfxInstance->Stop();
-                if ((*items)[index].audioActive && (*items)[index].audioSource) (*items)[index].audioSource->Stop();
+                if ((*items)[index].audioActive && (*items)[index].audioHandle != 0) EngineKernel::Instance().GetAudioWorld().StopVoice((*items)[index].audioHandle);
 
                 items->erase(items->begin() + index);
             }
@@ -473,7 +472,7 @@ namespace {
                 GESequencerItem cp = (*items)[index];
                 int w = cp.end - cp.start; cp.start += w + 1; cp.end += w + 1;
                 cp.vfxActive = false; cp.vfxInstance.reset();
-                cp.audioActive = false; cp.audioSource.reset();
+                cp.audioActive = false; cp.audioHandle = 0;
                 items->push_back(cp);
             }
         }

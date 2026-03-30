@@ -1,13 +1,13 @@
 #pragma once
 
 #include <string>
+#include <cstdint>
 #include <vector>
 #include <DirectXMath.h>
 #include "JSONManager.h" 
 
 namespace Effekseer { class Effect; }
 class EffectInstance;
-class AudioSource;
 
 // ============================================================================
 // ============================================================================
@@ -125,7 +125,7 @@ struct GESequencerItem
     bool               vfxActive = false;
     std::shared_ptr<EffectInstance> vfxInstance;
     bool                         audioActive = false;
-    std::shared_ptr<AudioSource> audioSource;
+    uint64_t                     audioHandle = 0;
 
     bool fired = false;
 };

@@ -4,6 +4,7 @@
 #include "Registry/Registry.h"
 #include "ThumbnailGenerator.h"
 #include "Engine/EditorSelection.h"
+#include "Engine/EngineKernel.h"
 #include "Graphics.h"
 #include "ImGuiRenderer.h"
 #include <unordered_set>
@@ -311,6 +312,10 @@ void AssetBrowser::RenderContentGrid() {
                 selection.SelectAsset(asset.path.string());
                 m_loadSceneTarget = asset.path.string();
                 m_openLoadScenePopup = true;
+            }
+            else if (asset.type == AssetType::Audio) {
+                selection.SelectAsset(asset.path.string());
+                EngineKernel::Instance().GetAudioWorld().TogglePreviewClip(asset.path.string(), AudioBusType::UI);
             }
             else {
                 AssetManager::Instance().OpenInExternalEditor(asset.path);

@@ -4,7 +4,6 @@
 #include "ImGuiRenderer.h"
 #include "Framework.h"
 #include "Graphics.h"
-#include "Audio/Audio.h"
 #include <shellapi.h>
 #include "Asset/AssetManager.h"
 #include "Engine/EngineKernel.h"
@@ -41,8 +40,6 @@ Framework::Framework(HWND hWnd)
 
     LOG_INFO("[Framework] Graphics initialized API=%s", Graphics::Instance().GetAPI() == GraphicsAPI::DX12 ? "DX12" : "DX11");
 
-    Audio::Instance()->Initialize();
-
     // 2. エンジンカーネルの初期化
     EngineKernel::Instance().Initialize();
 }
@@ -50,8 +47,6 @@ Framework::Framework(HWND hWnd)
 Framework::~Framework()
 {
     EngineKernel::Instance().Finalize();
-    Audio::Instance()->Finalize();
-
     // DX11/DX12 共通（内部で API 分岐）
     ImGuiRenderer::Finalize();
 }
@@ -89,8 +84,6 @@ int Framework::Run()
 void Framework::Update(float dt)
 {
     input.Update();
-    Audio::Instance()->Update();
-
     // ImGui NewFrame（DX11/DX12 共通 - 内部で API 分岐）
     ImGuiRenderer::Begin();
 

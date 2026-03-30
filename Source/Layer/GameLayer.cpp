@@ -14,6 +14,8 @@
 #include <Component\CameraBehaviorComponent.h>
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
+#include "Component/AudioSettingsComponent.h"
+#include "Component/AudioListenerComponent.h"
 #include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
 #include "RHI/DX11/DX11Texture.h"
@@ -35,7 +37,7 @@ void GameLayer::Initialize()
     m_registry.AddComponent(cameraEntity, CameraLensComponent{});
     m_registry.AddComponent(cameraEntity, CameraMatricesComponent{});
     m_registry.AddComponent(cameraEntity, CameraMainTagComponent{}); 
-
+    m_registry.AddComponent(cameraEntity, AudioListenerComponent{});
 
     EntityID lightEntity = m_registry.CreateEntity();
     m_registry.AddComponent(lightEntity, NameComponent{ "Directional Light" });
@@ -68,6 +70,10 @@ void GameLayer::Initialize()
     EntityID environmentEntity = m_registry.CreateEntity();
     m_registry.AddComponent(environmentEntity, NameComponent{ "Environment" });
     m_registry.AddComponent(environmentEntity, EnvironmentComponent{});
+
+    EntityID audioSettingsEntity = m_registry.CreateEntity();
+    m_registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
+    m_registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
 }
 
 void GameLayer::Finalize()
