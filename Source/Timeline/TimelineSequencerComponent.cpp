@@ -736,7 +736,7 @@ void TimelineSequencerComponent::OnGUI()
                 ImGui::SameLine();
                 if (ImGui::Button("...")) {
                     char path[MAX_PATH] = {};
-                    if (Dialog::OpenFileName(path, MAX_PATH, "Audio (*.wav)\0*.wav\0", "Select Audio", nullptr) == DialogResult::OK) {
+                    if (Dialog::OpenFileName(path, MAX_PATH, "Audio (*.wav;*.ogg;*.mp3;*.flac)\0*.wav;*.ogg;*.mp3;*.flac\0", "Select Audio", nullptr) == DialogResult::OK) {
                         std::string fullPath = path;
                         std::string key = "Data\\";
                         size_t pos = fullPath.find(key);

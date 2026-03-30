@@ -22,6 +22,7 @@ template <typename T>
 struct ComponentMeta;
 
 // --- Component Includes ---
+#include "Component/AudioBusSendComponent.h"
 #include "Component/AudioEmitterComponent.h"
 #include "Component/AudioListenerComponent.h"
 #include "Component/AudioOneShotRequestComponent.h"
@@ -50,6 +51,15 @@ struct ComponentMeta;
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
+
+template <>
+struct ComponentMeta<AudioBusSendComponent> {
+    static constexpr std::string_view Name = "AudioBusSendComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("bus", &AudioBusSendComponent::bus),
+        MakeField("sendVolume", &AudioBusSendComponent::sendVolume)
+    );
+};
 
 template <>
 struct ComponentMeta<AudioEmitterComponent> {
@@ -436,6 +446,7 @@ struct ComponentMeta<TransformComponent> {
 
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
+    AudioBusSendComponent,
     AudioEmitterComponent,
     AudioListenerComponent,
     AudioOneShotRequestComponent,

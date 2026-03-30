@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "Component/AudioOneShotRequestComponent.h"
+#include "Component/AudioStateComponent.h"
 #include "Component/ColliderComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/MaterialComponent.h"
@@ -91,6 +93,26 @@ namespace EntitySnapshot
         if (value.has_value()) {
             registry.AddComponent<T>(entity, *value);
         }
+    }
+
+    template<>
+    inline void CaptureComponent<AudioOneShotRequestComponent>(EntityID, Registry&, ComponentStorage&)
+    {
+    }
+
+    template<>
+    inline void RestoreComponent<AudioOneShotRequestComponent>(EntityID, Registry&, const ComponentStorage&)
+    {
+    }
+
+    template<>
+    inline void CaptureComponent<AudioStateComponent>(EntityID, Registry&, ComponentStorage&)
+    {
+    }
+
+    template<>
+    inline void RestoreComponent<AudioStateComponent>(EntityID, Registry&, const ComponentStorage&)
+    {
     }
 
     inline void CaptureAllComponents(EntityID entity, Registry& registry, ComponentStorage& storage)

@@ -147,6 +147,8 @@
     <ClInclude Include="Source\Asset\PrefabSystem.h" />
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h" />
     <ClInclude Include="Source\Audio\AudioWorldSystem.h" />
+    <ClInclude Include="Source\Audio\AudioAssetSystem.h" />
+    <ClInclude Include="Source\Audio\AudioClipAsset.h" />
     <ClInclude Include="Source\AssimpImporter.h" />
                     <ClInclude Include="Source\BT\BehaviorTree.h" />
     <ClInclude Include="Source\BT\BTBuilder.h" />
@@ -185,6 +187,7 @@
     <ClInclude Include="Source\Component\CameraBehaviorComponent.h" />
     <ClInclude Include="Source\Component\CameraComponent.h" />
     <ClInclude Include="Source\Component\CameraEffectComponent.h" />
+    <ClInclude Include="Source\Component\AudioBusSendComponent.h" />
     <ClInclude Include="Source\Component\ColliderComponent.h" />
     <ClInclude Include="Source\Component\Component.h" />
     <ClInclude Include="Source\Component\ComponentColumn.h" />
@@ -422,6 +425,7 @@
     <ClCompile Include="Source\Asset\PrefabSystem.cpp" />
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp" />
     <ClCompile Include="Source\Audio\AudioWorldSystem.cpp" />
+    <ClCompile Include="Source\Audio\AudioAssetSystem.cpp" />
     <ClCompile Include="External\miniaudio-master\miniaudio.c" />
     <ClCompile Include="Source\AssimpImporter.cpp" />
                     <ClCompile Include="Source\BT\BTBuilder.cpp" />

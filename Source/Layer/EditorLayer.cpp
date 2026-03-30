@@ -4772,88 +4772,197 @@ void EditorLayer::DrawAudioWindow()
 
     Registry& registry = m_gameLayer->GetRegistry();
     AudioSettingsComponent& settings = GetOrCreateAudioSettingsComponent(registry);
-    DrawGlobalSettingsUI(settings);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
     auto& audio = EngineKernel::Instance().GetAudioWorld();
     const EntityID listenerEntity = audio.GetActiveListenerEntity();
-    ImGui::TextDisabled("Active Listener:");
-    ImGui::SameLine();
-    if (Entity::IsNull(listenerEntity)) {
-        ImGui::TextUnformatted("None");
-    } else {
-        const std::string listenerLabel = GetEntityLabel(registry, listenerEntity);
-        ImGui::TextWrapped("%s", listenerLabel.c_str());
-    }
-
     const std::string previewPath = audio.GetPreviewClipPath();
-    ImGui::TextDisabled("Preview:");
-    ImGui::SameLine();
-    if (previewPath.empty()) {
-        ImGui::TextUnformatted("None");
-    } else {
-        const std::string previewName = std::filesystem::path(previewPath).filename().string();
-        ImGui::TextWrapped("%s", previewName.c_str());
-        ImGui::SameLine();
-        if (ImGui::SmallButton(ICON_FA_STOP " Stop Preview")) {
-            audio.StopPreview();
-        }
-    }
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::TextDisabled("Active Voices");
 
     auto voices = audio.GetDebugVoices();
-    if (voices.empty()) {
-        ImGui::TextDisabled("No active voices.");
-    } else if (ImGui::BeginTable("AudioVoices", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 260.0f))) {
-        ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("Clip");
-        ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("Entity", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-        ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("3D", ImGuiTableColumnFlags_WidthFixed, 40.0f);
-        ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, 45.0f);
-        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-        ImGui::TableHeadersRow();
+    auto buses = audio.GetDebugBuses();
+    auto cachedClips = audio.GetCachedClips();
 
-        for (const auto& voice : voices) {
-            ImGui::TableNextRow();
-            ImGui::TableSetColumnIndex(0);
-            ImGui::Text("%llu", static_cast<unsigned long long>(voice.handle));
-            ImGui::TableSetColumnIndex(1);
-            const std::string clipName = std::filesystem::path(voice.clipPath).filename().string();
-            ImGui::TextWrapped("%s", clipName.c_str());
-            ImGui::TableSetColumnIndex(2);
-            ImGui::TextUnformatted(GetAudioBusTypeLabel(voice.bus));
-            ImGui::TableSetColumnIndex(3);
-            if (Entity::IsNull(voice.entity)) {
-                ImGui::TextDisabled("Transient");
-            } else {
-                const std::string entityLabel = GetEntityLabel(registry, voice.entity);
-                ImGui::TextWrapped("%s", entityLabel.c_str());
+    if (ImGui::BeginTabBar("AudioDebugTabs")) {
+        if (ImGui::BeginTabItem("Mixer")) {
+            DrawGlobalSettingsUI(settings);
+
+            ImGui::Spacing();
+            if (ImGui::Button(ICON_FA_STOP " Stop All Voices")) {
+                audio.StopAllVoices();
             }
-            ImGui::TableSetColumnIndex(4);
-            if (voice.preview) {
-                ImGui::TextColored(ImVec4(0.45f, 0.85f, 1.0f, 1.0f), "Preview");
-            } else if (voice.playing) {
-                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Playing");
-            } else {
-                ImGui::TextDisabled("Stopped");
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_TRASH " Clear Clip Cache")) {
+                audio.ClearClipCache();
+                cachedClips.clear();
             }
-            ImGui::TableSetColumnIndex(5);
-            ImGui::TextUnformatted(voice.is3D ? "Yes" : "No");
-            ImGui::TableSetColumnIndex(6);
-            ImGui::TextUnformatted(voice.loop ? "Yes" : "No");
-            ImGui::TableSetColumnIndex(7);
-            ImGui::Text("%.2f / %.2f", voice.cursorSeconds, voice.lengthSeconds);
+            if (!previewPath.empty()) {
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_VOLUME_XMARK " Stop Preview")) {
+                    audio.StopPreview();
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+
+            ImGui::TextDisabled("Active Listener:");
+            ImGui::SameLine();
+            if (Entity::IsNull(listenerEntity)) {
+                ImGui::TextUnformatted("None");
+            } else {
+                const std::string listenerLabel = GetEntityLabel(registry, listenerEntity);
+                ImGui::TextWrapped("%s", listenerLabel.c_str());
+            }
+
+            ImGui::TextDisabled("Preview:");
+            ImGui::SameLine();
+            if (previewPath.empty()) {
+                ImGui::TextUnformatted("None");
+            } else {
+                const std::string previewName = std::filesystem::path(previewPath).filename().string();
+                ImGui::TextWrapped("%s", previewName.c_str());
+            }
+
+            int streamingVoiceCount = 0;
+            for (const auto& bus : buses) {
+                streamingVoiceCount += bus.streamingVoiceCount;
+            }
+            ImGui::TextDisabled("Voices: %d  |  Streams: %d  |  Cache: %zu", static_cast<int>(voices.size()), streamingVoiceCount, cachedClips.size());
+
+            if (ImGui::BeginTable("AudioBusTable", 7, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Base", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Effective", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("Voices", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                ImGui::TableSetupColumn("Streams", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Mute", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableSetupColumn("Solo", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableHeadersRow();
+
+                const auto activeSoloBus = audio.GetSoloBus();
+                for (const auto& bus : buses) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(GetAudioBusTypeLabel(bus.bus));
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.2f", bus.baseVolume);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%.2f", bus.effectiveVolume);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%d", bus.activeVoiceCount);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%d", bus.streamingVoiceCount);
+                    ImGui::TableSetColumnIndex(5);
+                    bool muted = bus.muted;
+                    std::string muteId = std::string("##MuteBus") + GetAudioBusTypeLabel(bus.bus);
+                    if (ImGui::Checkbox(muteId.c_str(), &muted)) {
+                        audio.SetBusMuted(bus.bus, muted);
+                    }
+                    ImGui::TableSetColumnIndex(6);
+                    bool solo = activeSoloBus.has_value() && *activeSoloBus == bus.bus;
+                    std::string soloId = std::string("##SoloBus") + GetAudioBusTypeLabel(bus.bus);
+                    if (ImGui::Checkbox(soloId.c_str(), &solo)) {
+                        audio.SetSoloBus(solo ? std::optional<AudioBusType>(bus.bus) : std::nullopt);
+                    }
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::EndTabItem();
         }
 
-        ImGui::EndTable();
+        if (ImGui::BeginTabItem("Voices")) {
+            ImGui::TextDisabled("Active Voices");
+            if (voices.empty()) {
+                ImGui::TextDisabled("No active voices.");
+            } else if (ImGui::BeginTable("AudioVoices", 10, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 300.0f))) {
+                ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Clip");
+                ImGui::TableSetupColumn("Bus", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Entity", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+                ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("3D", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+                ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, 45.0f);
+                ImGui::TableSetupColumn("Vol", ImGuiTableColumnFlags_WidthFixed, 55.0f);
+                ImGui::TableSetupColumn("Pitch", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+                ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                ImGui::TableHeadersRow();
+
+                for (const auto& voice : voices) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("%llu", static_cast<unsigned long long>(voice.handle));
+                    ImGui::TableSetColumnIndex(1);
+                    const std::string clipName = std::filesystem::path(voice.clipPath).filename().string();
+                    ImGui::TextWrapped("%s", clipName.c_str());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted(GetAudioBusTypeLabel(voice.bus));
+                    ImGui::TableSetColumnIndex(3);
+                    if (Entity::IsNull(voice.entity)) {
+                        ImGui::TextDisabled("Transient");
+                    } else {
+                        const std::string entityLabel = GetEntityLabel(registry, voice.entity);
+                        ImGui::TextWrapped("%s", entityLabel.c_str());
+                    }
+                    ImGui::TableSetColumnIndex(4);
+                    if (voice.preview) {
+                        ImGui::TextColored(ImVec4(0.45f, 0.85f, 1.0f, 1.0f), "Preview");
+                    } else if (voice.playing) {
+                        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Playing");
+                    } else {
+                        ImGui::TextDisabled("Stopped");
+                    }
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::TextUnformatted(voice.is3D ? "Yes" : "No");
+                    ImGui::TableSetColumnIndex(6);
+                    ImGui::TextUnformatted(voice.loop ? "Yes" : "No");
+                    ImGui::TableSetColumnIndex(7);
+                    ImGui::Text("%.2f", voice.volume);
+                    ImGui::TableSetColumnIndex(8);
+                    ImGui::Text("%.2f", voice.pitch);
+                    ImGui::TableSetColumnIndex(9);
+                    ImGui::Text("%.2f / %.2f", voice.cursorSeconds, voice.lengthSeconds);
+                }
+
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Cache")) {
+            ImGui::TextDisabled("Cached Audio Clips: %zu", cachedClips.size());
+            if (cachedClips.empty()) {
+                ImGui::TextDisabled("No cached clip metadata.");
+            } else if (ImGui::BeginTable("AudioClipCache", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 260.0f))) {
+                ImGui::TableSetupColumn("Clip");
+                ImGui::TableSetupColumn("Length", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn("Channels", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Sample Rate", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+                ImGui::TableSetupColumn("Streaming", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+                ImGui::TableSetupColumn("Size KB", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableHeadersRow();
+
+                for (const auto& clip : cachedClips) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextWrapped("%s", std::filesystem::path(clip.sourcePath).filename().string().c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.2f", clip.lengthSec);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%u", clip.channelCount);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%u", clip.sampleRate);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::TextUnformatted(clip.streaming ? "Yes" : "No");
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::Text("%.1f", static_cast<double>(clip.fileSizeBytes) / 1024.0);
+                }
+
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
     }
 
     ImGui::End();
@@ -5064,4 +5173,3 @@ void EditorLayer::DrawGBufferDebugWindow()
     }
     ImGui::End();
 }
-

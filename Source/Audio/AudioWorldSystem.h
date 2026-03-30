@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <DirectXMath.h>
 
+#include "Audio/AudioClipAsset.h"
 #include "Component/AudioEmitterComponent.h"
 #include "Entity/Entity.h"
 #include "Engine/EngineMode.h"
@@ -37,6 +39,17 @@ public:
         float lengthSeconds = 0.0f;
     };
 
+    struct DebugBusInfo
+    {
+        AudioBusType bus = AudioBusType::SFX;
+        float baseVolume = 1.0f;
+        float effectiveVolume = 1.0f;
+        bool muted = false;
+        bool solo = false;
+        int activeVoiceCount = 0;
+        int streamingVoiceCount = 0;
+    };
+
     AudioWorldSystem();
     ~AudioWorldSystem();
 
@@ -61,6 +74,7 @@ public:
                                      float maxDistance = 50.0f,
                                      bool streaming = false);
     void StopVoice(AudioVoiceHandle handle);
+    void StopAllVoices();
     void SetVoicePosition(AudioVoiceHandle handle, const DirectX::XMFLOAT3& position);
     bool IsVoiceAlive(AudioVoiceHandle handle) const;
 
@@ -71,6 +85,17 @@ public:
     std::string GetPreviewClipPath() const;
 
     std::vector<DebugVoiceInfo> GetDebugVoices() const;
+    std::vector<DebugBusInfo> GetDebugBuses() const;
+    AudioClipAsset DescribeClip(const std::string& clipPath);
+    std::vector<AudioClipAsset> GetCachedClips() const;
+    size_t GetCachedClipCount() const;
+    void ClearClipCache();
+
+    void SetBusMuted(AudioBusType bus, bool muted);
+    bool IsBusMuted(AudioBusType bus) const;
+    void SetSoloBus(std::optional<AudioBusType> bus);
+    std::optional<AudioBusType> GetSoloBus() const;
+
     EntityID GetActiveListenerEntity() const { return m_activeListenerEntity; }
     bool IsInitialized() const { return m_initialized; }
 

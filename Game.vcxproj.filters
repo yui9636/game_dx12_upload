@@ -747,6 +747,9 @@
     <ClInclude Include="Source\Component\AudioEmitterComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Component\AudioBusSendComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Component\AudioListenerComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
@@ -1360,6 +1363,9 @@
       <Filter>Source\Asset</Filter>
     </ClCompile>
     <ClCompile Include="Source\Audio\AudioWorldSystem.cpp">
+      <Filter>Source\Audio</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Audio\AudioAssetSystem.cpp">
       <Filter>Source\Audio</Filter>
     </ClCompile>
     <ClCompile Include="External\miniaudio-master\miniaudio.c">

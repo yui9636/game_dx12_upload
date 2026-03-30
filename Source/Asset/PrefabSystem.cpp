@@ -6,6 +6,7 @@
 
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
+#include "Component/AudioBusSendComponent.h"
 #include "Component/AudioEmitterComponent.h"
 #include "Component/AudioListenerComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -139,6 +140,13 @@ namespace
                 {"maxDistance", audioEmitter->maxDistance},
                 {"streaming", audioEmitter->streaming},
                 {"bus", static_cast<int>(audioEmitter->bus)}
+            });
+        }
+
+        if (const auto& audioBusSend = std::get<std::optional<AudioBusSendComponent>>(node.components); audioBusSend.has_value()) {
+            writeComponent("AudioBusSendComponent", json{
+                {"bus", static_cast<int>(audioBusSend->bus)},
+                {"sendVolume", audioBusSend->sendVolume}
             });
         }
 
@@ -449,6 +457,14 @@ namespace
             component.maxDistance = value.value("maxDistance", component.maxDistance);
             component.streaming = value.value("streaming", component.streaming);
             component.bus = static_cast<AudioBusType>(value.value("bus", static_cast<int>(component.bus)));
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("AudioBusSendComponent")) {
+            AudioBusSendComponent component;
+            const json& value = components["AudioBusSendComponent"];
+            component.bus = static_cast<AudioBusType>(value.value("bus", static_cast<int>(component.bus)));
+            component.sendVolume = value.value("sendVolume", component.sendVolume);
             SetOptional(node.components, component);
         }
 
@@ -1092,5 +1108,4 @@ bool PrefabSystem::CanDuplicate(EntityID entity, Registry& registry)
     EntityID prefabRoot = FindPrefabRoot(entity, registry);
     return Entity::IsNull(prefabRoot) || prefabRoot == entity;
 }
-
 

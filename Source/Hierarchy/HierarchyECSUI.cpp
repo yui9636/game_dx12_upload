@@ -1,4 +1,5 @@
 ﻿#include "HierarchyECSUI.h"
+#include "Engine/EngineKernel.h"
 #include "Registry/Registry.h"
 #include "Engine/EditorSelection.h"
 #include "Icon/IconFontManager.h"
@@ -211,6 +212,13 @@ namespace
         emitter.playOnStart = playOnStart;
         emitter.is3D = true;
         emitter.bus = AudioBusType::SFX;
+        if (!clipPath.empty()) {
+            const AudioClipAsset clip = EngineKernel::Instance().GetAudioWorld().DescribeClip(clipPath);
+            emitter.streaming = clip.streaming;
+            emitter.volume = clip.defaultVolume;
+            emitter.pitch = clip.defaultPitch;
+            emitter.loop = clip.defaultLoop;
+        }
 
         std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
         std::get<std::optional<TransformComponent>>(node.components) = transform;

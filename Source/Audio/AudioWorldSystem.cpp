@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -9,6 +10,8 @@
 
 #include "../../External/miniaudio-master/miniaudio.h"
 
+#include "AudioAssetSystem.h"
+#include "Component/AudioBusSendComponent.h"
 #include "Component/AudioListenerComponent.h"
 #include "Component/AudioOneShotRequestComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -37,6 +40,7 @@ namespace
         bool loop = false;
         bool paused = false;
         bool streaming = false;
+        float sendVolume = 1.0f;
         float volume = 1.0f;
         float pitch = 1.0f;
         float minDistance = 1.0f;
@@ -124,6 +128,7 @@ struct AudioWorldSystem::Impl
     bool sfxGroupInitialized = false;
     bool uiGroupInitialized = false;
 
+    AudioAssetSystem assets;
     AudioVoiceHandle nextHandle = 1;
     std::unordered_map<AudioVoiceHandle, std::unique_ptr<VoiceState>> voices;
     std::unordered_map<EntityID, EmitterRuntimeState> emitterStates;
@@ -131,6 +136,9 @@ struct AudioWorldSystem::Impl
     std::string previewClipPath;
     AudioBusType previewBus = AudioBusType::UI;
     EngineMode lastMode = EngineMode::Editor;
+    AudioSettingsComponent lastAppliedSettings{};
+    std::unordered_map<AudioBusType, bool> mutedBuses;
+    std::optional<AudioBusType> soloBus;
 
     ma_sound_group* GetGroup(AudioBusType bus)
     {
@@ -161,6 +169,37 @@ struct AudioWorldSystem::Impl
         emitterStates.clear();
         previewHandle = 0;
         previewClipPath.clear();
+    }
+
+    float GetBaseBusVolume(AudioBusType bus) const
+    {
+        switch (bus) {
+        case AudioBusType::BGM: return lastAppliedSettings.bgmVolume;
+        case AudioBusType::UI: return lastAppliedSettings.uiVolume;
+        case AudioBusType::Master:
+        case AudioBusType::SFX:
+        default:
+            return lastAppliedSettings.sfxVolume;
+        }
+    }
+
+    float GetEffectiveBusVolume(AudioBusType bus) const
+    {
+        float base = GetBaseBusVolume(bus);
+        if (lastAppliedSettings.muteAll) {
+            return 0.0f;
+        }
+
+        if (soloBus.has_value()) {
+            return (*soloBus == bus) ? base : 0.0f;
+        }
+
+        const auto mutedIt = mutedBuses.find(bus);
+        if (mutedIt != mutedBuses.end() && mutedIt->second) {
+            return 0.0f;
+        }
+
+        return base;
     }
 };
 
@@ -269,6 +308,7 @@ namespace
                                          bool is3D,
                                          bool loop,
                                          float volume,
+                                         float sendVolume,
                                          float pitch,
                                          float minDistance,
                                          float maxDistance,
@@ -280,8 +320,9 @@ namespace
                                          EntityID entity,
                                          const DirectX::XMFLOAT3* position)
     {
-        const std::string resolvedPath = NormalizeAudioPath(clipPath);
-        if (resolvedPath.empty() || !std::filesystem::exists(resolvedPath)) {
+        const AudioClipAsset clip = impl.assets.GetClipOrDefault(clipPath);
+        const std::string resolvedPath = clip.importedPath.empty() ? NormalizeAudioPath(clipPath) : clip.importedPath;
+        if (resolvedPath.empty() || !clip.valid) {
             LOG_WARN("[AudioWorldSystem] Missing audio clip: %s", clipPath.c_str());
             return 0;
         }
@@ -296,6 +337,7 @@ namespace
         voice->runtimeControlled = runtimeControlled;
         voice->is3D = is3D;
         voice->loop = loop;
+        voice->sendVolume = sendVolume;
         voice->volume = volume;
         voice->pitch = pitch;
         voice->minDistance = minDistance;
@@ -312,7 +354,7 @@ namespace
 
         voice->initialized = true;
         ma_sound_set_looping(&voice->sound, loop ? MA_TRUE : MA_FALSE);
-        ma_sound_set_volume(&voice->sound, volume);
+        ma_sound_set_volume(&voice->sound, volume * sendVolume);
         ma_sound_set_pitch(&voice->sound, pitch);
 
         if (is3D) {
@@ -347,7 +389,7 @@ AudioVoiceHandle AudioWorldSystem::PlayTransient2D(const std::string& clipPath,
     if (!m_impl) {
         return 0;
     }
-    return CreateVoiceInternal(*m_impl, clipPath, bus, false, loop, volume, pitch, 1.0f, 50.0f, streaming, true, true, false, true, Entity::NULL_ID, nullptr);
+    return CreateVoiceInternal(*m_impl, clipPath, bus, false, loop, volume, 1.0f, pitch, 1.0f, 50.0f, streaming, true, true, false, true, Entity::NULL_ID, nullptr);
 }
 
 AudioVoiceHandle AudioWorldSystem::PlayTransient3D(const std::string& clipPath,
@@ -363,7 +405,7 @@ AudioVoiceHandle AudioWorldSystem::PlayTransient3D(const std::string& clipPath,
     if (!m_impl) {
         return 0;
     }
-    return CreateVoiceInternal(*m_impl, clipPath, bus, true, loop, volume, pitch, minDistance, maxDistance, streaming, true, true, false, true, Entity::NULL_ID, &position);
+    return CreateVoiceInternal(*m_impl, clipPath, bus, true, loop, volume, 1.0f, pitch, minDistance, maxDistance, streaming, true, true, false, true, Entity::NULL_ID, &position);
 }
 
 void AudioWorldSystem::StopVoice(AudioVoiceHandle handle)
@@ -388,6 +430,23 @@ void AudioWorldSystem::StopVoice(AudioVoiceHandle handle)
     }
 
     m_impl->voices.erase(it);
+}
+
+void AudioWorldSystem::StopAllVoices()
+{
+    if (!m_impl) {
+        return;
+    }
+
+    std::vector<AudioVoiceHandle> handles;
+    handles.reserve(m_impl->voices.size());
+    for (const auto& entry : m_impl->voices) {
+        handles.push_back(entry.first);
+    }
+
+    for (AudioVoiceHandle handle : handles) {
+        StopVoice(handle);
+    }
 }
 
 void AudioWorldSystem::SetVoicePosition(AudioVoiceHandle handle, const DirectX::XMFLOAT3& position)
@@ -482,10 +541,11 @@ namespace
             }
         });
 
-        ma_engine_set_volume(&impl.engine, (settings.muteAll ? 0.0f : settings.masterVolume));
-        ma_sound_group_set_volume(&impl.bgmGroup, settings.bgmVolume);
-        ma_sound_group_set_volume(&impl.sfxGroup, settings.sfxVolume);
-        ma_sound_group_set_volume(&impl.uiGroup, settings.uiVolume);
+        impl.lastAppliedSettings = settings;
+        ma_engine_set_volume(&impl.engine, settings.muteAll ? 0.0f : settings.masterVolume);
+        ma_sound_group_set_volume(&impl.bgmGroup, impl.GetEffectiveBusVolume(AudioBusType::BGM));
+        ma_sound_group_set_volume(&impl.sfxGroup, impl.GetEffectiveBusVolume(AudioBusType::SFX));
+        ma_sound_group_set_volume(&impl.uiGroup, impl.GetEffectiveBusVolume(AudioBusType::UI));
     }
 
     EntityID SyncListener(AudioWorldSystem::Impl& impl, Registry& registry)
@@ -571,6 +631,9 @@ void AudioWorldSystem::Update(Registry& registry, EngineMode mode)
         const std::string resolvedPath = NormalizeAudioPath(emitter.clipAssetPath);
         const bool soundIs3D = emitter.is3D && emitter.spatialBlend > 0.0f;
         const TransformComponent* transform = registry.GetComponent<TransformComponent>(entity);
+        const AudioBusSendComponent* busSend = registry.GetComponent<AudioBusSendComponent>(entity);
+        const AudioBusType resolvedBus = busSend ? busSend->bus : emitter.bus;
+        const float sendVolume = busSend ? (std::max)(0.0f, busSend->sendVolume) : 1.0f;
 
         bool recreateVoice = runtime.handle == 0 || !IsVoiceAlive(runtime.handle);
         if (!recreateVoice && runtime.resolvedClipPath != resolvedPath) {
@@ -582,7 +645,7 @@ void AudioWorldSystem::Update(Registry& registry, EngineMode mode)
                 recreateVoice = true;
             } else {
                 const VoiceState& voice = *voiceIt->second;
-                recreateVoice = voice.bus != emitter.bus || voice.streaming != emitter.streaming || voice.is3D != soundIs3D;
+                recreateVoice = voice.bus != resolvedBus || voice.streaming != emitter.streaming || voice.is3D != soundIs3D;
             }
         }
 
@@ -594,8 +657,8 @@ void AudioWorldSystem::Update(Registry& registry, EngineMode mode)
 
             const DirectX::XMFLOAT3 position = transform ? transform->worldPosition : DirectX::XMFLOAT3{ 0.0f, 0.0f, 0.0f };
             runtime.handle = soundIs3D
-                ? CreateVoiceInternal(*m_impl, resolvedPath, emitter.bus, true, emitter.loop, emitter.volume, emitter.pitch, emitter.minDistance, emitter.maxDistance, emitter.streaming, false, false, false, true, entity, &position)
-                : CreateVoiceInternal(*m_impl, resolvedPath, emitter.bus, false, emitter.loop, emitter.volume, emitter.pitch, emitter.minDistance, emitter.maxDistance, emitter.streaming, false, false, false, true, entity, nullptr);
+                ? CreateVoiceInternal(*m_impl, resolvedPath, resolvedBus, true, emitter.loop, emitter.volume, sendVolume, emitter.pitch, emitter.minDistance, emitter.maxDistance, emitter.streaming, false, false, false, true, entity, &position)
+                : CreateVoiceInternal(*m_impl, resolvedPath, resolvedBus, false, emitter.loop, emitter.volume, sendVolume, emitter.pitch, emitter.minDistance, emitter.maxDistance, emitter.streaming, false, false, false, true, entity, nullptr);
             runtime.resolvedClipPath = resolvedPath;
             runtime.startedOnce = false;
             runtime.paused = false;
@@ -617,14 +680,15 @@ void AudioWorldSystem::Update(Registry& registry, EngineMode mode)
         VoiceState& voice = *voiceIt->second;
         voice.loop = emitter.loop;
         voice.volume = emitter.volume;
+        voice.sendVolume = sendVolume;
         voice.pitch = emitter.pitch;
         voice.minDistance = emitter.minDistance;
         voice.maxDistance = emitter.maxDistance;
-        voice.bus = emitter.bus;
+        voice.bus = resolvedBus;
         voice.entity = entity;
 
         ma_sound_set_looping(&voice.sound, emitter.loop ? MA_TRUE : MA_FALSE);
-        ma_sound_set_volume(&voice.sound, emitter.volume);
+        ma_sound_set_volume(&voice.sound, emitter.volume * sendVolume);
         ma_sound_set_pitch(&voice.sound, emitter.pitch);
 
         if (voice.is3D && transform) {
@@ -800,4 +864,97 @@ std::vector<AudioWorldSystem::DebugVoiceInfo> AudioWorldSystem::GetDebugVoices()
     });
 
     return voices;
+}
+
+std::vector<AudioWorldSystem::DebugBusInfo> AudioWorldSystem::GetDebugBuses() const
+{
+    std::vector<DebugBusInfo> buses;
+    if (!m_impl) {
+        return buses;
+    }
+
+    const AudioBusType orderedBuses[] = { AudioBusType::BGM, AudioBusType::SFX, AudioBusType::UI };
+    for (AudioBusType bus : orderedBuses) {
+        DebugBusInfo info;
+        info.bus = bus;
+        info.baseVolume = m_impl->GetBaseBusVolume(bus);
+        info.effectiveVolume = m_impl->GetEffectiveBusVolume(bus);
+        info.muted = IsBusMuted(bus);
+        info.solo = m_impl->soloBus.has_value() && *m_impl->soloBus == bus;
+
+        for (const auto& entry : m_impl->voices) {
+            const VoiceState& voice = *entry.second;
+            if (voice.bus != bus) {
+                continue;
+            }
+
+            info.activeVoiceCount += 1;
+            if (voice.streaming) {
+                info.streamingVoiceCount += 1;
+            }
+        }
+
+        buses.push_back(info);
+    }
+
+    return buses;
+}
+
+AudioClipAsset AudioWorldSystem::DescribeClip(const std::string& clipPath)
+{
+    if (!m_impl) {
+        return {};
+    }
+    return m_impl->assets.GetClipOrDefault(clipPath);
+}
+
+std::vector<AudioClipAsset> AudioWorldSystem::GetCachedClips() const
+{
+    if (!m_impl) {
+        return {};
+    }
+    return m_impl->assets.GetCachedClips();
+}
+
+size_t AudioWorldSystem::GetCachedClipCount() const
+{
+    return m_impl ? m_impl->assets.GetCachedClipCount() : 0;
+}
+
+void AudioWorldSystem::ClearClipCache()
+{
+    if (!m_impl) {
+        return;
+    }
+    m_impl->assets.ClearCache();
+}
+
+void AudioWorldSystem::SetBusMuted(AudioBusType bus, bool muted)
+{
+    if (!m_impl) {
+        return;
+    }
+    m_impl->mutedBuses[bus] = muted;
+}
+
+bool AudioWorldSystem::IsBusMuted(AudioBusType bus) const
+{
+    if (!m_impl) {
+        return false;
+    }
+    const auto it = m_impl->mutedBuses.find(bus);
+    return it != m_impl->mutedBuses.end() && it->second;
+}
+
+void AudioWorldSystem::SetSoloBus(std::optional<AudioBusType> bus)
+{
+    if (!m_impl) {
+        return;
+    }
+    m_impl->soloBus = bus;
+}
+
+std::optional<AudioBusType> AudioWorldSystem::GetSoloBus() const
+{
+    return m_impl ? m_impl->soloBus : std::optional<AudioBusType>{};
 }

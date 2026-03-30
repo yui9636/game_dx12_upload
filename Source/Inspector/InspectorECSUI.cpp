@@ -41,7 +41,7 @@
 #include "Component/CameraComponent.h"
 
 #include "Component/AudioEmitterComponent.h"
-
+#include "Component/AudioBusSendComponent.h"
 #include "Component/AudioListenerComponent.h"
 
 #include "Component/AudioSettingsComponent.h"
@@ -895,7 +895,7 @@ namespace {
 
 
         auto& audio = EngineKernel::Instance().GetAudioWorld();
-
+        const AudioClipAsset clip = audio.DescribeClip(path);
         const bool previewing = audio.IsPreviewing(path);
 
         if (ImGui::Button(previewing ? ICON_FA_STOP " Stop Preview" : ICON_FA_PLAY " Preview")) {
@@ -910,6 +910,18 @@ namespace {
 
             ImGui::TextDisabled("Previewing");
 
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        if (clip.valid) {
+            ImGui::Text("Length: %.2f sec", clip.lengthSec);
+            ImGui::Text("Channels: %u", clip.channelCount);
+            ImGui::Text("Sample Rate: %u Hz", clip.sampleRate);
+            ImGui::Text("Streaming Default: %s", clip.streaming ? "Yes" : "No");
+        } else {
+            ImGui::TextDisabled("Metadata unavailable.");
         }
 
     }
@@ -1133,6 +1145,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<TransformComponent>(registry, entity);
 
             DrawComponentIfPresent<AudioEmitterComponent>(registry, entity);
+
+            DrawComponentIfPresent<AudioBusSendComponent>(registry, entity);
 
             DrawComponentIfPresent<AudioListenerComponent>(registry, entity);
 
