@@ -912,6 +912,18 @@ namespace {
 
         }
 
+        float previewCursorSeconds = 0.0f;
+        float previewLengthSeconds = 0.0f;
+        const bool hasPreviewProgress = audio.GetPreviewPlaybackProgress(previewCursorSeconds, previewLengthSeconds) && previewLengthSeconds > 0.0f;
+        if (hasPreviewProgress) {
+            float seekSeconds = previewCursorSeconds;
+            if (ImGui::SliderFloat("##AudioPreviewSeek", &seekSeconds, 0.0f, previewLengthSeconds, "", ImGuiSliderFlags_NoInput)) {
+                audio.SeekPreview(seekSeconds);
+                previewCursorSeconds = seekSeconds;
+            }
+            ImGui::TextDisabled("%.2f / %.2f sec", previewCursorSeconds, previewLengthSeconds);
+        }
+
         ImGui::Spacing();
         ImGui::Separator();
 

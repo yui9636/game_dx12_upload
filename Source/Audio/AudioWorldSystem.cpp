@@ -526,6 +526,51 @@ std::string AudioWorldSystem::GetPreviewClipPath() const
     return m_impl ? m_impl->previewClipPath : std::string{};
 }
 
+bool AudioWorldSystem::GetPreviewPlaybackProgress(float& cursorSeconds, float& lengthSeconds) const
+{
+    cursorSeconds = 0.0f;
+    lengthSeconds = 0.0f;
+
+    if (!m_impl || m_impl->previewHandle == 0) {
+        return false;
+    }
+
+    auto it = m_impl->voices.find(m_impl->previewHandle);
+    if (it == m_impl->voices.end() || !it->second->initialized) {
+        return false;
+    }
+
+    ma_sound_get_cursor_in_seconds(&it->second->sound, &cursorSeconds);
+    ma_sound_get_length_in_seconds(&it->second->sound, &lengthSeconds);
+    if (lengthSeconds < 0.0f) {
+        lengthSeconds = 0.0f;
+    }
+
+    return true;
+}
+
+void AudioWorldSystem::SeekPreview(float seconds)
+{
+    if (!m_impl || m_impl->previewHandle == 0) {
+        return;
+    }
+
+    auto it = m_impl->voices.find(m_impl->previewHandle);
+    if (it == m_impl->voices.end() || !it->second->initialized) {
+        return;
+    }
+
+    float lengthSeconds = 0.0f;
+    ma_sound_get_length_in_seconds(&it->second->sound, &lengthSeconds);
+    if (lengthSeconds > 0.0f) {
+        seconds = (std::max)(0.0f, (std::min)(seconds, lengthSeconds));
+    } else {
+        seconds = (std::max)(0.0f, seconds);
+    }
+
+    ma_sound_seek_to_second(&it->second->sound, seconds);
+}
+
 namespace
 {
     void ApplySettingsComponent(AudioWorldSystem::Impl& impl, Registry& registry)

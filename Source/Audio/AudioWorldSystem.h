@@ -83,6 +83,8 @@ public:
     void StopPreview();
     bool IsPreviewing(const std::string& clipPath) const;
     std::string GetPreviewClipPath() const;
+    bool GetPreviewPlaybackProgress(float& cursorSeconds, float& lengthSeconds) const;
+    void SeekPreview(float seconds);
 
     std::vector<DebugVoiceInfo> GetDebugVoices() const;
     std::vector<DebugBusInfo> GetDebugBuses() const;
