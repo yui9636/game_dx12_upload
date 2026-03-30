@@ -741,6 +741,9 @@
     <ClInclude Include="Source\Layer\EditorLayer.h">
       <Filter>Source\Layer</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Layer\EditorLayerInternal.h">
+      <Filter>Source\Layer</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Component\CameraBehaviorComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
@@ -1378,6 +1381,21 @@
       <Filter>Source\Layer</Filter>
     </ClCompile>
     <ClCompile Include="Source\Layer\EditorLayer.cpp">
+      <Filter>Source\Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Layer\EditorLayerMenu.cpp">
+      <Filter>Source\Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Layer\EditorLayerOverlays.cpp">
+      <Filter>Source\Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Layer\EditorLayerPanels.cpp">
+      <Filter>Source\Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Layer\EditorLayerSceneIO.cpp">
+      <Filter>Source\Layer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Layer\EditorLayerSceneView.cpp">
       <Filter>Source\Layer</Filter>
     </ClCompile>
     <ClCompile Include="Source\Camera\CameraFinalizeSystem.cpp">

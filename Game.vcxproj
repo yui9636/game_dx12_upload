@@ -248,6 +248,7 @@
     <ClInclude Include="Source\Inspector\InspectorECSUI.h" />
     <ClInclude Include="Source\JSONManager.h" />
     <ClInclude Include="Source\Layer\EditorLayer.h" />
+    <ClInclude Include="Source\Layer\EditorLayerInternal.h" />
     <ClInclude Include="Source\Layer\GameLayer.h" />
     <ClInclude Include="Source\Layer\Layer.h" />
     <ClInclude Include="Source\Light\Light.h" />
@@ -488,6 +489,11 @@
     <ClCompile Include="Source\Inspector\InspectorECSUI.cpp" />
     <ClCompile Include="Source\JSONManager.cpp" />
     <ClCompile Include="Source\Layer\EditorLayer.cpp" />
+    <ClCompile Include="Source\Layer\EditorLayerMenu.cpp" />
+    <ClCompile Include="Source\Layer\EditorLayerOverlays.cpp" />
+    <ClCompile Include="Source\Layer\EditorLayerPanels.cpp" />
+    <ClCompile Include="Source\Layer\EditorLayerSceneIO.cpp" />
+    <ClCompile Include="Source\Layer\EditorLayerSceneView.cpp" />
     <ClCompile Include="Source\Layer\GameLayer.cpp" />
     <ClCompile Include="Source\Light\LightSystem.cpp" />
     <ClCompile Include="Source\Material\MaterialAsset.cpp" />
