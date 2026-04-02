@@ -13,6 +13,28 @@
 #include "Component/NameComponent.h"
 #include "Component/TransformComponent.h"
 #include "Component/HierarchyComponent.h"
+#include "Input/InputUserComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Input/InputTextFieldComponent.h"
+#include "Input/VibrationRequestComponent.h"
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/StaminaComponent.h"
+#include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/ActionStateComponent.h"
+#include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/DodgeStateComponent.h"
+#include "Gameplay/HitboxTrackingComponent.h"
+#include "Gameplay/StageBoundsComponent.h"
+#include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/PlaybackRangeComponent.h"
+#include "Gameplay/TimelineComponent.h"
+#include "Gameplay/TimelineItemBuffer.h"
+#include "Gameplay/SpeedCurveComponent.h"
+#include "Gameplay/HitStopComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/LightComponent.h"
 #include "Component/AudioEmitterComponent.h"
@@ -652,6 +674,92 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         }
         if (ImGui::MenuItem("Create Audio Source")) {
             CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), Entity::NULL_ID, "Create Audio Source");
+        }
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Input")) {
+            if (ImGui::MenuItem("Input User")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Input User" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                InputUserComponent user{};
+                user.userId = 1;
+                user.isPrimary = true;
+                registry->AddComponent(e, user);
+                registry->AddComponent(e, InputBindingComponent{});
+                registry->AddComponent(e, InputContextComponent{});
+                registry->AddComponent(e, ResolvedInputStateComponent{});
+            }
+            if (ImGui::MenuItem("Input Listener")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Input Listener" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                registry->AddComponent(e, InputContextComponent{});
+                registry->AddComponent(e, ResolvedInputStateComponent{});
+            }
+            if (ImGui::MenuItem("Text Input Target")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Text Input Target" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                InputContextComponent ctx{};
+                ctx.priority = InputContextPriority::TextInput;
+                ctx.textInputEnabled = true;
+                ctx.consumeLowerPriority = true;
+                registry->AddComponent(e, ctx);
+                registry->AddComponent(e, InputTextFieldComponent{});
+            }
+            if (ImGui::MenuItem("Vibration Source")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Vibration Source" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                registry->AddComponent(e, VibrationRequestComponent{});
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Gameplay")) {
+            if (ImGui::MenuItem("Player")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Player" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                PlayerTagComponent tag{}; tag.playerId = 1;
+                registry->AddComponent(e, tag);
+                registry->AddComponent(e, CharacterPhysicsComponent{});
+                registry->AddComponent(e, HealthComponent{});
+                registry->AddComponent(e, StaminaComponent{});
+                registry->AddComponent(e, LocomotionStateComponent{});
+                registry->AddComponent(e, ActionStateComponent{});
+                registry->AddComponent(e, ActionDatabaseComponent{});
+                registry->AddComponent(e, DodgeStateComponent{});
+                registry->AddComponent(e, HitboxTrackingComponent{});
+                registry->AddComponent(e, PlaybackComponent{});
+                registry->AddComponent(e, TimelineComponent{});
+                registry->AddComponent(e, TimelineItemBuffer{});
+                registry->AddComponent(e, InputContextComponent{});
+                registry->AddComponent(e, ResolvedInputStateComponent{});
+            }
+            if (ImGui::MenuItem("Character")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Character" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                registry->AddComponent(e, CharacterPhysicsComponent{});
+                registry->AddComponent(e, HealthComponent{});
+                registry->AddComponent(e, LocomotionStateComponent{});
+            }
+            if (ImGui::MenuItem("Timeline Entity")) {
+                EntityID e = registry->CreateEntity();
+                registry->AddComponent(e, NameComponent{ "Timeline Entity" });
+                registry->AddComponent(e, TransformComponent{});
+                registry->AddComponent(e, HierarchyComponent{});
+                registry->AddComponent(e, PlaybackComponent{});
+                registry->AddComponent(e, TimelineComponent{});
+                registry->AddComponent(e, TimelineItemBuffer{});
+            }
+            ImGui::EndMenu();
         }
         ImGui::EndPopup();
     }

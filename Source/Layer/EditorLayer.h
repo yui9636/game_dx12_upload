@@ -2,6 +2,9 @@
 #include "Layer.h"
 #include "GameLayer.h"
 #include "Asset/AssetBrowser.h"
+#include "Input/EditorInputBridge.h"
+#include "PlayerEditor/PlayerEditorPanel.h"
+#include "PlayerEditor/PlayerEditorWindow.h"
 #include <memory>
 #include <array>
 #include <DirectXMath.h>
@@ -84,7 +87,14 @@ public:
         Audio,
         RenderPasses,
         GridSettings,
-        GBufferDebug
+        GBufferDebug,
+        PlayerEditor
+    };
+
+    enum class WorkspaceTab
+    {
+        LevelEditor,
+        PlayerEditor
     };
 
     struct CameraBookmark
@@ -105,8 +115,10 @@ public:
     void Finalize() override;
     void Update(const EngineTime& time) override;
     void RenderUI() override;
+    void RenderDetachedWindows();
 
     AssetBrowser* GetAssetBrowser() const { return m_assetBrowser.get(); }
+    EditorInputBridge& GetInputBridge() { return m_inputBridge; }
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
     DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
     DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
@@ -138,6 +150,7 @@ public:
 private:
     GameLayer* m_gameLayer;
     std::unique_ptr<AssetBrowser> m_assetBrowser;
+    EditorInputBridge m_inputBridge;
 
     EntityID m_selectedEntity = Entity::NULL_ID;
     bool m_showSceneView = true;
@@ -163,6 +176,11 @@ private:
     bool m_showSceneCameraIcons = true;
     bool m_showSceneBounds = false;
     bool m_showSceneCollision = false;
+    bool m_showInputDebug = false;
+    bool m_showPlayerEditor = false;
+    WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
+    PlayerEditorPanel m_playerEditorPanel;
+    std::unique_ptr<PlayerEditorWindow> m_playerEditorWindow;
     SceneShadingMode m_sceneShadingMode = SceneShadingMode::Lit;
     DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };
     DirectX::XMFLOAT2 m_gameViewSize = { 0.0f, 0.0f };
@@ -215,8 +233,10 @@ private:
     // ==========================================
     // ==========================================
     void DrawDockSpace();
+    void DrawWorkspaceTabs();
     void DrawMenuBar();
     void DrawMainToolbar();
+    void DrawPlayerEditorWorkspace();
     void DrawSceneView();
     void DrawGameView();
     void DrawHierarchy();
@@ -229,6 +249,7 @@ private:
     void DrawStatusBar();
     void DrawUnsavedChangesPopup();
     void DrawRecoveryPopup();
+    void SyncPlayerEditorPanelState();
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();

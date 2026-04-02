@@ -388,11 +388,14 @@ void EditorLayer::ExecuteCloseSecondaryWindows()
     m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
+    m_showPlayerEditor = false;
+    m_activeWorkspace = WorkspaceTab::LevelEditor;
     if (m_maximizedWindow == WindowFocusTarget::Lighting ||
         m_maximizedWindow == WindowFocusTarget::Audio ||
         m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
-        m_maximizedWindow == WindowFocusTarget::GBufferDebug) {
+        m_maximizedWindow == WindowFocusTarget::GBufferDebug ||
+        m_maximizedWindow == WindowFocusTarget::PlayerEditor) {
         m_maximizedWindow = WindowFocusTarget::None;
     }
 }
@@ -421,6 +424,7 @@ void EditorLayer::ExecuteResetLayout()
     m_showSceneBounds = false;
     m_showSceneCollision = false;
     m_sceneShadingMode = SceneShadingMode::Lit;
+    m_activeWorkspace = WorkspaceTab::LevelEditor;
     m_maximizedWindow = WindowFocusTarget::None;
     m_forceDockLayoutReset = true;
 }
@@ -428,6 +432,12 @@ void EditorLayer::ExecuteResetLayout()
 void EditorLayer::ExecuteMaximizeActivePanel()
 {
     if (m_lastFocusedWindow == WindowFocusTarget::None) {
+        return;
+    }
+    if (m_lastFocusedWindow == WindowFocusTarget::PlayerEditor) {
+        m_showPlayerEditor = true;
+        m_activeWorkspace = WorkspaceTab::PlayerEditor;
+        m_pendingWindowFocus = WindowFocusTarget::PlayerEditor;
         return;
     }
     m_maximizedWindow = (m_maximizedWindow == m_lastFocusedWindow) ? WindowFocusTarget::None : m_lastFocusedWindow;
@@ -451,7 +461,14 @@ void EditorLayer::RequestWindowFocus(WindowFocusTarget target)
     case WindowFocusTarget::RenderPasses: m_showRenderPassesWindow = true; break;
     case WindowFocusTarget::GridSettings: m_showGridSettingsWindow = true; break;
     case WindowFocusTarget::GBufferDebug: m_showGBufferDebug = true; break;
+    case WindowFocusTarget::PlayerEditor:
+        m_showPlayerEditor = true;
+        m_activeWorkspace = WorkspaceTab::PlayerEditor;
+        break;
     default: break;
+    }
+    if (target != WindowFocusTarget::PlayerEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
     }
     m_pendingWindowFocus = target;
 }
@@ -755,6 +772,18 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem("Render Passes", nullptr, &m_showRenderPassesWindow);
             ImGui::MenuItem("Grid Settings", nullptr, &m_showGridSettingsWindow);
             ImGui::MenuItem(ICON_FA_IMAGES " G-Buffer Debug", nullptr, &m_showGBufferDebug);
+            ImGui::MenuItem(ICON_FA_GAMEPAD " Input Debug", nullptr, &m_showInputDebug);
+            bool showPlayerEditor = m_showPlayerEditor;
+            if (ImGui::MenuItem(ICON_FA_USER " Player Editor", nullptr, &showPlayerEditor)) {
+                m_showPlayerEditor = showPlayerEditor;
+                if (m_showPlayerEditor) {
+                    m_activeWorkspace = WorkspaceTab::PlayerEditor;
+                    m_pendingWindowFocus = WindowFocusTarget::PlayerEditor;
+                } else if (m_activeWorkspace == WorkspaceTab::PlayerEditor) {
+                    m_activeWorkspace = WorkspaceTab::LevelEditor;
+                    m_pendingWindowFocus = WindowFocusTarget::SceneView;
+                }
+            }
             ImGui::Separator();
             if (ImGui::MenuItem("Focus Hierarchy")) RequestWindowFocus(WindowFocusTarget::Hierarchy);
             if (ImGui::MenuItem("Focus Inspector")) RequestWindowFocus(WindowFocusTarget::Inspector);
@@ -802,7 +831,8 @@ void EditorLayer::DrawMainToolbar()
     auto& ifm = IconFontManager::Instance();
     ImGuiViewport* vp = ImGui::GetMainViewport();
 
-    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + ImGui::GetFrameHeight()));
+    const float workspaceTabHeight = m_showPlayerEditor ? 34.0f : 0.0f;
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + ImGui::GetFrameHeight() + workspaceTabHeight));
     ImGui::SetNextWindowSize(ImVec2(vp->Size.x, 32));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |

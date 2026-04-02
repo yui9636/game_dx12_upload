@@ -1,6 +1,5 @@
 #include "CameraController.h"
 #include "Camera/Camera.h"
-#include "Input/Input.h"
 #include "Actor/Actor.h"
 
 #include <string.h>
@@ -146,9 +145,8 @@ void CameraController::Update(float dt)
 
 void CameraController::FreeCamera(float dt)
 {
-	GamePad& gamePad = Input::Instance().GetGamePad();
-	float ax = gamePad.GetAxisRX();
-	float ay = gamePad.GetAxisRY();
+	float ax = 0.0f;
+	float ay = 0.0f;
 	float speed = rollSpeed * dt;
 
 	angle.x += ay * speed;

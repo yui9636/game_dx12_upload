@@ -29,6 +29,7 @@
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
 #include "Console/Logger.h"
+#include "Input/SDLInputBackend.h"
 #include <wrl/client.h>
 #include <cfloat>
 #include <DirectXCollision.h>
@@ -955,6 +956,15 @@ void EngineKernel::Initialize()
         MaterialPreviewStudio::Instance().Initialize(nullptr);
     }
 
+    // SDL3 input backend
+    m_inputBackend = std::make_unique<SDLInputBackend>();
+    {
+        HWND hwnd = Graphics::Instance().GetWindowHandle();
+        if (!m_inputBackend->Initialize(hwnd)) {
+            LOG_ERROR("[EngineKernel] Failed to initialize SDL input backend.");
+        }
+    }
+
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
     if (isDX12) {
@@ -974,12 +984,26 @@ void EngineKernel::Initialize()
 
 void EngineKernel::Finalize()
 {
+    if (m_inputBackend) {
+        m_inputBackend->Shutdown();
+        m_inputBackend.reset();
+    }
     if (m_audioWorld) {
         m_audioWorld->Finalize();
         m_audioWorld.reset();
     }
     if (m_editorLayer) m_editorLayer->Finalize();
     if (m_gameLayer) m_gameLayer->Finalize();
+}
+
+void EngineKernel::PollInput()
+{
+    if (m_inputBackend) {
+        m_inputBackend->BeginFrame();
+        m_inputQueue.Clear();
+        m_inputBackend->PollEvents(m_inputQueue);
+        m_inputBackend->EndFrame();
+    }
 }
 
 void EngineKernel::Update(float rawDt)
@@ -1368,6 +1392,10 @@ void EngineKernel::Render()
 
     m_renderPipeline->SubmitFrame(rc);
 
+    if (m_editorLayer) {
+        m_editorLayer->RenderDetachedWindows();
+    }
+
     // D3D12 デバッグメッセージをログに出力（初回フレームのみ）
     if (kEnableDx12RuntimeDiagnostics && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         Graphics::Instance().GetDX12Device()->FlushDebugMessages();
@@ -1397,6 +1425,9 @@ void EngineKernel::Play()
 {
     if (mode == EngineMode::Editor) {
         mode = EngineMode::Play;
+        if (m_editorLayer && m_gameLayer) {
+            m_editorLayer->GetInputBridge().OnPlayStarted(m_gameLayer->GetRegistry());
+        }
     }
     else if (mode == EngineMode::Pause) {
         mode = EngineMode::Play;
@@ -1408,6 +1439,9 @@ void EngineKernel::Stop()
 {
     if (mode == EngineMode::Play || mode == EngineMode::Pause) {
         mode = EngineMode::Editor;
+        if (m_editorLayer && m_gameLayer) {
+            m_editorLayer->GetInputBridge().OnPlayStopped(m_gameLayer->GetRegistry());
+        }
     }
     m_stepFrameRequested = false;
 }

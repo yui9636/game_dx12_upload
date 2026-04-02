@@ -31,6 +31,11 @@ public:
     // DX12 描画終了。ImGui::Render + RenderDrawData をまとめて行う。
     static void RenderDX12(ID3D12GraphicsCommandList* commandList);
 
+    static DX12Device* GetDX12Device() { return s_dx12Device; }
+    static ID3D12DescriptorHeap* GetDX12SrvHeap() { return s_imguiSrvHeap.Get(); }
+    static D3D12_CPU_DESCRIPTOR_HANDLE GetDX12SrvCpuHandle(uint32_t slot);
+    static D3D12_GPU_DESCRIPTOR_HANDLE GetDX12SrvGpuHandle(uint32_t slot);
+
     // Win32 メッセージハンドラ
     static LRESULT HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 

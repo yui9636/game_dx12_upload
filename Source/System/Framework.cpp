@@ -16,7 +16,6 @@ extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam
 
 Framework::Framework(HWND hWnd)
     : hWnd(hWnd)
-    , input(hWnd)
 {
     // 1. グラフィックス初期化
     Graphics::Instance().Initialize(hWnd, GraphicsAPI::DX12);
@@ -83,8 +82,8 @@ int Framework::Run()
 
 void Framework::Update(float dt)
 {
-    input.Update();
-    // ImGui NewFrame（DX11/DX12 共通 - 内部で API 分岐）
+    EngineKernel::Instance().PollInput();
+    // ImGui NewFrame
     ImGuiRenderer::Begin();
 
     EngineKernel::Instance().Update(dt);

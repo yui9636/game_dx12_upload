@@ -51,6 +51,29 @@ struct ComponentMeta;
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputDebugStateComponent.h"
+#include "Input/InputTextFieldComponent.h"
+#include "Input/InputUserComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Input/VibrationRequestComponent.h"
+#include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/ActionStateComponent.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/DodgeStateComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/HitboxTrackingComponent.h"
+#include "Gameplay/HitStopComponent.h"
+#include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/PlaybackRangeComponent.h"
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/SpeedCurveComponent.h"
+#include "Gameplay/StageBoundsComponent.h"
+#include "Gameplay/StaminaComponent.h"
+#include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/TimelineComponent.h"
 
 template <>
 struct ComponentMeta<AudioBusSendComponent> {
@@ -159,7 +182,6 @@ template <>
 struct ComponentMeta<CameraTPVControlComponent> {
     static constexpr std::string_view Name = "CameraTPVControlComponent";
     static constexpr auto Fields = std::make_tuple(
-        MakeField("target", &CameraTPVControlComponent::target),
         MakeField("distance", &CameraTPVControlComponent::distance),
         MakeField("heightOffset", &CameraTPVControlComponent::heightOffset),
         MakeField("smoothness", &CameraTPVControlComponent::smoothness),
@@ -172,7 +194,6 @@ template <>
 struct ComponentMeta<CameraLookAtComponent> {
     static constexpr std::string_view Name = "CameraLookAtComponent";
     static constexpr auto Fields = std::make_tuple(
-        MakeField("target", &CameraLookAtComponent::target),
         MakeField("up", &CameraLookAtComponent::up)
     );
 };
@@ -280,10 +301,7 @@ template <>
 struct ComponentMeta<HierarchyComponent> {
     static constexpr std::string_view Name = "HierarchyComponent";
     static constexpr auto Fields = std::make_tuple(
-        MakeField("isActive", &HierarchyComponent::isActive),
-        MakeField("firstChild", &HierarchyComponent::firstChild),
-        MakeField("prevSibling", &HierarchyComponent::prevSibling),
-        MakeField("nextSibling", &HierarchyComponent::nextSibling)
+        MakeField("isActive", &HierarchyComponent::isActive)
     );
 };
 
@@ -444,6 +462,282 @@ struct ComponentMeta<TransformComponent> {
     );
 };
 
+template <>
+struct ComponentMeta<InputBindingComponent> {
+    static constexpr std::string_view Name = "InputBindingComponent";
+    static constexpr auto Fields = std::make_tuple();
+};
+
+template <>
+struct ComponentMeta<InputContextComponent> {
+    static constexpr std::string_view Name = "InputContextComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("priority", &InputContextComponent::priority),
+        MakeField("activeMapCount", &InputContextComponent::activeMapCount),
+        MakeField("consumeLowerPriority", &InputContextComponent::consumeLowerPriority),
+        MakeField("textInputEnabled", &InputContextComponent::textInputEnabled),
+        MakeField("uiNavigationEnabled", &InputContextComponent::uiNavigationEnabled),
+        MakeField("pointerEnabled", &InputContextComponent::pointerEnabled),
+        MakeField("enabled", &InputContextComponent::enabled),
+        MakeField("consumed", &InputContextComponent::consumed)
+    );
+};
+
+template <>
+struct ComponentMeta<InputDebugStateComponent> {
+    static constexpr std::string_view Name = "InputDebugStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("historyHead", &InputDebugStateComponent::historyHead),
+        MakeField("historyCount", &InputDebugStateComponent::historyCount),
+        MakeField("recordEnabled", &InputDebugStateComponent::recordEnabled)
+    );
+};
+
+template <>
+struct ComponentMeta<InputTextFieldComponent> {
+    static constexpr std::string_view Name = "InputTextFieldComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("isFocused", &InputTextFieldComponent::isFocused),
+        MakeField("allowMultiline", &InputTextFieldComponent::allowMultiline),
+        MakeField("maxLength", &InputTextFieldComponent::maxLength),
+        MakeField("compositionEnabled", &InputTextFieldComponent::compositionEnabled),
+        MakeField("compositionCursor", &InputTextFieldComponent::compositionCursor),
+        MakeField("compositionSelectionLen", &InputTextFieldComponent::compositionSelectionLen)
+    );
+};
+
+template <>
+struct ComponentMeta<InputUserComponent> {
+    static constexpr std::string_view Name = "InputUserComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("userId", &InputUserComponent::userId),
+        MakeField("deviceMask", &InputUserComponent::deviceMask),
+        MakeField("isEditorUser", &InputUserComponent::isEditorUser),
+        MakeField("isPrimary", &InputUserComponent::isPrimary)
+    );
+};
+
+template <>
+struct ComponentMeta<ResolvedInputStateComponent> {
+    static constexpr std::string_view Name = "ResolvedInputStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("actionCount", &ResolvedInputStateComponent::actionCount),
+        MakeField("axisCount", &ResolvedInputStateComponent::axisCount),
+        MakeField("pointerX", &ResolvedInputStateComponent::pointerX),
+        MakeField("deltaX", &ResolvedInputStateComponent::deltaX),
+        MakeField("scrollX", &ResolvedInputStateComponent::scrollX),
+        MakeField("textLength", &ResolvedInputStateComponent::textLength),
+        MakeField("lastDeviceType", &ResolvedInputStateComponent::lastDeviceType)
+    );
+};
+
+template <>
+struct ComponentMeta<VibrationRequestComponent> {
+    static constexpr std::string_view Name = "VibrationRequestComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("leftMotor", &VibrationRequestComponent::leftMotor),
+        MakeField("rightMotor", &VibrationRequestComponent::rightMotor),
+        MakeField("duration", &VibrationRequestComponent::duration),
+        MakeField("targetUserId", &VibrationRequestComponent::targetUserId)
+    );
+};
+
+template <>
+struct ComponentMeta<ActionDatabaseComponent> {
+    static constexpr std::string_view Name = "ActionDatabaseComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("nodeCount", &ActionDatabaseComponent::nodeCount)
+    );
+};
+
+template <>
+struct ComponentMeta<ActionStateComponent> {
+    static constexpr std::string_view Name = "ActionStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("currentNodeIndex", &ActionStateComponent::currentNodeIndex),
+        MakeField("reservedNodeIndex", &ActionStateComponent::reservedNodeIndex),
+        MakeField("stateTimer", &ActionStateComponent::stateTimer),
+        MakeField("comboCount", &ActionStateComponent::comboCount),
+        MakeField("comboTimer", &ActionStateComponent::comboTimer),
+        MakeField("comboTimeout", &ActionStateComponent::comboTimeout)
+    );
+};
+
+template <>
+struct ComponentMeta<CharacterPhysicsComponent> {
+    static constexpr std::string_view Name = "CharacterPhysicsComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("velocity", &CharacterPhysicsComponent::velocity),
+        MakeField("verticalVelocity", &CharacterPhysicsComponent::verticalVelocity),
+        MakeField("gravity", &CharacterPhysicsComponent::gravity),
+        MakeField("friction", &CharacterPhysicsComponent::friction),
+        MakeField("maxMoveSpeed", &CharacterPhysicsComponent::maxMoveSpeed),
+        MakeField("acceleration", &CharacterPhysicsComponent::acceleration),
+        MakeField("isGround", &CharacterPhysicsComponent::isGround),
+        MakeField("height", &CharacterPhysicsComponent::height),
+        MakeField("stepOffset", &CharacterPhysicsComponent::stepOffset)
+    );
+};
+
+template <>
+struct ComponentMeta<DodgeStateComponent> {
+    static constexpr std::string_view Name = "DodgeStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("dodgeMoveSpeed", &DodgeStateComponent::dodgeMoveSpeed),
+        MakeField("dodgeDuration", &DodgeStateComponent::dodgeDuration),
+        MakeField("dodgeExitNormalized", &DodgeStateComponent::dodgeExitNormalized),
+        MakeField("dodgeTimer", &DodgeStateComponent::dodgeTimer),
+        MakeField("dodgeAngleY", &DodgeStateComponent::dodgeAngleY),
+        MakeField("dodgeTriggered", &DodgeStateComponent::dodgeTriggered)
+    );
+};
+
+template <>
+struct ComponentMeta<HealthComponent> {
+    static constexpr std::string_view Name = "HealthComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("health", &HealthComponent::health),
+        MakeField("maxHealth", &HealthComponent::maxHealth),
+        MakeField("invincibleTimer", &HealthComponent::invincibleTimer),
+        MakeField("isInvincible", &HealthComponent::isInvincible),
+        MakeField("isDead", &HealthComponent::isDead),
+        MakeField("lastDamage", &HealthComponent::lastDamage)
+    );
+};
+
+template <>
+struct ComponentMeta<HitboxTrackingComponent> {
+    static constexpr std::string_view Name = "HitboxTrackingComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("lastHitboxStart", &HitboxTrackingComponent::lastHitboxStart),
+        MakeField("hitEntityCount", &HitboxTrackingComponent::hitEntityCount)
+    );
+};
+
+template <>
+struct ComponentMeta<HitStopComponent> {
+    static constexpr std::string_view Name = "HitStopComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("timer", &HitStopComponent::timer),
+        MakeField("speedScale", &HitStopComponent::speedScale)
+    );
+};
+
+template <>
+struct ComponentMeta<LocomotionStateComponent> {
+    static constexpr std::string_view Name = "LocomotionStateComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("moveInput", &LocomotionStateComponent::moveInput),
+        MakeField("inputStrength", &LocomotionStateComponent::inputStrength),
+        MakeField("worldMoveDir", &LocomotionStateComponent::worldMoveDir),
+        MakeField("gaitIndex", &LocomotionStateComponent::gaitIndex),
+        MakeField("currentSpeed", &LocomotionStateComponent::currentSpeed),
+        MakeField("targetAngleY", &LocomotionStateComponent::targetAngleY),
+        MakeField("turningInPlace", &LocomotionStateComponent::turningInPlace),
+        MakeField("lastTurnSign", &LocomotionStateComponent::lastTurnSign),
+        MakeField("walkThreshold", &LocomotionStateComponent::walkThreshold),
+        MakeField("jogThreshold", &LocomotionStateComponent::jogThreshold),
+        MakeField("runThreshold", &LocomotionStateComponent::runThreshold),
+        MakeField("walkMaxSpeed", &LocomotionStateComponent::walkMaxSpeed),
+        MakeField("jogMaxSpeed", &LocomotionStateComponent::jogMaxSpeed),
+        MakeField("runMaxSpeed", &LocomotionStateComponent::runMaxSpeed),
+        MakeField("acceleration", &LocomotionStateComponent::acceleration),
+        MakeField("launchBoost", &LocomotionStateComponent::launchBoost),
+        MakeField("deceleration", &LocomotionStateComponent::deceleration),
+        MakeField("turnSpeed", &LocomotionStateComponent::turnSpeed)
+    );
+};
+
+template <>
+struct ComponentMeta<PlaybackComponent> {
+    static constexpr std::string_view Name = "PlaybackComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("currentSeconds", &PlaybackComponent::currentSeconds),
+        MakeField("clipLength", &PlaybackComponent::clipLength),
+        MakeField("playSpeed", &PlaybackComponent::playSpeed),
+        MakeField("playing", &PlaybackComponent::playing),
+        MakeField("looping", &PlaybackComponent::looping),
+        MakeField("stopAtEnd", &PlaybackComponent::stopAtEnd),
+        MakeField("finished", &PlaybackComponent::finished)
+    );
+};
+
+template <>
+struct ComponentMeta<PlaybackRangeComponent> {
+    static constexpr std::string_view Name = "PlaybackRangeComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enabled", &PlaybackRangeComponent::enabled),
+        MakeField("startSeconds", &PlaybackRangeComponent::startSeconds),
+        MakeField("endSeconds", &PlaybackRangeComponent::endSeconds),
+        MakeField("loopWithinRange", &PlaybackRangeComponent::loopWithinRange)
+    );
+};
+
+template <>
+struct ComponentMeta<PlayerTagComponent> {
+    static constexpr std::string_view Name = "PlayerTagComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("playerId", &PlayerTagComponent::playerId)
+    );
+};
+
+template <>
+struct ComponentMeta<SpeedCurveComponent> {
+    static constexpr std::string_view Name = "SpeedCurveComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enabled", &SpeedCurveComponent::enabled),
+        MakeField("useRangeSpace", &SpeedCurveComponent::useRangeSpace),
+        MakeField("pointCount", &SpeedCurveComponent::pointCount)
+    );
+};
+
+template <>
+struct ComponentMeta<StageBoundsComponent> {
+    static constexpr std::string_view Name = "StageBoundsComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("radius", &StageBoundsComponent::radius)
+    );
+};
+
+template <>
+struct ComponentMeta<StaminaComponent> {
+    static constexpr std::string_view Name = "StaminaComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("current", &StaminaComponent::current),
+        MakeField("max", &StaminaComponent::max),
+        MakeField("costPerUse", &StaminaComponent::costPerUse),
+        MakeField("recoveryRate", &StaminaComponent::recoveryRate),
+        MakeField("recoveryDelay", &StaminaComponent::recoveryDelay),
+        MakeField("recoveryTimer", &StaminaComponent::recoveryTimer)
+    );
+};
+
+template <>
+struct ComponentMeta<StateMachineParamsComponent> {
+    static constexpr std::string_view Name = "StateMachineParamsComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("params", &StateMachineParamsComponent::params),
+        MakeField("paramCount", &StateMachineParamsComponent::paramCount),
+        MakeField("currentStateId", &StateMachineParamsComponent::currentStateId),
+        MakeField("stateTimer", &StateMachineParamsComponent::stateTimer),
+        MakeField("animFinished", &StateMachineParamsComponent::animFinished)
+    );
+};
+
+template <>
+struct ComponentMeta<TimelineComponent> {
+    static constexpr std::string_view Name = "TimelineComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("fps", &TimelineComponent::fps),
+        MakeField("currentFrame", &TimelineComponent::currentFrame),
+        MakeField("frameMin", &TimelineComponent::frameMin),
+        MakeField("frameMax", &TimelineComponent::frameMax),
+        MakeField("animationIndex", &TimelineComponent::animationIndex),
+        MakeField("clipLengthSec", &TimelineComponent::clipLengthSec),
+        MakeField("playing", &TimelineComponent::playing)
+    );
+};
+
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
     AudioBusSendComponent,
@@ -478,5 +772,28 @@ using AllComponentTypes = std::tuple<
     ShadowSettingsComponent,
     SpriteComponent,
     TextComponent,
-    TransformComponent
+    TransformComponent,
+    InputBindingComponent,
+    InputContextComponent,
+    InputDebugStateComponent,
+    InputTextFieldComponent,
+    InputUserComponent,
+    ResolvedInputStateComponent,
+    VibrationRequestComponent,
+    ActionDatabaseComponent,
+    ActionStateComponent,
+    CharacterPhysicsComponent,
+    DodgeStateComponent,
+    HealthComponent,
+    HitboxTrackingComponent,
+    HitStopComponent,
+    LocomotionStateComponent,
+    PlaybackComponent,
+    PlaybackRangeComponent,
+    PlayerTagComponent,
+    SpeedCurveComponent,
+    StageBoundsComponent,
+    StaminaComponent,
+    StateMachineParamsComponent,
+    TimelineComponent
 >;

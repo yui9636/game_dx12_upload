@@ -8,6 +8,8 @@
 #include "ReflectionProbe/ReflectionProbeBaker.h"
 #include "Render/OffscreenRenderer.h"
 #include "Grid/GridRenderSystem.h"
+#include "Input/IInputBackend.h"
+#include "Input/InputEventQueue.h"
 #include "Registry/Registry.h"
 #include <memory>
 
@@ -26,6 +28,7 @@ public:
 
     void Update(float rawDt);
     void Render();
+    void PollInput();
 
     void Play();
     void Stop();
@@ -37,6 +40,9 @@ public:
     const EngineTime& GetTime() const { return time; }
     AudioWorldSystem& GetAudioWorld() { return *m_audioWorld; }
     const AudioWorldSystem& GetAudioWorld() const { return *m_audioWorld; }
+
+    IInputBackend& GetInputBackend() { return *m_inputBackend; }
+    const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
 private:
     void Initialize();
@@ -57,6 +63,10 @@ private:
 
     // Shared offscreen renderer for thumbnails / material preview
     std::unique_ptr<OffscreenRenderer> m_sharedOffscreen;
+
+    // Input system
+    std::unique_ptr<IInputBackend> m_inputBackend;
+    InputEventQueue m_inputQueue;
 
     Registry m_emptyRegistry;
 };

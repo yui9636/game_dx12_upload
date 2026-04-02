@@ -12,6 +12,25 @@
 #include <Camera\CameraFinalizeSystem.h>
 #include "Model/ModelUpdateSystem.h"
 #include <Component\CameraBehaviorComponent.h>
+#include "Input/InputContextSystem.h"
+#include "Input/InputResolveSystem.h"
+#include "Input/InputTextSystem.h"
+#include "Input/InputFeedbackSystem.h"
+#include "Engine/EngineKernel.h"
+#include "Gameplay/PlayerInputSystem.h"
+#include "Gameplay/ActionSystem.h"
+#include "Gameplay/DodgeSystem.h"
+#include "Gameplay/LocomotionSystem.h"
+#include "Gameplay/StaminaSystem.h"
+#include "Gameplay/HealthSystem.h"
+#include "Gameplay/CharacterPhysicsSystem.h"
+#include "Gameplay/PlaybackSystem.h"
+#include "Gameplay/TimelineSystem.h"
+#include "Gameplay/TimelineHitboxSystem.h"
+#include "Gameplay/TimelineVFXSystem.h"
+#include "Gameplay/TimelineAudioSystem.h"
+#include "Gameplay/TimelineShakeSystem.h"
+#include "Gameplay/HitboxTrackingSystem.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -83,8 +102,31 @@ void GameLayer::Finalize()
 
 void GameLayer::Update(const EngineTime& time)
 {
-    FreeCameraSystem::Update(m_registry, time.unscaledDt);
+    auto& kernel = EngineKernel::Instance();
+    const auto& eventQueue = kernel.GetInputEventQueue();
 
+    InputContextSystem::Update(m_registry);
+    InputResolveSystem::Update(m_registry, eventQueue, time.unscaledDt);
+    InputTextSystem::Update(m_registry, eventQueue, kernel.GetInputBackend());
+    InputFeedbackSystem::Update(m_registry, kernel.GetInputBackend(), time.unscaledDt);
+
+    // --- Gameplay Systems (spec order) ---
+    PlayerInputSystem::Update(m_registry);
+    ActionSystem::Update(m_registry, time.dt);
+    DodgeSystem::Update(m_registry, time.dt);
+    LocomotionSystem::Update(m_registry, time.dt);
+    StaminaSystem::Update(m_registry, time.dt);
+    HealthSystem::Update(m_registry, time.dt);
+    CharacterPhysicsSystem::Update(m_registry, time.dt);
+    PlaybackSystem::Update(m_registry, time.dt);
+    TimelineSystem::Update(m_registry);
+    TimelineHitboxSystem::Update(m_registry);
+    TimelineVFXSystem::Update(m_registry);
+    TimelineAudioSystem::Update(m_registry);
+    TimelineShakeSystem::Update(m_registry, time.dt);
+    HitboxTrackingSystem::Update(m_registry);
+
+    FreeCameraSystem::Update(m_registry, time.unscaledDt);
 
     TransformSystem transformSys;
     transformSys.Update(m_registry);

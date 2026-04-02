@@ -17,13 +17,17 @@
 #define IMGUI_NO_DOCKING_FALLBACK
 #endif
 
+namespace {
+    constexpr uint32_t kReservedDx12DescriptorSlots = 2;
+}
+
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
 
 bool ImGuiRenderer::s_isDX12 = false;
 DX12Device* ImGuiRenderer::s_dx12Device = nullptr;
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ImGuiRenderer::s_imguiSrvHeap;
 uint32_t ImGuiRenderer::s_descriptorSize = 0;
-uint32_t ImGuiRenderer::s_nextTextureSlot = 1;
+uint32_t ImGuiRenderer::s_nextTextureSlot = kReservedDx12DescriptorSlots;
 std::unordered_map<const ITexture*, uint32_t> ImGuiRenderer::s_textureSlots;
 std::vector<ImGuiRenderer::DeferredTextureSlot> ImGuiRenderer::s_deferredUnregisters;
 std::vector<uint32_t> ImGuiRenderer::s_freeSlots;
@@ -42,20 +46,9 @@ void ImGuiRenderer::Initialize(HWND hWnd, ID3D11Device* device, ID3D11DeviceCont
 
 #ifndef IMGUI_NO_DOCKING_FALLBACK
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-    io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleFonts;
-    io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleViewports;
 #endif
 
     ImGui::StyleColorsDark();
-
-#ifndef IMGUI_NO_DOCKING_FALLBACK
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.WindowRounding = 0.0f;
-        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-    }
-#endif
 
     ImGui_ImplWin32_Init(hWnd);
     ImGui_ImplDX11_Init(device, dc);
@@ -148,12 +141,6 @@ void ImGuiRenderer::Render(ID3D11DeviceContext* /*context*/)
 {
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-    }
 }
 
 void ImGuiRenderer::End()
@@ -259,16 +246,9 @@ void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
 
 bool ImGuiRenderer::RebuildFontAtlas()
 {
-    ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->Build();
-
-    if (s_isDX12) {
-        ImGui_ImplDX12_InvalidateDeviceObjects();
-        return ImGui_ImplDX12_CreateDeviceObjects();
-    }
-
-    ImGui_ImplDX11_InvalidateDeviceObjects();
-    return ImGui_ImplDX11_CreateDeviceObjects();
+    // Current DX11/DX12 backends support dynamic font atlas texture updates.
+    // Fonts added to io.Fonts are uploaded by the backend during the next frame/render.
+    return true;
 }
 
 void ImGuiRenderer::ResetTextureCache()
@@ -276,5 +256,29 @@ void ImGuiRenderer::ResetTextureCache()
     s_textureSlots.clear();
     s_deferredUnregisters.clear();
     s_freeSlots.clear();
-    s_nextTextureSlot = 1;
+    s_nextTextureSlot = kReservedDx12DescriptorSlots;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE ImGuiRenderer::GetDX12SrvCpuHandle(uint32_t slot)
+{
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = {};
+    if (!s_imguiSrvHeap) {
+        return handle;
+    }
+
+    handle = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
+    handle.ptr += static_cast<SIZE_T>(slot) * s_descriptorSize;
+    return handle;
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE ImGuiRenderer::GetDX12SrvGpuHandle(uint32_t slot)
+{
+    D3D12_GPU_DESCRIPTOR_HANDLE handle = {};
+    if (!s_imguiSrvHeap) {
+        return handle;
+    }
+
+    handle = s_imguiSrvHeap->GetGPUDescriptorHandleForHeapStart();
+    handle.ptr += static_cast<UINT64>(slot) * s_descriptorSize;
+    return handle;
 }

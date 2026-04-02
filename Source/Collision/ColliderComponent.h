@@ -7,7 +7,6 @@
 #include "Collision.h" 
 
 class NodeAttachComponent;
-class TimelineSequencerComponent;
 class Gizmos;
 class Actor;
 
@@ -67,10 +66,6 @@ public:
     void AddSphere(const DirectX::SimpleMath::Vector3& offset, float radius, ColliderAttribute attr = ColliderAttribute::Body);
     void AddCapsule(const DirectX::SimpleMath::Vector3& offset, float radius, float height, ColliderAttribute attr = ColliderAttribute::Body);
     void AddBox(const DirectX::SimpleMath::Vector3& offset, const DirectX::SimpleMath::Vector3& size, ColliderAttribute attr = ColliderAttribute::Body);
-
-    void SyncFromSequencer(TimelineSequencerComponent* seq, int currentFrame);
-    void ClearSequencerRuntime();
-
 
     float GetMaxRadiusXZ() const;
 

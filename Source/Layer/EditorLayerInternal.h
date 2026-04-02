@@ -46,6 +46,7 @@
 #include "ImGuiRenderer.h"
 #include "UI/UI2DDrawSystem.h"
 #include "UI/UIHitTestSystem.h"
+#include "Input/InputDebugSystem.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>

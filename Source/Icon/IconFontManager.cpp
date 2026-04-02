@@ -27,8 +27,8 @@ void IconFontManager::Setup(const std::vector<SizeConfig>& configs)
         fontMap[conf.type] = font;
     }
 
-    // ★重要：もし初期化後に Setup を呼んでいるなら、これが必要
-    io.Fonts->Build();
+    // New ImGui renderer backends update font textures dynamically.
+    // We only register fonts here and let the backend upload them on frame/render.
 }
 
 bool IconFontManager::IconButton(const char* icon, IconSemantic semantic, IconFontSize size, const char* tooltip)

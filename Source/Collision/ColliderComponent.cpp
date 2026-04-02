@@ -2,10 +2,10 @@
 #include "Actor/Actor.h"
 #include "Graphics.h"
 #include "Gizmos.h"
-#include "Timeline/TimelineSequencerComponent.h"
 #include "Component/NodeAttachComponent.h"
-#include "CollisionManager.h" 
-#include "Model/Model.h"       
+#include "CollisionManager.h"
+#include "Model/Model.h"
+#include <imgui.h>
 
 #include <SimpleMath.h>
 #include <cmath>
@@ -275,101 +275,6 @@ std::shared_ptr<Component> ColliderComponent::Clone()
     }
     return clone;
 }
-
-void ColliderComponent::ClearSequencerRuntime()
-{
-    auto it = elements.begin();
-    while (it != elements.end())
-    {
-        if (it->runtimeTag != 0)
-        {
-            UnregisterFromManager(*it);
-            it = elements.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-}
-
-
-void ColliderComponent::SyncFromSequencer(TimelineSequencerComponent* seq, int currentFrame)
-{
-    if (!seq) return;
-
-
-    const auto& items = seq->GetItems();
-
-    std::vector<int> activeIndices;
-    for (int i = 0; i < (int)items.size(); ++i)
-    {
-        const auto& it = items[i];
-        if (it.type != 0) continue;
-
-        if (currentFrame >= it.start && currentFrame <= it.end)
-        {
-            activeIndices.push_back(i);
-        }
-    }
-
-    for (int index : activeIndices)
-    {
-        int targetTag = index + 1;
-        const auto& it = items[index];
-
-        auto found = std::find_if(elements.begin(), elements.end(),
-            [targetTag](const Element& e) { return e.runtimeTag == targetTag; });
-
-        if (found != elements.end())
-        {
-            Element& e = *found;
-            e.nodeIndex = it.hb.nodeIndex;
-            e.offsetLocal = DirectX::SimpleMath::Vector3(it.hb.offsetLocal.x, it.hb.offsetLocal.y, it.hb.offsetLocal.z);
-            e.radius = it.hb.radius;
-            UpdateToManager(e);
-        }
-        else
-        {
-            Element e{};
-            e.enabled = true;
-            e.type = ShapeType::Sphere;
-            e.nodeIndex = it.hb.nodeIndex;
-            e.offsetLocal = DirectX::SimpleMath::Vector3(it.hb.offsetLocal.x, it.hb.offsetLocal.y, it.hb.offsetLocal.z);
-            e.radius = it.hb.radius;
-            e.color = DirectX::SimpleMath::Vector4(1, 0, 0, 0.35f);
-            e.runtimeTag = targetTag;
-            e.label = "HB(runtime)";
-            e.attribute = ColliderAttribute::Attack;
-
-            RegisterToManager(e);
-            elements.push_back(e);
-        }
-    }
-
-    auto it = elements.begin();
-    while (it != elements.end())
-    {
-        if (it->runtimeTag != 0)
-        {
-            int originalIndex = it->runtimeTag - 1;
-            bool isActive = false;
-            for (int idx : activeIndices) {
-                if (idx == originalIndex) { isActive = true; break; }
-            }
-
-            if (!isActive)
-            {
-                UnregisterFromManager(*it);
-                it = elements.erase(it);
-                continue;
-            }
-        }
-        ++it;
-    }
-}
-
-
 
 void ColliderComponent::OnGUI()
 {

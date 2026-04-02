@@ -22,9 +22,6 @@
     <Filter Include="Source\Audio">
       <UniqueIdentifier>{a2d7d922-5060-4e07-98b8-da08ba1c3b62}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Character">
-      <UniqueIdentifier>{96e202ac-71e6-47be-8feb-918f2a15140d}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source\Stage">
       <UniqueIdentifier>{04735a01-0bcf-4648-9a5e-81490fdb91bb}</UniqueIdentifier>
     </Filter>
@@ -46,14 +43,8 @@
     <Filter Include="Source\Collision">
       <UniqueIdentifier>{61ce20d2-ff7c-4f8a-a288-08373ae14b1d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Timeline">
-      <UniqueIdentifier>{de70beaf-b6c1-4c13-b1eb-de624ddb4b42}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source\Component">
       <UniqueIdentifier>{d574f817-d07f-4dde-ba39-f0a43529a4c9}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\Runner">
-      <UniqueIdentifier>{1fa22eb9-af2f-4292-b6a4-67eee8acf4c3}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Model">
       <UniqueIdentifier>{f315a324-3783-4de0-b5d9-63aeab08aaaf}</UniqueIdentifier>
@@ -76,9 +67,6 @@
     <Filter Include="Source\Sprite">
       <UniqueIdentifier>{ddfbb006-a048-475d-93cc-5fcfb80b05a3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Character\Enemy">
-      <UniqueIdentifier>{a03a07a6-b718-4d2d-84c1-d5158b887566}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source\Message">
       <UniqueIdentifier>{8a9120a7-b0c4-4379-9b49-24cf72f30265}</UniqueIdentifier>
     </Filter>
@@ -96,9 +84,6 @@
     </Filter>
     <Filter Include="Source\Animator">
       <UniqueIdentifier>{b7d9fb3a-8272-4acc-92d5-1ef8407a7ed9}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source\BT">
-      <UniqueIdentifier>{fcabe3eb-dfd5-49c5-84a7-11d1ff0bf159}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source\Engine">
       <UniqueIdentifier>{6fd185fc-c236-44ea-a617-9bd52d7c0ad1}</UniqueIdentifier>
@@ -196,6 +181,12 @@
     <Filter Include="Source\Entity">
       <UniqueIdentifier>{dfd7dd76-a133-4d97-86a1-a121e2b0c1d9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\PlayerEditor">
+      <UniqueIdentifier>{b4e3c8a1-7f2d-4e6a-9c15-8d3b0a5f7e92}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Gameplay">
+      <UniqueIdentifier>{a1c5d9e3-6b8f-4a2d-b7e0-3f9c1d5a8b64}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\ImGuiRenderer.h">
@@ -234,17 +225,11 @@
     <ClInclude Include="Source\Input\Mouse.h">
       <Filter>Source\Input</Filter>
     </ClInclude>
-                <ClInclude Include="Source\Character\Character.h">
-      <Filter>Source\Character</Filter>
-    </ClInclude>
     <ClInclude Include="Source\easing.h">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\Stage\Stage.h">
       <Filter>Source\Stage</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Player.h">
-      <Filter>Source\Character</Filter>
     </ClInclude>
     <ClInclude Include="Source\PrimitiveRenderer.h">
       <Filter>Source</Filter>
@@ -312,12 +297,6 @@
     <ClInclude Include="Source\Particle\ParticleSetting.h">
       <Filter>Source\Particle</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Character\PlayerEditorComponent.h">
-      <Filter>Source\Character</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\LocomotionComponent.h">
-      <Filter>Source\Character</Filter>
-    </ClInclude>
     <ClInclude Include="External\ImGuizmo\ImSequencer.h">
       <Filter>External\imgui-docking</Filter>
     </ClInclude>
@@ -339,14 +318,8 @@
     <ClInclude Include="Source\Collision\ColliderComponent.h">
       <Filter>Source\Collision</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Timeline\TimelineSequencerComponent.h">
-      <Filter>Source\Timeline</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Component\Component.h">
       <Filter>Source\Component</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Runner\RunnerComponent.h">
-      <Filter>Source\Runner</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\NodeAttachComponent.h">
       <Filter>Source\Component</Filter>
@@ -444,21 +417,6 @@
     <ClInclude Include="Source\Sprite\Sprite3D.h">
       <Filter>Source\Sprite</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\C_EnemyHUD.h">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\Enemy.h">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\EnemyManager.h">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\C_DodgeGauge.h">
-      <Filter>Source\Character</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\C_PlayerHUD.h">
-      <Filter>Source\Character</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Font\FontManager.h">
       <Filter>Source\Font</Filter>
     </ClInclude>
@@ -482,15 +440,6 @@
     </ClInclude>
     <ClInclude Include="External\meshoptimizer-cpp-master\src\meshoptimizer.h">
       <Filter>External\meshoptimizer</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\EnemyAIController.h">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\EnemyBoss.h">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Character\Enemy\EnemyLocomotionComponent.h">
-      <Filter>Source\Character\Enemy</Filter>
     </ClInclude>
     <ClInclude Include="Source\ShaderClass\ShaderCompiler.h">
       <Filter>Source\ShaderClass</Filter>
@@ -530,24 +479,6 @@
     </ClInclude>
     <ClInclude Include="Source\System\ResourceManager.h">
       <Filter>Source\System</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BTGraph.h">
-      <Filter>Source\BT</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BTEditorComponent.h">
-      <Filter>Source\BT</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BTCommands.h">
-      <Filter>Source\BT</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BehaviorTree.h">
-      <Filter>Source\BT</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BTBuilder.h">
-      <Filter>Source\BT</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\BT\BTNodes.h">
-      <Filter>Source\BT</Filter>
     </ClInclude>
     <ClInclude Include="Source\Engine\EngineKernel.h">
       <Filter>Source\Engine</Filter>
@@ -946,6 +877,45 @@
     <ClInclude Include="Source\RHI\DX12\DX12ResourceFactory.h" />
     <ClInclude Include="Source\RHI\DX12\DX12RootSignature.h" />
     <ClInclude Include="Source\RHI\DX12\DX12DescriptorAllocator.h" />
+    <ClInclude Include="Source\PlayerEditor\TimelineAsset.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\TimelineAssetSerializer.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\TimelineDriver.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorWindow.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\StateMachineAsset.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\StateMachineAssetSerializer.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\PreviewState.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\GizmoOverlay.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\InputMappingTab.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\StateMachineParamsComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\StateMachineSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\ImGuiRenderer.cpp">
@@ -984,14 +954,8 @@
     <ClCompile Include="Source\Input\Mouse.cpp">
       <Filter>Source\Input</Filter>
     </ClCompile>
-                <ClCompile Include="Source\Character\Character.cpp">
-      <Filter>Source\Character</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Stage\Stage.cpp">
       <Filter>Source\Stage</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Player.cpp">
-      <Filter>Source\Character</Filter>
     </ClCompile>
     <ClCompile Include="Source\PrimitiveRenderer.cpp">
       <Filter>Source</Filter>
@@ -1047,12 +1011,6 @@
     <ClCompile Include="External\ImGuizmo\ImCurveEdit.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Character\PlayerEditorComponent.cpp">
-      <Filter>Source\Character</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\LocomotionComponent.cpp">
-      <Filter>Source\Character</Filter>
-    </ClCompile>
     <ClCompile Include="External\ImGuizmo\ImSequencer.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
@@ -1071,14 +1029,8 @@
     <ClCompile Include="Source\Collision\ColliderComponent.cpp">
       <Filter>Source\Collision</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Timeline\TimelineSequencerComponent.cpp">
-      <Filter>Source\Timeline</Filter>
-    </ClCompile>
     <ClCompile Include="External\imgui-docking\imgui_tables.cpp">
       <Filter>External\imgui-docking</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Runner\RunnerComponent.cpp">
-      <Filter>Source\Runner</Filter>
     </ClCompile>
     <ClCompile Include="Source\Component\NodeAttachComponent.cpp">
       <Filter>Source\Component</Filter>
@@ -1167,21 +1119,6 @@
     <ClCompile Include="Source\Sprite\Sprite3D.cpp">
       <Filter>Source\Sprite</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\C_EnemyHUD.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\Enemy.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\EnemyManager.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\C_DodgeGauge.cpp">
-      <Filter>Source\Character</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\C_PlayerHUD.cpp">
-      <Filter>Source\Character</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Font\FontManager.cpp">
       <Filter>Source\Font</Filter>
     </ClCompile>
@@ -1236,15 +1173,6 @@
     <ClCompile Include="External\meshoptimizer-cpp-master\src\simplifier.cpp">
       <Filter>External\meshoptimizer</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\EnemyAIController.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\EnemyBoss.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Character\Enemy\EnemyLocomotionComponent.cpp">
-      <Filter>Source\Character\Enemy</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Stage\StageInfoComponent.cpp">
       <Filter>Source\Stage</Filter>
     </ClCompile>
@@ -1265,12 +1193,6 @@
     </ClCompile>
     <ClCompile Include="Source\System\ResourceManager.cpp">
       <Filter>Source\System</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\BT\BTEditorComponent.cpp">
-      <Filter>Source\BT</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\BT\BTBuilder.cpp">
-      <Filter>Source\BT</Filter>
     </ClCompile>
     <ClCompile Include="Source\Engine\EngineKernel.cpp">
       <Filter>Source\Engine</Filter>
@@ -1550,6 +1472,36 @@
     </ClCompile>
     <ClCompile Include="Source\RHI\DX12\DX12DescriptorAllocator.cpp">
       <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\TimelineDriver.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\TimelineAssetSerializer.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorWindow.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\StateMachineAssetSerializer.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PreviewState.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\GizmoOverlay.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\InputMappingTab.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

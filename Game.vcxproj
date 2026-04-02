@@ -58,9 +58,9 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -68,8 +68,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MD\x64\Debug;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MD\x64\Debug;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug;.\External\SDL-release-3.4.x\build\Debug</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>
@@ -80,8 +80,11 @@
       <AssemblerOutputFile>Data\Shader\%(Filename).cod</AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h"</Command>
+      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/"</Command>
     </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Debug\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -91,9 +94,9 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <LanguageStandard>stdcpp17</LanguageStandard>
@@ -103,8 +106,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;xinput.lib;winmm.lib;assimp.lib;zlibstatic.lib;Jolt.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MT\x64\Debug;.\External\Effekseer170e\lib\vs2022\MT\x64\Release;.\External\Effekseer170e\lib\vs2022\MD\x64\Release;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug</AdditionalLibraryDirectories>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MT\x64\Debug;.\External\Effekseer170e\lib\vs2022\MT\x64\Release;.\External\Effekseer170e\lib\vs2022\MD\x64\Release;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug;.\External\SDL-release-3.4.x\build\Release</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>
@@ -117,8 +120,11 @@
       </AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h"</Command>
+      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/"</Command>
     </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Release\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="External\FSR2\dx11\ffx_fsr2_dx11.h" />
@@ -150,29 +156,11 @@
     <ClInclude Include="Source\Audio\AudioAssetSystem.h" />
     <ClInclude Include="Source\Audio\AudioClipAsset.h" />
     <ClInclude Include="Source\AssimpImporter.h" />
-                    <ClInclude Include="Source\BT\BehaviorTree.h" />
-    <ClInclude Include="Source\BT\BTBuilder.h" />
-    <ClInclude Include="Source\BT\BTCommands.h" />
-    <ClInclude Include="Source\BT\BTEditorComponent.h" />
-    <ClInclude Include="Source\BT\BTGraph.h" />
-    <ClInclude Include="Source\BT\BTNodes.h" />
     <ClInclude Include="Source\Camera\Camera.h" />
     <ClInclude Include="Source\Camera\CameraController.h" />
     <ClInclude Include="Source\Camera\CameraFinalizeSystem.h" />
     <ClInclude Include="Source\Camera\FreeCameraSystem.h" />
     <ClInclude Include="Source\Camera\ThirdPersonCameraSystem.h" />
-    <ClInclude Include="Source\Character\Character.h" />
-    <ClInclude Include="Source\Character\C_DodgeGauge.h" />
-    <ClInclude Include="Source\Character\C_PlayerHUD.h" />
-    <ClInclude Include="Source\Character\Enemy\C_EnemyHUD.h" />
-    <ClInclude Include="Source\Character\Enemy\Enemy.h" />
-    <ClInclude Include="Source\Character\Enemy\EnemyAIController.h" />
-    <ClInclude Include="Source\Character\Enemy\EnemyBoss.h" />
-    <ClInclude Include="Source\Character\Enemy\EnemyLocomotionComponent.h" />
-    <ClInclude Include="Source\Character\Enemy\EnemyManager.h" />
-    <ClInclude Include="Source\Character\LocomotionComponent.h" />
-    <ClInclude Include="Source\Character\Player.h" />
-    <ClInclude Include="Source\Character\PlayerEditorComponent.h" />
     <ClInclude Include="Source\Cinematic\CinematicCurve.h" />
     <ClInclude Include="Source\Cinematic\CinematicPlayComponent.h" />
     <ClInclude Include="Source\Cinematic\CinematicSequence.h" />
@@ -241,10 +229,59 @@
     <ClInclude Include="Source\Icon\IconFontManager.h" />
     <ClInclude Include="Source\Icon\IconsFontAwesome7.h" />
     <ClInclude Include="Source\ImGuiRenderer.h" />
-    <ClInclude Include="Source\Input\GamePad.h" />
-    <ClInclude Include="Source\Input\Input.h" />
-    <ClInclude Include="Source\Input\InputActionComponent.h" />
-    <ClInclude Include="Source\Input\Mouse.h" />
+    <ClInclude Include="Source\Input\EditorInputBridge.h" />
+    <ClInclude Include="Source\Input\IInputBackend.h" />
+    <ClInclude Include="Source\Input\InputActionMapAsset.h" />
+    <ClInclude Include="Source\Input\InputBindingComponent.h" />
+    <ClInclude Include="Source\Input\InputBindingProfileAsset.h" />
+    <ClInclude Include="Source\Input\InputConsumeTag.h" />
+    <ClInclude Include="Source\Input\InputContextComponent.h" />
+    <ClInclude Include="Source\Input\InputContextSystem.h" />
+    <ClInclude Include="Source\Input\InputDebugStateComponent.h" />
+    <ClInclude Include="Source\Input\InputDebugSystem.h" />
+    <ClInclude Include="Source\Input\InputEvent.h" />
+    <ClInclude Include="Source\Input\InputEventQueue.h" />
+    <ClInclude Include="Source\Input\InputFeedbackSystem.h" />
+    <ClInclude Include="Source\Input\InputResolveSystem.h" />
+    <ClInclude Include="Source\Input\InputTextFieldComponent.h" />
+    <ClInclude Include="Source\Input\InputTextSystem.h" />
+    <ClInclude Include="Source\Input\InputUserComponent.h" />
+    <ClInclude Include="Source\Input\ResolvedInputStateComponent.h" />
+    <ClInclude Include="Source\Input\SDLInputBackend.h" />
+    <ClInclude Include="Source\Input\VibrationRequestComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlayerTagComponent.h" />
+    <ClInclude Include="Source\Gameplay\CharacterPhysicsComponent.h" />
+    <ClInclude Include="Source\Gameplay\HealthComponent.h" />
+    <ClInclude Include="Source\Gameplay\StaminaComponent.h" />
+    <ClInclude Include="Source\Gameplay\LocomotionStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\ActionStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\ActionDatabaseComponent.h" />
+    <ClInclude Include="Source\Gameplay\DodgeStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\HitboxTrackingComponent.h" />
+    <ClInclude Include="Source\Gameplay\StageBoundsComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackRangeComponent.h" />
+    <ClInclude Include="Source\Gameplay\TimelineComponent.h" />
+    <ClInclude Include="Source\Gameplay\TimelineItemBuffer.h" />
+    <ClInclude Include="Source\Gameplay\SpeedCurveComponent.h" />
+    <ClInclude Include="Source\Gameplay\HitStopComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlayerInputSystem.h" />
+    <ClInclude Include="Source\Gameplay\LocomotionSystem.h" />
+    <ClInclude Include="Source\Gameplay\ActionSystem.h" />
+    <ClInclude Include="Source\Gameplay\DodgeSystem.h" />
+    <ClInclude Include="Source\Gameplay\StaminaSystem.h" />
+    <ClInclude Include="Source\Gameplay\HealthSystem.h" />
+    <ClInclude Include="Source\Gameplay\CharacterPhysicsSystem.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineHitboxSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineVFXSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineAudioSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineShakeSystem.h" />
+    <ClInclude Include="Source\Gameplay\HitboxTrackingSystem.h" />
+    <ClInclude Include="Source\Gameplay\StateMachineParamsComponent.h" />
+    <ClInclude Include="Source\Gameplay\StateMachineSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h" />
     <ClInclude Include="Source\Inspector\InspectorECSUI.h" />
     <ClInclude Include="Source\JSONManager.h" />
     <ClInclude Include="Source\Layer\EditorLayer.h" />
@@ -270,6 +307,16 @@
     <ClInclude Include="Source\Physics\PhysicsManager.h" />
     <ClInclude Include="Source\Physics\PhysicsSyncSystem.h" />
     <ClInclude Include="Source\Physics\PhysicsSystem.h" />
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h" />
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorWindow.h" />
+    <ClInclude Include="Source\PlayerEditor\StateMachineAsset.h" />
+    <ClInclude Include="Source\PlayerEditor\StateMachineAssetSerializer.h" />
+    <ClInclude Include="Source\PlayerEditor\TimelineAsset.h" />
+    <ClInclude Include="Source\PlayerEditor\TimelineAssetSerializer.h" />
+    <ClInclude Include="Source\PlayerEditor\TimelineDriver.h" />
+    <ClInclude Include="Source\PlayerEditor\PreviewState.h" />
+    <ClInclude Include="Source\PlayerEditor\GizmoOverlay.h" />
+    <ClInclude Include="Source\PlayerEditor\InputMappingTab.h" />
     <ClInclude Include="Source\PostEffect.h" />
     <ClInclude Include="Source\PostEffect\BloomExtractSystem.h" />
     <ClInclude Include="Source\PostEffect\ColorFilterExtractSystem.h" />
@@ -338,7 +385,6 @@
     <ClInclude Include="Source\RHI\IState.h" />
     <ClInclude Include="Source\RHI\ITexture.h" />
     <ClInclude Include="Source\RHI\PipelineStateDesc.h" />
-    <ClInclude Include="Source\Runner\RunnerComponent.h" />
     <ClInclude Include="Source\Scene\SceneDataUploadSystem.h" />
     <ClInclude Include="Source\ShaderClass\EffectVariantShader.h" />
     <ClInclude Include="Source\ShaderClass\GBufferPBRShader.h" />
@@ -365,7 +411,6 @@
     <ClInclude Include="Source\System\PathResolver.h" />
     <ClInclude Include="Source\System\Query.h" />
     <ClInclude Include="Source\System\ResourceManager.h" />
-    <ClInclude Include="Source\Timeline\TimelineSequencerComponent.h" />
     <ClInclude Include="Source\Transform\TransformSystem.h" />
     <ClInclude Include="Source\Type\TypeInfo.h" />
     <ClInclude Include="Source\UI\DamageTextManager.h" />
@@ -429,25 +474,11 @@
     <ClCompile Include="Source\Audio\AudioAssetSystem.cpp" />
     <ClCompile Include="External\miniaudio-master\miniaudio.c" />
     <ClCompile Include="Source\AssimpImporter.cpp" />
-                    <ClCompile Include="Source\BT\BTBuilder.cpp" />
-    <ClCompile Include="Source\BT\BTEditorComponent.cpp" />
     <ClCompile Include="Source\Camera\Camera.cpp" />
     <ClCompile Include="Source\Camera\CameraController.cpp" />
     <ClCompile Include="Source\Camera\CameraFinalizeSystem.cpp" />
     <ClCompile Include="Source\Camera\FreeCameraSystem.cpp" />
     <ClCompile Include="Source\Camera\ThirdPersonCameraSystem.cpp" />
-    <ClCompile Include="Source\Character\Character.cpp" />
-    <ClCompile Include="Source\Character\C_DodgeGauge.cpp" />
-    <ClCompile Include="Source\Character\C_PlayerHUD.cpp" />
-    <ClCompile Include="Source\Character\Enemy\C_EnemyHUD.cpp" />
-    <ClCompile Include="Source\Character\Enemy\Enemy.cpp" />
-    <ClCompile Include="Source\Character\Enemy\EnemyAIController.cpp" />
-    <ClCompile Include="Source\Character\Enemy\EnemyBoss.cpp" />
-    <ClCompile Include="Source\Character\Enemy\EnemyLocomotionComponent.cpp" />
-    <ClCompile Include="Source\Character\Enemy\EnemyManager.cpp" />
-    <ClCompile Include="Source\Character\LocomotionComponent.cpp" />
-    <ClCompile Include="Source\Character\Player.cpp" />
-    <ClCompile Include="Source\Character\PlayerEditorComponent.cpp" />
     <ClCompile Include="Source\Cinematic\CinematicPlayComponent.cpp" />
     <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp" />
     <ClCompile Include="Source\Collision\ColliderComponent.cpp" />
@@ -482,10 +513,31 @@
     <ClCompile Include="Source\Hierarchy\HierarchySystem.cpp" />
     <ClCompile Include="Source\Icon\IconFontManager.cpp" />
     <ClCompile Include="Source\ImGuiRenderer.cpp" />
-    <ClCompile Include="Source\Input\GamePad.cpp" />
-    <ClCompile Include="Source\Input\Input.cpp" />
-    <ClCompile Include="Source\Input\InputActionComponent.cpp" />
-    <ClCompile Include="Source\Input\Mouse.cpp" />
+    <ClCompile Include="Source\Input\EditorInputBridge.cpp" />
+    <ClCompile Include="Source\Input\InputActionMapAsset.cpp" />
+    <ClCompile Include="Source\Input\InputBindingProfileAsset.cpp" />
+    <ClCompile Include="Source\Input\InputContextSystem.cpp" />
+    <ClCompile Include="Source\Input\InputDebugSystem.cpp" />
+    <ClCompile Include="Source\Input\InputFeedbackSystem.cpp" />
+    <ClCompile Include="Source\Input\InputResolveSystem.cpp" />
+    <ClCompile Include="Source\Input\InputTextSystem.cpp" />
+    <ClCompile Include="Source\Input\SDLInputBackend.cpp" />
+    <ClCompile Include="Source\Gameplay\PlayerInputSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\LocomotionSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\ActionSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\DodgeSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\StaminaSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\HealthSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\CharacterPhysicsSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\PlaybackSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineHitboxSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineVFXSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineAudioSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp" />
     <ClCompile Include="Source\Inspector\InspectorECSUI.cpp" />
     <ClCompile Include="Source\JSONManager.cpp" />
     <ClCompile Include="Source\Layer\EditorLayer.cpp" />
@@ -511,6 +563,14 @@
     <ClCompile Include="Source\Physics\PhysicsManager.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSyncSystem.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSystem.cpp" />
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp" />
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorWindow.cpp" />
+    <ClCompile Include="Source\PlayerEditor\StateMachineAssetSerializer.cpp" />
+    <ClCompile Include="Source\PlayerEditor\TimelineAssetSerializer.cpp" />
+    <ClCompile Include="Source\PlayerEditor\TimelineDriver.cpp" />
+    <ClCompile Include="Source\PlayerEditor\PreviewState.cpp" />
+    <ClCompile Include="Source\PlayerEditor\GizmoOverlay.cpp" />
+    <ClCompile Include="Source\PlayerEditor\InputMappingTab.cpp" />
     <ClCompile Include="Source\PostEffect.cpp" />
     <ClCompile Include="Source\PostEffect\BloomExtractSystem.cpp" />
     <ClCompile Include="Source\PostEffect\ColorFilterExtractSystem.cpp" />
@@ -558,7 +618,6 @@
     <ClCompile Include="Source\RHI\DX11\DX11Sampler.cpp" />
     <ClCompile Include="Source\RHI\DX11\DX11Shader.cpp" />
     <ClCompile Include="Source\RHI\DX11\DX11Texture.cpp" />
-    <ClCompile Include="Source\Runner\RunnerComponent.cpp" />
     <ClCompile Include="Source\Scene\SceneDataUploadSystem.cpp" />
     <ClCompile Include="Source\ShaderClass\EffectVariantShader.cpp" />
     <ClCompile Include="Source\ShaderClass\GBufferPBRShader.cpp" />
@@ -581,7 +640,6 @@
     <ClCompile Include="Source\System\Mathf.cpp" />
     <ClCompile Include="Source\System\PathResolver.cpp" />
     <ClCompile Include="Source\System\ResourceManager.cpp" />
-    <ClCompile Include="Source\Timeline\TimelineSequencerComponent.cpp" />
     <ClCompile Include="Source\Transform\TransformSystem.cpp" />
     <ClCompile Include="Source\UI\DamageTextManager.cpp" />
     <ClCompile Include="Source\UI\UICombo.cpp" />

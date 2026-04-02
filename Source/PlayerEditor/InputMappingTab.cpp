@@ -1,0 +1,291 @@
+#include "InputMappingTab.h"
+#include <imgui.h>
+#include "Icon/IconsFontAwesome7.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Registry/Registry.h"
+
+void InputMappingTab::SetActionMapPath(const std::string& path)
+{
+    if (path == m_actionMapPath) return;
+    m_actionMapPath = path;
+    if (!path.empty()) {
+        m_editingMap.LoadFromFile(path);
+    }
+    m_dirty = false;
+}
+
+void InputMappingTab::Draw(Registry* registry)
+{
+    // Action map selector
+    ImGui::Text("Action Map: %s", m_actionMapPath.empty() ? "(none)" : m_actionMapPath.c_str());
+    ImGui::SameLine();
+    if (ImGui::Button("Load...")) {
+        // Placeholder: in a real implementation, open file dialog
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save") && !m_actionMapPath.empty()) {
+        m_editingMap.SaveToFile(m_actionMapPath);
+        m_dirty = false;
+    }
+    if (m_dirty) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "(unsaved)");
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::BeginTabBar("InputSubTabs")) {
+        if (ImGui::BeginTabItem("Actions")) {
+            DrawActionTable();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Axes")) {
+            DrawAxisTable();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem("Settings")) {
+            DrawSettings();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem(ICON_FA_GAMEPAD " Live Test")) {
+            DrawLiveTest(registry);
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+
+    DrawKeyBindPopup();
+}
+
+void InputMappingTab::DrawActionTable()
+{
+    if (ImGui::BeginTable("ActionsTable", 6,
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+    {
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 120);
+        ImGui::TableSetupColumn("Keyboard", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Mouse", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("Gamepad", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("Trigger", ImGuiTableColumnFlags_WidthFixed, 80);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 30);
+        ImGui::TableHeadersRow();
+
+        for (int i = 0; i < (int)m_editingMap.actions.size(); ++i) {
+            auto& action = m_editingMap.actions[i];
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+
+            // Name
+            ImGui::TableSetColumnIndex(0);
+            char nameBuf[64];
+            strncpy_s(nameBuf, action.actionName.c_str(), _TRUNCATE);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##name", nameBuf, sizeof(nameBuf))) {
+                action.actionName = nameBuf;
+                m_dirty = true;
+            }
+
+            // Keyboard
+            ImGui::TableSetColumnIndex(1);
+            char kbLabel[32];
+            snprintf(kbLabel, sizeof(kbLabel), "SC:%u", action.scancode);
+            if (ImGui::Button(kbLabel, ImVec2(-1, 0))) {
+                m_capturingKey = true;
+                m_captureTargetAction = i;
+                m_captureField = CaptureField::Keyboard;
+                ImGui::OpenPopup("KeyCapture");
+            }
+
+            // Mouse
+            ImGui::TableSetColumnIndex(2);
+            char msLabel[16];
+            snprintf(msLabel, sizeof(msLabel), "M%u", action.mouseButton);
+            if (ImGui::Button(msLabel, ImVec2(-1, 0))) {
+                m_capturingKey = true;
+                m_captureTargetAction = i;
+                m_captureField = CaptureField::Mouse;
+                ImGui::OpenPopup("KeyCapture");
+            }
+
+            // Gamepad
+            ImGui::TableSetColumnIndex(3);
+            char gpLabel[16];
+            if (action.gamepadButton == 0xFF)
+                snprintf(gpLabel, sizeof(gpLabel), "--");
+            else
+                snprintf(gpLabel, sizeof(gpLabel), "GP%u", action.gamepadButton);
+            if (ImGui::Button(gpLabel, ImVec2(-1, 0))) {
+                m_capturingKey = true;
+                m_captureTargetAction = i;
+                m_captureField = CaptureField::Gamepad;
+                ImGui::OpenPopup("KeyCapture");
+            }
+
+            // Trigger type
+            ImGui::TableSetColumnIndex(4);
+            int trigInt = static_cast<int>(action.trigger);
+            const char* trigNames[] = { "Pressed", "Released", "Held", "DoubleTap" };
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::Combo("##trig", &trigInt, trigNames, 4)) {
+                action.trigger = static_cast<ActionTriggerType>(trigInt);
+                m_dirty = true;
+            }
+
+            // Delete
+            ImGui::TableSetColumnIndex(5);
+            if (ImGui::Button("X")) {
+                m_editingMap.actions.erase(m_editingMap.actions.begin() + i);
+                m_dirty = true;
+                ImGui::PopID();
+                break;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+    }
+
+    if (ImGui::Button("+ Add Action")) {
+        ActionBinding ab;
+        ab.actionName = "NewAction";
+        m_editingMap.actions.push_back(ab);
+        m_dirty = true;
+    }
+}
+
+void InputMappingTab::DrawAxisTable()
+{
+    if (ImGui::BeginTable("AxesTable", 7,
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+    {
+        ImGui::TableSetupColumn("Axis", ImGuiTableColumnFlags_WidthFixed, 100);
+        ImGui::TableSetupColumn("+Key", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("-Key", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("GP Axis", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("DeadZone", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("Sens", ImGuiTableColumnFlags_WidthFixed, 60);
+        ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 30);
+        ImGui::TableHeadersRow();
+
+        for (int i = 0; i < (int)m_editingMap.axes.size(); ++i) {
+            auto& axis = m_editingMap.axes[i];
+            ImGui::PushID(1000 + i);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            char nameBuf[64];
+            strncpy_s(nameBuf, axis.axisName.c_str(), _TRUNCATE);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText("##name", nameBuf, sizeof(nameBuf))) {
+                axis.axisName = nameBuf;
+                m_dirty = true;
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragScalar("##pk", ImGuiDataType_U32, &axis.positiveKey, 1.0f)) m_dirty = true;
+
+            ImGui::TableSetColumnIndex(2);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragScalar("##nk", ImGuiDataType_U32, &axis.negativeKey, 1.0f)) m_dirty = true;
+
+            ImGui::TableSetColumnIndex(3);
+            int gpAxis = axis.gamepadAxis;
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragInt("##gpa", &gpAxis, 1, 0, 15)) { axis.gamepadAxis = (uint8_t)gpAxis; m_dirty = true; }
+
+            ImGui::TableSetColumnIndex(4);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##dz", &axis.deadzone, 0.01f, 0.0f, 1.0f)) m_dirty = true;
+
+            ImGui::TableSetColumnIndex(5);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##sens", &axis.sensitivity, 0.01f, 0.0f, 10.0f)) m_dirty = true;
+
+            ImGui::TableSetColumnIndex(6);
+            if (ImGui::Button("X")) {
+                m_editingMap.axes.erase(m_editingMap.axes.begin() + i);
+                m_dirty = true;
+                ImGui::PopID();
+                break;
+            }
+
+            ImGui::PopID();
+        }
+
+        ImGui::EndTable();
+    }
+
+    if (ImGui::Button("+ Add Axis")) {
+        AxisBinding ab;
+        ab.axisName = "NewAxis";
+        m_editingMap.axes.push_back(ab);
+        m_dirty = true;
+    }
+}
+
+void InputMappingTab::DrawSettings()
+{
+    if (ImGui::DragInt("Hold Threshold (frames)", &m_editingMap.holdThresholdFrames, 1, 1, 120))
+        m_dirty = true;
+    if (ImGui::DragInt("Double Tap Gap (frames)", &m_editingMap.doubleTapGapFrames, 1, 1, 60))
+        m_dirty = true;
+}
+
+void InputMappingTab::DrawLiveTest(Registry* registry)
+{
+    if (!registry) {
+        ImGui::Text("No registry available.");
+        return;
+    }
+
+    ImGui::Text("Real-time input state from ResolvedInputStateComponent:");
+    ImGui::Separator();
+
+    // Find first entity with ResolvedInputStateComponent
+    // For now, just show placeholder
+    ImGui::Text("Actions:");
+    for (int i = 0; i < (int)m_editingMap.actions.size(); ++i) {
+        auto& a = m_editingMap.actions[i];
+        // In full implementation: read from ResolvedInputStateComponent
+        ImGui::BulletText("%s: [--]", a.actionName.c_str());
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Axes:");
+    for (int i = 0; i < (int)m_editingMap.axes.size(); ++i) {
+        auto& ax = m_editingMap.axes[i];
+        ImGui::BulletText("%s: 0.00", ax.axisName.c_str());
+    }
+}
+
+void InputMappingTab::DrawKeyBindPopup()
+{
+    if (ImGui::BeginPopupModal("KeyCapture", nullptr,
+        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+    {
+        ImGui::Text("Press any key/button...");
+        ImGui::Text("(ESC to cancel)");
+
+        // Check for key press via ImGui IO
+        auto& io = ImGui::GetIO();
+        for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+            if (ImGui::IsKeyPressed((ImGuiKey)k)) {
+                if (k == ImGuiKey_Escape) {
+                    m_capturingKey = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                else if (m_captureTargetAction >= 0 && m_captureTargetAction < (int)m_editingMap.actions.size()) {
+                    // Store scancode (simplified - in real impl, convert ImGuiKey to SDL scancode)
+                    m_editingMap.actions[m_captureTargetAction].scancode = (uint32_t)k;
+                    m_dirty = true;
+                    m_capturingKey = false;
+                    ImGui::CloseCurrentPopup();
+                }
+                break;
+            }
+        }
+        ImGui::EndPopup();
+    }
+}

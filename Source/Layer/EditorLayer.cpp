@@ -1,4 +1,6 @@
 #include "EditorLayerInternal.h"
+#include "EditorTheme.h"
+#include "Graphics.h"
 
 EditorLayer::EditorLayer(GameLayer* gameLayer)
     : m_gameLayer(gameLayer)
@@ -6,23 +8,26 @@ EditorLayer::EditorLayer(GameLayer* gameLayer)
 {
 }
 
-
 void EditorLayer::Initialize()
 {
-
     m_assetBrowser = std::make_unique<AssetBrowser>();
     m_assetBrowser->Initialize();
 
-    ApplyUnityTheme();
+    if (m_gameLayer) {
+        m_inputBridge.Initialize(m_gameLayer->GetRegistry());
+    }
+
+    ApplyEditorGrayTheme();
     MarkSceneSaved();
     CheckRecoveryCandidate();
 }
 
-
 void EditorLayer::Finalize()
 {
+    if (m_gameLayer) {
+        m_inputBridge.Finalize(m_gameLayer->GetRegistry());
+    }
 }
-
 
 void EditorLayer::Update(const EngineTime& time)
 {
@@ -33,6 +38,11 @@ void EditorLayer::Update(const EngineTime& time)
     HandleEditorShortcuts();
     ProcessDeferredEditorActions();
     UpdateAutosave(time.unscaledDt);
+
+    if (m_gameLayer) {
+        m_inputBridge.UpdateHoverState(m_sceneViewHovered);
+        m_inputBridge.UpdateTextInputState(io.WantTextInput, m_gameLayer->GetRegistry());
+    }
 
     if (!io.WantTextInput && m_gameLayer) {
         Registry& registry = m_gameLayer->GetRegistry();
@@ -122,17 +132,65 @@ void EditorLayer::Update(const EngineTime& time)
         pos += forward * (io.MouseWheel * (m_cameraMoveSpeed * 0.5f));
     }
 
+    if (m_gameLayer && m_sceneViewHovered) {
+        const auto* edInput = m_inputBridge.GetEditorInput(m_gameLayer->GetRegistry());
+        if (edInput) {
+            const float orbitSpeed = 2.0f * io.DeltaTime;
+            const float flySpeed = m_cameraMoveSpeed * io.DeltaTime;
+
+            if (m_sceneViewMode == SceneViewMode::Mode3D) {
+                const float orbitX = edInput->axes[0];
+                const float orbitY = edInput->axes[1];
+                if (fabsf(orbitX) > 0.01f || fabsf(orbitY) > 0.01f) {
+                    m_editorCameraUserOverride = true;
+                    m_editorCameraYaw += orbitX * orbitSpeed;
+                    m_editorCameraPitch += orbitY * orbitSpeed;
+                    m_editorCameraPitch = std::clamp(m_editorCameraPitch, -1.55f, 1.55f);
+                }
+
+                const float moveX = edInput->axes[2];
+                const float moveZ = edInput->axes[3];
+                if (fabsf(moveX) > 0.01f || fabsf(moveZ) > 0.01f) {
+                    m_editorCameraUserOverride = true;
+                    pos += right * moveX * flySpeed;
+                    pos += forward * moveZ * flySpeed;
+                }
+            } else {
+                const float panX = edInput->axes[2];
+                const float panY = edInput->axes[3];
+                if (fabsf(panX) > 0.01f || fabsf(panY) > 0.01f) {
+                    m_editor2DCenter.x += panX * flySpeed;
+                    m_editor2DCenter.y += panY * flySpeed;
+                }
+            }
+        }
+    }
+
     XMStoreFloat3(&m_editorCameraPosition, pos);
 }
 
-
 void EditorLayer::RenderUI()
 {
-    // カーネルから移動してきた大枠のUI描画
-    DrawDockSpace();
+    if (!m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+    }
+
     DrawMenuBar();
-    if (m_showMainToolbar) {
+    DrawWorkspaceTabs();
+
+    const bool showPlayerWorkspace = m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor;
+    if (showPlayerWorkspace && m_maximizedWindow == WindowFocusTarget::PlayerEditor) {
+        m_maximizedWindow = WindowFocusTarget::None;
+    }
+
+    if (!showPlayerWorkspace && m_showMainToolbar) {
         DrawMainToolbar();
+    }
+
+    if (showPlayerWorkspace) {
+        DrawPlayerEditorWorkspace();
+    } else {
+        DrawDockSpace();
     }
 
     const bool maximizeLeft = (m_maximizedWindow == WindowFocusTarget::Hierarchy);
@@ -145,47 +203,53 @@ void EditorLayer::RenderUI()
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug);
 
-    if (m_showSceneView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::SceneView)) {
-        DrawSceneView();
-    }
-    if (m_showGameView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GameView)) {
-        DrawGameView();
-    }
-    if (m_showHierarchy && (m_maximizedWindow == WindowFocusTarget::None || maximizeLeft)) {
-        DrawHierarchy();
-    }
-    if (m_showInspector && (m_maximizedWindow == WindowFocusTarget::None || maximizeRight)) {
-        DrawInspector();
+    if (!showPlayerWorkspace) {
+        if (m_showSceneView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::SceneView)) {
+            DrawSceneView();
+        }
+        if (m_showGameView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GameView)) {
+            DrawGameView();
+        }
+        if (m_showHierarchy && (m_maximizedWindow == WindowFocusTarget::None || maximizeLeft)) {
+            DrawHierarchy();
+        }
+        if (m_showInspector && (m_maximizedWindow == WindowFocusTarget::None || maximizeRight)) {
+            DrawInspector();
+        }
+        if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {
+            DrawLightingWindow();
+        }
+        if (m_showAudioWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Audio || maximizeTool)) {
+            DrawAudioWindow();
+        }
+        if (m_showRenderPassesWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::RenderPasses || maximizeTool)) {
+            DrawRenderPassesWindow();
+        }
+        if (m_showGridSettingsWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GridSettings || maximizeTool)) {
+            DrawGridSettingsWindow();
+        }
+        if (m_showGBufferDebug && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GBufferDebug || maximizeTool)) {
+            DrawGBufferDebugWindow();
+        }
+        if (m_showInputDebug) {
+            InputDebugSystem::DrawDebugWindow(m_gameLayer->GetRegistry(), EngineKernel::Instance().GetInputBackend(), EngineKernel::Instance().GetInputEventQueue());
+        }
     }
 
-    if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {
-        DrawLightingWindow();
-    }
-    if (m_showAudioWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Audio || maximizeTool)) {
-        DrawAudioWindow();
-    }
-    if (m_showRenderPassesWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::RenderPasses || maximizeTool)) {
-        DrawRenderPassesWindow();
-    }
-    if (m_showGridSettingsWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GridSettings || maximizeTool)) {
-        DrawGridSettingsWindow();
-    }
-    if (m_showGBufferDebug && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::GBufferDebug || maximizeTool)) {
-        DrawGBufferDebugWindow();
-    }
     if (m_showStatusBar) {
         DrawStatusBar();
     }
     DrawUnsavedChangesPopup();
     DrawRecoveryPopup();
     DrawRenamePopup();
-    if (m_showConsole && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomConsole)) {
+
+    if (!showPlayerWorkspace && m_showConsole && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomConsole)) {
         bool consoleFocused = false;
         ApplyPendingWindowFocus(WindowFocusTarget::Console);
         Console::Instance().Draw(kConsoleWindowTitle, &m_showConsole, &consoleFocused);
         SetLastFocusedWindow(WindowFocusTarget::Console, consoleFocused);
     }
-    if (m_assetBrowser && m_showAssetBrowser && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomAsset)) {
+    if (!showPlayerWorkspace && m_assetBrowser && m_showAssetBrowser && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomAsset)) {
         m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
         bool assetFocused = false;
         ApplyPendingWindowFocus(WindowFocusTarget::AssetBrowser);
@@ -194,3 +258,27 @@ void EditorLayer::RenderUI()
     }
 }
 
+void EditorLayer::RenderDetachedWindows()
+{
+    // Player Editor is now hosted inside the main editor as a workspace tab.
+}
+
+void EditorLayer::SyncPlayerEditorPanelState()
+{
+    if (!m_gameLayer) {
+        m_playerEditorPanel.SetModel(nullptr);
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    const EntityID selectedEntity = EditorSelection::Instance().GetPrimaryEntity();
+
+    const Model* selectedModel = nullptr;
+    if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+        if (auto* mesh = registry.GetComponent<MeshComponent>(selectedEntity); mesh && mesh->model) {
+            selectedModel = mesh->model.get();
+        }
+    }
+
+    m_playerEditorPanel.SetModel(selectedModel);
+}

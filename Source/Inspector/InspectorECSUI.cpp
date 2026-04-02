@@ -26,6 +26,31 @@
 
 #include "Component/NameComponent.h"
 
+// Gameplay components
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/StaminaComponent.h"
+#include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/ActionStateComponent.h"
+#include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/DodgeStateComponent.h"
+#include "Gameplay/HitboxTrackingComponent.h"
+#include "Gameplay/StageBoundsComponent.h"
+#include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/PlaybackRangeComponent.h"
+#include "Gameplay/TimelineComponent.h"
+#include "Gameplay/SpeedCurveComponent.h"
+#include "Gameplay/HitStopComponent.h"
+// Input components
+#include "Input/InputUserComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Input/InputTextFieldComponent.h"
+#include "Input/VibrationRequestComponent.h"
+#include "Component/ColliderComponent.h"
+
 #include "Component/TransformComponent.h"
 
 #include "Component/MeshComponent.h"
@@ -356,6 +381,47 @@ namespace {
 
         }
 
+    }
+
+    // Removable version - shows X button in header
+    template <typename T>
+    bool DrawComponentRemovable(Registry* registry, EntityID entity) {
+        T* component = registry->GetComponent<T>(entity);
+        if (!component) return false;
+
+        const char* name = ComponentMeta<T>::Name.data();
+        bool open = true;
+        bool hdrOpen = ImGui::CollapsingHeader(name, &open, ImGuiTreeNodeFlags_DefaultOpen);
+
+        if (!open) {
+            // X button clicked — remove component
+            registry->RemoveComponent<T>(entity);
+            return true; // component removed
+        }
+
+        if (hdrOpen) {
+            if (ImGui::BeginTable(name, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+                ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableNextColumn();
+                std::apply([&](auto... fields) {
+                    ((DrawUndoableValueWidget(registry, entity, *component, fields.name.data(), component->*(fields.ptr))), ...);
+                }, ComponentMeta<T>::Fields);
+                ImGui::EndTable();
+            }
+        }
+        return false;
+    }
+
+    // Add Component helper - returns true if added
+    template <typename T>
+    bool TryAddComponent(Registry* registry, EntityID entity, const char* label) {
+        if (registry->GetComponent<T>(entity)) return false; // already present
+        if (ImGui::MenuItem(label)) {
+            registry->AddComponent(entity, T{});
+            return true;
+        }
+        return false;
     }
 
 
@@ -1375,6 +1441,81 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<ReflectionProbeComponent>(registry, entity);
 
             DrawComponentIfPresent<ShadowSettingsComponent>(registry, entity);
+
+            // --- Gameplay Components (removable) ---
+            ImGui::Spacing();
+            DrawComponentRemovable<PlayerTagComponent>(registry, entity);
+            DrawComponentRemovable<CharacterPhysicsComponent>(registry, entity);
+            DrawComponentRemovable<HealthComponent>(registry, entity);
+            DrawComponentRemovable<StaminaComponent>(registry, entity);
+            DrawComponentRemovable<LocomotionStateComponent>(registry, entity);
+            DrawComponentRemovable<ActionStateComponent>(registry, entity);
+            DrawComponentRemovable<ActionDatabaseComponent>(registry, entity);
+            DrawComponentRemovable<DodgeStateComponent>(registry, entity);
+            DrawComponentRemovable<HitboxTrackingComponent>(registry, entity);
+            DrawComponentRemovable<StageBoundsComponent>(registry, entity);
+            DrawComponentRemovable<PlaybackComponent>(registry, entity);
+            DrawComponentRemovable<PlaybackRangeComponent>(registry, entity);
+            DrawComponentRemovable<TimelineComponent>(registry, entity);
+            DrawComponentRemovable<SpeedCurveComponent>(registry, entity);
+            DrawComponentRemovable<HitStopComponent>(registry, entity);
+
+            // --- Input Components (removable) ---
+            DrawComponentRemovable<InputUserComponent>(registry, entity);
+            DrawComponentRemovable<InputContextComponent>(registry, entity);
+            DrawComponentRemovable<InputBindingComponent>(registry, entity);
+            DrawComponentRemovable<ResolvedInputStateComponent>(registry, entity);
+            DrawComponentRemovable<InputTextFieldComponent>(registry, entity);
+            DrawComponentRemovable<VibrationRequestComponent>(registry, entity);
+
+            // --- Add Component Button ---
+            ImGui::Spacing();
+            ImGui::Separator();
+            float width = ImGui::GetContentRegionAvail().x;
+            if (ImGui::Button("Add Component", ImVec2(width, 0))) {
+                ImGui::OpenPopup("AddComponentPopup");
+            }
+            if (ImGui::BeginPopup("AddComponentPopup")) {
+                ImGui::TextDisabled("-- Gameplay --");
+                TryAddComponent<PlayerTagComponent>(registry, entity, "PlayerTag");
+                TryAddComponent<CharacterPhysicsComponent>(registry, entity, "CharacterPhysics");
+                TryAddComponent<HealthComponent>(registry, entity, "Health");
+                TryAddComponent<StaminaComponent>(registry, entity, "Stamina");
+                TryAddComponent<LocomotionStateComponent>(registry, entity, "LocomotionState");
+                TryAddComponent<ActionStateComponent>(registry, entity, "ActionState");
+                TryAddComponent<ActionDatabaseComponent>(registry, entity, "ActionDatabase");
+                TryAddComponent<DodgeStateComponent>(registry, entity, "DodgeState");
+                TryAddComponent<HitboxTrackingComponent>(registry, entity, "HitboxTracking");
+                TryAddComponent<StageBoundsComponent>(registry, entity, "StageBounds");
+                TryAddComponent<PlaybackComponent>(registry, entity, "Playback");
+                TryAddComponent<PlaybackRangeComponent>(registry, entity, "PlaybackRange");
+                TryAddComponent<TimelineComponent>(registry, entity, "Timeline");
+                TryAddComponent<SpeedCurveComponent>(registry, entity, "SpeedCurve");
+                TryAddComponent<HitStopComponent>(registry, entity, "HitStop");
+                ImGui::Separator();
+                ImGui::TextDisabled("-- Input --");
+                TryAddComponent<InputUserComponent>(registry, entity, "InputUser");
+                TryAddComponent<InputContextComponent>(registry, entity, "InputContext");
+                TryAddComponent<InputBindingComponent>(registry, entity, "InputBinding");
+                TryAddComponent<ResolvedInputStateComponent>(registry, entity, "ResolvedInputState");
+                TryAddComponent<InputTextFieldComponent>(registry, entity, "InputTextField");
+                TryAddComponent<VibrationRequestComponent>(registry, entity, "VibrationRequest");
+                ImGui::Separator();
+                ImGui::TextDisabled("-- Core --");
+                TryAddComponent<ColliderComponent>(registry, entity, "Collider");
+                TryAddComponent<MeshComponent>(registry, entity, "Mesh");
+                TryAddComponent<LightComponent>(registry, entity, "Light");
+                TryAddComponent<AudioEmitterComponent>(registry, entity, "AudioEmitter");
+                TryAddComponent<AudioListenerComponent>(registry, entity, "AudioListener");
+                TryAddComponent<CameraLensComponent>(registry, entity, "CameraLens");
+                TryAddComponent<CameraFreeControlComponent>(registry, entity, "CameraFreeControl");
+                TryAddComponent<Camera2DComponent>(registry, entity, "Camera2D");
+                TryAddComponent<SpriteComponent>(registry, entity, "Sprite");
+                TryAddComponent<TextComponent>(registry, entity, "Text");
+                TryAddComponent<CanvasItemComponent>(registry, entity, "CanvasItem");
+                TryAddComponent<RectTransformComponent>(registry, entity, "RectTransform");
+                ImGui::EndPopup();
+            }
 
         }
 

@@ -3,12 +3,13 @@
 void EditorLayer::DrawDockSpace()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float toolbarHeight = m_showMainToolbar ? 32.0f : 0.0f;
+    const float workspaceTabHeight = m_showPlayerEditor ? 34.0f : 0.0f;
+    const float toolbarHeight = (m_showMainToolbar && m_activeWorkspace == WorkspaceTab::LevelEditor) ? 32.0f : 0.0f;
     const float statusBarHeight = m_showStatusBar ? 26.0f : 0.0f;
-    const ImVec2 dockspacePos(viewport->WorkPos.x, viewport->WorkPos.y + toolbarHeight);
+    const ImVec2 dockspacePos(viewport->WorkPos.x, viewport->WorkPos.y + workspaceTabHeight + toolbarHeight);
     const ImVec2 dockspaceSize(
         viewport->WorkSize.x,
-        (std::max)(1.0f, viewport->WorkSize.y - toolbarHeight - statusBarHeight));
+        (std::max)(1.0f, viewport->WorkSize.y - workspaceTabHeight - toolbarHeight - statusBarHeight));
 
     ImGui::SetNextWindowPos(dockspacePos);
     ImGui::SetNextWindowSize(dockspaceSize);
@@ -73,6 +74,124 @@ void EditorLayer::DrawDockSpace()
 
 
     ImGui::End();
+}
+
+void EditorLayer::DrawWorkspaceTabs()
+{
+    if (!m_showPlayerEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+        return;
+    }
+
+    constexpr float kWorkspaceTabHeight = 34.0f;
+    constexpr float kTabHeight = 24.0f;
+    constexpr float kTabSpacing = 4.0f;
+    constexpr float kTabPaddingX = 14.0f;
+    constexpr float kCloseButtonWidth = 22.0f;
+
+    ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + ImGui::GetFrameHeight()));
+    ImGui::SetNextWindowSize(ImVec2(vp->Size.x, kWorkspaceTabHeight));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
+    bool playerTabOpen = m_showPlayerEditor;
+
+    if (ImGui::Begin("##WorkspaceTabs", nullptr, flags))
+    {
+        const ImVec4 activeTabColor = ImGui::GetStyleColorVec4(ImGuiCol_TabActive);
+        const ImVec4 inactiveTabColor = ImGui::GetStyleColorVec4(ImGuiCol_Tab);
+        const ImVec4 hoveredTabColor = ImGui::GetStyleColorVec4(ImGuiCol_TabHovered);
+
+        auto drawWorkspaceTabButton = [&](const char* id, const char* label, bool active) -> bool
+        {
+            const float width = ImGui::CalcTextSize(label).x + kTabPaddingX * 2.0f;
+            ImGui::PushID(id);
+            ImGui::PushStyleColor(ImGuiCol_Button, active ? activeTabColor : inactiveTabColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hoveredTabColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, activeTabColor);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, active ? 1.0f : 0.0f);
+
+            const bool clicked = ImGui::Button(label, ImVec2(width, kTabHeight));
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(3);
+            ImGui::PopID();
+            return clicked;
+        };
+
+        auto drawWorkspaceTabClose = [&](const char* id, bool active) -> bool
+        {
+            ImGui::PushID(id);
+            ImGui::PushStyleColor(ImGuiCol_Button, active ? activeTabColor : inactiveTabColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, hoveredTabColor);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, activeTabColor);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, active ? 1.0f : 0.0f);
+
+            const bool clicked = ImGui::Button("x", ImVec2(kCloseButtonWidth, kTabHeight));
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(3);
+            ImGui::PopID();
+            return clicked;
+        };
+
+        if (drawWorkspaceTabButton("LevelWorkspaceTab", ICON_FA_CUBE " Level Editor",
+            m_activeWorkspace == WorkspaceTab::LevelEditor)) {
+            m_activeWorkspace = WorkspaceTab::LevelEditor;
+        }
+
+        if (playerTabOpen) {
+            ImGui::SameLine(0.0f, kTabSpacing);
+
+            const bool playerActive = (m_activeWorkspace == WorkspaceTab::PlayerEditor);
+            if (drawWorkspaceTabButton("PlayerWorkspaceTab", ICON_FA_USER " Player Editor", playerActive)) {
+                m_activeWorkspace = WorkspaceTab::PlayerEditor;
+                m_pendingWindowFocus = WindowFocusTarget::PlayerEditor;
+            }
+
+            ImGui::SameLine(0.0f, 1.0f);
+            if (drawWorkspaceTabClose("PlayerWorkspaceTabClose", playerActive)) {
+                playerTabOpen = false;
+            }
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+
+    m_showPlayerEditor = playerTabOpen;
+    if (!m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+        RequestWindowFocus(WindowFocusTarget::SceneView);
+    }
+}
+
+void EditorLayer::DrawPlayerEditorWorkspace()
+{
+    constexpr float kWorkspaceTabHeight = 34.0f;
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float workspaceTabHeight = m_showPlayerEditor ? kWorkspaceTabHeight : 0.0f;
+    const float statusBarHeight = m_showStatusBar ? 26.0f : 0.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + workspaceTabHeight));
+    ImGui::SetNextWindowSize(ImVec2(
+        viewport->WorkSize.x,
+        (std::max)(1.0f, viewport->WorkSize.y - workspaceTabHeight - statusBarHeight)));
+
+    SyncPlayerEditorPanelState();
+
+    bool playerEditorFocused = false;
+    ApplyPendingWindowFocus(WindowFocusTarget::PlayerEditor);
+    m_playerEditorPanel.DrawWorkspace(
+        m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
+        &playerEditorFocused);
+    SetLastFocusedWindow(WindowFocusTarget::PlayerEditor, playerEditorFocused);
 }
 
 
