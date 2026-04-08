@@ -15,6 +15,8 @@
 #include <RenderPass\SkyboxPass.h>
 #include <RenderPass\GBufferPass.h>
 #include <RenderPass\ForwardTransparentPass.h>
+#include <RenderPass\EffectMeshPass.h>
+#include <RenderPass\EffectParticlePass.h>
 #include <RenderPass\DeferredLightingPass.h>
 #include <RenderPass\GTAOPass.h>
 #include "RenderPass/SSGIPass.h"
@@ -926,6 +928,8 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<DeferredLightingPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<SkyboxPass>());
     m_renderPipeline->AddPass(std::make_shared<ForwardTransparentPass>());
+    m_renderPipeline->AddPass(std::make_shared<EffectMeshPass>());
+    m_renderPipeline->AddPass(std::make_shared<EffectParticlePass>());
     if (isDX12) {
         m_renderPipeline->AddPass(std::make_shared<FinalBlitPass>(factory));
     }
@@ -1068,6 +1072,8 @@ void EngineKernel::Render()
     }
     std::vector<RenderPipeline::RenderViewContext> views;
     if (m_editorLayer) {
+        m_editorLayer->SetEffectPreviewTexture(nullptr);
+        const bool useEffectPreviewAsPrimary = m_editorLayer->ShouldRenderEffectPreview();
         if (!m_editorLayer->HasEditorCameraUserOverride() && !m_editorLayer->HasEditorCameraAutoFramed()) {
             DirectX::BoundingBox mergedBounds{};
             bool hasMergedBounds = false;
@@ -1123,24 +1129,69 @@ void EngineKernel::Render()
                 m_editorLayer->SetEditorCameraLookAt(rc.cameraPosition, target);
             }
         }
-        const DirectX::XMFLOAT2 sceneViewSize = m_editorLayer->GetSceneViewSize();
+        const DirectX::XMFLOAT2 sceneViewSize = useEffectPreviewAsPrimary
+            ? m_editorLayer->GetEffectPreviewRenderSize()
+            : m_editorLayer->GetSceneViewSize();
         const uint32_t panelWidth = static_cast<uint32_t>((std::max)(sceneViewSize.x, 0.0f));
         const uint32_t panelHeight = static_cast<uint32_t>((std::max)(sceneViewSize.y, 0.0f));
         auto primaryView = m_renderPipeline->BuildPrimaryViewContext(rc, panelWidth, panelHeight);
         auto& state = primaryView.state;
-        state.viewMatrix = m_editorLayer->GetEditorViewMatrix();
-        state.cameraPosition = m_editorLayer->GetEditorCameraPosition();
-        state.cameraDirection = m_editorLayer->GetEditorCameraDirection();
-        state.fovY = m_editorLayer->GetEditorCameraFovY();
-        state.aspect = (state.renderHeight > 0)
-            ? (static_cast<float>(state.renderWidth) / static_cast<float>(state.renderHeight))
-            : state.aspect;
-        state.projectionMatrix = m_editorLayer->BuildEditorProjectionMatrix(state.aspect);
-        {
-            using namespace DirectX;
-            const XMMATRIX view = XMLoadFloat4x4(&state.viewMatrix);
-            const XMMATRIX projection = XMLoadFloat4x4(&state.projectionMatrix);
-            XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
+        if (useEffectPreviewAsPrimary) {
+            const uint32_t previewWidth = (std::max)(panelWidth, 64u);
+            const uint32_t previewHeight = (std::max)(panelHeight, 64u);
+            state.historyKey = 0xEFFE0001ull;
+            state.panelWidth = previewWidth;
+            state.panelHeight = previewHeight;
+            state.renderWidth = previewWidth;
+            state.renderHeight = previewHeight;
+            state.displayWidth = previewWidth;
+            state.displayHeight = previewHeight;
+            state.viewport = RhiViewport(0.0f, 0.0f, static_cast<float>(previewWidth), static_cast<float>(previewHeight));
+            state.cameraPosition = m_editorLayer->GetEffectPreviewCameraPosition();
+            state.cameraDirection = m_editorLayer->GetEffectPreviewCameraDirection();
+            state.fovY = m_editorLayer->GetEffectPreviewCameraFovY();
+            state.nearZ = m_editorLayer->GetEffectPreviewNearZ();
+            state.farZ = m_editorLayer->GetEffectPreviewFarZ();
+            state.aspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
+            state.enableAsyncCompute = false;
+            state.enableGTAO = false;
+            state.enableSSGI = false;
+            state.enableVolumetricFog = false;
+            state.enableSSR = false;
+            state.enableDeferredLighting = false;
+            state.enableSkybox = m_editorLayer->ShouldEffectPreviewUseSkybox();
+            state.clearColor = m_editorLayer->GetEffectPreviewClearColor();
+            {
+                using namespace DirectX;
+                const XMFLOAT3 previewTarget = m_editorLayer->GetEffectPreviewCameraTarget();
+                const XMVECTOR eye = XMLoadFloat3(&state.cameraPosition);
+                const XMVECTOR target = XMLoadFloat3(&previewTarget);
+                const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+                const XMMATRIX view = XMMatrixLookAtLH(eye, target, up);
+                const XMMATRIX projection = XMMatrixPerspectiveFovLH(
+                    state.fovY,
+                    state.aspect,
+                    state.nearZ,
+                    state.farZ);
+                XMStoreFloat4x4(&state.viewMatrix, view);
+                XMStoreFloat4x4(&state.projectionMatrix, projection);
+                XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
+            }
+        } else {
+            state.viewMatrix = m_editorLayer->GetEditorViewMatrix();
+            state.cameraPosition = m_editorLayer->GetEditorCameraPosition();
+            state.cameraDirection = m_editorLayer->GetEditorCameraDirection();
+            state.fovY = m_editorLayer->GetEditorCameraFovY();
+            state.aspect = (state.renderHeight > 0)
+                ? (static_cast<float>(state.renderWidth) / static_cast<float>(state.renderHeight))
+                : state.aspect;
+            state.projectionMatrix = m_editorLayer->BuildEditorProjectionMatrix(state.aspect);
+            {
+                using namespace DirectX;
+                const XMMATRIX view = XMLoadFloat4x4(&state.viewMatrix);
+                const XMMATRIX projection = XMLoadFloat4x4(&state.projectionMatrix);
+                XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
+            }
         }
         state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
         state.jitterOffset = { 0.0f, 0.0f };
@@ -1214,6 +1265,13 @@ void EngineKernel::Render()
             primaryView.debugGBuffer2 ? primaryView.debugGBuffer2 : rc.debugGBuffer2,
             nullptr,
             primaryView.debugDepth ? primaryView.debugDepth : rc.debugGBufferDepth);
+
+        if (m_editorLayer->ShouldRenderEffectPreview()) {
+            ITexture* effectPreviewTexture = primaryView.sceneViewTexture
+                ? primaryView.sceneViewTexture
+                : primaryView.displayTexture;
+            m_editorLayer->SetEffectPreviewTexture(effectPreviewTexture);
+        }
     }
 
     static uint64_t s_perfLogFrame = 0;

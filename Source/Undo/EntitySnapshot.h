@@ -12,6 +12,7 @@
 #include "Component/AudioOneShotRequestComponent.h"
 #include "Component/AudioStateComponent.h"
 #include "Component/ColliderComponent.h"
+#include "Component/EffectPlaybackComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/MaterialComponent.h"
 #include "Component/PhysicsComponent.h"
@@ -250,6 +251,14 @@ namespace EntitySnapshot
             probe->cubemapSRV.Reset();
             probe->cubemapTexture.reset();
             probe->needsBake = true;
+        }
+
+        if (auto* effectPlayback = registry.GetComponent<EffectPlaybackComponent>(entity)) {
+            effectPlayback->isPlaying = false;
+            effectPlayback->currentTime = 0.0f;
+            effectPlayback->runtimeInstanceId = 0;
+            effectPlayback->stopRequested = false;
+            effectPlayback->lifetimeFade = 1.0f;
         }
     }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -33,6 +34,7 @@ private:
 
     std::unordered_map<std::string, std::shared_ptr<Model>> modelMap;
     std::unordered_map<std::string, std::shared_ptr<ITexture>> textureMap;
+    std::unordered_set<std::string> m_failedTexturePaths;
 
     std::unordered_map<std::string, std::shared_ptr<MaterialAsset>> m_materials;
 

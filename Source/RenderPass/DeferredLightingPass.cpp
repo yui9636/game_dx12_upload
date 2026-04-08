@@ -152,7 +152,7 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         return;
     }
 
-    float clearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    float clearColor[4] = { rc.clearColor.x, rc.clearColor.y, rc.clearColor.z, rc.clearColor.w };
     rc.commandList->ClearColor(rtScene, clearColor);
     rc.commandList->SetRenderTarget(rtScene, nullptr);
 
@@ -163,6 +163,18 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
     rc.sceneDepthTexture = dsReal;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)rtScene->GetWidth(), (float)rtScene->GetHeight());
     rc.commandList->SetViewport(rc.mainViewport);
+
+    if (!rc.enableDeferredLighting) {
+        return;
+    }
+
+    const bool hasOpaqueGeometry =
+        !queue.opaquePackets.empty() ||
+        !queue.opaqueInstanceBatches.empty() ||
+        rc.HasPreparedOpaqueCommands();
+    if (!hasOpaqueGeometry) {
+        return;
+    }
 
     rc.commandList->SetPipelineState(m_pso.get());
 

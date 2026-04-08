@@ -1,8 +1,59 @@
 #include <filesystem>
+#include <cstring>
 #include <wrl.h>
 #include <DirectXTex.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 #include "System/Misc.h"
 #include "GpuResourceUtils.h"
+
+namespace
+{
+	HRESULT LoadImageWithStb(
+		const char* filename,
+		DirectX::ScratchImage& outImage,
+		DirectX::TexMetadata& outMetadata)
+	{
+		int width = 0;
+		int height = 0;
+		int channels = 0;
+		stbi_uc* pixels = stbi_load(filename, &width, &height, &channels, 4);
+		if (!pixels || width <= 0 || height <= 0) {
+			if (pixels) {
+				stbi_image_free(pixels);
+			}
+			return E_FAIL;
+		}
+
+		HRESULT hr = outImage.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM,
+			static_cast<size_t>(width),
+			static_cast<size_t>(height),
+			1u,
+			1u);
+		if (FAILED(hr)) {
+			stbi_image_free(pixels);
+			return hr;
+		}
+
+		const DirectX::Image* image = outImage.GetImage(0, 0, 0);
+		if (!image || !image->pixels) {
+			stbi_image_free(pixels);
+			return E_FAIL;
+		}
+
+		const size_t srcRowPitch = static_cast<size_t>(width) * 4u;
+		for (int y = 0; y < height; ++y) {
+			memcpy(
+				image->pixels + image->rowPitch * static_cast<size_t>(y),
+				pixels + srcRowPitch * static_cast<size_t>(y),
+				srcRowPitch);
+		}
+
+		outMetadata = outImage.GetMetadata();
+		stbi_image_free(pixels);
+		return S_OK;
+	}
+}
 
 HRESULT GpuResourceUtils::LoadVertexShader(
 	ID3D11Device* device,
@@ -130,7 +181,11 @@ HRESULT GpuResourceUtils::LoadImageFromFile(
 	std::wstring wfilename = filepath.wstring();
 
 	HRESULT hr;
-	if (extension == ".tga")
+	if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
+	{
+		hr = LoadImageWithStb(filename, outImage, outMetadata);
+	}
+	else if (extension == ".tga")
 	{
 		hr = DirectX::GetMetadataFromTGAFile(wfilename.c_str(), outMetadata);
 		if (FAILED(hr)) return hr;

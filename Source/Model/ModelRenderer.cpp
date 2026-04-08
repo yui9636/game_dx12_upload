@@ -125,8 +125,8 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
     }
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
     rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    BlendState lastBlendState = BlendState::EnumCount;
     DepthState lastDepthState = DepthState::EnumCount;
     RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
@@ -317,6 +317,7 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
     rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    BlendState lastBlendState = BlendState::Opaque;
     DepthState lastDepthState = DepthState::EnumCount;
     RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
@@ -335,7 +336,10 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
             if (!meshResource) continue;
 
             const Model::Material& material = meshResource->material;
-            if (material.alphaMode == Model::AlphaMode::Blend || (material.color.w > 0.01f && material.color.w < 0.99f))
+            const bool wantsTransparentBlend = drawInfo.blendState != BlendState::Opaque;
+            if (wantsTransparentBlend ||
+                material.alphaMode == Model::AlphaMode::Blend ||
+                (material.color.w > 0.01f && material.color.w < 0.99f))
             {
                 TransparencyDrawInfo& tInfo = transparencyDrawInfos.emplace_back();
                 tInfo.modelResource = modelResource;
@@ -364,6 +368,10 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
                 continue;
             }
 
+            if (lastBlendState != drawInfo.blendState) {
+                rc.commandList->SetBlendState(rc.renderState->GetBlendState(drawInfo.blendState), blendFactor, 0xFFFFFFFF);
+                lastBlendState = drawInfo.blendState;
+            }
             if (lastDepthState != drawInfo.depthState) {
                 rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(drawInfo.depthState), 0);
                 lastDepthState = drawInfo.depthState;
@@ -400,8 +408,8 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
     }
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Transparency), blendFactor, 0xFFFFFFFF);
     rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    BlendState lastBlendState = BlendState::EnumCount;
     DepthState lastDepthState = DepthState::EnumCount;
     RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
@@ -419,6 +427,10 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
         if (!shader) continue;
         shader->Begin(rc);
 
+        if (lastBlendState != info.blendState) {
+            rc.commandList->SetBlendState(rc.renderState->GetBlendState(info.blendState), blendFactor, 0xFFFFFFFF);
+            lastBlendState = info.blendState;
+        }
         if (lastDepthState != info.depthState) {
             rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(info.depthState), 0);
             lastDepthState = info.depthState;

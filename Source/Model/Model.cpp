@@ -631,6 +631,18 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	{
 
+		if (sourceOnly)
+		{
+			material.diffuseMap = nullptr;
+			material.normalMap = nullptr;
+			material.metallicMap = nullptr;
+			material.roughnessMap = nullptr;
+			material.albedoMap = nullptr;
+			material.occlusionMap = nullptr;
+			material.emissiveMap = nullptr;
+			continue;
+		}
+
 		auto& rm = ResourceManager::Instance();
 
 

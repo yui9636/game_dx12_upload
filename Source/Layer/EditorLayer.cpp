@@ -174,21 +174,31 @@ void EditorLayer::RenderUI()
     if (!m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor) {
         m_activeWorkspace = WorkspaceTab::LevelEditor;
     }
+    if (!m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+    }
 
     DrawMenuBar();
     DrawWorkspaceTabs();
 
     const bool showPlayerWorkspace = m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor;
+    const bool showEffectWorkspace = m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor;
+    const bool showSecondaryWorkspace = showPlayerWorkspace || showEffectWorkspace;
     if (showPlayerWorkspace && m_maximizedWindow == WindowFocusTarget::PlayerEditor) {
         m_maximizedWindow = WindowFocusTarget::None;
     }
+    if (showEffectWorkspace && m_maximizedWindow == WindowFocusTarget::EffectEditor) {
+        m_maximizedWindow = WindowFocusTarget::None;
+    }
 
-    if (!showPlayerWorkspace && m_showMainToolbar) {
+    if (!showSecondaryWorkspace && m_showMainToolbar) {
         DrawMainToolbar();
     }
 
     if (showPlayerWorkspace) {
         DrawPlayerEditorWorkspace();
+    } else if (showEffectWorkspace) {
+        DrawEffectEditorWorkspace();
     } else {
         DrawDockSpace();
     }
@@ -203,7 +213,7 @@ void EditorLayer::RenderUI()
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug);
 
-    if (!showPlayerWorkspace) {
+    if (!showSecondaryWorkspace) {
         if (m_showSceneView && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::SceneView)) {
             DrawSceneView();
         }
@@ -243,13 +253,13 @@ void EditorLayer::RenderUI()
     DrawRecoveryPopup();
     DrawRenamePopup();
 
-    if (!showPlayerWorkspace && m_showConsole && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomConsole)) {
+    if (!showSecondaryWorkspace && m_showConsole && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomConsole)) {
         bool consoleFocused = false;
         ApplyPendingWindowFocus(WindowFocusTarget::Console);
         Console::Instance().Draw(kConsoleWindowTitle, &m_showConsole, &consoleFocused);
         SetLastFocusedWindow(WindowFocusTarget::Console, consoleFocused);
     }
-    if (!showPlayerWorkspace && m_assetBrowser && m_showAssetBrowser && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomAsset)) {
+    if (!showSecondaryWorkspace && m_assetBrowser && m_showAssetBrowser && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomAsset)) {
         m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
         bool assetFocused = false;
         ApplyPendingWindowFocus(WindowFocusTarget::AssetBrowser);
@@ -281,4 +291,23 @@ void EditorLayer::SyncPlayerEditorPanelState()
     }
 
     m_playerEditorPanel.SetModel(selectedModel);
+}
+
+void EditorLayer::SyncEffectEditorPanelState()
+{
+    if (!m_gameLayer) {
+        m_effectEditorPanel.SetViewportTexture(nullptr);
+        m_effectEditorPanel.SetSelectedContext(Entity::NULL_ID, "");
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    const EntityID selectedEntity = EditorSelection::Instance().GetPrimaryEntity();
+    std::string meshPath;
+    if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
+        if (auto* mesh = registry.GetComponent<MeshComponent>(selectedEntity)) {
+            meshPath = mesh->modelFilePath;
+        }
+    }
+    m_effectEditorPanel.SetSelectedContext(selectedEntity, meshPath);
 }

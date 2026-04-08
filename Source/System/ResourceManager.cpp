@@ -11,8 +11,153 @@
 #include <DirectXTex.h>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <vector>
+#include <windows.h>
 
 namespace {
+    std::string NormalizePathLower(const std::string& path)
+    {
+        std::string normalized = path;
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return normalized;
+    }
+
+    bool IsEffectTexturePath(const std::string& normalizedPath)
+    {
+        return normalizedPath.find("/data/effect/") != std::string::npos;
+    }
+
+    bool IsBleedableTextureFormat(DXGI_FORMAT format)
+    {
+        return format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+            format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB ||
+            format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+            format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    }
+
+    void BleedTransparentPixels(DirectX::ScratchImage& image)
+    {
+        const DirectX::TexMetadata metadata = image.GetMetadata();
+        if (metadata.dimension != DirectX::TEX_DIMENSION_TEXTURE2D || !IsBleedableTextureFormat(metadata.format)) {
+            return;
+        }
+
+        constexpr int kBleedPasses = 8;
+        constexpr uint8_t kAlphaThreshold = 3;
+
+        for (size_t item = 0; item < metadata.arraySize; ++item) {
+            for (size_t mip = 0; mip < metadata.mipLevels; ++mip) {
+                DirectX::Image* dstImage = const_cast<DirectX::Image*>(image.GetImage(mip, item, 0));
+                if (!dstImage || !dstImage->pixels || dstImage->width == 0 || dstImage->height == 0) {
+                    continue;
+                }
+
+                const size_t width = dstImage->width;
+                const size_t height = dstImage->height;
+                const bool isBgra =
+                    metadata.format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+                    metadata.format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+
+                std::vector<uint8_t> working(dstImage->rowPitch * height);
+                std::vector<uint8_t> source(dstImage->rowPitch * height);
+                memcpy(working.data(), dstImage->pixels, working.size());
+
+                for (int pass = 0; pass < kBleedPasses; ++pass) {
+                    memcpy(source.data(), working.data(), source.size());
+                    bool changed = false;
+
+                    for (size_t y = 0; y < height; ++y) {
+                        for (size_t x = 0; x < width; ++x) {
+                            uint8_t* dstPixel = working.data() + y * dstImage->rowPitch + x * 4u;
+                            const uint8_t* srcPixel = source.data() + y * dstImage->rowPitch + x * 4u;
+                            if (srcPixel[3] > kAlphaThreshold) {
+                                continue;
+                            }
+
+                            int sumR = 0;
+                            int sumG = 0;
+                            int sumB = 0;
+                            int contributorCount = 0;
+
+                            for (int oy = -1; oy <= 1; ++oy) {
+                                for (int ox = -1; ox <= 1; ++ox) {
+                                    if (ox == 0 && oy == 0) {
+                                        continue;
+                                    }
+
+                                    const int nx = static_cast<int>(x) + ox;
+                                    const int ny = static_cast<int>(y) + oy;
+                                    if (nx < 0 || ny < 0 || nx >= static_cast<int>(width) || ny >= static_cast<int>(height)) {
+                                        continue;
+                                    }
+
+                                    const uint8_t* neighbor = source.data() + static_cast<size_t>(ny) * dstImage->rowPitch + static_cast<size_t>(nx) * 4u;
+                                    if (neighbor[3] <= kAlphaThreshold) {
+                                        continue;
+                                    }
+
+                                    if (isBgra) {
+                                        sumR += neighbor[2];
+                                        sumG += neighbor[1];
+                                        sumB += neighbor[0];
+                                    } else {
+                                        sumR += neighbor[0];
+                                        sumG += neighbor[1];
+                                        sumB += neighbor[2];
+                                    }
+                                    ++contributorCount;
+                                }
+                            }
+
+                            if (contributorCount == 0) {
+                                continue;
+                            }
+
+                            const uint8_t outR = static_cast<uint8_t>(sumR / contributorCount);
+                            const uint8_t outG = static_cast<uint8_t>(sumG / contributorCount);
+                            const uint8_t outB = static_cast<uint8_t>(sumB / contributorCount);
+                            if (isBgra) {
+                                dstPixel[2] = outR;
+                                dstPixel[1] = outG;
+                                dstPixel[0] = outB;
+                            } else {
+                                dstPixel[0] = outR;
+                                dstPixel[1] = outG;
+                                dstPixel[2] = outB;
+                            }
+                            changed = true;
+                        }
+                    }
+
+                    if (!changed) {
+                        break;
+                    }
+                }
+
+                memcpy(dstImage->pixels, working.data(), working.size());
+            }
+        }
+    }
+
+    HRESULT LoadImageFromFileGuarded(
+        const std::string& resolved,
+        DirectX::ScratchImage& image,
+        DirectX::TexMetadata& metadata,
+        bool& hadStructuredException)
+    {
+        hadStructuredException = false;
+        HRESULT hr = E_FAIL;
+        __try {
+            hr = GpuResourceUtils::LoadImageFromFile(resolved.c_str(), image, metadata);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            hadStructuredException = true;
+            hr = E_FAIL;
+        }
+        return hr;
+    }
+
     float HalfToFloatLocal(uint16_t value) {
         const uint32_t sign = static_cast<uint32_t>(value & 0x8000u) << 16;
         uint32_t exponent = (value >> 10) & 0x1Fu;
@@ -186,6 +331,7 @@ void ResourceManager::Clear()
 {
     modelMap.clear();
     textureMap.clear();
+    m_failedTexturePaths.clear();
 }
 
 std::shared_ptr<Model> ResourceManager::GetModel(const std::string& path, float scaling, bool sourceOnly)
@@ -216,17 +362,43 @@ std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
 {
     if (path.empty()) return nullptr;
     if (textureMap.count(path)) return textureMap[path];
+    if (m_failedTexturePaths.count(path)) return nullptr;
 
     std::string resolved = PathResolver::Resolve(path);
+    if (m_failedTexturePaths.count(resolved)) return nullptr;
+    if (!std::filesystem::exists(resolved) || !std::filesystem::is_regular_file(resolved)) {
+        LOG_WARN("[ResourceManager] Texture path does not exist: %s", resolved.c_str());
+        m_failedTexturePaths.insert(path);
+        m_failedTexturePaths.insert(resolved);
+        return nullptr;
+    }
 
     DirectX::ScratchImage image;
     DirectX::TexMetadata metadata;
-    HRESULT hr = GpuResourceUtils::LoadImageFromFile(resolved.c_str(), image, metadata);
-    if (FAILED(hr)) return nullptr;
+    HRESULT hr = E_FAIL;
+    bool hadStructuredException = false;
+    try {
+        hr = LoadImageFromFileGuarded(resolved, image, metadata, hadStructuredException);
+    } catch (...) {
+        LOG_WARN("[ResourceManager] Texture load threw exception: %s", resolved.c_str());
+        m_failedTexturePaths.insert(path);
+        m_failedTexturePaths.insert(resolved);
+        return nullptr;
+    }
+    if (hadStructuredException) {
+        LOG_WARN("[ResourceManager] Texture load raised structured exception: %s", resolved.c_str());
+        m_failedTexturePaths.insert(path);
+        m_failedTexturePaths.insert(resolved);
+        return nullptr;
+    }
+    if (FAILED(hr)) {
+        LOG_WARN("[ResourceManager] Failed to load texture: %s (hr=0x%08X)", resolved.c_str(), static_cast<unsigned>(hr));
+        m_failedTexturePaths.insert(path);
+        m_failedTexturePaths.insert(resolved);
+        return nullptr;
+    }
 
-    std::string normalized = resolved;
-    std::replace(normalized.begin(), normalized.end(), '\\', '/');
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::string normalized = NormalizePathLower(resolved);
 
     const bool looksLikeIblCube = normalized.find("/data/texture/ibl/") != std::string::npos
         && metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE2D
@@ -238,6 +410,10 @@ std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
             static_cast<unsigned>(metadata.arraySize),
             static_cast<unsigned>(metadata.mipLevels),
             static_cast<int>(metadata.format));
+    }
+
+    if (IsEffectTexturePath(normalized)) {
+        BleedTransparentPixels(image);
     }
 
     auto* factory = Graphics::Instance().GetResourceFactory();

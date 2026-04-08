@@ -42,6 +42,12 @@
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/SpeedCurveComponent.h"
 #include "Gameplay/HitStopComponent.h"
+#include "Component/EffectAssetComponent.h"
+#include "Component/EffectAttachmentComponent.h"
+#include "Component/EffectParameterOverrideComponent.h"
+#include "Component/EffectPlaybackComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
+#include "Component/EffectSpawnRequestComponent.h"
 // Input components
 #include "Input/InputUserComponent.h"
 #include "Input/InputContextComponent.h"
@@ -1459,6 +1465,12 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentRemovable<TimelineComponent>(registry, entity);
             DrawComponentRemovable<SpeedCurveComponent>(registry, entity);
             DrawComponentRemovable<HitStopComponent>(registry, entity);
+            DrawComponentRemovable<EffectAssetComponent>(registry, entity);
+            DrawComponentRemovable<EffectPlaybackComponent>(registry, entity);
+            DrawComponentRemovable<EffectSpawnRequestComponent>(registry, entity);
+            DrawComponentRemovable<EffectAttachmentComponent>(registry, entity);
+            DrawComponentRemovable<EffectParameterOverrideComponent>(registry, entity);
+            DrawComponentRemovable<EffectPreviewTagComponent>(registry, entity);
 
             // --- Input Components (removable) ---
             DrawComponentRemovable<InputUserComponent>(registry, entity);
@@ -1492,6 +1504,12 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 TryAddComponent<TimelineComponent>(registry, entity, "Timeline");
                 TryAddComponent<SpeedCurveComponent>(registry, entity, "SpeedCurve");
                 TryAddComponent<HitStopComponent>(registry, entity, "HitStop");
+                TryAddComponent<EffectAssetComponent>(registry, entity, "EffectAsset");
+                TryAddComponent<EffectPlaybackComponent>(registry, entity, "EffectPlayback");
+                TryAddComponent<EffectSpawnRequestComponent>(registry, entity, "EffectSpawnRequest");
+                TryAddComponent<EffectAttachmentComponent>(registry, entity, "EffectAttachment");
+                TryAddComponent<EffectParameterOverrideComponent>(registry, entity, "EffectParameterOverride");
+                TryAddComponent<EffectPreviewTagComponent>(registry, entity, "EffectPreviewTag");
                 ImGui::Separator();
                 ImGui::TextDisabled("-- Input --");
                 TryAddComponent<InputUserComponent>(registry, entity, "InputUser");

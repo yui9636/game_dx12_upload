@@ -3,7 +3,8 @@
 void EditorLayer::DrawDockSpace()
 {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    const float workspaceTabHeight = m_showPlayerEditor ? 34.0f : 0.0f;
+    const bool hasWorkspaceTabs = m_showPlayerEditor || m_showEffectEditor;
+    const float workspaceTabHeight = hasWorkspaceTabs ? 34.0f : 0.0f;
     const float toolbarHeight = (m_showMainToolbar && m_activeWorkspace == WorkspaceTab::LevelEditor) ? 32.0f : 0.0f;
     const float statusBarHeight = m_showStatusBar ? 26.0f : 0.0f;
     const ImVec2 dockspacePos(viewport->WorkPos.x, viewport->WorkPos.y + workspaceTabHeight + toolbarHeight);
@@ -78,7 +79,7 @@ void EditorLayer::DrawDockSpace()
 
 void EditorLayer::DrawWorkspaceTabs()
 {
-    if (!m_showPlayerEditor) {
+    if (!m_showPlayerEditor && !m_showEffectEditor) {
         m_activeWorkspace = WorkspaceTab::LevelEditor;
         return;
     }
@@ -99,6 +100,7 @@ void EditorLayer::DrawWorkspaceTabs()
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 4.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
     bool playerTabOpen = m_showPlayerEditor;
+    bool effectTabOpen = m_showEffectEditor;
 
     if (ImGui::Begin("##WorkspaceTabs", nullptr, flags))
     {
@@ -160,12 +162,32 @@ void EditorLayer::DrawWorkspaceTabs()
                 playerTabOpen = false;
             }
         }
+
+        if (effectTabOpen) {
+            ImGui::SameLine(0.0f, kTabSpacing);
+
+            const bool effectActive = (m_activeWorkspace == WorkspaceTab::EffectEditor);
+            if (drawWorkspaceTabButton("EffectWorkspaceTab", ICON_FA_WAND_MAGIC_SPARKLES " Effect Editor", effectActive)) {
+                m_activeWorkspace = WorkspaceTab::EffectEditor;
+                m_pendingWindowFocus = WindowFocusTarget::EffectEditor;
+            }
+
+            ImGui::SameLine(0.0f, 1.0f);
+            if (drawWorkspaceTabClose("EffectWorkspaceTabClose", effectActive)) {
+                effectTabOpen = false;
+            }
+        }
     }
     ImGui::End();
     ImGui::PopStyleVar(2);
 
     m_showPlayerEditor = playerTabOpen;
+    m_showEffectEditor = effectTabOpen;
     if (!m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+        RequestWindowFocus(WindowFocusTarget::SceneView);
+    }
+    if (!m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor) {
         m_activeWorkspace = WorkspaceTab::LevelEditor;
         RequestWindowFocus(WindowFocusTarget::SceneView);
     }
@@ -192,6 +214,30 @@ void EditorLayer::DrawPlayerEditorWorkspace()
         m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
         &playerEditorFocused);
     SetLastFocusedWindow(WindowFocusTarget::PlayerEditor, playerEditorFocused);
+}
+
+void EditorLayer::DrawEffectEditorWorkspace()
+{
+    constexpr float kWorkspaceTabHeight = 34.0f;
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const bool hasWorkspaceTabs = m_showPlayerEditor || m_showEffectEditor;
+    const float workspaceTabHeight = hasWorkspaceTabs ? kWorkspaceTabHeight : 0.0f;
+    const float statusBarHeight = m_showStatusBar ? 26.0f : 0.0f;
+
+    ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x, viewport->WorkPos.y + workspaceTabHeight));
+    ImGui::SetNextWindowSize(ImVec2(
+        viewport->WorkSize.x,
+        (std::max)(1.0f, viewport->WorkSize.y - workspaceTabHeight - statusBarHeight)));
+
+    SyncEffectEditorPanelState();
+
+    bool effectEditorFocused = false;
+    ApplyPendingWindowFocus(WindowFocusTarget::EffectEditor);
+    m_effectEditorPanel.DrawWorkspace(
+        m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
+        &effectEditorFocused);
+    SetLastFocusedWindow(WindowFocusTarget::EffectEditor, effectEditorFocused);
 }
 
 

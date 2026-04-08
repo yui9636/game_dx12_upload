@@ -53,7 +53,7 @@ bool ThumbnailGenerator::LazyInitialize()
         TextureFormat::RGBA8_UNORM, TextureFormat::D24_UNORM_S8_UINT,
         clearColor, static_cast<uint32_t>(MAX_CACHE));
 
-    m_sphereModel = ResourceManager::Instance().GetModel("Data/Model/sphere/fbx_sphere_001.fbx");
+    m_sphereModel = ResourceManager::Instance().GetModel("Data/Model/sphere/fbx_sphere_001.fbx", 1.0f, true);
     m_initialized = (m_texturePool.GetSharedDepth() != nullptr);
     if (m_initialized) {
         LOG_INFO("[ThumbnailGenerator] Initialized.");
@@ -261,7 +261,7 @@ void ThumbnailGenerator::RenderThumbnail(ITexture* target, std::function<void()>
 
 std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string& modelPath, std::shared_ptr<ITexture> cacheTex)
 {
-    auto model = ResourceManager::Instance().GetModel(modelPath);
+    auto model = ResourceManager::Instance().GetModel(modelPath, 1.0f, true);
     if (!model) return nullptr;
 
     if (!cacheTex) return nullptr;

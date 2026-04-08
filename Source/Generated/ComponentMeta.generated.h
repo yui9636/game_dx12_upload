@@ -34,6 +34,12 @@ struct ComponentMeta;
 #include "Component/CameraEffectComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/ColliderComponent.h"
+#include "Component/EffectAssetComponent.h"
+#include "Component/EffectAttachmentComponent.h"
+#include "Component/EffectParameterOverrideComponent.h"
+#include "Component/EffectPlaybackComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
+#include "Component/EffectSpawnRequestComponent.h"
 #include "Component/EnvironmentComponent.h"
 #include "Component/GizmoComponent.h"
 #include "Component/GridComponent.h"
@@ -259,6 +265,73 @@ struct ComponentMeta<ColliderComponent> {
         MakeField("elements", &ColliderComponent::elements),
         MakeField("enabled", &ColliderComponent::enabled),
         MakeField("drawGizmo", &ColliderComponent::drawGizmo)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectAssetComponent> {
+    static constexpr std::string_view Name = "EffectAssetComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("assetPath", &EffectAssetComponent::assetPath),
+        MakeField("autoPlay", &EffectAssetComponent::autoPlay),
+        MakeField("loop", &EffectAssetComponent::loop),
+        MakeField("useSelectedMeshFallback", &EffectAssetComponent::useSelectedMeshFallback)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectAttachmentComponent> {
+    static constexpr std::string_view Name = "EffectAttachmentComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("socketName", &EffectAttachmentComponent::socketName),
+        MakeField("offsetLocal", &EffectAttachmentComponent::offsetLocal),
+        MakeField("offsetRotDeg", &EffectAttachmentComponent::offsetRotDeg),
+        MakeField("offsetScale", &EffectAttachmentComponent::offsetScale)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectParameterOverrideComponent> {
+    static constexpr std::string_view Name = "EffectParameterOverrideComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enabled", &EffectParameterOverrideComponent::enabled),
+        MakeField("scalarParameter", &EffectParameterOverrideComponent::scalarParameter),
+        MakeField("scalarValue", &EffectParameterOverrideComponent::scalarValue),
+        MakeField("colorParameter", &EffectParameterOverrideComponent::colorParameter),
+        MakeField("colorValue", &EffectParameterOverrideComponent::colorValue)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectPlaybackComponent> {
+    static constexpr std::string_view Name = "EffectPlaybackComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("isPlaying", &EffectPlaybackComponent::isPlaying),
+        MakeField("currentTime", &EffectPlaybackComponent::currentTime),
+        MakeField("duration", &EffectPlaybackComponent::duration),
+        MakeField("seed", &EffectPlaybackComponent::seed),
+        MakeField("loop", &EffectPlaybackComponent::loop),
+        MakeField("stopRequested", &EffectPlaybackComponent::stopRequested),
+        MakeField("runtimeInstanceId", &EffectPlaybackComponent::runtimeInstanceId),
+        MakeField("lifetimeFade", &EffectPlaybackComponent::lifetimeFade)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectPreviewTagComponent> {
+    static constexpr std::string_view Name = "EffectPreviewTagComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("previewOnly", &EffectPreviewTagComponent::previewOnly)
+    );
+};
+
+template <>
+struct ComponentMeta<EffectSpawnRequestComponent> {
+    static constexpr std::string_view Name = "EffectSpawnRequestComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("pending", &EffectSpawnRequestComponent::pending),
+        MakeField("restartIfActive", &EffectSpawnRequestComponent::restartIfActive),
+        MakeField("requestGeneration", &EffectSpawnRequestComponent::requestGeneration)
     );
 };
 
@@ -756,6 +829,12 @@ using AllComponentTypes = std::tuple<
     CameraShakeComponent,
     CanvasItemComponent,
     ColliderComponent,
+    EffectAssetComponent,
+    EffectAttachmentComponent,
+    EffectParameterOverrideComponent,
+    EffectPlaybackComponent,
+    EffectPreviewTagComponent,
+    EffectSpawnRequestComponent,
     EnvironmentComponent,
     GizmoComponent,
     GridComponent,

@@ -5,6 +5,7 @@
 #include "Input/EditorInputBridge.h"
 #include "PlayerEditor/PlayerEditorPanel.h"
 #include "PlayerEditor/PlayerEditorWindow.h"
+#include "EffectEditor/EffectEditorPanel.h"
 #include <memory>
 #include <array>
 #include <DirectXMath.h>
@@ -88,13 +89,15 @@ public:
         RenderPasses,
         GridSettings,
         GBufferDebug,
-        PlayerEditor
+        PlayerEditor,
+        EffectEditor
     };
 
     enum class WorkspaceTab
     {
         LevelEditor,
-        PlayerEditor
+        PlayerEditor,
+        EffectEditor
     };
 
     struct CameraBookmark
@@ -122,7 +125,11 @@ public:
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
     DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
     DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
-    bool ShouldRenderSceneGrid3D() const { return m_showSceneGrid && m_sceneViewMode == SceneViewMode::Mode3D; }
+    bool ShouldRenderSceneGrid3D() const {
+        return m_activeWorkspace == WorkspaceTab::LevelEditor &&
+            m_showSceneGrid &&
+            m_sceneViewMode == SceneViewMode::Mode3D;
+    }
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
         return (m_sceneViewMode == SceneViewMode::Mode2D)
             ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
@@ -137,9 +144,20 @@ public:
     void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
     void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
     void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
+    void SetEffectPreviewTexture(ITexture* texture) { m_effectEditorPanel.SetViewportTexture(texture); }
     SceneViewMode GetSceneViewMode() const { return m_sceneViewMode; }
     float GetSceneGridCellSize() const { return m_sceneGridCellSize; }
     int GetSceneGridHalfLineCount() const { return m_sceneGridHalfLineCount; }
+    bool ShouldRenderEffectPreview() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }
+    DirectX::XMFLOAT2 GetEffectPreviewRenderSize() const { return m_effectEditorPanel.GetPreviewRenderSize(); }
+    DirectX::XMFLOAT3 GetEffectPreviewCameraPosition() const { return m_effectEditorPanel.GetPreviewCameraPosition(); }
+    DirectX::XMFLOAT3 GetEffectPreviewCameraTarget() const { return m_effectEditorPanel.GetPreviewCameraTarget(); }
+    DirectX::XMFLOAT3 GetEffectPreviewCameraDirection() const { return m_effectEditorPanel.GetPreviewCameraDirection(); }
+    float GetEffectPreviewCameraFovY() const { return m_effectEditorPanel.GetPreviewCameraFovY(); }
+    float GetEffectPreviewNearZ() const { return m_effectEditorPanel.GetPreviewNearZ(); }
+    float GetEffectPreviewFarZ() const { return m_effectEditorPanel.GetPreviewFarZ(); }
+    DirectX::XMFLOAT4 GetEffectPreviewClearColor() const { return m_effectEditorPanel.GetPreviewClearColor(); }
+    bool ShouldEffectPreviewUseSkybox() const { return m_effectEditorPanel.ShouldPreviewUseSkybox(); }
     void SetGBufferDebugTextures(ITexture* g0, ITexture* g1, ITexture* g2, ITexture* g3, ITexture* depth) {
         m_gbufferTexture0 = g0;
         m_gbufferTexture1 = g1;
@@ -178,8 +196,10 @@ private:
     bool m_showSceneCollision = false;
     bool m_showInputDebug = false;
     bool m_showPlayerEditor = false;
+    bool m_showEffectEditor = false;
     WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
     PlayerEditorPanel m_playerEditorPanel;
+    EffectEditorPanel m_effectEditorPanel;
     std::unique_ptr<PlayerEditorWindow> m_playerEditorWindow;
     SceneShadingMode m_sceneShadingMode = SceneShadingMode::Lit;
     DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };
@@ -237,6 +257,7 @@ private:
     void DrawMenuBar();
     void DrawMainToolbar();
     void DrawPlayerEditorWorkspace();
+    void DrawEffectEditorWorkspace();
     void DrawSceneView();
     void DrawGameView();
     void DrawHierarchy();
@@ -250,6 +271,7 @@ private:
     void DrawUnsavedChangesPopup();
     void DrawRecoveryPopup();
     void SyncPlayerEditorPanelState();
+    void SyncEffectEditorPanelState();
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();

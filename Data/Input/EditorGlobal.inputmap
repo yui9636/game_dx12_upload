@@ -1,0 +1,18 @@
+{
+  "name": "EditorGlobal",
+  "contextCategory": "EditorGlobal",
+  "actions": [
+    { "actionName": "Save",      "scancode": 22, "gamepadButton": 255 },
+    { "actionName": "Undo",      "scancode": 29, "gamepadButton": 255 },
+    { "actionName": "Redo",      "scancode": 28, "gamepadButton": 255 },
+    { "actionName": "Delete",    "scancode": 76, "gamepadButton": 255 },
+    { "actionName": "Duplicate", "scancode": 7,  "gamepadButton": 255 },
+    { "actionName": "Copy",      "scancode": 6,  "gamepadButton": 255 },
+    { "actionName": "Paste",     "scancode": 25, "gamepadButton": 255 },
+    { "actionName": "Play",      "scancode": 62, "gamepadButton": 255 },
+    { "actionName": "Rename",    "scancode": 59, "gamepadButton": 255 }
+  ],
+  "axes": [],
+  "holdThresholdFrames": 30,
+  "doubleTapGapFrames": 15
+}

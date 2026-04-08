@@ -31,6 +31,7 @@
 #include "Gameplay/TimelineAudioSystem.h"
 #include "Gameplay/TimelineShakeSystem.h"
 #include "Gameplay/HitboxTrackingSystem.h"
+#include "EffectRuntime/EffectSystems.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -124,6 +125,13 @@ void GameLayer::Update(const EngineTime& time)
     TimelineVFXSystem::Update(m_registry);
     TimelineAudioSystem::Update(m_registry);
     TimelineShakeSystem::Update(m_registry, time.dt);
+    EffectSpawnSystem::Update(m_registry, time.dt);
+    EffectPlaybackSystem::Update(m_registry, time.dt);
+    EffectAttachmentSystem::Update(m_registry);
+    EffectSimulationSystem::Update(m_registry, time.dt);
+    EffectLifetimeSystem::Update(m_registry, time.dt);
+    const float previewDt = time.dt > 0.0f ? 0.0f : time.unscaledDt;
+    EffectPreviewSystem::Update(m_registry, previewDt);
     HitboxTrackingSystem::Update(m_registry);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
@@ -184,6 +192,7 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
 
     MeshExtractSystem extractSys;
     extractSys.Extract(m_registry, queue);
+    EffectExtractSystem::Extract(m_registry, rc, queue);
 }
 
 

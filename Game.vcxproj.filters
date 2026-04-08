@@ -184,6 +184,12 @@
     <Filter Include="Source\PlayerEditor">
       <UniqueIdentifier>{b4e3c8a1-7f2d-4e6a-9c15-8d3b0a5f7e92}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\EffectEditor">
+      <UniqueIdentifier>{9f7f0b42-5a9d-4d3e-bf3e-c29f093cc991}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\EffectRuntime">
+      <UniqueIdentifier>{4e9cfe5a-02fd-4ce6-b947-c25b1a8c0d26}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Gameplay">
       <UniqueIdentifier>{a1c5d9e3-6b8f-4a2d-b7e0-3f9c1d5a8b64}</UniqueIdentifier>
     </Filter>
@@ -864,6 +870,12 @@
     <ClInclude Include="Source\RenderGraph\FrameGraphTypes.h">
       <Filter>Source\RenderGraph</Filter>
     </ClInclude>
+    <ClInclude Include="Source\RenderPass\EffectMeshPass.h">
+      <Filter>Source\RenderPass</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\RenderPass\EffectParticlePass.h">
+      <Filter>Source\RenderPass</Filter>
+    </ClInclude>
     <ClInclude Include="External\imgui-docking\backends\imgui_impl_dx12.h" />
     <ClInclude Include="Source\RHI\GraphicsAPI.h" />
     <ClInclude Include="Source\RHI\DX12\DX12Device.h" />
@@ -906,6 +918,24 @@
     </ClInclude>
     <ClInclude Include="Source\PlayerEditor\InputMappingTab.h">
       <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h">
+      <Filter>Source\EffectEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectCompiler.h">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectGraphAsset.h">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectGraphSerializer.h">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectRuntimeRegistry.h">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectSystems.h">
+      <Filter>Source\EffectRuntime</Filter>
     </ClInclude>
     <ClInclude Include="Source\Gameplay\StateMachineParamsComponent.h">
       <Filter>Source\Gameplay</Filter>
@@ -1497,6 +1527,27 @@
     <ClCompile Include="Source\PlayerEditor\InputMappingTab.cpp">
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp">
+      <Filter>Source\EffectEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\EffectRuntime\EffectCompiler.cpp">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\EffectRuntime\EffectGraphSerializer.cpp">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\EffectRuntime\EffectRuntimeRegistry.cpp">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\EffectRuntime\EffectSystems.cpp">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\EffectMeshPass.cpp">
+      <Filter>Source\RenderPass</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\EffectParticlePass.cpp">
+      <Filter>Source\RenderPass</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp">
       <Filter>Source\Gameplay</Filter>
     </ClCompile>
@@ -1616,6 +1667,54 @@
     <FxCompile Include="Shader\BloomPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBuild_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBuildDrawArgs_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleCompact_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleEmit_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleInitialize_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleMeshPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleMeshVS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleResetCounters_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleUpdate_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticlePrefixSum_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleScatterAlive_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBillboardGS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBuildBins_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBuildBinArgs_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleCoarseDepth_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleDepthBinArgs_cs.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
     <FxCompile Include="Shader\SwordTrailPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
@@ -1638,6 +1737,15 @@
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\compute_particle_render_ps.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleBillboardPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleRibbonVS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectParticleRibbonGS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\compute_particle_render_vs.hlsl">

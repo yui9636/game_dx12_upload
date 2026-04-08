@@ -17,6 +17,7 @@
 #include "Component/AudioSettingsComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/SpriteComponent.h"
@@ -619,7 +620,8 @@ namespace {
     {
         return registry.GetComponent<EnvironmentComponent>(entity) ||
                registry.GetComponent<ReflectionProbeComponent>(entity) ||
-               registry.GetComponent<AudioSettingsComponent>(entity);
+               registry.GetComponent<AudioSettingsComponent>(entity) ||
+               registry.GetComponent<EffectPreviewTagComponent>(entity);
     }
 
     EntityID FindEnvironmentEntity(Registry& registry)

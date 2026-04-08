@@ -1,0 +1,21 @@
+{
+  "name": "Gameplay",
+  "contextCategory": "RuntimeGameplay",
+  "actions": [
+    { "actionName": "AttackLight",  "scancode": 225,  "gamepadButton": 0 },
+    { "actionName": "AttackHeavy",  "scancode": 44,   "gamepadButton": 3 },
+    { "actionName": "Dodge",        "scancode": 44,   "gamepadButton": 1 },
+    { "actionName": "Jump",         "scancode": 44,   "gamepadButton": 0 },
+    { "actionName": "LockOn",       "scancode": 20,   "gamepadButton": 9 },
+    { "actionName": "Interact",     "scancode": 8,    "gamepadButton": 2 },
+    { "actionName": "Pause",        "scancode": 41,   "gamepadButton": 6 }
+  ],
+  "axes": [
+    { "axisName": "MoveX",   "gamepadAxis": 0, "positiveKey": 7,  "negativeKey": 4,  "deadzone": 0.2, "sensitivity": 1.0 },
+    { "axisName": "MoveY",   "gamepadAxis": 1, "positiveKey": 26, "negativeKey": 22, "deadzone": 0.2, "sensitivity": 1.0 },
+    { "axisName": "CameraX", "gamepadAxis": 2, "positiveKey": 0,  "negativeKey": 0,  "deadzone": 0.15,"sensitivity": 1.0 },
+    { "axisName": "CameraY", "gamepadAxis": 3, "positiveKey": 0,  "negativeKey": 0,  "deadzone": 0.15,"sensitivity": 1.0 }
+  ],
+  "holdThresholdFrames": 30,
+  "doubleTapGapFrames": 15
+}

@@ -122,6 +122,9 @@ struct RenderContext
         bool enableSSGI = true;
         bool enableVolumetricFog = true;
         bool enableSSR = true;
+        bool enableDeferredLighting = true;
+        bool enableSkybox = true;
+        DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 
         DirectX::XMFLOAT4X4 viewMatrix;
         DirectX::XMFLOAT4X4 projectionMatrix;
@@ -298,6 +301,9 @@ struct RenderContext
     bool enableSSGI = true;
     bool enableVolumetricFog = true;
     bool enableSSR = true;
+    bool enableDeferredLighting = true;
+    bool enableSkybox = true;
+    DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
     IBuffer* activeCountBuffer = nullptr;      // count buffer for multi-draw
     uint32_t activeCountBufferOffset = 0;
     uint32_t activeMaxDrawCount = 0;           // max commands for multi-draw

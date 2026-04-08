@@ -1,0 +1,127 @@
+{
+  "editor": {
+    "sceneViewMode": "3D"
+  },
+  "nodes": [
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
+        "CameraFreeControlComponent": {
+          "moveSpeed": 20.0,
+          "pitch": 0.35000014305114746,
+          "rotateSpeed": 0.004999999888241291,
+          "yaw": -0.43500006198883057
+        },
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Main Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 129.8496856689453,
+            "y": 227.07566833496094,
+            "z": -389.63641357421875
+          },
+          "localRotation": {
+            "w": 0.9615263342857361,
+            "x": 0.17000621557235718,
+            "y": -0.21249337494373322,
+            "z": 0.03757067397236824
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 1
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "intensity": 1.0,
+          "range": 10.0,
+          "type": 0
+        },
+        "NameComponent": {
+          "name": "Directional Light"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 0.8535533547401428,
+            "x": 0.3535533845424652,
+            "y": 0.3535533845424652,
+            "z": -0.1464466005563736
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 2
+    },
+    {
+      "components": {
+        "NameComponent": {
+          "name": "Reflection Probe"
+        },
+        "ReflectionProbeComponent": {
+          "position": {
+            "x": 0.0,
+            "y": 1.5,
+            "z": 0.0
+          },
+          "radius": 20.0
+        }
+      },
+      "id": 3
+    }
+  ],
+  "rootLocalIds": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "type": "scene",
+  "version": 1
+}

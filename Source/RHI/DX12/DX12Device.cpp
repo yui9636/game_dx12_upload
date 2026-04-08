@@ -145,7 +145,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // RTV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = FRAME_COUNT + 512; // back buffers + render targets + thumbnails
+        desc.NumDescriptors = FRAME_COUNT + 4096; // back buffers + render targets + editor/history buffers
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
@@ -154,7 +154,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // DSV heap
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 512;
+        desc.NumDescriptors = 2048;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
@@ -163,7 +163,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // CBV/SRV/UAV heap (shader visible) - 将来のバインドレス用に予約
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 4096;
+        desc.NumDescriptors = 16384;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavHeap));
@@ -175,7 +175,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // SRV は必ずこの Non-Shader-Visible ヒープに作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 4096;
+        desc.NumDescriptors = 16384;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavStagingHeap));

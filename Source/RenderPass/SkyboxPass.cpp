@@ -20,7 +20,7 @@ void SkyboxPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 }
 
 void SkyboxPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) {
-    if (rc.environment.skyboxPath.empty()) return;
+    if (!rc.enableSkybox || rc.environment.skyboxPath.empty()) return;
 
     ITexture* rtScene = resources.GetTexture(m_hSceneColor);
     ITexture* dsReal = resources.GetTexture(m_hDepth);

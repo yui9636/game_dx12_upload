@@ -31,6 +31,8 @@
 #include "RenderPass/DeferredLightingPass.h"
 #include "RenderPass/SkyboxPass.h"
 #include "RenderPass/ForwardTransparentPass.h"
+#include "RenderPass/EffectMeshPass.h"
+#include "RenderPass/EffectParticlePass.h"
 #include "RenderPass/PostProcessPass.h"
 #include "Console/Logger.h"
 #include "System/TaskSystem.h"
@@ -69,6 +71,8 @@ namespace
         if (dynamic_cast<DeferredLightingPass*>(pass.get())) return std::make_shared<DeferredLightingPass>(factory);
         if (dynamic_cast<SkyboxPass*>(pass.get())) return std::make_shared<SkyboxPass>();
         if (dynamic_cast<ForwardTransparentPass*>(pass.get())) return std::make_shared<ForwardTransparentPass>();
+        if (dynamic_cast<EffectMeshPass*>(pass.get())) return std::make_shared<EffectMeshPass>();
+        if (dynamic_cast<EffectParticlePass*>(pass.get())) return std::make_shared<EffectParticlePass>();
         if (dynamic_cast<FinalBlitPass*>(pass.get())) return std::make_shared<FinalBlitPass>(factory);
         if (dynamic_cast<PostProcessPass*>(pass.get())) return std::make_shared<PostProcessPass>();
         return nullptr;
@@ -455,6 +459,9 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     rc.enableSSGI = viewState.enableSSGI;
     rc.enableVolumetricFog = viewState.enableVolumetricFog;
     rc.enableSSR = viewState.enableSSR;
+    rc.enableDeferredLighting = viewState.enableDeferredLighting;
+    rc.enableSkybox = viewState.enableSkybox;
+    rc.clearColor = viewState.clearColor;
     rc.viewMatrix = viewState.viewMatrix;
     rc.projectionMatrix = viewState.projectionMatrix;
     rc.viewProjectionUnjittered = viewState.viewProjectionUnjittered;
@@ -521,6 +528,10 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
         rc.prevJitterOffset = history.prevJitterOffset;
         history.prevViewProjection = viewState.viewProjectionUnjittered;
         history.prevJitterOffset = viewState.jitterOffset;
+    }
+
+    if (!rc.enableSkybox) {
+        rc.environment.skyboxPath.clear();
     }
 
     FrameGraph& frameGraph = *history.frameGraph;
@@ -715,6 +726,9 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     baseRc.activeCountBuffer = rc.activeCountBuffer;
     baseRc.useGpuCulling = rc.useGpuCulling;
     baseRc.pendingAsyncComputeFenceValue = rc.pendingAsyncComputeFenceValue;
+    baseRc.enableDeferredLighting = rc.enableDeferredLighting;
+    baseRc.enableSkybox = rc.enableSkybox;
+    baseRc.clearColor = rc.clearColor;
     baseRc.debugGBuffer0 = rc.debugGBuffer0;
     baseRc.debugGBuffer1 = rc.debugGBuffer1;
     baseRc.debugGBuffer2 = rc.debugGBuffer2;
@@ -783,6 +797,9 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.enableSSGI = rc.enableSSGI;
     view.enableVolumetricFog = rc.enableVolumetricFog;
     view.enableSSR = rc.enableSSR;
+    view.enableDeferredLighting = rc.enableDeferredLighting;
+    view.enableSkybox = rc.enableSkybox;
+    view.clearColor = rc.clearColor;
     return viewContext;
 }
 

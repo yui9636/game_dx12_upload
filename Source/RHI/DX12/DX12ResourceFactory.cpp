@@ -96,7 +96,7 @@ namespace {
         D3D12_RESOURCE_BARRIER toCopy = {};
         toCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         toCopy.Transition.pResource = textureResource;
-        toCopy.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        toCopy.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         toCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         toCopy.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmdList->ResourceBarrier(1, &toCopy);
@@ -116,7 +116,7 @@ namespace {
         toSrv.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         toSrv.Transition.pResource = textureResource;
         toSrv.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        toSrv.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        toSrv.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         toSrv.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         cmdList->ResourceBarrier(1, &toSrv);
 
@@ -245,11 +245,14 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
 
     // 1. デフォルトヒープにテクスチャリソース作成
     D3D12_RESOURCE_DESC texDesc = {};
-    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    const bool isVolumeTexture = metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D;
+    texDesc.Dimension = isVolumeTexture ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     texDesc.Alignment = 0;
     texDesc.Width = static_cast<UINT64>(metadata.width);
     texDesc.Height = static_cast<UINT>(metadata.height);
-    texDesc.DepthOrArraySize = static_cast<UINT16>(metadata.arraySize);
+    texDesc.DepthOrArraySize = isVolumeTexture
+        ? static_cast<UINT16>(metadata.depth)
+        : static_cast<UINT16>(metadata.arraySize);
     texDesc.MipLevels = static_cast<UINT16>(metadata.mipLevels);
     texDesc.Format = metadata.format;
     texDesc.SampleDesc.Count = 1;
@@ -268,7 +271,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     if (FAILED(hr)) return nullptr;
 
     // 2. サブリソース数の計算とフットプリント取得
-    const UINT numSubresources = static_cast<UINT>(metadata.mipLevels * metadata.arraySize);
+    const UINT numSubresources = static_cast<UINT>(metadata.mipLevels * (isVolumeTexture ? 1 : metadata.arraySize));
     std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts(numSubresources);
     std::vector<UINT> numRows(numSubresources);
     std::vector<UINT64> rowSizeInBytes(numSubresources);
@@ -306,19 +309,38 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
 
     for (UINT i = 0; i < numSubresources; ++i) {
         // サブリソースインデックスからMipLevelとArraySliceを取得
-        UINT mipLevel = i % static_cast<UINT>(metadata.mipLevels);
-        UINT arraySlice = i / static_cast<UINT>(metadata.mipLevels);
-
-        const DirectX::Image* srcImage = image.GetImage(mipLevel, arraySlice, 0);
-        if (!srcImage) continue;
-
         const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout = layouts[i];
-        BYTE* dstSlice = mappedData + layout.Offset;
+        BYTE* dstSubresource = mappedData + layout.Offset;
 
-        for (UINT row = 0; row < numRows[i]; ++row) {
-            const BYTE* srcRow = srcImage->pixels + row * srcImage->rowPitch;
-            BYTE* dstRow = dstSlice + row * layout.Footprint.RowPitch;
-            memcpy(dstRow, srcRow, static_cast<size_t>(rowSizeInBytes[i]));
+        const UINT mipLevel = i % static_cast<UINT>(metadata.mipLevels);
+        const UINT arraySlice = isVolumeTexture ? 0u : (i / static_cast<UINT>(metadata.mipLevels));
+
+        if (isVolumeTexture) {
+            const size_t dstSlicePitch = static_cast<size_t>(layout.Footprint.RowPitch) * static_cast<size_t>(numRows[i]);
+            for (UINT depthSlice = 0; depthSlice < layout.Footprint.Depth; ++depthSlice) {
+                const DirectX::Image* srcImage = image.GetImage(mipLevel, 0, depthSlice);
+                if (!srcImage) {
+                    continue;
+                }
+
+                BYTE* dstSlice = dstSubresource + static_cast<size_t>(depthSlice) * dstSlicePitch;
+                for (UINT row = 0; row < numRows[i]; ++row) {
+                    const BYTE* srcRow = srcImage->pixels + static_cast<size_t>(row) * srcImage->rowPitch;
+                    BYTE* dstRow = dstSlice + static_cast<size_t>(row) * layout.Footprint.RowPitch;
+                    memcpy(dstRow, srcRow, static_cast<size_t>(rowSizeInBytes[i]));
+                }
+            }
+        } else {
+            const DirectX::Image* srcImage = image.GetImage(mipLevel, arraySlice, 0);
+            if (!srcImage) {
+                continue;
+            }
+
+            for (UINT row = 0; row < numRows[i]; ++row) {
+                const BYTE* srcRow = srcImage->pixels + static_cast<size_t>(row) * srcImage->rowPitch;
+                BYTE* dstRow = dstSubresource + static_cast<size_t>(row) * layout.Footprint.RowPitch;
+                memcpy(dstRow, srcRow, static_cast<size_t>(rowSizeInBytes[i]));
+            }
         }
     }
     uploadBuffer->Unmap(0, nullptr);
@@ -350,12 +372,12 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
     }
 
-    // バリア: COPY_DEST → PIXEL_SHADER_RESOURCE
+    // バリア: COPY_DEST → ShaderResource
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = textureResource.Get();
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     cmdList->ResourceBarrier(1, &barrier);
 

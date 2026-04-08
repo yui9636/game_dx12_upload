@@ -186,7 +186,12 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
     srvDesc.Format = srvFormat;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-    if (isCubemap) {
+    if (resDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+        srvDesc.Texture3D.MipLevels = resDesc.MipLevels;
+        srvDesc.Texture3D.MostDetailedMip = 0;
+        srvDesc.Texture3D.ResourceMinLODClamp = 0.0f;
+    } else if (isCubemap) {
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
         srvDesc.TextureCube.MipLevels = resDesc.MipLevels;
         srvDesc.TextureCube.MostDetailedMip = 0;

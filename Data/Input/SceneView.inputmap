@@ -1,0 +1,21 @@
+{
+  "name": "SceneView",
+  "contextCategory": "SceneView",
+  "actions": [
+    { "actionName": "Select",        "mouseButton": 0, "gamepadButton": 0 },
+    { "actionName": "ContextMenu",   "mouseButton": 1, "gamepadButton": 255 },
+    { "actionName": "GizmoMove",     "scancode": 26,   "gamepadButton": 255 },
+    { "actionName": "GizmoRotate",   "scancode": 8,    "gamepadButton": 255 },
+    { "actionName": "GizmoScale",    "scancode": 21,   "gamepadButton": 255 },
+    { "actionName": "FocusSelected", "scancode": 9,    "gamepadButton": 255 },
+    { "actionName": "SnapToggle",    "scancode": 30,   "gamepadButton": 255 }
+  ],
+  "axes": [
+    { "axisName": "CameraOrbitX",  "gamepadAxis": 2, "positiveKey": 0, "negativeKey": 0, "deadzone": 0.15, "sensitivity": 2.0 },
+    { "axisName": "CameraOrbitY",  "gamepadAxis": 3, "positiveKey": 0, "negativeKey": 0, "deadzone": 0.15, "sensitivity": 2.0 },
+    { "axisName": "CameraMoveX",   "gamepadAxis": 0, "positiveKey": 7, "negativeKey": 4, "deadzone": 0.15, "sensitivity": 1.0 },
+    { "axisName": "CameraMoveZ",   "gamepadAxis": 1, "positiveKey": 26,"negativeKey": 22,"deadzone": 0.15, "sensitivity": 1.0 }
+  ],
+  "holdThresholdFrames": 30,
+  "doubleTapGapFrames": 15
+}
