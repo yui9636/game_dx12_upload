@@ -4,7 +4,6 @@
 #include <nlohmann/json.hpp>
 #include <DirectXMath.h>
 #include <iostream>
-#include "Particle/compute_particle_system.h"
 
 using json = nlohmann::json;
 
@@ -28,29 +27,6 @@ namespace nlohmann {
         }
         static void from_json(const json& j, DirectX::XMFLOAT4X4& m) {
             for (int i = 0; i < 16; ++i) (&m.m[0][0])[i] = j.at(i).get<float>();
-        }
-    };
-
-    template<> struct adl_serializer<compute_particle_system::emit_particle_data> {
-        static void to_json(json& j, const compute_particle_system::emit_particle_data& p) {
-            j = {
-                {"parameter", p.parameter},
-                {"position", p.position},
-                {"rotation", p.rotation},
-                {"scale", p.scale},
-                {"velocity", p.velocity},
-                {"acceleration", p.acceleration},
-                //{"color", p.color}
-            };
-        }
-        static void from_json(const json& j, compute_particle_system::emit_particle_data& p) {
-            j.at("parameter").get_to(p.parameter);
-            j.at("position").get_to(p.position);
-            j.at("rotation").get_to(p.rotation);
-            j.at("scale").get_to(p.scale);
-            j.at("velocity").get_to(p.velocity);
-            j.at("acceleration").get_to(p.acceleration);
-            //j.at("color").get_to(p.color);
         }
     };
 }

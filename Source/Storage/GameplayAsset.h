@@ -5,9 +5,9 @@
 #include <vector>
 #include <DirectXMath.h>
 #include "JSONManager.h" 
+#include "EffectRuntime/EffectService.h"
 
 namespace Effekseer { class Effect; }
-class EffectInstance;
 
 // ============================================================================
 // ============================================================================
@@ -122,8 +122,8 @@ struct GESequencerItem
     GEAudioPayload  audio;
     GECameraShakePayload shake;
 
-    bool               vfxActive = false;
-    std::shared_ptr<EffectInstance> vfxInstance;
+    bool                         vfxActive = false;
+    EffectHandle                 vfxHandle;
     bool                         audioActive = false;
     uint64_t                     audioHandle = 0;
 

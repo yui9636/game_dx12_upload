@@ -20,6 +20,7 @@
 #include "RenderContext/RenderContext.h"
 #include "RenderContext/RenderQueue.h"
 #include "Model/Model.h"
+#include "Model/ModelResource.h"
 #include "System/ResourceManager.h"
 #include "Type/TypeInfo.h"
 
@@ -139,16 +140,21 @@ void EffectSpawnSystem::Update(Registry& registry, float)
                 continue;
             }
 
+            const float requestedStartTime = request
+                ? (request->startTime < 0.0f ? 0.0f : request->startTime)
+                : (playback.currentTime < 0.0f ? 0.0f : playback.currentTime);
             playback.runtimeInstanceId = runtimeId;
-            playback.currentTime = 0.0f;
+            playback.currentTime = requestedStartTime;
             playback.duration = compiled->duration > 0.0f ? compiled->duration : playback.duration;
             playback.loop = asset.loop || playback.loop;
             playback.isPlaying = true;
             playback.stopRequested = false;
-            playback.lifetimeFade = 1.0f;
+            SyncRuntimeTime(playback);
+            UpdateLifetimeFade(playback);
 
             if (request) {
                 request->pending = false;
+                request->startTime = 0.0f;
             }
         }
     }

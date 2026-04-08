@@ -31,6 +31,7 @@
 #include "Gameplay/TimelineAudioSystem.h"
 #include "Gameplay/TimelineShakeSystem.h"
 #include "Gameplay/HitboxTrackingSystem.h"
+#include "EffectRuntime/EffectService.h"
 #include "EffectRuntime/EffectSystems.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
@@ -103,6 +104,8 @@ void GameLayer::Finalize()
 
 void GameLayer::Update(const EngineTime& time)
 {
+    EffectService::Instance().SetRegistry(&m_registry);
+
     auto& kernel = EngineKernel::Instance();
     const auto& eventQueue = kernel.GetInputEventQueue();
 

@@ -3,11 +3,12 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include "Actor/Actor.h"
 #include "Camera/CameraController.h"
-#include "Effect/EffectComponent.h"
-#include "Effect/EffectManager.h"
+#include "EffectRuntime/EffectService.h"
 #include "Message/Messenger.h"
 #include "Message/MessageData.h"
+#include "Model/Model.h"
 #include <windows.h> 
 
 namespace Cinematic
@@ -169,70 +170,100 @@ namespace Cinematic
             DirectX::XMFLOAT3 offsetRot = { 0,0,0 };
             DirectX::XMFLOAT3 offsetScale = { 1,1,1 };
 
-            std::weak_ptr<EffectInstance> activeInstance;
+            EffectHandle activeHandle;
         };
 
         std::vector<Key> keys;
-        EffectComponent* targetComponent = nullptr;
+        Actor* targetActor = nullptr;
 
         TrackType GetType() const override { return TrackType::Effect; }
 
         void Bind(void* target) override {
-            if (auto actor = static_cast<Actor*>(target)) {
-                auto comp = actor->GetComponent<EffectComponent>();
-                targetComponent = comp.get();
-            }
+            targetActor = static_cast<Actor*>(target);
         }
 
         void Evaluate(float time) override
         {
-            if (isMuted || !targetComponent) return;
+            if (isMuted || !targetActor) return;
+
+            Model* model = targetActor->GetModelRaw();
+            const auto& nodes = model ? model->GetNodes() : std::vector<Model::Node>();
+            DirectX::XMMATRIX actorWorld = DirectX::XMLoadFloat4x4(&targetActor->GetTransform());
 
             for (auto& key : keys)
             {
                 bool isInside = (time >= key.time && time < (key.time + key.duration));
-
-                auto instance = key.activeInstance.lock();
+                const bool hasActiveHandle = EffectService::Instance().IsAlive(key.activeHandle);
 
                 if (isInside)
                 {
-                    if (!instance)
+                    if (!hasActiveHandle)
                     {
-                        key.activeInstance = targetComponent->Play(
-                            key.effectName,
-                            key.boneName,
-                            key.offsetPos,
-                            key.offsetRot,
-                            key.offsetScale,
-                            false
-                        );
-                        instance = key.activeInstance.lock();
-
-                       
+                        EffectPlayDesc desc;
+                        desc.assetPath = key.effectName;
+                        desc.position = targetActor->GetPosition();
+                        desc.loop = false;
+                        desc.debugName = "Cinematic Effect";
+                        key.activeHandle = EffectService::Instance().PlayWorld(desc);
                     }
 
-                    if (instance)
+                    if (key.activeHandle.IsValid())
                     {
                         float relativeTime = time - key.time;
+                        EffectService::Instance().Seek(key.activeHandle, relativeTime, key.duration, false);
 
-                        instance->age = relativeTime;
-                        instance->lifeTime = key.duration;
+                        DirectX::XMMATRIX socketWorld = actorWorld;
+                        if (!key.boneName.empty() && model)
+                        {
+                            int targetBoneIndex = -1;
+                            for (size_t i = 0; i < nodes.size(); ++i) {
+                                if (nodes[i].name == key.boneName) {
+                                    targetBoneIndex = static_cast<int>(i);
+                                    break;
+                                }
+                            }
 
-                        targetComponent->SetEffectTransform(
-                            key.activeInstance,
-                            key.offsetPos,
-                            key.offsetRot,
-                            key.offsetScale 
-                        );
+                            if (targetBoneIndex >= 0 && targetBoneIndex < static_cast<int>(nodes.size())) {
+                                const DirectX::XMMATRIX boneWorld = DirectX::XMLoadFloat4x4(&nodes[targetBoneIndex].worldTransform);
+                                socketWorld = boneWorld * actorWorld;
+                            }
+                        }
 
+                        DirectX::XMFLOAT4X4 socketMatrix;
+                        DirectX::XMStoreFloat4x4(&socketMatrix, socketWorld);
+                        DirectX::XMVECTOR ax = DirectX::XMVector3Normalize(DirectX::XMVectorSet(socketMatrix._11, socketMatrix._12, socketMatrix._13, 0));
+                        DirectX::XMVECTOR ay = DirectX::XMVector3Normalize(DirectX::XMVectorSet(socketMatrix._21, socketMatrix._22, socketMatrix._23, 0));
+                        DirectX::XMVECTOR az = DirectX::XMVector3Normalize(DirectX::XMVectorSet(socketMatrix._31, socketMatrix._32, socketMatrix._33, 0));
+                        DirectX::XMVECTOR p = DirectX::XMVectorSet(socketMatrix._41, socketMatrix._42, socketMatrix._43, 1);
+
+                        DirectX::XMMATRIX normalizedSocket = DirectX::XMMatrixIdentity();
+                        normalizedSocket.r[0] = ax;
+                        normalizedSocket.r[1] = ay;
+                        normalizedSocket.r[2] = az;
+                        normalizedSocket.r[3] = p;
+
+                        const DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(key.offsetScale.x, key.offsetScale.y, key.offsetScale.z);
+                        const DirectX::XMMATRIX rotationMatrix = DirectX::XMMatrixRotationRollPitchYaw(
+                            DirectX::XMConvertToRadians(key.offsetRot.x),
+                            DirectX::XMConvertToRadians(key.offsetRot.y),
+                            DirectX::XMConvertToRadians(key.offsetRot.z));
+                        const DirectX::XMMATRIX translationMatrix = DirectX::XMMatrixTranslation(
+                            key.offsetPos.x,
+                            key.offsetPos.y,
+                            key.offsetPos.z);
+                        const DirectX::XMMATRIX effectWorld = scaleMatrix * rotationMatrix * translationMatrix * normalizedSocket;
+
+                        DirectX::XMFLOAT4X4 worldMatrix;
+                        DirectX::XMStoreFloat4x4(&worldMatrix, effectWorld);
+                        EffectService::Instance().SetWorldMatrix(key.activeHandle, worldMatrix);
                     }
                 }
                 else
                 {
-                    if (instance)
+                    if (hasActiveHandle)
                     {
-                        targetComponent->Stop(key.activeInstance);
-                        key.activeInstance.reset();
+                        EffectService::Instance().Stop(key.activeHandle, true);
+                        key.activeHandle.Reset();
                     }
                 }
             }

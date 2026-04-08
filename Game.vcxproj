@@ -202,13 +202,8 @@
     <ClInclude Include="Source\DebugRender\DebugRenderSystem.h" />
     <ClInclude Include="Source\Duplicate\DuplicateSystem.h" />
     <ClInclude Include="Source\easing.h" />
-    <ClInclude Include="Source\Effect\EffectComponent.h" />
-    <ClInclude Include="Source\Effect\EffectLoader.h" />
-    <ClInclude Include="Source\Effect\EffectManager.h" />
     <ClInclude Include="Source\Effect\EffectMaterial.h" />
-    <ClInclude Include="Source\Effect\EffectNode.h" />
     <ClInclude Include="Source\Effect\HologramManager.h" />
-    <ClInclude Include="Source\Effect\MeshEmitter.h" />
     <ClInclude Include="Source\Engine\EditorSelection.h" />
     <ClInclude Include="Source\Engine\EngineMode.h" />
     <ClInclude Include="Source\Engine\EngineKernel.h" />
@@ -302,8 +297,6 @@
     <ClInclude Include="Source\Model\ModelRenderer.h" />
     <ClInclude Include="Source\Model\ModelUpdateSystem.h" />
     <ClInclude Include="Source\Noise\CurlNoiseGenerator.h" />
-    <ClInclude Include="Source\Particle\compute_particle_system.h" />
-    <ClInclude Include="Source\Particle\ParticleEmitter.h" />
     <ClInclude Include="Source\Particle\ParticleSetting.h" />
     <ClInclude Include="Source\Particle\ParticleUtils.h" />
     <ClInclude Include="Source\Physics\PhysicsManager.h" />
@@ -311,6 +304,7 @@
     <ClInclude Include="Source\Physics\PhysicsSystem.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h" />
     <ClInclude Include="Source\EffectRuntime\EffectCompiler.h" />
+    <ClInclude Include="Source\EffectRuntime\EffectService.h" />
     <ClInclude Include="Source\EffectRuntime\EffectGraphAsset.h" />
     <ClInclude Include="Source\EffectRuntime\EffectGraphSerializer.h" />
     <ClInclude Include="Source\EffectRuntime\EffectRuntimeRegistry.h" />
@@ -396,7 +390,6 @@
     <ClInclude Include="Source\RHI\ITexture.h" />
     <ClInclude Include="Source\RHI\PipelineStateDesc.h" />
     <ClInclude Include="Source\Scene\SceneDataUploadSystem.h" />
-    <ClInclude Include="Source\ShaderClass\EffectVariantShader.h" />
     <ClInclude Include="Source\ShaderClass\GBufferPBRShader.h" />
     <ClInclude Include="Source\ShaderClass\HologramShader.h" />
     <ClInclude Include="Source\ShaderClass\PBRShader.h" />
@@ -502,12 +495,8 @@
     <ClCompile Include="Source\Console\Profiler.cpp" />
     <ClCompile Include="Source\DebugRender\DebugRenderSystem.cpp" />
     <ClCompile Include="Source\Duplicate\DuplicateSystem.cpp" />
-    <ClCompile Include="Source\Effect\EffectComponent.cpp" />
-    <ClCompile Include="Source\Effect\EffectLoader.cpp" />
-    <ClCompile Include="Source\Effect\EffectManager.cpp" />
     <ClCompile Include="Source\Effect\EffectMaterial.cpp" />
     <ClCompile Include="Source\Effect\HologramManager.cpp" />
-    <ClCompile Include="Source\Effect\MeshEmitter.cpp" />
     <ClCompile Include="Source\Engine\EngineKernel.cpp" />
     <ClCompile Include="Source\Entity\EntityManager.cpp" />
     <ClCompile Include="Source\Environment\EnvironmentExtractSystem.cpp" />
@@ -567,14 +556,13 @@
     <ClCompile Include="Source\Model\ModelRenderer.cpp" />
     <ClCompile Include="Source\Model\ModelUpdateSystem.cpp" />
     <ClCompile Include="Source\Noise\CurlNoiseGenerator.cpp" />
-    <ClCompile Include="Source\Particle\compute_particle_system.cpp" />
-    <ClCompile Include="Source\Particle\ParticleEmitter.cpp" />
     <ClCompile Include="Source\Particle\ParticleUtils.cpp" />
     <ClCompile Include="Source\Physics\PhysicsManager.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSyncSystem.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSystem.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectCompiler.cpp" />
+    <ClCompile Include="Source\EffectRuntime\EffectService.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectGraphSerializer.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectRuntimeRegistry.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectSystems.cpp" />
@@ -636,7 +624,6 @@
     <ClCompile Include="Source\RHI\DX11\DX11Shader.cpp" />
     <ClCompile Include="Source\RHI\DX11\DX11Texture.cpp" />
     <ClCompile Include="Source\Scene\SceneDataUploadSystem.cpp" />
-    <ClCompile Include="Source\ShaderClass\EffectVariantShader.cpp" />
     <ClCompile Include="Source\ShaderClass\GBufferPBRShader.cpp" />
     <ClCompile Include="Source\ShaderClass\HologramShader.cpp" />
     <ClCompile Include="Source\ShaderClass\PBRShader.cpp" />
@@ -677,7 +664,6 @@
     <None Include="Shader\Font.hlsli" />
     <None Include="Shader\FullScreenQuad.hlsli" />
     <None Include="Shader\Gizmos.hlsli" />
-    <None Include="Shader\ParticleMesh.hlsli" />
     <None Include="Shader\PBR.hlsli" />
     <None Include="Shader\Phong.hlsli" />
     <None Include="Shader\PostEffect.hlsli" />
@@ -696,23 +682,7 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
-    <FxCompile Include="Shader\EffectParticleBuild_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CSMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CSMain</EntryPointName>
-    </FxCompile>
     <FxCompile Include="Shader\EffectParticleBuildDrawArgs_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CSMain</EntryPointName>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CSMain</EntryPointName>
-    </FxCompile>
-    <FxCompile Include="Shader\EffectParticleCompact_cs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CSMain</EntryPointName>
@@ -826,12 +796,6 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CSMain</EntryPointName>
     </FxCompile>
-    <FxCompile Include="Shader\compute_particle_begin_frame_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
     <FxCompile Include="Shader\compute_particle_bitonic_sort_b2_cs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
@@ -842,36 +806,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_emit_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_end_frame_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_init_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_render_gs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Geometry</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Geometry</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_render_ps.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\EffectParticleBillboardPS.hlsl">
@@ -896,18 +830,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_sort_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_update_cs.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\DeferredLightingPS.hlsl">
@@ -1021,12 +943,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
-    <FxCompile Include="Shader\ParticleMeshVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
     <FxCompile Include="Shader\PBRPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
@@ -1097,21 +1013,6 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <None Include="Shader\Effect.hlsl">
-      <FileType>Document</FileType>
-    </None>
-    <FxCompile Include="Shader\EffectPS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="Shader\EffectVS.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\Sprite3D_PS.hlsl">

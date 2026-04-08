@@ -331,7 +331,8 @@ struct ComponentMeta<EffectSpawnRequestComponent> {
     static constexpr auto Fields = std::make_tuple(
         MakeField("pending", &EffectSpawnRequestComponent::pending),
         MakeField("restartIfActive", &EffectSpawnRequestComponent::restartIfActive),
-        MakeField("requestGeneration", &EffectSpawnRequestComponent::requestGeneration)
+        MakeField("requestGeneration", &EffectSpawnRequestComponent::requestGeneration),
+        MakeField("startTime", &EffectSpawnRequestComponent::startTime)
     );
 };
 

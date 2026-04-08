@@ -1,5 +1,6 @@
 #include "MeshExtractSystem.h"
 #include "Model/Model.h"
+#include "Model/ModelResource.h"
 #include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "System/TaskSystem.h"

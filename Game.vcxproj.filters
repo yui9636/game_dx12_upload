@@ -297,9 +297,6 @@
     <ClInclude Include="External\imgui-docking\timer.h">
       <Filter>External\imgui-docking</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Particle\compute_particle_system.h">
-      <Filter>Source\Particle</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Particle\ParticleSetting.h">
       <Filter>Source\Particle</Filter>
     </ClInclude>
@@ -348,12 +345,6 @@
     <ClInclude Include="Source\Storage\GEStorageCompilerComponent.h">
       <Filter>Source\Storage</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Effect\EffectManager.h">
-      <Filter>Source\Effect</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\ShaderClass\EffectVariantShader.h">
-      <Filter>Source\ShaderClass</Filter>
-    </ClInclude>
     <ClInclude Include="Source\ShaderClass\HologramShader.h">
       <Filter>Source\ShaderClass</Filter>
     </ClInclude>
@@ -375,16 +366,7 @@
     <ClInclude Include="Source\Effect\EffectMaterial.h">
       <Filter>Source\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Effect\EffectNode.h">
-      <Filter>Source\Effect</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Effect\HologramManager.h">
-      <Filter>Source\Effect</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Effect\MeshEmitter.h">
-      <Filter>Source\Effect</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Effect\EffectLoader.h">
       <Filter>Source\Effect</Filter>
     </ClInclude>
     <ClInclude Include="Source\UI\DamageTextManager.h">
@@ -432,9 +414,6 @@
     <ClInclude Include="Source\Message\Messenger.h">
       <Filter>Source\Message</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Particle\ParticleEmitter.h">
-      <Filter>Source\Particle</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Particle\ParticleUtils.h">
       <Filter>Source\Particle</Filter>
     </ClInclude>
@@ -476,9 +455,6 @@
     </ClInclude>
     <ClInclude Include="Source\Animator\IAnimationDriver.h">
       <Filter>Source\Animator</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Effect\EffectComponent.h">
-      <Filter>Source\Effect</Filter>
     </ClInclude>
     <ClInclude Include="Source\System\PathResolver.h">
       <Filter>Source\System</Filter>
@@ -925,6 +901,9 @@
     <ClInclude Include="Source\EffectRuntime\EffectCompiler.h">
       <Filter>Source\EffectRuntime</Filter>
     </ClInclude>
+    <ClInclude Include="Source\EffectRuntime\EffectService.h">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClInclude>
     <ClInclude Include="Source\EffectRuntime\EffectGraphAsset.h">
       <Filter>Source\EffectRuntime</Filter>
     </ClInclude>
@@ -1035,9 +1014,6 @@
     <ClCompile Include="External\imgui-docking\timer.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Particle\compute_particle_system.cpp">
-      <Filter>Source\Particle</Filter>
-    </ClCompile>
     <ClCompile Include="External\ImGuizmo\ImCurveEdit.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
@@ -1080,12 +1056,6 @@
     <ClCompile Include="Source\Storage\GEStorageCompilerComponent.cpp">
       <Filter>Source\Storage</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Effect\EffectManager.cpp">
-      <Filter>Source\Effect</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\ShaderClass\EffectVariantShader.cpp">
-      <Filter>Source\ShaderClass</Filter>
-    </ClCompile>
     <ClCompile Include="Source\ShaderClass\HologramShader.cpp">
       <Filter>Source\ShaderClass</Filter>
     </ClCompile>
@@ -1105,12 +1075,6 @@
       <Filter>Source\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Source\Effect\HologramManager.cpp">
-      <Filter>Source\Effect</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Effect\MeshEmitter.cpp">
-      <Filter>Source\Effect</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Effect\EffectLoader.cpp">
       <Filter>Source\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Source\UI\DamageTextManager.cpp">
@@ -1191,9 +1155,6 @@
     <ClCompile Include="External\imgui_gradient-main\src\imgg_imgui_draw.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Particle\ParticleEmitter.cpp">
-      <Filter>Source\Particle</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Particle\ParticleUtils.cpp">
       <Filter>Source\Particle</Filter>
     </ClCompile>
@@ -1214,9 +1175,6 @@
     </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorComponent.cpp">
       <Filter>Source\Animator</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Effect\EffectComponent.cpp">
-      <Filter>Source\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Source\System\PathResolver.cpp">
       <Filter>Source\System</Filter>
@@ -1533,6 +1491,9 @@
     <ClCompile Include="Source\EffectRuntime\EffectCompiler.cpp">
       <Filter>Source\EffectRuntime</Filter>
     </ClCompile>
+    <ClCompile Include="Source\EffectRuntime\EffectService.cpp">
+      <Filter>Source\EffectRuntime</Filter>
+    </ClCompile>
     <ClCompile Include="Source\EffectRuntime\EffectGraphSerializer.cpp">
       <Filter>Source\EffectRuntime</Filter>
     </ClCompile>
@@ -1667,13 +1628,7 @@
     <FxCompile Include="Shader\BloomPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
-    <FxCompile Include="Shader\EffectParticleBuild_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
     <FxCompile Include="Shader\EffectParticleBuildDrawArgs_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\EffectParticleCompact_cs.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\EffectParticleEmit_cs.hlsl">
@@ -1721,24 +1676,6 @@
     <FxCompile Include="Shader\SwordTrailVS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
-    <FxCompile Include="Shader\EffectVS.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\EffectPS.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_emit_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_init_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_render_gs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_render_ps.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
     <FxCompile Include="Shader\EffectParticleBillboardPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
@@ -1749,18 +1686,6 @@
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\compute_particle_render_vs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_update_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_begin_frame_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_end_frame_cs.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\compute_particle_sort_cs.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\compute_particle_bitonic_sort_b2_cs.hlsl">
@@ -1782,9 +1707,6 @@
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\HologramVS.hlsl">
-      <Filter>Shader</Filter>
-    </FxCompile>
-    <FxCompile Include="Shader\ParticleMeshVS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\DepthOfFieldPS.hlsl">
