@@ -277,6 +277,7 @@ void EditorLayer::SyncPlayerEditorPanelState()
 {
     if (!m_gameLayer) {
         m_playerEditorPanel.SetModel(nullptr);
+        m_playerEditorPanel.SetPreviewEntity(Entity::NULL_ID);
         return;
     }
 
@@ -291,6 +292,7 @@ void EditorLayer::SyncPlayerEditorPanelState()
     }
 
     m_playerEditorPanel.SetModel(selectedModel);
+    m_playerEditorPanel.SetPreviewEntity(selectedEntity);
 }
 
 void EditorLayer::SyncEffectEditorPanelState()

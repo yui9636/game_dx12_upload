@@ -11,6 +11,8 @@
 #include "StateMachineAssetSerializer.h"
 #include "ImGuiRenderer.h"
 #include "Model/Model.h"
+#include "Animator/AnimatorService.h"
+#include "Registry/Registry.h"
 
 // ============================================================================
 // Constants
@@ -1469,6 +1471,7 @@ void PlayerEditorPanel::DrawAnimatorPanel()
     if (!ImGui::Begin(kPEAnimatorTitle)) { ImGui::End(); return; }
 
     bool previewing = m_previewState.IsActive();
+    const bool hasPreviewTarget = m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity);
 
     if (previewing) {
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), ICON_FA_CIRCLE " Preview Active");
@@ -1492,9 +1495,20 @@ void PlayerEditorPanel::DrawAnimatorPanel()
         }
     } else {
         ImGui::TextDisabled("Select an entity with AnimatorComponent");
-        ImGui::TextDisabled("and enter preview mode to begin.");
+        ImGui::TextDisabled("and start preview to scrub animation.");
         ImGui::Separator();
         ImGui::DragInt("Animation Index", &m_selectedAnimIndex, 1, -1, 200);
+        if (hasPreviewTarget) {
+            if (ImGui::Button(ICON_FA_PLAY " Start Preview")) {
+                AnimatorService::Instance().EnsureAnimator(m_previewEntity);
+                m_previewState.EnterPreview(m_previewEntity);
+                m_previewState.SetAnimationIndex(m_selectedAnimIndex);
+            }
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::Button(ICON_FA_PLAY " Start Preview");
+            ImGui::EndDisabled();
+        }
     }
 
     ImGui::End();

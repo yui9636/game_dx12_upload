@@ -5,7 +5,7 @@
 #include "Component/ColliderComponent.h"
 #include "Component/LightComponent.h"
 #include "Component/MeshComponent.h"
-#include "Component/NodeAttachComponent.h"
+#include "Transform/NodeAttachmentUtils.h"
 #include <System\Query.h>
 
 using namespace DirectX;
@@ -29,7 +29,7 @@ void DebugRenderSystem::Render(Registry& registry)
                 MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
                 if (mesh && mesh->model) {
                     XMFLOAT3 offset = { (float)e.offsetLocal.x, (float)e.offsetLocal.y, (float)e.offsetLocal.z };
-                    XMFLOAT3 posModelSpace = NodeAttachComponent::GetWorldPosition_NodeLocal(
+                    XMFLOAT3 posModelSpace = NodeAttachmentUtils::GetWorldPositionNodeLocal(
                         mesh->model.get(), e.nodeIndex, offset);
                     vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&posModelSpace), matWorld);
                 }

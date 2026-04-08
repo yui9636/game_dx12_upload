@@ -6,7 +6,8 @@
 #include "StateMachineAsset.h"
 #include "PreviewState.h"
 #include "InputMappingTab.h"
-#include "Component/NodeAttachComponent.h"
+#include "Component/NodeSocket.h"
+#include "Entity/Entity.h"
 
 struct ImVec2;
 class Registry;
@@ -14,7 +15,7 @@ class ITexture;
 class Model;
 
 // ============================================================================
-// Player Editor — UE-style multi-panel DockSpace editor
+// Player Editor 窶・UE-style multi-panel DockSpace editor
 // 7 docked sub-windows:
 //   Left:   Skeleton Tree / StateMachine (tabbed)
 //   Center: 3D Viewport (large)
@@ -34,6 +35,7 @@ public:
 
     // Model for bone tree (set externally from selected entity)
     void SetModel(const Model* model);
+    void SetPreviewEntity(EntityID entity) { m_previewEntity = entity; }
 
     // Asset access
     TimelineAsset&       GetTimelineAsset()       { return m_timelineAsset; }
@@ -53,12 +55,12 @@ private:
 
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
 
-    // ── DockSpace Layout ──
+    // 笏笏 DockSpace Layout 笏笏
     void BuildDockLayout(unsigned int dockspaceId);
     bool m_needsLayoutRebuild = true;
     HostMode m_lastHostMode = HostMode::Window;
 
-    // ── Sub-windows ──
+    // 笏笏 Sub-windows 笏笏
     void DrawViewportPanel();
     void DrawSkeletonPanel();       // Bone tree + Sockets
     void DrawStateMachinePanel();
@@ -67,40 +69,40 @@ private:
     void DrawAnimatorPanel();
     void DrawInputPanel();
 
-    // ── Skeleton internals ──
+    // 笏笏 Skeleton internals 笏笏
     void DrawBoneTreeNode(int nodeIndex);
     void DrawSocketList();
 
-    // ── Timeline internals ──
+    // 笏笏 Timeline internals 笏笏
     void DrawTimelineTrackHeaders(float height);
     void DrawTimelineGrid(float height);
     void DrawTimelinePlaybackToolbar();
     void DrawTimelineItemInspector();
 
-    // ── StateMachine internals ──
+    // 笏笏 StateMachine internals 笏笏
     void DrawNodeGraph(ImVec2 canvasSize);
     void DrawStateNodeInspector();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
 
-    // ── Connection mode (drag-wire) ──
+    // 笏笏 Connection mode (drag-wire) 笏笏
     bool     m_isConnecting      = false;
     uint32_t m_connectFromNodeId = 0;
 
-    // ── Selection context for Properties panel ──
+    // 笏笏 Selection context for Properties panel 笏笏
     enum class SelectionContext { None, StateNode, Transition, TimelineTrack, TimelineItem, Bone, Socket };
     SelectionContext m_selectionCtx = SelectionContext::None;
 
-    // ── Assets ──
+    // 笏笏 Assets 笏笏
     TimelineAsset       m_timelineAsset;
     StateMachineAsset   m_stateMachineAsset;
 
-    // ── Preview ──
+    // 笏笏 Preview 笏笏
     PreviewState m_previewState;
 
-    // ── Input mapping ──
+    // 笏笏 Input mapping 笏笏
     InputMappingTab m_inputMappingTab;
 
-    // ── Timeline state ──
+    // 笏笏 Timeline state 笏笏
     int   m_playheadFrame    = 0;
     bool  m_isPlaying        = false;
     float m_timelineZoom     = 1.0f;
@@ -108,13 +110,13 @@ private:
     int   m_selectedTrackId  = -1;
     int   m_selectedItemIdx  = -1;
 
-    // ── StateMachine state ──
+    // 笏笏 StateMachine state 笏笏
     uint32_t m_selectedNodeId       = 0;
     uint32_t m_selectedTransitionId = 0;
     DirectX::XMFLOAT2 m_graphOffset = { 200, 150 };
     float    m_graphZoom            = 1.0f;
 
-    // ── Skeleton state ──
+    // 笏笏 Skeleton state 笏笏
     const Model* m_model             = nullptr;
     int          m_selectedBoneIndex  = -1;
     std::string  m_selectedBoneName;
@@ -122,16 +124,17 @@ private:
     std::vector<NodeSocket> m_sockets;         // Editable socket list
     int          m_selectedSocketIdx  = -1;
 
-    // ── Animator state ──
+    // 笏笏 Animator state 笏笏
     int m_selectedAnimIndex = -1;
     std::string m_currentModelPath;
+    EntityID m_previewEntity = Entity::NULL_ID;
 
-    // ── Viewport ──
+    // 笏笏 Viewport 笏笏
     ITexture* m_viewportTexture = nullptr;
     float m_vpCameraYaw   = 0.0f;
     float m_vpCameraPitch = 0.2f;
     float m_vpCameraDist  = 5.0f;
 
-    // ── Per-frame ──
+    // 笏笏 Per-frame 笏笏
     Registry* m_registry = nullptr;
 };

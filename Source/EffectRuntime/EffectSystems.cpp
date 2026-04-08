@@ -11,8 +11,10 @@
 #include "Component/EffectPlaybackComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
 #include "Component/EffectSpawnRequestComponent.h"
+#include "Component/HierarchyComponent.h"
 #include "Component/MaterialComponent.h"
 #include "Component/MeshComponent.h"
+#include "Component/NodeSocketComponent.h"
 #include "Component/TransformComponent.h"
 #include "EffectParameterBindings.h"
 #include "EffectRuntimeRegistry.h"
@@ -22,6 +24,7 @@
 #include "Model/Model.h"
 #include "Model/ModelResource.h"
 #include "System/ResourceManager.h"
+#include "Transform/NodeAttachmentUtils.h"
 #include "Type/TypeInfo.h"
 
 namespace
@@ -88,6 +91,55 @@ namespace
         playback.currentTime = playback.duration;
         playback.lifetimeFade = 0.0f;
         SyncRuntimeTime(playback);
+    }
+
+    void ApplyAttachedWorldToTransform(
+        Registry& registry,
+        EntityID entity,
+        const DirectX::XMFLOAT4X4& desiredWorld)
+    {
+        using namespace DirectX;
+
+        auto* transform = registry.GetComponent<TransformComponent>(entity);
+        if (!transform) {
+            return;
+        }
+
+        transform->prevWorldMatrix = transform->worldMatrix;
+        transform->worldMatrix = desiredWorld;
+
+        XMMATRIX parentWorld = XMMatrixIdentity();
+        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
+            if (!Entity::IsNull(hierarchy->parent)) {
+                if (auto* parentTransform = registry.GetComponent<TransformComponent>(hierarchy->parent)) {
+                    parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
+                }
+            }
+        }
+
+        XMFLOAT4X4 localMatrix;
+        XMStoreFloat4x4(&localMatrix, XMLoadFloat4x4(&desiredWorld) * XMMatrixInverse(nullptr, parentWorld));
+        transform->localMatrix = localMatrix;
+
+        XMVECTOR localScale;
+        XMVECTOR localRot;
+        XMVECTOR localPos;
+        if (XMMatrixDecompose(&localScale, &localRot, &localPos, XMLoadFloat4x4(&localMatrix))) {
+            XMStoreFloat3(&transform->localScale, localScale);
+            XMStoreFloat4(&transform->localRotation, localRot);
+            XMStoreFloat3(&transform->localPosition, localPos);
+        }
+
+        XMVECTOR worldScale;
+        XMVECTOR worldRot;
+        XMVECTOR worldPos;
+        if (XMMatrixDecompose(&worldScale, &worldRot, &worldPos, XMLoadFloat4x4(&desiredWorld))) {
+            XMStoreFloat3(&transform->worldScale, worldScale);
+            XMStoreFloat4(&transform->worldRotation, worldRot);
+            XMStoreFloat3(&transform->worldPosition, worldPos);
+        }
+
+        transform->isDirty = false;
     }
 }
 
@@ -198,11 +250,9 @@ void EffectAttachmentSystem::Update(Registry& registry)
         }
 
         auto* attachments = static_cast<EffectAttachmentComponent*>(attachmentColumn->Get(0));
-        auto* transforms = static_cast<TransformComponent*>(transformColumn->Get(0));
-
         for (size_t row = 0; row < archetype->GetEntityCount(); ++row) {
+            const EntityID entity = archetype->GetEntities()[row];
             auto& attachment = attachments[row];
-            auto& transform = transforms[row];
             if (Entity::IsNull(attachment.parentEntity) || !registry.IsAlive(attachment.parentEntity)) {
                 continue;
             }
@@ -212,13 +262,39 @@ void EffectAttachmentSystem::Update(Registry& registry)
                 continue;
             }
 
-            transform.localPosition = {
-                parentTransform->worldPosition.x + attachment.offsetLocal.x,
-                parentTransform->worldPosition.y + attachment.offsetLocal.y,
-                parentTransform->worldPosition.z + attachment.offsetLocal.z
-            };
-            transform.localScale = attachment.offsetScale;
-            transform.isDirty = true;
+            DirectX::XMFLOAT4X4 desiredWorld{};
+            bool resolved = false;
+
+            if (!attachment.socketName.empty()) {
+                auto* parentMesh = registry.GetComponent<MeshComponent>(attachment.parentEntity);
+                if (parentMesh && parentMesh->model) {
+                    auto* sockets = registry.GetComponent<NodeSocketComponent>(attachment.parentEntity);
+                    int cachedBoneIndex = -1;
+                    resolved = NodeAttachmentUtils::TryResolveNamedAttachmentWorldMatrix(
+                        parentMesh->model.get(),
+                        parentTransform->worldMatrix,
+                        sockets,
+                        attachment.socketName,
+                        true,
+                        cachedBoneIndex,
+                        attachment.offsetLocal,
+                        attachment.offsetRotDeg,
+                        attachment.offsetScale,
+                        NodeAttachmentSpace::NodeLocal,
+                        desiredWorld);
+                }
+            }
+
+            if (!resolved) {
+                desiredWorld = NodeAttachmentUtils::ComposeAttachmentWorldMatrix(
+                    parentTransform->worldMatrix,
+                    attachment.offsetLocal,
+                    attachment.offsetRotDeg,
+                    attachment.offsetScale,
+                    NodeAttachmentSpace::NodeLocal);
+            }
+
+            ApplyAttachedWorldToTransform(registry, entity, desiredWorld);
         }
     }
 }

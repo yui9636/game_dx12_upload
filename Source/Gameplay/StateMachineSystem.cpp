@@ -6,6 +6,8 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/StaminaComponent.h"
 #include "Gameplay/PlaybackComponent.h"
+#include "Animator/AnimatorService.h"
+#include "Animator/AnimatorComponent.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "System/Query.h"
@@ -109,6 +111,7 @@ void StateMachineSystem::Update(Registry& registry, float dt)
         auto* staminaCol = arch->GetSignature().test(staminaId) ? arch->GetColumn(staminaId) : nullptr;
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+            const EntityID entity = arch->GetEntities()[i];
             auto& smp = *static_cast<StateMachineParamsComponent*>(smpCol->Get(i));
             auto& pb  = *static_cast<PlaybackComponent*>(pbCol->Get(i));
 
@@ -123,6 +126,16 @@ void StateMachineSystem::Update(Registry& registry, float dt)
             if (smp.currentStateId == 0) {
                 smp.currentStateId = asset->defaultStateId;
                 smp.stateTimer = 0.0f;
+                if (const StateNode* initialState = asset->FindState(smp.currentStateId)) {
+                    if (registry.GetComponent<AnimatorComponent>(entity)) {
+                        AnimatorService::Instance().PlayBase(entity, initialState->animationIndex, initialState->loopAnimation, 0.0f, initialState->animSpeed);
+                    }
+                    pb.currentSeconds = 0.0f;
+                    pb.playing = true;
+                    pb.looping = initialState->loopAnimation;
+                    pb.playSpeed = initialState->animSpeed;
+                    pb.finished = false;
+                }
             }
 
             smp.stateTimer += dt;
@@ -165,6 +178,9 @@ void StateMachineSystem::Update(Registry& registry, float dt)
                     pb.looping = newState->loopAnimation;
                     pb.playSpeed = newState->animSpeed;
                     pb.finished = false;
+                    if (registry.GetComponent<AnimatorComponent>(entity)) {
+                        AnimatorService::Instance().PlayBase(entity, newState->animationIndex, newState->loopAnimation, best->blendDuration, newState->animSpeed);
+                    }
                 }
             }
         }

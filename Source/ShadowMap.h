@@ -15,8 +15,6 @@ class IInputLayout;
 class IResourceFactory;
 class IPipelineState;
 struct RenderContext;
-class Actor;
-
 class ShadowMap
 {
 public:
@@ -29,7 +27,6 @@ public:
     void BeginCascade(const RenderContext& rc, int cascadeIndex);
     void End(const RenderContext& rc);
 
-    void DrawSceneImmediate(const RenderContext& rc, const std::vector<std::shared_ptr<Actor>>& actors);
     void Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix);
     void DrawInstanced(const RenderContext& rc, const ModelResource* modelResource,
         int meshIndex,

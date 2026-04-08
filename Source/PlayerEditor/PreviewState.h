@@ -2,13 +2,11 @@
 #include "TimelineDriver.h"
 #include "TimelineAsset.h"
 #include <memory>
-
-class AnimatorComponent;
-class Actor;
+#include "Entity/Entity.h"
 
 // ============================================================================
 // Manages enter/exit preview mode for timeline scrubbing
-// Saves and restores AnimatorComponent state
+// Saves and restores timeline preview state for ECS animator playback.
 // ============================================================================
 
 class PreviewState
@@ -16,7 +14,7 @@ class PreviewState
 public:
     bool IsActive() const { return m_active; }
 
-    void EnterPreview(AnimatorComponent* animator);
+    void EnterPreview(EntityID entity);
     void ExitPreview();
 
     // Drive animation from timeline
@@ -35,7 +33,7 @@ public:
 private:
     bool m_active = false;
     TimelineDriver m_driver;
-    AnimatorComponent* m_animator = nullptr;
+    EntityID m_entity = Entity::NULL_ID;
 
     // Saved state for restore
     struct SavedState

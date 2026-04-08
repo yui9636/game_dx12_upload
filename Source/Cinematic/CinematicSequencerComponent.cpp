@@ -217,10 +217,9 @@ void CinematicSequencerComponent::SetTargetActor(std::shared_ptr<Actor> actor)
     targetActor = actor;
     if (auto act = targetActor.lock())
     {
-        if (auto animator = act->GetComponent<AnimatorComponent>())
-        {
-            driver.Connect(animator.get());
-        }
+        // Legacy AnimatorComponent support has been removed.
+        // Cinematic animation track playback will be reintroduced after the sequencer rewrite.
+        driver.Disconnect();
 
         if (sequence)
         {
@@ -312,38 +311,10 @@ void CinematicSequencerComponent::OnGUI()
                 }
             }
             else if (track->GetType() == TrackType::Animation) {
-                if (ImGui::Button("Add Animation Key")) ImGui::OpenPopup("SelectAnimPopup");
-                if (ImGui::BeginPopup("SelectAnimPopup")) {
-                    std::vector<std::string> animNames;
-                    if (auto actor = targetActor.lock()) {
-                        if (auto animator = actor->GetComponent<AnimatorComponent>()) animNames = animator->GetAnimationNameList();
-                    }
-                    if (animNames.empty()) { ImGui::TextDisabled("No Animator found"); }
-                    else {
-                        if (ImGui::Selectable("Stop / None")) {
-                            AnimationTrack* animTrack = static_cast<AnimationTrack*>(track.get());
-                            animTrack->AddKey(currentTime, -1, "None", 1.0f);
-                            driver.SetOverrideAnimation(-1);
-                        }
-                        for (const auto& name : animNames) {
-                            if (ImGui::Selectable(name.c_str())) {
-                                if (auto actor = targetActor.lock()) {
-                                    float duration = 2.0f;
-                                    if (auto model = actor->GetModelRaw()) {
-                                        int animModelIdx = model->GetAnimationIndex(name.c_str());
-                                        if (animModelIdx >= 0) duration = model->GetAnimations()[animModelIdx].secondsLength;
-                                    }
-                                    auto animator = actor->GetComponent<AnimatorComponent>();
-                                    int idx = animator->GetAnimationIndexByName(name);
-                                    AnimationTrack* animTrack = static_cast<AnimationTrack*>(track.get());
-                                    animTrack->AddKey(currentTime, idx, name, duration);
-                                    driver.SetOverrideAnimation(idx);
-                                }
-                            }
-                        }
-                    }
-                    ImGui::EndPopup();
-                }
+                ImGui::BeginDisabled();
+                ImGui::Button("Add Animation Key");
+                ImGui::EndDisabled();
+                ImGui::TextDisabled("Animation track editing is temporarily disabled.");
             }
             else if (track->GetType() == TrackType::Effect)
             {

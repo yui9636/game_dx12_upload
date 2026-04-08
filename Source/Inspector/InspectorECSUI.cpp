@@ -1,4 +1,4 @@
-﻿#include "InspectorECSUI.h"
+#include "InspectorECSUI.h"
 
 #include "Engine/EditorSelection.h"
 
@@ -68,6 +68,8 @@
 #include "Component/MaterialComponent.h"
 
 #include "Component/PrefabInstanceComponent.h"
+#include "Component/NodeAttachmentComponent.h"
+#include "Component/NodeSocketComponent.h"
 
 #include "Component/CameraComponent.h"
 
@@ -1471,6 +1473,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentRemovable<EffectAttachmentComponent>(registry, entity);
             DrawComponentRemovable<EffectParameterOverrideComponent>(registry, entity);
             DrawComponentRemovable<EffectPreviewTagComponent>(registry, entity);
+            DrawComponentRemovable<NodeAttachmentComponent>(registry, entity);
+            DrawComponentRemovable<NodeSocketComponent>(registry, entity);
 
             // --- Input Components (removable) ---
             DrawComponentRemovable<InputUserComponent>(registry, entity);
@@ -1510,6 +1514,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 TryAddComponent<EffectAttachmentComponent>(registry, entity, "EffectAttachment");
                 TryAddComponent<EffectParameterOverrideComponent>(registry, entity, "EffectParameterOverride");
                 TryAddComponent<EffectPreviewTagComponent>(registry, entity, "EffectPreviewTag");
+                TryAddComponent<NodeAttachmentComponent>(registry, entity, "NodeAttachment");
+                TryAddComponent<NodeSocketComponent>(registry, entity, "NodeSocket");
                 ImGui::Separator();
                 ImGui::TextDisabled("-- Input --");
                 TryAddComponent<InputUserComponent>(registry, entity, "InputUser");

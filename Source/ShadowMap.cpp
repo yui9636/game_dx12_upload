@@ -1031,16 +1031,6 @@ void ShadowMap::DrawInstancedMulti(const RenderContext& rc, const ModelResource*
     rc.commandList->ExecuteIndexedIndirectMulti(argumentBuffer, argumentOffsetBytes, commandCount, commandStride);
 }
 
-void ShadowMap::DrawSceneImmediate(const RenderContext& rc, const std::vector<std::shared_ptr<Actor>>& actors)
-{
-    for (auto& actor : actors)
-    {
-        ::Model* model = actor->GetModelRaw();
-        if (!model) continue;
-        this->Draw(rc, model->GetModelResource().get(), actor->GetTransform());
-    }
-}
-
 // ───── 数学ヘルパー ─────────────────────────────────────────────
 
 std::array<XMVECTOR, 8> ShadowMap::GetFrustumCorners(float fov, float aspect, float nearZ, float farZ, const XMFLOAT4X4& viewMat)

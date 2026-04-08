@@ -48,6 +48,8 @@ struct ComponentMeta;
 #include "Component/MaterialComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
+#include "Component/NodeAttachmentComponent.h"
+#include "Component/NodeSocketComponent.h"
 #include "Component/PhysicsComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/PrefabInstanceComponent.h"
@@ -66,6 +68,7 @@ struct ComponentMeta;
 #include "Input/VibrationRequestComponent.h"
 #include "Gameplay/ActionDatabaseComponent.h"
 #include "Gameplay/ActionStateComponent.h"
+#include "Gameplay/AnimatorComponent.h"
 #include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/HealthComponent.h"
@@ -420,6 +423,30 @@ struct ComponentMeta<NameComponent> {
 };
 
 template <>
+struct ComponentMeta<NodeAttachmentComponent> {
+    static constexpr std::string_view Name = "NodeAttachmentComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enabled", &NodeAttachmentComponent::enabled),
+        MakeField("attached", &NodeAttachmentComponent::attached),
+        MakeField("useSocket", &NodeAttachmentComponent::useSocket),
+        MakeField("attachName", &NodeAttachmentComponent::attachName),
+        MakeField("offsetLocal", &NodeAttachmentComponent::offsetLocal),
+        MakeField("offsetRotDeg", &NodeAttachmentComponent::offsetRotDeg),
+        MakeField("offsetScale", &NodeAttachmentComponent::offsetScale),
+        MakeField("offsetSpace", &NodeAttachmentComponent::offsetSpace),
+        MakeField("cachedBoneIndex", &NodeAttachmentComponent::cachedBoneIndex)
+    );
+};
+
+template <>
+struct ComponentMeta<NodeSocketComponent> {
+    static constexpr std::string_view Name = "NodeSocketComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("sockets", &NodeSocketComponent::sockets)
+    );
+};
+
+template <>
 struct ComponentMeta<PhysicsComponent> {
     static constexpr std::string_view Name = "PhysicsComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -638,6 +665,24 @@ struct ComponentMeta<ActionStateComponent> {
 };
 
 template <>
+struct ComponentMeta<AnimatorComponent> {
+    static constexpr std::string_view Name = "AnimatorComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("baseLayer", &AnimatorComponent::baseLayer),
+        MakeField("actionLayer", &AnimatorComponent::actionLayer),
+        MakeField("enableRootMotion", &AnimatorComponent::enableRootMotion),
+        MakeField("bakeRootMotionY", &AnimatorComponent::bakeRootMotionY),
+        MakeField("rootMotionScale", &AnimatorComponent::rootMotionScale),
+        MakeField("rootMotionDelta", &AnimatorComponent::rootMotionDelta),
+        MakeField("driverConnected", &AnimatorComponent::driverConnected),
+        MakeField("driverAllowInternalUpdate", &AnimatorComponent::driverAllowInternalUpdate),
+        MakeField("driverOverrideAnimIndex", &AnimatorComponent::driverOverrideAnimIndex),
+        MakeField("driverTime", &AnimatorComponent::driverTime),
+        MakeField("driverLoop", &AnimatorComponent::driverLoop)
+    );
+};
+
+template <>
 struct ComponentMeta<CharacterPhysicsComponent> {
     static constexpr std::string_view Name = "CharacterPhysicsComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -844,6 +889,8 @@ using AllComponentTypes = std::tuple<
     MaterialComponent,
     MeshComponent,
     NameComponent,
+    NodeAttachmentComponent,
+    NodeSocketComponent,
     PhysicsComponent,
     PostEffectComponent,
     PrefabInstanceComponent,
@@ -862,6 +909,7 @@ using AllComponentTypes = std::tuple<
     VibrationRequestComponent,
     ActionDatabaseComponent,
     ActionStateComponent,
+    AnimatorComponent,
     CharacterPhysicsComponent,
     DodgeStateComponent,
     HealthComponent,

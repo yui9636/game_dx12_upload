@@ -1,6 +1,6 @@
 #include "CollisionSystem.h"
 #include "Collision/CollisionManager.h"
-#include "Component/NodeAttachComponent.h"
+#include "Transform/NodeAttachmentUtils.h"
 #include <System\Query.h>
 
 using namespace DirectX;
@@ -32,7 +32,7 @@ void CollisionSystem::Update(Registry& registry)
                 MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
                 if (mesh && mesh->model) {
                     XMFLOAT3 offset = { (float)e.offsetLocal.x, (float)e.offsetLocal.y, (float)e.offsetLocal.z };
-                    XMFLOAT3 posModelSpace = NodeAttachComponent::GetWorldPosition_NodeLocal(
+                    XMFLOAT3 posModelSpace = NodeAttachmentUtils::GetWorldPositionNodeLocal(
                         mesh->model.get(), e.nodeIndex, offset);
                     vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&posModelSpace), matWorld);
                 }
@@ -44,7 +44,7 @@ void CollisionSystem::Update(Registry& registry)
                 vWorldPos = XMVector3TransformCoord(XMLoadFloat3((XMFLOAT3*)&e.offsetLocal), matWorld);
             }
 
-            /* ... ä˘ë∂èàóù ... */
+            /* ... Êó¢Â≠òÂá¶ÁêÜ ... */
         }
         });
 }

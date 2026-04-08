@@ -1,18 +1,17 @@
 #include "PreviewState.h"
-#include "Animator/AnimatorComponent.h"
+#include "Animator/AnimatorService.h"
+#include <cmath>
 
-void PreviewState::EnterPreview(AnimatorComponent* animator)
+void PreviewState::EnterPreview(EntityID entity)
 {
-    if (m_active || !animator) return;
+    if (m_active || Entity::IsNull(entity)) return;
 
-    m_animator = animator;
+    m_entity = entity;
     m_active = true;
-
-    // Save current state (driver is private; we just track that we entered preview)
     m_saved.hadDriver = false;
 
-    // Connect our driver
-    m_driver.Connect(animator);
+    AnimatorService::Instance().EnsureAnimator(entity);
+    m_driver.Connect(entity);
     m_driver.SetLoop(false);
     m_driver.SetTime(0.0f);
 }
@@ -21,10 +20,8 @@ void PreviewState::ExitPreview()
 {
     if (!m_active) return;
 
-    // Disconnect driver (restores nullptr)
     m_driver.Disconnect();
-
-    m_animator = nullptr;
+    m_entity = Entity::NULL_ID;
     m_active = false;
 }
 
@@ -50,10 +47,11 @@ void PreviewState::AdvanceTime(float dt, const TimelineAsset& asset)
     float t = m_driver.GetTime() + dt;
     if (asset.duration > 0.0f) {
         if (t > asset.duration) {
-            if (m_driver.IsLoop())
-                t = fmodf(t, asset.duration);
-            else
+            if (m_driver.IsLoop()) {
+                t = std::fmod(t, asset.duration);
+            } else {
                 t = asset.duration;
+            }
         }
     }
     m_driver.SetTime(t);

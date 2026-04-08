@@ -147,7 +147,9 @@
     <ClInclude Include="External\meshoptimizer-cpp-master\src\meshoptimizer.h" />
     <ClInclude Include="Source\Actor\Actor.h" />
     <ClInclude Include="Source\Animator\AnimatorComponent.h" />
-    <ClInclude Include="Source\Animator\IAnimationDriver.h" />
+    <ClInclude Include="Source\Animator\AnimatorRuntime.h" />
+    <ClInclude Include="Source\Animator\AnimatorService.h" />
+    <ClInclude Include="Source\Animator\AnimatorSystem.h" />
     <ClInclude Include="Source\Archetype\Archetype.h" />
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
@@ -164,12 +166,10 @@
     <ClInclude Include="Source\Camera\FreeCameraSystem.h" />
     <ClInclude Include="Source\Camera\ThirdPersonCameraSystem.h" />
     <ClInclude Include="Source\Cinematic\CinematicCurve.h" />
-    <ClInclude Include="Source\Cinematic\CinematicPlayComponent.h" />
     <ClInclude Include="Source\Cinematic\CinematicSequence.h" />
     <ClInclude Include="Source\Cinematic\CinematicSequencerComponent.h" />
     <ClInclude Include="Source\Cinematic\CinematicTrack.h" />
     <ClInclude Include="Source\Cinematic\CinematicTypes.h" />
-    <ClInclude Include="Source\Collision\ColliderComponent.h" />
     <ClInclude Include="Source\Collision\Collision.h" />
     <ClInclude Include="Source\Collision\CollisionFunctions.h" />
     <ClInclude Include="Source\Collision\CollisionManager.h" />
@@ -190,7 +190,9 @@
     <ClInclude Include="Source\Component\MaterialComponent.h" />
     <ClInclude Include="Source\Component\MeshComponent.h" />
     <ClInclude Include="Source\Component\NameComponent.h" />
-    <ClInclude Include="Source\Component\NodeAttachComponent.h" />
+    <ClInclude Include="Source\Component\NodeAttachmentComponent.h" />
+    <ClInclude Include="Source\Component\NodeSocket.h" />
+    <ClInclude Include="Source\Component\NodeSocketComponent.h" />
     <ClInclude Include="Source\Component\PhysicsComponent.h" />
     <ClInclude Include="Source\Component\PostEffectComponent.h" />
     <ClInclude Include="Source\Component\ReflectionProbeComponent.h" />
@@ -253,6 +255,7 @@
     <ClInclude Include="Source\Gameplay\LocomotionStateComponent.h" />
     <ClInclude Include="Source\Gameplay\ActionStateComponent.h" />
     <ClInclude Include="Source\Gameplay\ActionDatabaseComponent.h" />
+    <ClInclude Include="Source\Gameplay\AnimatorComponent.h" />
     <ClInclude Include="Source\Gameplay\DodgeStateComponent.h" />
     <ClInclude Include="Source\Gameplay\HitboxTrackingComponent.h" />
     <ClInclude Include="Source\Gameplay\StageBoundsComponent.h" />
@@ -402,9 +405,7 @@
     <ClInclude Include="Source\Sprite\Sprite.h" />
     <ClInclude Include="Source\Sprite\Sprite3D.h" />
     <ClInclude Include="Source\Stage\Stage.h" />
-    <ClInclude Include="Source\Stage\StageInfoComponent.h" />
     <ClInclude Include="Source\Storage\GameplayAsset.h" />
-    <ClInclude Include="Source\Storage\GEStorageCompilerComponent.h" />
     <ClInclude Include="Source\SwordTrail.h" />
     <ClInclude Include="Source\System\Dialog.h" />
     <ClInclude Include="Source\System\Framework.h" />
@@ -414,6 +415,8 @@
     <ClInclude Include="Source\System\PathResolver.h" />
     <ClInclude Include="Source\System\Query.h" />
     <ClInclude Include="Source\System\ResourceManager.h" />
+    <ClInclude Include="Source\Transform\NodeAttachmentSystem.h" />
+    <ClInclude Include="Source\Transform\NodeAttachmentUtils.h" />
     <ClInclude Include="Source\Transform\TransformSystem.h" />
     <ClInclude Include="Source\Type\TypeInfo.h" />
     <ClInclude Include="Source\UI\DamageTextManager.h" />
@@ -466,7 +469,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="Source\Actor\Actor.cpp" />
-    <ClCompile Include="Source\Animator\AnimatorComponent.cpp" />
+    <ClCompile Include="Source\Animator\AnimatorRuntime.cpp" />
+    <ClCompile Include="Source\Animator\AnimatorService.cpp" />
+    <ClCompile Include="Source\Animator\AnimatorSystem.cpp" />
     <ClCompile Include="Source\Archetype\Archetype.cpp" />
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
@@ -482,14 +487,13 @@
     <ClCompile Include="Source\Camera\CameraFinalizeSystem.cpp" />
     <ClCompile Include="Source\Camera\FreeCameraSystem.cpp" />
     <ClCompile Include="Source\Camera\ThirdPersonCameraSystem.cpp" />
-    <ClCompile Include="Source\Cinematic\CinematicPlayComponent.cpp" />
     <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp" />
-    <ClCompile Include="Source\Collision\ColliderComponent.cpp" />
     <ClCompile Include="Source\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Source\Collision\CollisionManager.cpp" />
     <ClCompile Include="Source\Collision\CollisionSystem.cpp" />
     <ClCompile Include="Source\Component\ComponentColumn.cpp" />
-    <ClCompile Include="Source\Component\NodeAttachComponent.cpp" />
+    <ClCompile Include="Source\Transform\NodeAttachmentSystem.cpp" />
+    <ClCompile Include="Source\Transform\NodeAttachmentUtils.cpp" />
     <ClCompile Include="Source\Console\Console.cpp" />
     <ClCompile Include="Source\Console\Logger.cpp" />
     <ClCompile Include="Source\Console\Profiler.cpp" />
@@ -635,8 +639,6 @@
     <ClCompile Include="Source\Sprite\Sprite.cpp" />
     <ClCompile Include="Source\Sprite\Sprite3D.cpp" />
     <ClCompile Include="Source\Stage\Stage.cpp" />
-    <ClCompile Include="Source\Stage\StageInfoComponent.cpp" />
-    <ClCompile Include="Source\Storage\GEStorageCompilerComponent.cpp" />
     <ClCompile Include="Source\SwordTrail.cpp" />
     <ClCompile Include="Source\System\Dialog.cpp" />
     <ClCompile Include="Source\System\Framework.cpp" />

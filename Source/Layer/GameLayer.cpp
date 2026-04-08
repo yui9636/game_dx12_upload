@@ -1,6 +1,7 @@
-﻿#include "GameLayer.h"
+#include "GameLayer.h"
 #include "Graphics.h"
 #include <Transform\TransformSystem.h>
+#include <Transform\NodeAttachmentSystem.h>
 #include <Mesh\MeshExtractSystem.h>
 #include "Component/CameraComponent.h"
 #include "Component/TransformComponent.h"
@@ -25,6 +26,7 @@
 #include "Gameplay/HealthSystem.h"
 #include "Gameplay/CharacterPhysicsSystem.h"
 #include "Gameplay/PlaybackSystem.h"
+#include "Gameplay/StateMachineSystem.h"
 #include "Gameplay/TimelineSystem.h"
 #include "Gameplay/TimelineHitboxSystem.h"
 #include "Gameplay/TimelineVFXSystem.h"
@@ -33,6 +35,8 @@
 #include "Gameplay/HitboxTrackingSystem.h"
 #include "EffectRuntime/EffectService.h"
 #include "EffectRuntime/EffectSystems.h"
+#include "Animator/AnimatorService.h"
+#include "Animator/AnimatorSystem.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -105,6 +109,7 @@ void GameLayer::Finalize()
 void GameLayer::Update(const EngineTime& time)
 {
     EffectService::Instance().SetRegistry(&m_registry);
+    AnimatorService::Instance().SetRegistry(&m_registry);
 
     auto& kernel = EngineKernel::Instance();
     const auto& eventQueue = kernel.GetInputEventQueue();
@@ -123,6 +128,7 @@ void GameLayer::Update(const EngineTime& time)
     HealthSystem::Update(m_registry, time.dt);
     CharacterPhysicsSystem::Update(m_registry, time.dt);
     PlaybackSystem::Update(m_registry, time.dt);
+    StateMachineSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
     TimelineHitboxSystem::Update(m_registry);
     TimelineVFXSystem::Update(m_registry);
@@ -130,7 +136,6 @@ void GameLayer::Update(const EngineTime& time)
     TimelineShakeSystem::Update(m_registry, time.dt);
     EffectSpawnSystem::Update(m_registry, time.dt);
     EffectPlaybackSystem::Update(m_registry, time.dt);
-    EffectAttachmentSystem::Update(m_registry);
     EffectSimulationSystem::Update(m_registry, time.dt);
     EffectLifetimeSystem::Update(m_registry, time.dt);
     const float previewDt = time.dt > 0.0f ? 0.0f : time.unscaledDt;
@@ -141,7 +146,10 @@ void GameLayer::Update(const EngineTime& time)
 
     TransformSystem transformSys;
     transformSys.Update(m_registry);
+    NodeAttachmentSystem::Update(m_registry);
+    EffectAttachmentSystem::Update(m_registry);
 
+    AnimatorSystem::Update(m_registry, time.dt);
     ModelUpdateSystem::Update(m_registry);
 
     CameraFinalizeSystem::Update(m_registry);

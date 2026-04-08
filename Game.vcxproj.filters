@@ -318,13 +318,16 @@
     <ClInclude Include="Source\Input\InputActionComponent.h">
       <Filter>Source\Input</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Collision\ColliderComponent.h">
-      <Filter>Source\Collision</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Component\Component.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Component\NodeAttachComponent.h">
+    <ClInclude Include="Source\Component\NodeAttachmentComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\NodeSocket.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\NodeSocketComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Model\Model.h">
@@ -340,9 +343,6 @@
       <Filter>Source\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Storage\GameplayAsset.h">
-      <Filter>Source\Storage</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Storage\GEStorageCompilerComponent.h">
       <Filter>Source\Storage</Filter>
     </ClInclude>
     <ClInclude Include="Source\ShaderClass\HologramShader.h">
@@ -429,9 +429,6 @@
     <ClInclude Include="Source\ShaderClass\ShaderCompiler.h">
       <Filter>Source\ShaderClass</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Stage\StageInfoComponent.h">
-      <Filter>Source\Stage</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Cinematic\CinematicCurve.h">
       <Filter>Source\Cinematic</Filter>
     </ClInclude>
@@ -447,13 +444,16 @@
     <ClInclude Include="Source\Cinematic\CinematicTypes.h">
       <Filter>Source\Cinematic</Filter>
     </ClInclude>
-        <ClInclude Include="Source\Cinematic\CinematicPlayComponent.h">
-      <Filter>Source\Cinematic</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Animator\AnimatorComponent.h">
       <Filter>Source\Animator</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Animator\IAnimationDriver.h">
+    <ClInclude Include="Source\Animator\AnimatorRuntime.h">
+      <Filter>Source\Animator</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Animator\AnimatorService.h">
+      <Filter>Source\Animator</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Animator\AnimatorSystem.h">
       <Filter>Source\Animator</Filter>
     </ClInclude>
     <ClInclude Include="Source\System\PathResolver.h">
@@ -497,6 +497,12 @@
     </ClInclude>
     <ClInclude Include="Source\Component\NameComponent.h">
       <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Transform\NodeAttachmentSystem.h">
+      <Filter>Source\Transform</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Transform\NodeAttachmentUtils.h">
+      <Filter>Source\Transform</Filter>
     </ClInclude>
     <ClInclude Include="Source\Transform\TransformSystem.h">
       <Filter>Source\Transform</Filter>
@@ -922,6 +928,9 @@
     <ClInclude Include="Source\Gameplay\StateMachineSystem.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Gameplay\AnimatorComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
@@ -1032,14 +1041,14 @@
     <ClCompile Include="Source\Input\InputActionComponent.cpp">
       <Filter>Source\Input</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Collision\ColliderComponent.cpp">
-      <Filter>Source\Collision</Filter>
-    </ClCompile>
     <ClCompile Include="External\imgui-docking\imgui_tables.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Component\NodeAttachComponent.cpp">
-      <Filter>Source\Component</Filter>
+    <ClCompile Include="Source\Transform\NodeAttachmentSystem.cpp">
+      <Filter>Source\Transform</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Transform\NodeAttachmentUtils.cpp">
+      <Filter>Source\Transform</Filter>
     </ClCompile>
     <ClCompile Include="Source\Model\Model.cpp">
       <Filter>Source\Model</Filter>
@@ -1052,9 +1061,6 @@
     </ClCompile>
     <ClCompile Include="Source\Actor\Actor.cpp">
       <Filter>Source\Actor</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Storage\GEStorageCompilerComponent.cpp">
-      <Filter>Source\Storage</Filter>
     </ClCompile>
     <ClCompile Include="Source\ShaderClass\HologramShader.cpp">
       <Filter>Source\ShaderClass</Filter>
@@ -1164,16 +1170,16 @@
     <ClCompile Include="External\meshoptimizer-cpp-master\src\simplifier.cpp">
       <Filter>External\meshoptimizer</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Stage\StageInfoComponent.cpp">
-      <Filter>Source\Stage</Filter>
-    </ClCompile>
     <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp">
       <Filter>Source\Cinematic</Filter>
     </ClCompile>
-        <ClCompile Include="Source\Cinematic\CinematicPlayComponent.cpp">
-      <Filter>Source\Cinematic</Filter>
+    <ClCompile Include="Source\Animator\AnimatorRuntime.cpp">
+      <Filter>Source\Animator</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Animator\AnimatorComponent.cpp">
+    <ClCompile Include="Source\Animator\AnimatorService.cpp">
+      <Filter>Source\Animator</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Animator\AnimatorSystem.cpp">
       <Filter>Source\Animator</Filter>
     </ClCompile>
     <ClCompile Include="Source\System\PathResolver.cpp">

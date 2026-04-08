@@ -1,32 +1,29 @@
 #pragma once
-#include "Animator/IAnimationDriver.h"
 
-class AnimatorComponent;
+#include "Entity/Entity.h"
 
-class TimelineDriver : public IAnimationDriver
+class TimelineDriver
 {
 public:
-    // IAnimationDriver
-    float GetTime() const override { return m_currentTime; }
-    bool  AllowInternalUpdate() const override { return false; }
-    int   GetOverrideAnimationIndex() const override { return m_animIndex; }
-    bool  IsLoop() const override { return m_loop; }
+    float GetTime() const { return m_currentTime; }
+    bool IsLoop() const { return m_loop; }
+    int GetOverrideAnimationIndex() const { return m_animIndex; }
 
-    // Setters
-    void SetTime(float t)              { m_currentTime = t; }
-    void SetOverrideAnimation(int idx) { m_animIndex = idx; }
-    void SetLoop(bool loop)            { m_loop = loop; }
+    void SetTime(float t);
+    void SetOverrideAnimation(int idx);
+    void SetLoop(bool loop);
 
-    // Connect/Disconnect to AnimatorComponent
-    void Connect(AnimatorComponent* target);
+    void Connect(EntityID targetEntity);
     void Disconnect();
 
     ~TimelineDriver() { Disconnect(); }
 
 private:
-    float m_currentTime = 0.0f;
-    int   m_animIndex   = -1;
-    bool  m_loop        = false;
+    void Sync();
 
-    AnimatorComponent* m_target = nullptr;
+private:
+    float m_currentTime = 0.0f;
+    int m_animIndex = -1;
+    bool m_loop = false;
+    EntityID m_targetEntity = Entity::NULL_ID;
 };
