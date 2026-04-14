@@ -313,6 +313,7 @@
     <ClInclude Include="Source\EffectRuntime\EffectGraphSerializer.h" />
     <ClInclude Include="Source\EffectRuntime\EffectRuntimeRegistry.h" />
     <ClInclude Include="Source\EffectRuntime\EffectSystems.h" />
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorSession.h" />
     <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h" />
     <ClInclude Include="Source\PlayerEditor\PlayerModelPreviewStudio.h" />
     <ClInclude Include="Source\PlayerEditor\PlayerEditorWindow.h" />
@@ -594,6 +595,7 @@
     <ClCompile Include="Source\EffectRuntime\EffectGraphSerializer.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectRuntimeRegistry.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectSystems.cpp" />
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorSession.cpp" />
     <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp" />
     <ClCompile Include="Source\PlayerEditor\PlayerModelPreviewStudio.cpp" />
     <ClCompile Include="Source\PlayerEditor\PlayerEditorWindow.cpp" />

@@ -644,6 +644,9 @@
     <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorSession.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
     <ClInclude Include="Source\PlayerEditor\PlayerEditorWindow.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
@@ -1433,6 +1436,9 @@
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
     <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorSession.cpp">
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
     <ClCompile Include="Source\PlayerEditor\PlayerEditorWindow.cpp">

@@ -13,6 +13,7 @@
 #include "Icon/IconsFontAwesome7.h"
 #include "TimelineAssetSerializer.h"
 #include "StateMachineAssetSerializer.h"
+#include "PlayerEditorSession.h"
 #include "ImGuiRenderer.h"
 #include "Model/Model.h"
 #include "Component/MeshComponent.h"
@@ -257,92 +258,27 @@ static bool DrawDetachedTopTabBar(bool* p_open)
 
 void PlayerEditorPanel::Suspend()
 {
-    m_playheadFrame = 0;
-    m_isPlaying = false;
-    SyncPreviewTimelinePlayback();
-    if (m_previewState.IsActive()) {
-        m_previewState.ExitPreview();
-    }
-    DestroyOwnedPreviewEntity();
+    PlayerEditorSession::Suspend(*this);
 }
 
 void PlayerEditorPanel::DestroyOwnedPreviewEntity()
 {
-    if (!m_previewEntityOwned) {
-        return;
-    }
-
-    if (m_previewState.IsActive()) {
-        m_previewState.ExitPreview();
-    }
-
-    if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
-        m_registry->DestroyEntity(m_previewEntity);
-    }
-
-    m_previewEntity = Entity::NULL_ID;
-    m_previewEntityOwned = false;
+    PlayerEditorSession::DestroyOwnedPreviewEntity(*this);
 }
 
 void PlayerEditorPanel::EnsureOwnedPreviewEntity()
 {
-    if (!m_registry || !HasOpenModel()) {
-        return;
-    }
-
-    if (CanUsePreviewEntity()) {
-        return;
-    }
-
-    DestroyOwnedPreviewEntity();
-
-    m_previewEntity = m_registry->CreateEntity();
-    m_previewEntityOwned = true;
-    m_registry->AddComponent(m_previewEntity, NameComponent{ "Player Preview" });
-
-    TransformComponent transform{};
-    transform.localPosition = { 0.0f, 0.0f, 0.0f };
-    transform.localScale = { 1.0f, 1.0f, 1.0f };
-    transform.isDirty = true;
-    m_registry->AddComponent(m_previewEntity, transform);
-
-    MeshComponent mesh{};
-    mesh.modelFilePath = m_currentModelPath;
-    mesh.model = m_ownedModel;
-    mesh.isVisible = true;
-    mesh.castShadow = true;
-    m_registry->AddComponent(m_previewEntity, mesh);
-    m_registry->AddComponent(m_previewEntity, EffectPreviewTagComponent{});
-
-    ApplyEditorBindingsToPreviewEntity();
+    PlayerEditorSession::EnsureOwnedPreviewEntity(*this);
 }
 
 void PlayerEditorPanel::SetPreviewEntity(EntityID entity)
 {
-    if (m_previewEntity == entity && !m_previewEntityOwned) {
-        return;
-    }
-
-    m_isPlaying = false;
-    if (m_previewState.IsActive()) {
-        m_previewState.ExitPreview();
-    }
-
-    DestroyOwnedPreviewEntity();
-    m_previewEntity = entity;
-    m_previewEntityOwned = false;
-    ImportSocketsFromPreviewEntity();
+    PlayerEditorSession::SetPreviewEntity(*this, entity);
 }
 
 void PlayerEditorPanel::SyncExternalSelection(EntityID entity, const std::string& modelPath)
 {
-    m_selectedEntity = entity;
-    m_selectedEntityModelPath = modelPath;
-
-    if (!Entity::IsNull(m_previewEntity) && m_registry && !m_registry->IsAlive(m_previewEntity)) {
-        m_previewEntity = Entity::NULL_ID;
-        m_previewEntityOwned = false;
-    }
+    PlayerEditorSession::SyncExternalSelection(*this, entity, modelPath);
 }
 
 bool PlayerEditorPanel::DrawToolbarButton(const char* label, bool enabled)
@@ -408,399 +344,82 @@ bool PlayerEditorPanel::CanUsePreviewEntity() const
 
 bool PlayerEditorPanel::OpenModelFromPath(const std::string& path)
 {
-    if (path.empty()) {
-        return false;
-    }
-
-    std::shared_ptr<Model> model = ResourceManager::Instance().GetModel(path);
-    if (!model) {
-        return false;
-    }
-
-    Suspend();
-    m_ownedModel = model;
-    m_model = m_ownedModel.get();
-    m_currentModelPath = path;
-    ResetSelectionState();
-    m_selectedAnimIndex = m_model->GetAnimations().empty() ? -1 : 0;
-    m_previewModelScale = 1.0f;
-
-    if (m_selectedEntityModelPath == path && !Entity::IsNull(m_selectedEntity)) {
-        SetPreviewEntity(m_selectedEntity);
-    } else {
-        EnsureOwnedPreviewEntity();
-    }
-
-    RebuildPreviewTimelineRuntimeData();
-    return true;
+    return PlayerEditorSession::OpenModelFromPath(*this, path);
 }
 
 bool PlayerEditorPanel::OpenTimelineFromPath(const std::string& path)
 {
-    if (path.empty()) {
-        return false;
-    }
-
-    TimelineAsset loaded;
-    if (!TimelineAssetSerializer::Load(path, loaded)) {
-        return false;
-    }
-
-    m_timelineAsset = std::move(loaded);
-    m_timelineAssetPath = path;
-    m_timelineDirty = false;
-    m_playheadFrame = 0;
-    if (m_timelineAsset.animationIndex >= 0) {
-        m_selectedAnimIndex = m_timelineAsset.animationIndex;
-    }
-    RebuildPreviewTimelineRuntimeData();
-    return true;
+    return PlayerEditorSession::OpenTimelineFromPath(*this, path);
 }
 
 bool PlayerEditorPanel::OpenStateMachineFromPath(const std::string& path)
 {
-    if (path.empty()) {
-        return false;
-    }
-
-    StateMachineAsset loaded;
-    if (!StateMachineAssetSerializer::Load(path, loaded)) {
-        return false;
-    }
-
-    m_stateMachineAsset = std::move(loaded);
-    m_stateMachineAssetPath = path;
-    m_stateMachineDirty = false;
-    m_selectedNodeId = 0;
-    m_selectedTransitionId = 0;
-    ApplyEditorBindingsToPreviewEntity();
-    return true;
+    return PlayerEditorSession::OpenStateMachineFromPath(*this, path);
 }
 
 bool PlayerEditorPanel::OpenInputMapFromPath(const std::string& path)
 {
-    return m_inputMappingTab.OpenActionMap(path);
+    return PlayerEditorSession::OpenInputMapFromPath(*this, path);
 }
 
 bool PlayerEditorPanel::SaveTimelineDocument(bool saveAs)
 {
-    std::string path = m_timelineAssetPath;
-    if (saveAs || path.empty()) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!path.empty()) {
-            strcpy_s(pathBuffer, path.c_str());
-        } else if (!m_timelineAsset.name.empty()) {
-            strcpy_s(pathBuffer, ("Assets/Timeline/" + m_timelineAsset.name + ".timeline.json").c_str());
-        }
-        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kTimelineFileFilter, "Save Timeline", "json") != DialogResult::OK) {
-            return false;
-        }
-        path = pathBuffer;
-    }
-
-    if (!TimelineAssetSerializer::Save(path, m_timelineAsset)) {
-        return false;
-    }
-
-    m_timelineAssetPath = path;
-    m_timelineDirty = false;
-    StateMachineSystem::InvalidateAssetCache(path.c_str());
-    return true;
+    return PlayerEditorSession::SaveTimelineDocument(*this, saveAs);
 }
 
 bool PlayerEditorPanel::SaveStateMachineDocument(bool saveAs)
 {
-    std::string path = m_stateMachineAssetPath;
-    if (saveAs || path.empty()) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!path.empty()) {
-            strcpy_s(pathBuffer, path.c_str());
-        } else if (!m_stateMachineAsset.name.empty()) {
-            strcpy_s(pathBuffer, ("Assets/StateMachine/" + m_stateMachineAsset.name + ".statemachine.json").c_str());
-        }
-        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kStateMachineFileFilter, "Save State Machine", "json") != DialogResult::OK) {
-            return false;
-        }
-        path = pathBuffer;
-    }
-
-    if (!StateMachineAssetSerializer::Save(path, m_stateMachineAsset)) {
-        return false;
-    }
-
-    m_stateMachineAssetPath = path;
-    m_stateMachineDirty = false;
-    StateMachineSystem::InvalidateAssetCache(path.c_str());
-    return true;
+    return PlayerEditorSession::SaveStateMachineDocument(*this, saveAs);
 }
 
 bool PlayerEditorPanel::SaveInputMapDocument(bool saveAs)
 {
-    if (!saveAs) {
-        return m_inputMappingTab.SaveActionMap();
-    }
-
-    char pathBuffer[MAX_PATH] = {};
-    const std::string& currentPath = m_inputMappingTab.GetActionMapPath();
-    if (!currentPath.empty()) {
-        strcpy_s(pathBuffer, currentPath.c_str());
-    }
-    if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kInputMapFileFilter, "Save Input Map", "json") != DialogResult::OK) {
-        return false;
-    }
-    return m_inputMappingTab.SaveActionMapAs(pathBuffer);
+    return PlayerEditorSession::SaveInputMapDocument(*this, saveAs);
 }
 
 bool PlayerEditorPanel::SaveAllDocuments(bool saveAs)
 {
-    bool attempted = false;
-    bool ok = true;
-
-    if (m_timelineDirty || (saveAs && !m_timelineAsset.tracks.empty())) {
-        attempted = true;
-        ok &= SaveTimelineDocument(saveAs);
-    }
-    if (m_stateMachineDirty || (saveAs && !m_stateMachineAsset.states.empty())) {
-        attempted = true;
-        ok &= SaveStateMachineDocument(saveAs);
-    }
-    if (m_inputMappingTab.IsDirty() || (saveAs && !m_inputMappingTab.GetActionMapPath().empty())) {
-        attempted = true;
-        ok &= SaveInputMapDocument(saveAs);
-    }
-    if (m_socketDirty) {
-        attempted = true;
-        ExportSocketsToPreviewEntity();
-    }
-
-    return attempted && ok;
+    return PlayerEditorSession::SaveAllDocuments(*this, saveAs);
 }
 
 void PlayerEditorPanel::ApplyEditorBindingsToPreviewEntity()
 {
-    if (!CanUsePreviewEntity()) {
-        return;
-    }
-
-    MeshComponent* mesh = m_registry->GetComponent<MeshComponent>(m_previewEntity);
-    if (!mesh) {
-        m_registry->AddComponent<MeshComponent>(m_previewEntity, MeshComponent{});
-        mesh = m_registry->GetComponent<MeshComponent>(m_previewEntity);
-    }
-    if (mesh && !m_currentModelPath.empty()) {
-        mesh->modelFilePath = m_currentModelPath;
-        if (m_ownedModel) {
-            mesh->model = m_ownedModel;
-        }
-    }
-
-    {
-        StateMachineParamsComponent* stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity);
-        if (!stateMachine && !m_stateMachineAssetPath.empty()) {
-            m_registry->AddComponent<StateMachineParamsComponent>(m_previewEntity, StateMachineParamsComponent{});
-            stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity);
-        }
-        if (stateMachine && !m_stateMachineAssetPath.empty()) {
-            strcpy_s(stateMachine->assetPath, m_stateMachineAssetPath.c_str());
-        } else if (stateMachine) {
-            stateMachine->assetPath[0] = '\0';
-        }
-    }
-
-    {
-        InputBindingComponent* inputBinding = m_registry->GetComponent<InputBindingComponent>(m_previewEntity);
-        if (!inputBinding && !m_inputMappingTab.GetActionMapPath().empty()) {
-            m_registry->AddComponent<InputBindingComponent>(m_previewEntity, InputBindingComponent{});
-            inputBinding = m_registry->GetComponent<InputBindingComponent>(m_previewEntity);
-        }
-        if (inputBinding && !m_inputMappingTab.GetActionMapPath().empty()) {
-            strcpy_s(inputBinding->actionMapAssetPath, m_inputMappingTab.GetActionMapPath().c_str());
-        } else if (inputBinding) {
-            inputBinding->actionMapAssetPath[0] = '\0';
-        }
-    }
-
-    ExportSocketsToPreviewEntity();
+    PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(*this);
 }
 
 void PlayerEditorPanel::RebuildPreviewTimelineRuntimeData()
 {
-    if (!CanUsePreviewEntity()) {
-        return;
-    }
-
-    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*m_registry, m_previewEntity);
-
-    TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity);
-    TimelineItemBuffer* buffer = m_registry->GetComponent<TimelineItemBuffer>(m_previewEntity);
-    PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity);
-    if (!timeline || !buffer || !playback) {
-        return;
-    }
-
-    const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
-    TimelineAssetRuntimeBuilder::Build(m_timelineAsset, m_selectedAnimIndex, *timeline, *buffer);
-
-    const float durationSeconds = GetSelectedAnimationDurationSeconds();
-    if (timeline->fps <= 0.0f) {
-        timeline->fps = fps;
-    }
-    if (timeline->frameMax <= 0 && durationSeconds > 0.0f) {
-        timeline->frameMax = static_cast<int>(durationSeconds * timeline->fps);
-    }
-    if (timeline->clipLengthSec <= 0.0f) {
-        timeline->clipLengthSec = durationSeconds;
-    }
-
-    playback->clipLength = durationSeconds > 0.0f ? durationSeconds : timeline->clipLengthSec;
-    playback->playSpeed = 1.0f;
-    playback->looping = m_previewState.IsActive() ? m_previewState.GetDriver()->IsLoop() : false;
-    playback->finished = false;
-
-    SyncPreviewTimelinePlayback();
+    PlayerEditorSession::RebuildPreviewTimelineRuntimeData(*this);
 }
 
 void PlayerEditorPanel::SyncPreviewTimelinePlayback()
 {
-    if (!CanUsePreviewEntity()) {
-        return;
-    }
-
-    TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity);
-    PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity);
-    if (!timeline || !playback) {
-        return;
-    }
-
-    const float fps = timeline->fps > 0.0f ? timeline->fps : 60.0f;
-    const float currentSeconds = fps > 0.0f ? static_cast<float>(m_playheadFrame) / fps : 0.0f;
-    playback->currentSeconds = currentSeconds;
-    playback->playing = m_isPlaying;
-    playback->finished = false;
-    timeline->currentFrame = m_playheadFrame;
-    timeline->playing = m_isPlaying;
+    PlayerEditorSession::SyncPreviewTimelinePlayback(*this);
 }
 
 bool PlayerEditorPanel::SavePrefabDocument(bool saveAs)
 {
-    if (!CanUsePreviewEntity()) {
-        return false;
-    }
-
-    if (HasAnyDirtyDocument()) {
-        if (!SaveAllDocuments(false) && HasAnyDirtyDocument()) {
-            if (!SaveAllDocuments(true)) {
-                return false;
-            }
-        }
-    }
-
-    ApplyEditorBindingsToPreviewEntity();
-    PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*m_registry, m_previewEntity);
-    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*m_registry, m_previewEntity);
-    PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
-
-    std::string prefabPath;
-    if (!saveAs) {
-        if (const PrefabInstanceComponent* prefab = m_registry->GetComponent<PrefabInstanceComponent>(m_previewEntity)) {
-            prefabPath = prefab->prefabAssetPath;
-        }
-    }
-
-    if (prefabPath.empty()) {
-        char pathBuffer[MAX_PATH] = {};
-        if (const PrefabInstanceComponent* prefab = m_registry->GetComponent<PrefabInstanceComponent>(m_previewEntity);
-            prefab && !prefab->prefabAssetPath.empty()) {
-            strcpy_s(pathBuffer, prefab->prefabAssetPath.c_str());
-        } else {
-            const std::string defaultName = m_currentModelPath.empty()
-                ? "Assets/Prefab/Player.prefab"
-                : ("Assets/Prefab/" + std::filesystem::path(m_currentModelPath).stem().string() + ".prefab");
-            strcpy_s(pathBuffer, defaultName.c_str());
-        }
-
-        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kPrefabFileFilter, "Save Player Prefab", "prefab") != DialogResult::OK) {
-            return false;
-        }
-        prefabPath = pathBuffer;
-    }
-
-    return PrefabSystem::SaveEntityToPrefabPath(m_previewEntity, *m_registry, prefabPath);
+    return PlayerEditorSession::SavePrefabDocument(*this, saveAs);
 }
 
 void PlayerEditorPanel::RevertAllDocuments()
 {
-    if (!m_timelineAssetPath.empty()) {
-        OpenTimelineFromPath(m_timelineAssetPath);
-    }
-    if (!m_stateMachineAssetPath.empty()) {
-        OpenStateMachineFromPath(m_stateMachineAssetPath);
-    }
-    if (!m_inputMappingTab.GetActionMapPath().empty()) {
-        m_inputMappingTab.ReloadActionMap();
-    }
-    ImportSocketsFromPreviewEntity();
-    m_socketDirty = false;
+    PlayerEditorSession::RevertAllDocuments(*this);
 }
 
 void PlayerEditorPanel::ImportSocketsFromPreviewEntity()
 {
-    if (!CanUsePreviewEntity()) {
-        m_sockets.clear();
-        m_socketDirty = false;
-        return;
-    }
-
-    if (NodeSocketComponent* sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity)) {
-        m_sockets = sockets->sockets;
-    } else {
-        m_sockets.clear();
-    }
-    m_socketDirty = false;
+    PlayerEditorSession::ImportSocketsFromPreviewEntity(*this);
 }
 
 void PlayerEditorPanel::ExportSocketsToPreviewEntity()
 {
-    if (!CanUsePreviewEntity()) {
-        return;
-    }
-
-    NodeSocketComponent* sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity);
-    if (!sockets) {
-        m_registry->AddComponent<NodeSocketComponent>(m_previewEntity, NodeSocketComponent{});
-        sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity);
-    }
-    if (!sockets) {
-        return;
-    }
-
-    sockets->sockets = m_sockets;
-    m_socketDirty = false;
+    PlayerEditorSession::ExportSocketsToPreviewEntity(*this);
 }
 
 void PlayerEditorPanel::ImportFromSelectedEntity()
 {
-    if (!m_registry || Entity::IsNull(m_selectedEntity) || !m_registry->IsAlive(m_selectedEntity)) {
-        return;
-    }
-
-    if (!m_selectedEntityModelPath.empty()) {
-        OpenModelFromPath(m_selectedEntityModelPath);
-    }
-
-    SetPreviewEntity(m_selectedEntity);
-
-    if (StateMachineParamsComponent* stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_selectedEntity);
-        stateMachine && stateMachine->assetPath[0] != '\0') {
-        OpenStateMachineFromPath(stateMachine->assetPath);
-    }
-
-    if (InputBindingComponent* inputBinding = m_registry->GetComponent<InputBindingComponent>(m_selectedEntity);
-        inputBinding && inputBinding->actionMapAssetPath[0] != '\0') {
-        OpenInputMapFromPath(inputBinding->actionMapAssetPath);
-    }
-
-    ImportSocketsFromPreviewEntity();
+    PlayerEditorSession::ImportFromSelectedEntity(*this);
 }
 
 void PlayerEditorPanel::DrawToolbar()
@@ -1239,8 +858,6 @@ void PlayerEditorPanel::DrawSkeletonPanel()
 
     if (!m_model) {
         ImGui::TextDisabled("No model assigned.");
-        ImGui::TextDisabled("Select an entity with a model");
-        ImGui::TextDisabled("to display its bone hierarchy.");
         ImGui::End();
         return;
     }
@@ -2870,15 +2487,11 @@ void PlayerEditorPanel::DrawAnimatorPanel()
     if (previewing) {
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), ICON_FA_CIRCLE " Preview Active");
         ImGui::Separator();
-    } else {
-        ImGui::TextDisabled("Select an entity with AnimatorComponent");
-        ImGui::TextDisabled("Double-click an animation to start timeline playback.");
-        ImGui::Separator();
     }
 
-    if (!hasPreviewTarget) {
-        ImGui::TextDisabled("No valid preview target.");
-    }
+    //if (!hasPreviewTarget) {
+    //    ImGui::TextDisabled("No valid preview target.");
+    //}
 
     const float listHeight = previewing
         ? -ImGui::GetFrameHeightWithSpacing() * 2.0f - 8.0f
@@ -2909,26 +2522,7 @@ void PlayerEditorPanel::DrawAnimatorPanel()
     }
     ImGui::EndChild();
 
-    if (previewing) {
-        ImGui::Separator();
-        bool loop = m_previewState.GetDriver()->IsLoop();
-        if (ImGui::Checkbox("Loop", &loop)) {
-            m_previewState.SetLoop(loop);
-            if (CanUsePreviewEntity()) {
-                if (PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity)) {
-                    playback->looping = loop;
-                }
-            }
-        }
-
-        if (ImGui::Button(ICON_FA_STOP " Stop Preview")) {
-            m_isPlaying = false;
-            m_playheadFrame = 0;
-            SyncPreviewTimelinePlayback();
-            m_previewState.ExitPreview();
-        }
-    }
-
+   
     ImGui::End();
 }
 

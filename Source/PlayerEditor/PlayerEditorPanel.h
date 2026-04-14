@@ -13,6 +13,7 @@ struct ImVec2;
 class Registry;
 class ITexture;
 class Model;
+class PlayerEditorSession;
 
 // ============================================================================
 // Player Editor 窶・UE-style multi-panel DockSpace editor
@@ -60,6 +61,8 @@ public:
     int  GetSelectedBoneIndex() const { return m_selectedBoneIndex; }
 
 private:
+    friend class PlayerEditorSession;
+
     enum class HostMode
     {
         Window,
