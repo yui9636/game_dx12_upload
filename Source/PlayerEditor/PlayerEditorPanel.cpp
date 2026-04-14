@@ -518,7 +518,7 @@ void PlayerEditorPanel::DrawEmptyState()
 }
 
 // ============================================================================
-// Main Draw — Host DockSpace
+// Main Draw  EHost DockSpace
 // ============================================================================
 
 void PlayerEditorPanel::Draw(Registry* registry, bool* p_open, bool* outFocused)
@@ -655,14 +655,14 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
 // DockSpace Layout Builder  (UE Animation Editor style)
 // ============================================================================
 //
-//  ┌────────────┬──────────────────────┬──────────────────┐
-//  │ StateMachine│  3D Viewport        │ Properties       │
-//  │ (NodeGraph) │  (center, large)    │ (Details)        │
-//  │             │                     ├──────────────────┤
-//  │             │                     │ Animator / Input │
+//  ┌────────────┬──────────────────────┬──────────────────━E
+//  ━EStateMachine━E 3D Viewport        ━EProperties       ━E
+//  ━E(NodeGraph) ━E (center, large)    ━E(Details)        ━E
+//  ━E            ━E                    ├──────────────────┤
+//  ━E            ━E                    ━EAnimator / Input ━E
 //  ├─────────────┴─────────────────────┴──────────────────┤
-//  │ Timeline  (full width, bottom)                       │
-//  └──────────────────────────────────────────────────────┘
+//  ━ETimeline  (full width, bottom)                       ━E
+//  └──────────────────────────────────────────────────────━E
 //
 
 void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)
@@ -674,13 +674,13 @@ void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)
 
     ImGuiID mainId = dockId;
 
-    // 1. Bottom: Timeline (full width, 35% height — like UE's Notify/Track panel)
+    // 1. Bottom: Timeline (full width, 35% height  Elike UE's Notify/Track panel)
     ImGuiID bottomId;
     ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Down, 0.35f, &bottomId, &mainId);
 
     // 2. Left: StateMachine (25% width of top area)
     ImGuiID leftId;
-    ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Left, 0.25f, &leftId, &mainId);
+    ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Left, 0.46f, &leftId, &mainId);
 
     // 3. Right: Properties + Animator/Input (22% width)
     ImGuiID rightId;
@@ -849,7 +849,7 @@ void PlayerEditorPanel::SetModel(const Model* model)
 }
 
 // ############################################################################
-//  SKELETON PANEL — Bone Tree + Socket Management
+//  SKELETON PANEL  EBone Tree + Socket Management
 // ############################################################################
 
 void PlayerEditorPanel::DrawSkeletonPanel()
@@ -864,55 +864,23 @@ void PlayerEditorPanel::DrawSkeletonPanel()
 
     const auto& nodes = m_model->GetNodes();
 
-    // ── Selected bone info bar ──
-    if (m_selectedBoneIndex >= 0 && m_selectedBoneIndex < (int)nodes.size()) {
-        ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), ICON_FA_BONE " %s", m_selectedBoneName.c_str());
-        ImGui::SameLine();
-        ImGui::TextDisabled("[%d]", m_selectedBoneIndex);
-
-        // "Apply to Item" button — sets the nodeIndex on selected timeline item
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_ARROW_RIGHT " Apply to Item")) {
-            for (auto& track : m_timelineAsset.tracks) {
-                if ((int)track.id != m_selectedTrackId) continue;
-                if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
-                auto& item = track.items[m_selectedItemIdx];
-                switch (track.type) {
-                case TimelineTrackType::Hitbox:     item.hitbox.nodeIndex = m_selectedBoneIndex; break;
-                case TimelineTrackType::VFX:        item.vfx.nodeIndex   = m_selectedBoneIndex; break;
-                case TimelineTrackType::Audio:      item.audio.nodeIndex = m_selectedBoneIndex; break;
-                default: break;
-                }
-                m_timelineDirty = true;
-            }
-        }
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set this bone as nodeIndex on selected timeline item");
-    } else {
-        ImGui::TextDisabled("No bone selected");
-    }
-    ImGui::Separator();
-
-    // ── Search filter ──
     ImGui::SetNextItemWidth(-1);
     ImGui::InputTextWithHint("##BoneSearch", ICON_FA_MAGNIFYING_GLASS " Search bones...",
         m_boneSearchFilter, sizeof(m_boneSearchFilter));
 
     ImGui::Separator();
 
-    // ── Bone tree / flat list ──
-    ImGui::BeginChild("BoneTree", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() * 5 - 8), ImGuiChildFlags_Borders);
+    const float socketPaneHeight = 28.0f;
+    const float treePaneHeight = (std::max)(0.0f, ImGui::GetContentRegionAvail().y - socketPaneHeight - ImGui::GetStyle().ItemSpacing.y);
+    ImGui::BeginChild("BoneTree", ImVec2(0, treePaneHeight), false, ImGuiWindowFlags_HorizontalScrollbar);
 
     if (m_boneSearchFilter[0] == '\0') {
-        // Hierarchical tree view: start from root nodes (parentIndex == -1 or 0)
         for (int i = 0; i < (int)nodes.size(); ++i) {
             if (nodes[i].parentIndex < 0) {
                 DrawBoneTreeNode(i);
             }
         }
-        // Also draw orphan root (parentIndex == 0 and index != 0)
-        // Usually node 0 is the scene root, handled by parentIndex == -1
     } else {
-        // Flat filtered list
         std::string filterLower(m_boneSearchFilter);
         for (auto& c : filterLower) c = (char)tolower(c);
 
@@ -933,13 +901,11 @@ void PlayerEditorPanel::DrawSkeletonPanel()
 
     ImGui::EndChild();
 
-    // ── Socket section ──
-    ImGui::Separator();
-    DrawSocketList();
+    ImGui::Dummy(ImVec2(0, ImGui::GetStyle().ItemSpacing.y * 0.1f));
+    DrawSocketList(socketPaneHeight);
 
     ImGui::End();
 }
-
 void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
 {
     if (!m_model) return;
@@ -1017,11 +983,15 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     }
 }
 
-void PlayerEditorPanel::DrawSocketList()
+void PlayerEditorPanel::DrawSocketList(float height)
 {
-    ImGui::Text(ICON_FA_PLUG " Sockets (%d)", (int)m_sockets.size());
+    ImGui::BeginChild("SocketList", ImVec2(0, height), false, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
 
-    if (ImGui::Button(ICON_FA_PLUS " Add Socket")) {
+    ImGui::TextDisabled(ICON_FA_PLUG " Sockets (%d)", (int)m_sockets.size());
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_PLUS " Add")) {
         NodeSocket sock;
         sock.name = "NewSocket";
         if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
@@ -1033,12 +1003,14 @@ void PlayerEditorPanel::DrawSocketList()
         m_socketDirty = true;
     }
 
+    ImGui::Separator();
+
     for (int si = 0; si < (int)m_sockets.size(); ++si) {
         auto& sock = m_sockets[si];
         ImGui::PushID(si);
 
         bool selected = (m_selectedSocketIdx == si);
-        std::string label = ICON_FA_PLUG " " + sock.name + " -> " + sock.parentBoneName;
+        std::string label = sock.name + " -> " + sock.parentBoneName;
         if (ImGui::Selectable(label.c_str(), selected)) {
             m_selectedSocketIdx = si;
             m_selectionCtx = SelectionContext::Socket;
@@ -1046,6 +1018,9 @@ void PlayerEditorPanel::DrawSocketList()
 
         ImGui::PopID();
     }
+
+    ImGui::PopStyleVar(2);
+    ImGui::EndChild();
 }
 
 // ############################################################################
@@ -1418,10 +1393,6 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
 {
     const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
     const float durationSeconds = GetSelectedAnimationDurationSeconds();
-    const char* currentAnimationName = "(none)";
-    if (m_model && m_selectedAnimIndex >= 0 && m_selectedAnimIndex < static_cast<int>(m_model->GetAnimations().size())) {
-        currentAnimationName = m_model->GetAnimations()[m_selectedAnimIndex].name.c_str();
-    }
 
     if (m_isPlaying && m_previewState.IsActive()) {
         m_previewState.AdvanceTime(ImGui::GetIO().DeltaTime, m_timelineAsset);
@@ -1448,7 +1419,6 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
         SyncPreviewTimelinePlayback();
     }
 
-    // Play controls
     if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
         m_playheadFrame = 0;
         m_isPlaying = false;
@@ -1488,7 +1458,6 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     }
     ImGui::SameLine();
 
-    // Frame display
     int maxFrame = m_timelineAsset.GetFrameCount();
     if (maxFrame <= 0 && durationSeconds > 0.0f) {
         maxFrame = static_cast<int>(durationSeconds * fps);
@@ -1503,19 +1472,16 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     ImGui::Text("/ %d", maxFrame);
     ImGui::SameLine();
 
-    // FPS
     ImGui::SetNextItemWidth(50);
     if (ImGui::DragFloat("FPS", &m_timelineAsset.fps, 1.0f, 1.0f, 120.0f, "%.0f")) {
         m_timelineDirty = true;
     }
     ImGui::SameLine();
 
-    // Zoom
     ImGui::SetNextItemWidth(80);
     ImGui::SliderFloat("Zoom##TL", &m_timelineZoom, 0.2f, 5.0f, "%.1f");
     ImGui::SameLine();
 
-    // Save
     if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
         SaveTimelineDocument(false);
     }
@@ -1524,21 +1490,12 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
         SaveTimelineDocument(true);
     }
 
-    // Duration
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     if (ImGui::DragFloat("Dur(s)", &m_timelineAsset.duration, 0.1f, 0.1f, 300.0f, "%.1f")) {
         m_timelineDirty = true;
     }
-
-    if (DrawDocumentPathLabel("Document", m_timelineAssetPath, m_timelineDirty)) {
-        ImGui::Separator();
-    }
-    ImGui::TextDisabled("Animation: %s", currentAnimationName);
-    ImGui::SameLine();
-    ImGui::TextDisabled("Model: %s", m_currentModelPath.empty() ? "(none)" : std::filesystem::path(m_currentModelPath).filename().string().c_str());
 }
-
 void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
 {
     if (ImGui::Button(ICON_FA_PLUS " Track")) {
@@ -2322,8 +2279,8 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
 
 void PlayerEditorPanel::DrawTimelineItemInspector()
 {
-    ImGui::Text(ICON_FA_CLOCK " Timeline Item");
-    ImGui::Separator();
+    //ImGui::Text(ICON_FA_CLOCK " Timeline Item");
+    //ImGui::Separator();
 
     for (auto& track : m_timelineAsset.tracks) {
         if ((int)track.id != m_selectedTrackId) continue;
@@ -2456,22 +2413,11 @@ void PlayerEditorPanel::DrawAnimatorPanel()
 {
     if (!ImGui::Begin(kPEAnimatorTitle)) { ImGui::End(); return; }
 
-    bool previewing = m_previewState.IsActive();
     const bool hasPreviewTarget = m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity);
 
-    if (previewing) {
-        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), ICON_FA_CIRCLE " Preview Active");
-        ImGui::Separator();
-    }
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
 
-    //if (!hasPreviewTarget) {
-    //    ImGui::TextDisabled("No valid preview target.");
-    //}
-
-    const float listHeight = previewing
-        ? -ImGui::GetFrameHeightWithSpacing() * 2.0f - 8.0f
-        : 0.0f;
-    ImGui::BeginChild("AnimatorAnimationList", ImVec2(0, listHeight), ImGuiChildFlags_Borders);
     if (!m_model) {
         ImGui::TextDisabled("No model assigned.");
     } else {
@@ -2495,9 +2441,8 @@ void PlayerEditorPanel::DrawAnimatorPanel()
             }
         }
     }
-    ImGui::EndChild();
 
-   
+    ImGui::PopStyleVar(2);
     ImGui::End();
 }
 
@@ -2511,3 +2456,4 @@ void PlayerEditorPanel::DrawInputPanel()
     m_inputMappingTab.Draw(m_registry);
     ImGui::End();
 }
+

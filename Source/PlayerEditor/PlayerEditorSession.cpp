@@ -168,21 +168,7 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
     panel.m_previewModelScale = 1.0f;
     panel.m_previewRenderSize = { 0.0f, 0.0f };
 
-    if (panel.m_model) {
-        const auto& nodes = panel.m_model->GetNodes();
-        panel.m_sockets.clear();
-        panel.m_sockets.reserve(nodes.size());
-        for (const auto& node : nodes) {
-            NodeSocket socket{};
-            socket.name = node.name;
-            socket.parentBoneName = node.name;
-            socket.cachedBoneIndex = -1;
-            socket.offsetPos = { 0.0f, 0.0f, 0.0f };
-            socket.offsetRotDeg = { 0.0f, 0.0f, 0.0f };
-            socket.offsetScale = { 1.0f, 1.0f, 1.0f };
-            panel.m_sockets.push_back(socket);
-        }
-    }
+    panel.m_sockets.clear();
     panel.m_socketDirty = false;
     panel.m_timelineDirty = false;
     panel.m_stateMachineDirty = false;

@@ -115,7 +115,7 @@ private:
 
     // 笏笏 Skeleton internals 笏笏
     void DrawBoneTreeNode(int nodeIndex);
-    void DrawSocketList();
+    void DrawSocketList(float height);
 
     // 笏笏 Timeline internals 笏笏
     void DrawTimelineTrackHeaders(float height);
