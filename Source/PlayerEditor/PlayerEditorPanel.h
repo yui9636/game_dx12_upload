@@ -29,13 +29,27 @@ public:
     void Draw(Registry* registry, bool* p_open, bool* outFocused);
     void DrawWorkspace(Registry* registry, bool* outFocused);
     void DrawDetached(Registry* registry, bool* p_open, bool* outFocused);
+    void Suspend();
 
     // Viewport texture (set by EditorLayer/Renderer)
     void SetViewportTexture(ITexture* tex) { m_viewportTexture = tex; }
+    bool CanRenderPreview() const { return HasOpenModel(); }
+    DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
+    DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
+    DirectX::XMFLOAT3 GetPreviewCameraTarget() const;
+    DirectX::XMFLOAT3 GetPreviewCameraDirection() const;
+    float GetPreviewCameraFovY() const { return 0.785398f; }
+    float GetPreviewNearZ() const { return 0.03f; }
+    float GetPreviewFarZ() const { return 500.0f; }
+    DirectX::XMFLOAT4 GetPreviewClearColor() const { return { 0.12f, 0.12f, 0.12f, 1.0f }; }
+    bool ShouldPreviewUseSkybox() const { return false; }
+    const Model* GetPreviewModel() const { return m_model; }
+    float GetPreviewModelScale() const { return m_previewModelScale; }
 
-    // Model for bone tree (set externally from selected entity)
+    // Model for bone tree (legacy external sync path)
     void SetModel(const Model* model);
-    void SetPreviewEntity(EntityID entity) { m_previewEntity = entity; }
+    void SetPreviewEntity(EntityID entity);
+    void SyncExternalSelection(EntityID entity, const std::string& modelPath);
 
     // Asset access
     TimelineAsset&       GetTimelineAsset()       { return m_timelineAsset; }
@@ -54,6 +68,33 @@ private:
     };
 
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
+    void DrawToolbar();
+    bool DrawToolbarButton(const char* label, bool enabled = true);
+    bool DrawDocumentPathLabel(const char* label, const std::string& path, bool dirty);
+    void DrawEmptyState();
+    void ResetSelectionState();
+    bool HasOpenModel() const;
+    bool HasAnyDirtyDocument() const;
+    bool HasSelectedEntityContext() const;
+    bool CanUsePreviewEntity() const;
+    bool OpenModelFromPath(const std::string& path);
+    bool OpenTimelineFromPath(const std::string& path);
+    bool OpenStateMachineFromPath(const std::string& path);
+    bool OpenInputMapFromPath(const std::string& path);
+    bool SaveTimelineDocument(bool saveAs);
+    bool SaveStateMachineDocument(bool saveAs);
+    bool SaveInputMapDocument(bool saveAs);
+    bool SaveAllDocuments(bool saveAs);
+    bool SavePrefabDocument(bool saveAs);
+    void RevertAllDocuments();
+    void ApplyEditorBindingsToPreviewEntity();
+    void EnsureOwnedPreviewEntity();
+    void DestroyOwnedPreviewEntity();
+    void RebuildPreviewTimelineRuntimeData();
+    void SyncPreviewTimelinePlayback();
+    void ImportFromSelectedEntity();
+    void ImportSocketsFromPreviewEntity();
+    void ExportSocketsToPreviewEntity();
 
     // 笏笏 DockSpace Layout 笏笏
     void BuildDockLayout(unsigned int dockspaceId);
@@ -78,11 +119,17 @@ private:
     void DrawTimelineGrid(float height);
     void DrawTimelinePlaybackToolbar();
     void DrawTimelineItemInspector();
+    bool DrawAnimationSelector(const char* label, int* animIndex);
+    float GetSelectedAnimationDurationSeconds() const;
+    void StartSelectedAnimationPreview();
+    void PreviewStateNode(uint32_t stateId, bool restartTimeline);
 
     // 笏笏 StateMachine internals 笏笏
     void DrawNodeGraph(ImVec2 canvasSize);
     void DrawStateNodeInspector();
+    void DrawStateMachineParameterList();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
+    void AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition);
 
     // 笏笏 Connection mode (drag-wire) 笏笏
     bool     m_isConnecting      = false;
@@ -95,6 +142,11 @@ private:
     // 笏笏 Assets 笏笏
     TimelineAsset       m_timelineAsset;
     StateMachineAsset   m_stateMachineAsset;
+    std::string         m_timelineAssetPath;
+    std::string         m_stateMachineAssetPath;
+    bool                m_timelineDirty = false;
+    bool                m_stateMachineDirty = false;
+    bool                m_socketDirty = false;
 
     // 笏笏 Preview 笏笏
     PreviewState m_previewState;
@@ -117,6 +169,7 @@ private:
     float    m_graphZoom            = 1.0f;
 
     // 笏笏 Skeleton state 笏笏
+    std::shared_ptr<Model> m_ownedModel;
     const Model* m_model             = nullptr;
     int          m_selectedBoneIndex  = -1;
     std::string  m_selectedBoneName;
@@ -127,13 +180,18 @@ private:
     // 笏笏 Animator state 笏笏
     int m_selectedAnimIndex = -1;
     std::string m_currentModelPath;
+    EntityID m_selectedEntity = Entity::NULL_ID;
+    std::string m_selectedEntityModelPath;
     EntityID m_previewEntity = Entity::NULL_ID;
+    bool m_previewEntityOwned = false;
 
     // 笏笏 Viewport 笏笏
     ITexture* m_viewportTexture = nullptr;
+    DirectX::XMFLOAT2 m_previewRenderSize = { 0.0f, 0.0f };
     float m_vpCameraYaw   = 0.0f;
     float m_vpCameraPitch = 0.2f;
     float m_vpCameraDist  = 5.0f;
+    float m_previewModelScale = 1.0f;
 
     // 笏笏 Per-frame 笏笏
     Registry* m_registry = nullptr;

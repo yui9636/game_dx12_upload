@@ -47,6 +47,7 @@ public:
 private:
     void Initialize();
     void Finalize();
+    void RenderPlayerPreviewOffscreen();
 
     EngineTime time;
     EngineMode mode = EngineMode::Editor;
@@ -61,7 +62,7 @@ private:
     std::unique_ptr<GameLayer> m_gameLayer;
     std::unique_ptr<EditorLayer> m_editorLayer;
 
-    // Shared offscreen renderer for thumbnails / material preview
+    // Shared offscreen renderer for thumbnails / previews
     std::unique_ptr<OffscreenRenderer> m_sharedOffscreen;
 
     // Input system

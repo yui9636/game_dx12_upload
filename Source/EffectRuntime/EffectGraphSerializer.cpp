@@ -41,7 +41,17 @@ namespace
             {"vectorValue2", node.vectorValue2},
             {"vectorValue3", node.vectorValue3},
             {"vectorValue4", node.vectorValue4},
+            {"vectorValue5", node.vectorValue5},
+            {"vectorValue6", node.vectorValue6},
+            {"vectorValue7", node.vectorValue7},
+            {"vectorValue8", node.vectorValue8},
+            {"vectorValue9", node.vectorValue9},
             {"stringValue", node.stringValue},
+            {"stringValue2", node.stringValue2},
+            {"stringValue3", node.stringValue3},
+            {"stringValue4", node.stringValue4},
+            {"stringValue5", node.stringValue5},
+            {"stringValue6", node.stringValue6},
             {"intValue", node.intValue},
             {"intValue2", node.intValue2},
             {"boolValue", node.boolValue}
@@ -61,7 +71,17 @@ namespace
         node.vectorValue2 = json.value("vectorValue2", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
         node.vectorValue3 = json.value("vectorValue3", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
         node.vectorValue4 = json.value("vectorValue4", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node.vectorValue5 = json.value("vectorValue5", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node.vectorValue6 = json.value("vectorValue6", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node.vectorValue7 = json.value("vectorValue7", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node.vectorValue8 = json.value("vectorValue8", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
+        node.vectorValue9 = json.value("vectorValue9", DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f });
         node.stringValue = json.value("stringValue", "");
+        node.stringValue2 = json.value("stringValue2", "");
+        node.stringValue3 = json.value("stringValue3", "");
+        node.stringValue4 = json.value("stringValue4", "");
+        node.stringValue5 = json.value("stringValue5", "");
+        node.stringValue6 = json.value("stringValue6", "");
         node.intValue = json.value("intValue", 0);
         node.intValue2 = json.value("intValue2", 0);
         node.boolValue = json.value("boolValue", false);

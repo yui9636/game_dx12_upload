@@ -204,6 +204,39 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             compiled->meshRenderer.rasterizerState = RasterizerState::SolidCullBack;
             compiled->meshRenderer.tint = node->vectorValue;
 
+            // Variant params from node fields (B1-B3)
+            {
+                auto& vp = compiled->meshRenderer.variantParams;
+                vp.shaderFlags = static_cast<uint32_t>(node->intValue2);
+                // vectorValue2: {dissolveAmount, dissolveEdge, fresnelPower, flowStrength}
+                vp.constants.dissolveAmount  = node->vectorValue2.x;
+                vp.constants.dissolveEdge    = node->vectorValue2.y > 0.0f ? node->vectorValue2.y : 0.05f;
+                vp.constants.fresnelPower    = node->vectorValue2.z > 0.0f ? node->vectorValue2.z : 3.0f;
+                vp.constants.flowStrength    = node->vectorValue2.w;
+                // vectorValue3: {flowSpeed.x, flowSpeed.y, scrollSpeed.x, scrollSpeed.y}
+                vp.constants.flowSpeed    = { node->vectorValue3.x, node->vectorValue3.y };
+                vp.constants.scrollSpeed  = { node->vectorValue3.z, node->vectorValue3.w };
+                // vectorValue4: {rimPower, emissionIntensity, distortStrength, alphaFade}
+                vp.constants.rimPower          = node->vectorValue4.x > 0.0f ? node->vectorValue4.x : 2.0f;
+                vp.constants.emissionIntensity = node->vectorValue4.y;
+                vp.constants.distortStrength   = node->vectorValue4.z;
+                // vectorValue5-8: colors
+                if (node->vectorValue5.w > 0.0f || node->vectorValue5.x > 0.0f)
+                    vp.constants.dissolveGlowColor = node->vectorValue5;
+                if (node->vectorValue6.w > 0.0f || node->vectorValue6.x > 0.0f)
+                    vp.constants.fresnelColor = node->vectorValue6;
+                if (node->vectorValue7.w > 0.0f || node->vectorValue7.x > 0.0f)
+                    vp.constants.rimColor = node->vectorValue7;
+                if (node->vectorValue8.w > 0.0f || node->vectorValue8.x > 0.0f)
+                    vp.constants.emissionColor = node->vectorValue8;
+                // Texture paths (stringValue2-6)
+                vp.maskTexturePath  = node->stringValue2;
+                vp.normalMapPath    = node->stringValue3;
+                vp.flowMapPath      = node->stringValue4;
+                vp.subTexturePath   = node->stringValue5;
+                vp.emissionTexPath  = node->stringValue6;
+            }
+
             if (const auto* meshNode = findConnectedNode(node->id, EffectValueType::Mesh)) {
                 compiled->meshRenderer.meshAssetPath = meshNode->stringValue;
             }
@@ -240,6 +273,36 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             compiled->particleRenderer.curlNoiseScrollSpeed = (std::max)(0.0f, node->vectorValue4.z);
             compiled->particleRenderer.vortexStrength = node->vectorValue4.w;
 
+            // Phase 2: Attractor from vectorValue5/6/7
+            {
+                compiled->particleRenderer.attractors[0] = node->vectorValue5;
+                compiled->particleRenderer.attractors[1] = node->vectorValue6;
+                int aCount = 0;
+                if (std::abs(node->vectorValue5.w) > 0.001f) aCount = 1;
+                if (std::abs(node->vectorValue6.w) > 0.001f) aCount = 2;
+                compiled->particleRenderer.attractorCount = static_cast<uint32_t>(aCount);
+                compiled->particleRenderer.attractorRadii = {
+                    node->vectorValue7.x > 0.0f ? node->vectorValue7.x : 5.0f,
+                    node->vectorValue7.y > 0.0f ? node->vectorValue7.y : 5.0f,
+                    5.0f, 5.0f
+                };
+                compiled->particleRenderer.attractorFalloff = {
+                    node->vectorValue7.z, node->vectorValue7.w, 1.0f, 1.0f
+                };
+            }
+            // Phase 2: Collision from vectorValue8/9
+            {
+                compiled->particleRenderer.collisionPlane = node->vectorValue8;
+                compiled->particleRenderer.collisionRestitution = node->vectorValue9.x > 0.0f ? node->vectorValue9.x : 0.5f;
+                compiled->particleRenderer.collisionFriction = node->vectorValue9.y >= 0.0f ? node->vectorValue9.y : 0.3f;
+                const float planeLen = node->vectorValue8.x * node->vectorValue8.x
+                    + node->vectorValue8.y * node->vectorValue8.y
+                    + node->vectorValue8.z * node->vectorValue8.z;
+                compiled->particleRenderer.collisionEnabled =
+                    (planeLen > 0.5f) || (node->vectorValue9.z > 0.0f);
+                compiled->particleRenderer.collisionSphereCount = 0;
+            }
+
             if (IsEffectParticleMaxParticlesTooLow(
                 node->intValue,
                 compiled->particleRenderer.spawnRate,
@@ -268,6 +331,16 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             compiled->particleRenderer.subUvFrameRate = (std::max)(0.0f, node->vectorValue2.w);
             compiled->particleRenderer.softParticleEnabled = node->boolValue;
             compiled->particleRenderer.softParticleScale = (std::max)(0.0f, node->scalar);
+            {
+                int blendInt = static_cast<int>(node->scalar2);
+                if (blendInt >= 0 && blendInt < static_cast<int>(EffectParticleBlendMode::EnumCount)) {
+                    compiled->particleRenderer.blendMode = static_cast<EffectParticleBlendMode>(blendInt);
+                }
+            }
+            compiled->particleRenderer.randomSpeedRange = std::clamp(node->vectorValue4.x, 0.0f, 1.0f);
+            compiled->particleRenderer.randomSizeRange  = std::clamp(node->vectorValue4.y, 0.0f, 1.0f);
+            compiled->particleRenderer.randomLifeRange  = std::clamp(node->vectorValue4.z, 0.0f, 1.0f);
+            compiled->particleRenderer.windStrength     = node->vectorValue4.w;
 
             const EffectGraphNode* colorNode = findConnectedNode(node->id, EffectValueType::Color);
             if (!colorNode) {
@@ -276,9 +349,53 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             if (colorNode) {
                 compiled->particleRenderer.tint = colorNode->vectorValue;
                 compiled->particleRenderer.tintEnd = colorNode->vectorValue2;
+                // Phase 1C: Color gradient (4-key)
+                const int gradKeys = colorNode->intValue;
+                if (gradKeys >= 3 && gradKeys <= 4) {
+                    compiled->particleRenderer.gradientKeyCount = static_cast<uint32_t>(gradKeys);
+                    compiled->particleRenderer.gradientColor0 = colorNode->vectorValue;
+                    compiled->particleRenderer.gradientColor1 = colorNode->vectorValue3;
+                    compiled->particleRenderer.gradientColor2 = colorNode->vectorValue4;
+                    compiled->particleRenderer.gradientColor3 = colorNode->vectorValue2;
+                    compiled->particleRenderer.gradientMidTimes = {
+                        (std::max)(0.01f, colorNode->scalar > 0.0f ? colorNode->scalar : 0.33f),
+                        (std::max)(0.02f, colorNode->scalar2 > 0.0f ? colorNode->scalar2 : 0.66f)
+                    };
+                } else {
+                    compiled->particleRenderer.gradientKeyCount = 2;
+                    compiled->particleRenderer.gradientColor0 = colorNode->vectorValue;
+                    compiled->particleRenderer.gradientColor3 = colorNode->vectorValue2;
+                    compiled->particleRenderer.gradientColor1 = colorNode->vectorValue;
+                    compiled->particleRenderer.gradientColor2 = colorNode->vectorValue2;
+                    compiled->particleRenderer.gradientMidTimes = { 0.0f, 1.0f };
+                }
             }
             compiled->particleRenderer.tint.w *= alphaScale;
             compiled->particleRenderer.tintEnd.w *= alphaScale;
+
+            // Phase 1C: Size curve (4-key) from SpriteRenderer node
+            {
+                const int sizeKeys = static_cast<int>(node->vectorValue6.w);
+                if (sizeKeys >= 3 && sizeKeys <= 4) {
+                    compiled->particleRenderer.sizeCurveKeyCount = static_cast<uint32_t>(sizeKeys);
+                    compiled->particleRenderer.sizeCurveValues = node->vectorValue5;
+                    compiled->particleRenderer.sizeCurveTimes = {
+                        0.0f,
+                        (std::max)(0.01f, node->vectorValue6.x),
+                        (std::max)(0.02f, node->vectorValue6.y),
+                        1.0f
+                    };
+                } else {
+                    compiled->particleRenderer.sizeCurveKeyCount = 2;
+                    compiled->particleRenderer.sizeCurveValues = {
+                        compiled->particleRenderer.startSize,
+                        compiled->particleRenderer.startSize,
+                        compiled->particleRenderer.endSize,
+                        compiled->particleRenderer.endSize
+                    };
+                    compiled->particleRenderer.sizeCurveTimes = { 0.0f, 0.0f, 1.0f, 1.0f };
+                }
+            }
 
             if (compiled->particleRenderer.drawMode == EffectParticleDrawMode::Mesh) {
                 compiled->particleRenderer.meshAssetPath = asset.previewDefaults.previewMeshPath;

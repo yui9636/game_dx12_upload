@@ -18,6 +18,7 @@
 #include "Component/Camera2DComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
+#include "Component/SequencerPreviewCameraComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/SpriteComponent.h"
@@ -78,8 +79,10 @@ namespace {
     constexpr const char* kHierarchyWindowTitle = ICON_FA_LIST " Hierarchy";
     constexpr const char* kInspectorWindowTitle = ICON_FA_CIRCLE_INFO " Inspector";
     constexpr const char* kAssetBrowserWindowTitle = ICON_FA_FOLDER_OPEN " Asset Browser";
+    constexpr const char* kSerializerWindowTitle = "Serializer";
     constexpr const char* kLightingWindowTitle = ICON_FA_SUN " Lighting Settings";
     constexpr const char* kAudioWindowTitle = ICON_FA_VOLUME_HIGH " Audio";
+    constexpr const char* kSequencerWindowTitle = ICON_FA_FILM " Sequencer";
     constexpr const char* kRenderPassesWindowTitle = "Render Passes";
     constexpr const char* kGridSettingsWindowTitle = "Grid Settings";
     constexpr const char* kGBufferWindowTitle = ICON_FA_IMAGES " G-Buffer Debug";
@@ -93,7 +96,9 @@ namespace {
         case EditorLayer::WindowFocusTarget::Hierarchy: return kHierarchyWindowTitle;
         case EditorLayer::WindowFocusTarget::Inspector: return kInspectorWindowTitle;
         case EditorLayer::WindowFocusTarget::AssetBrowser: return kAssetBrowserWindowTitle;
+        case EditorLayer::WindowFocusTarget::Serializer: return kSerializerWindowTitle;
         case EditorLayer::WindowFocusTarget::Console: return kConsoleWindowTitle;
+        case EditorLayer::WindowFocusTarget::Sequencer: return kSequencerWindowTitle;
         case EditorLayer::WindowFocusTarget::Lighting: return kLightingWindowTitle;
         case EditorLayer::WindowFocusTarget::Audio: return kAudioWindowTitle;
         case EditorLayer::WindowFocusTarget::RenderPasses: return kRenderPassesWindowTitle;
@@ -621,7 +626,8 @@ namespace {
         return registry.GetComponent<EnvironmentComponent>(entity) ||
                registry.GetComponent<ReflectionProbeComponent>(entity) ||
                registry.GetComponent<AudioSettingsComponent>(entity) ||
-               registry.GetComponent<EffectPreviewTagComponent>(entity);
+               registry.GetComponent<EffectPreviewTagComponent>(entity) ||
+               registry.GetComponent<SequencerPreviewCameraComponent>(entity);
     }
 
     EntityID FindEnvironmentEntity(Registry& registry)

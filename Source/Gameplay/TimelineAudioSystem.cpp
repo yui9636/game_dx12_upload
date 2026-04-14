@@ -1,13 +1,52 @@
 #include "TimelineAudioSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
+#include "Component/MeshComponent.h"
 #include "Component/TransformComponent.h"
 #include "Audio/AudioWorldSystem.h"
 #include "Engine/EngineKernel.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
+#include "Transform/NodeAttachmentUtils.h"
+
+namespace
+{
+    DirectX::XMFLOAT3 ResolveTimelineNodeWorldPosition(
+        Registry& registry,
+        EntityID entity,
+        const TransformComponent* transform,
+        int nodeIndex)
+    {
+        if (!transform) {
+            return { 0.0f, 0.0f, 0.0f };
+        }
+
+        auto* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model || nodeIndex < 0 || nodeIndex >= static_cast<int>(mesh->model->GetNodes().size())) {
+            return transform->worldPosition;
+        }
+
+        DirectX::XMFLOAT4X4 world;
+        int cacheIndex = nodeIndex;
+        if (NodeAttachmentUtils::TryGetBoneWorldMatrix(
+            mesh->model.get(),
+            transform->worldMatrix,
+            mesh->model->GetNodes()[nodeIndex].name,
+            cacheIndex,
+            { 0.0f, 0.0f, 0.0f },
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 1.0f },
+            NodeAttachmentSpace::NodeLocal,
+            world)) {
+            return { world._41, world._42, world._43 };
+        }
+
+        return transform->worldPosition;
+    }
+}
 
 void TimelineAudioSystem::Update(Registry& registry) {
     auto& audio = EngineKernel::Instance().GetAudioWorld();
@@ -23,16 +62,13 @@ void TimelineAudioSystem::Update(Registry& registry) {
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
             auto& tl  = *static_cast<TimelineComponent*>(tlCol->Get(i));
             auto& buf = *static_cast<TimelineItemBuffer*>(bufCol->Get(i));
-
-            DirectX::XMFLOAT3 worldPos = { 0, 0, 0 };
-            if (txCol) {
-                auto& tx = *static_cast<TransformComponent*>(txCol->Get(i));
-                worldPos = tx.worldPosition;
-            }
+            const EntityID ownerEntity = arch->GetEntities()[i];
+            TransformComponent* tx = txCol ? static_cast<TransformComponent*>(txCol->Get(i)) : nullptr;
 
             for (auto& item : buf.items) {
                 if (item.type != 3) continue;
                 bool inside = tl.currentFrame >= item.start && tl.currentFrame <= item.end;
+                const DirectX::XMFLOAT3 worldPos = ResolveTimelineNodeWorldPosition(registry, ownerEntity, tx, item.audio.nodeIndex);
 
                 if (inside && !item.audioActive) {
                     // Play audio

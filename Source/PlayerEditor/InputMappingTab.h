@@ -13,8 +13,14 @@ class InputMappingTab
 public:
     void Draw(Registry* registry);
 
+    bool OpenActionMap(const std::string& path);
+    bool SaveActionMap();
+    bool SaveActionMapAs(const std::string& path);
+    bool ReloadActionMap();
     void SetActionMapPath(const std::string& path);
     const std::string& GetActionMapPath() const { return m_actionMapPath; }
+    const InputActionMapAsset& GetEditingMap() const { return m_editingMap; }
+    bool IsDirty() const { return m_dirty; }
 
 private:
     void DrawActionTable();

@@ -80,6 +80,9 @@ void EditorLayer::DrawSceneView()
         if (m_showSceneLightIcons || m_showSceneCameraIcons) {
             DrawSceneIconOverlay(m_sceneViewRect, view, projection);
         }
+        if (m_showSequencer && m_activeWorkspace == WorkspaceTab::LevelEditor) {
+            DrawSequencerCameraOverlay(m_sceneViewRect, view, projection);
+        }
         if (m_showSceneBounds || m_sceneShadingMode == SceneShadingMode::Wireframe) {
             DrawSceneBoundsOverlay(m_sceneViewRect, view, projection);
         }

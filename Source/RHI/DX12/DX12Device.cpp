@@ -203,6 +203,30 @@ void DX12Device::CreateFence() {
     assert(m_computeFenceEvent != nullptr);
 }
 
+void DX12Device::ResizeSwapChain(uint32_t width, uint32_t height) {
+    if (!m_swapChain || width == 0 || height == 0) return;
+
+    WaitForGPU();
+
+    // Release back buffer references
+    for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
+        m_backBuffers[i].Reset();
+    }
+
+    // Resize swap chain buffers
+    DXGI_SWAP_CHAIN_DESC1 desc = {};
+    m_swapChain->GetDesc1(&desc);
+    HRESULT hr = m_swapChain->ResizeBuffers(FRAME_COUNT, width, height, desc.Format, desc.Flags);
+    assert(SUCCEEDED(hr));
+
+    // Re-acquire back buffers
+    for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
+        m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
+    }
+
+    m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+}
+
 void DX12Device::WaitForGPU() {
     if (!m_commandQueue || !m_fence || !m_fenceEvent) return;
 

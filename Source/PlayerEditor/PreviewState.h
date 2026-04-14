@@ -1,6 +1,7 @@
 #pragma once
 #include "TimelineDriver.h"
 #include "TimelineAsset.h"
+#include "Gameplay/AnimatorComponent.h"
 #include <memory>
 #include "Entity/Entity.h"
 
@@ -38,13 +39,8 @@ private:
     // Saved state for restore
     struct SavedState
     {
-        int   baseAnimIndex   = 0;
-        float baseTime        = 0.0f;
-        bool  baseLoop        = true;
-        int   actionAnimIndex = -1;
-        float actionTime      = 0.0f;
-        bool  actionLoop      = false;
-        bool  hadDriver       = false;
+        AnimatorComponent animator{};
+        bool hadAnimator = false;
     };
     SavedState m_saved{};
 };

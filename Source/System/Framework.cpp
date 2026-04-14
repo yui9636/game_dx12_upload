@@ -66,6 +66,13 @@ int Framework::Run()
         }
         else
         {
+            if (m_minimized) continue;
+
+            if (m_needsResize && m_ready) {
+                m_needsResize = false;
+                Graphics::Instance().OnResize(m_pendingWidth, m_pendingHeight);
+            }
+
             timer.Tick();
             CalculateFrameStats();
 
@@ -75,6 +82,7 @@ int Framework::Run()
 
             Update(dt);
             Render(dt);
+            m_ready = true;
         }
     }
     return (int)msg.wParam;
@@ -169,8 +177,37 @@ LRESULT CALLBACK Framework::HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LP
     case WM_KEYDOWN:
         if (wParam == VK_ESCAPE) PostMessage(hWnd, WM_CLOSE, 0, 0);
         break;
-    case WM_ENTERSIZEMOVE: timer.Stop();  break;
-    case WM_EXITSIZEMOVE:  timer.Start(); break;
+    case WM_SIZE:
+    {
+        UINT width = LOWORD(lParam);
+        UINT height = HIWORD(lParam);
+        if (wParam == SIZE_MINIMIZED) {
+            m_minimized = true;
+        } else if (wParam == SIZE_MAXIMIZED || wParam == SIZE_RESTORED) {
+            m_minimized = false;
+            if (width > 0 && height > 0) {
+                m_pendingWidth = width;
+                m_pendingHeight = height;
+                // Maximize/restore: resize immediately (not dragging)
+                if (!m_inSizeMove) {
+                    m_needsResize = true;
+                }
+            }
+        }
+        break;
+    }
+    case WM_ENTERSIZEMOVE:
+        m_inSizeMove = true;
+        timer.Stop();
+        break;
+    case WM_EXITSIZEMOVE:
+        m_inSizeMove = false;
+        timer.Start();
+        // Apply pending resize from drag
+        if (m_pendingWidth > 0 && m_pendingHeight > 0) {
+            m_needsResize = true;
+        }
+        break;
     default:
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }

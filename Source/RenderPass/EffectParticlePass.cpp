@@ -28,6 +28,7 @@
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "ShadowMap.h"
+#include "RenderContext/RenderQueue.h"
 #include "System/ResourceManager.h"
 
 using Microsoft::WRL::ComPtr;
@@ -104,6 +105,31 @@ namespace
         DirectX::XMFLOAT4 sizeSeed = { 0.18f, 0.04f, 1.0f, 0.0f };
         DirectX::XMFLOAT4 subUvParams = { 1.0f, 1.0f, 0.0f, 0.0f };
         DirectX::XMFLOAT4 motionParams = { 0.0f, 0.18f, 0.20f, 0.0f };
+        DirectX::XMFLOAT4 randomParams = { 0.0f, 0.0f, 0.0f, 0.0f }; // x=speedRange, y=sizeRange, z=lifeRange, w=windStrength
+        DirectX::XMFLOAT4 windDirection = { 1.0f, 0.0f, 0.0f, 0.0f }; // xyz=direction, w=turbulence
+        // Phase 1C: Size curve (4 keys)
+        DirectX::XMFLOAT4 sizeCurveValues = { 0.18f, 0.18f, 0.04f, 0.04f }; // s0,s1,s2,s3
+        DirectX::XMFLOAT4 sizeCurveTimes  = { 0.0f,  0.33f, 0.66f, 1.0f };  // t0,t1,t2,t3
+        // Phase 1C: Color gradient (4 keys)
+        DirectX::XMFLOAT4 gradientColor0 = { 1.0f, 1.0f, 1.0f, 1.0f };
+        DirectX::XMFLOAT4 gradientColor1 = { 1.0f, 1.0f, 1.0f, 1.0f };
+        DirectX::XMFLOAT4 gradientColor2 = { 1.0f, 1.0f, 1.0f, 0.0f };
+        DirectX::XMFLOAT4 gradientColor3 = { 1.0f, 1.0f, 1.0f, 0.0f };
+        DirectX::XMFLOAT4 gradientTimes  = { 0.0f, 0.33f, 0.66f, 1.0f }; // t0,t1,t2,t3
+        // Phase 2: Attractors
+        DirectX::XMFLOAT4 attractor0 = {};
+        DirectX::XMFLOAT4 attractor1 = {};
+        DirectX::XMFLOAT4 attractor2 = {};
+        DirectX::XMFLOAT4 attractor3 = {};
+        DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
+        DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f };
+        // Phase 2: Collision
+        DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
+        DirectX::XMFLOAT4 collisionSphere0 = {};
+        DirectX::XMFLOAT4 collisionSphere1 = {};
+        DirectX::XMFLOAT4 collisionSphere2 = {};
+        DirectX::XMFLOAT4 collisionSphere3 = {};
+        DirectX::XMFLOAT4 collisionParams = {}; // x=restitution, y=friction, z=sphereCount, w=attractorCount
     };
 
     struct EffectParticleSortConstants
@@ -275,6 +301,7 @@ namespace
         D3D12_GPU_VIRTUAL_ADDRESS binIndexGpuVa = 0ull;   // bin-sorted particle indices
         DX12Buffer* depthBinIndirectArgsBuffer = nullptr;  // per-depth-bin indirect args (Phase 3)
         D3D12_GPU_VIRTUAL_ADDRESS depthBinIndexGpuVa = 0ull;
+        EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
     };
 
     struct MeshDrawEntry
@@ -294,6 +321,7 @@ namespace
         D3D12_GPU_VIRTUAL_ADDRESS warmGpuVa = 0ull;
         D3D12_GPU_VIRTUAL_ADDRESS ribbonHistoryGpuVa = 0ull;
         DX12Buffer* indirectArgsBuffer = nullptr;
+        EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
     };
 
     struct EffectParticleDx12Resources
@@ -319,9 +347,11 @@ namespace
         ComPtr<ID3D12PipelineState> sortC2PipelineState;
         ComPtr<ID3D12RootSignature> billboardRootSignature;
         ComPtr<ID3D12PipelineState> billboardPipelineState;
+        ComPtr<ID3D12PipelineState> billboardBlendPSOs[static_cast<int>(EffectParticleBlendMode::EnumCount)];
         ComPtr<ID3D12CommandSignature> billboardCommandSignature;
         ComPtr<ID3D12RootSignature> ribbonRootSignature;
         ComPtr<ID3D12PipelineState> ribbonPipelineState;
+        ComPtr<ID3D12PipelineState> ribbonBlendPSOs[static_cast<int>(EffectParticleBlendMode::EnumCount)];
         ComPtr<ID3D12RootSignature> meshRootSignature;
         ComPtr<ID3D12PipelineState> meshPipelineState;
         ComPtr<ID3D12DescriptorHeap> textureHeap;
@@ -335,6 +365,10 @@ namespace
         uint64_t frameCounter = 0;
         bool warnedNonDx12 = false;
         bool warnedMissingMesh = false;
+
+        // Trail pipeline
+        ComPtr<ID3D12RootSignature> trailRootSignature;
+        ComPtr<ID3D12PipelineState> trailPipelineState;
     };
 
     EffectParticleDx12Resources& GetEffectParticleDx12Resources();
@@ -360,6 +394,7 @@ namespace
     bool CreateBillboardPipeline(DX12Device* device, EffectParticleDx12Resources& resources);
     bool CreateRibbonPipeline(DX12Device* device, EffectParticleDx12Resources& resources);
     bool CreateMeshPipeline(DX12Device* device, EffectParticleDx12Resources& resources);
+    bool CreateTrailPipeline(DX12Device* device, EffectParticleDx12Resources& resources);
     bool CreateTextureDescriptorHeap(DX12Device* device, EffectParticleDx12Resources& resources);
     bool EnsureCurlNoiseTexture(DX12Device* device, EffectParticleDx12Resources& resources);
     bool EnsurePassResources(DX12Device* device, EffectParticleDx12Resources& resources);
@@ -763,43 +798,46 @@ namespace
         return true;
     }
 
-    D3D12_BLEND_DESC CreateAdditiveBlendDesc()
+    D3D12_BLEND_DESC CreateBlendDesc(EffectParticleBlendMode mode)
     {
         D3D12_BLEND_DESC blendDesc = {};
         blendDesc.AlphaToCoverageEnable = FALSE;
         blendDesc.IndependentBlendEnable = FALSE;
-        auto& rtBlend = blendDesc.RenderTarget[0];
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.LogicOpEnable = FALSE;
-        rtBlend.SrcBlend = D3D12_BLEND_ONE;
-        rtBlend.DestBlend = D3D12_BLEND_ONE;
-        rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        rtBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
-        rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        auto& rt = blendDesc.RenderTarget[0];
+        rt.BlendEnable = TRUE;
+        rt.LogicOpEnable = FALSE;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        rt.LogicOp = D3D12_LOGIC_OP_NOOP;
+        rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+        switch (mode) {
+        case EffectParticleBlendMode::Additive:
+            rt.SrcBlend = D3D12_BLEND_ONE;         rt.DestBlend = D3D12_BLEND_ONE;
+            rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+            break;
+        case EffectParticleBlendMode::AlphaBlend:
+            rt.SrcBlend = D3D12_BLEND_SRC_ALPHA;   rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+            rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+            break;
+        case EffectParticleBlendMode::Multiply:
+            rt.SrcBlend = D3D12_BLEND_DEST_COLOR;  rt.DestBlend = D3D12_BLEND_ZERO;
+            rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+            break;
+        case EffectParticleBlendMode::SoftAdditive:
+            rt.SrcBlend = D3D12_BLEND_ONE;         rt.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
+            rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+            break;
+        default: // PremultipliedAlpha
+            rt.SrcBlend = D3D12_BLEND_ONE;         rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+            rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+            break;
+        }
         return blendDesc;
     }
 
-    D3D12_BLEND_DESC CreatePremultipliedAlphaBlendDesc()
-    {
-        D3D12_BLEND_DESC blendDesc = {};
-        blendDesc.AlphaToCoverageEnable = FALSE;
-        blendDesc.IndependentBlendEnable = FALSE;
-        auto& rtBlend = blendDesc.RenderTarget[0];
-        rtBlend.BlendEnable = TRUE;
-        rtBlend.LogicOpEnable = FALSE;
-        rtBlend.SrcBlend = D3D12_BLEND_ONE;
-        rtBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-        rtBlend.BlendOp = D3D12_BLEND_OP_ADD;
-        rtBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        rtBlend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-        rtBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        rtBlend.LogicOp = D3D12_LOGIC_OP_NOOP;
-        rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        return blendDesc;
-    }
+    D3D12_BLEND_DESC CreateAdditiveBlendDesc() { return CreateBlendDesc(EffectParticleBlendMode::Additive); }
+    D3D12_BLEND_DESC CreatePremultipliedAlphaBlendDesc() { return CreateBlendDesc(EffectParticleBlendMode::PremultipliedAlpha); }
 
     D3D12_RASTERIZER_DESC CreateRasterDesc(D3D12_CULL_MODE cullMode)
     {
@@ -1593,6 +1631,16 @@ namespace
             return false;
         }
 
+        // Create blend mode PSO variants
+        for (int i = 0; i < static_cast<int>(EffectParticleBlendMode::EnumCount); ++i) {
+            psoDesc.BlendState = CreateBlendDesc(static_cast<EffectParticleBlendMode>(i));
+            hr = d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&resources.billboardBlendPSOs[i]));
+            if (FAILED(hr)) {
+                LOG_ERROR("[EffectParticlePass] Failed to create billboard blend PSO %d", i);
+                return false;
+            }
+        }
+
         D3D12_INDIRECT_ARGUMENT_DESC drawArgumentDesc = {};
         drawArgumentDesc.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
 
@@ -1721,6 +1769,16 @@ namespace
             return false;
         }
 
+        // Create blend mode PSO variants for ribbon
+        for (int i = 0; i < static_cast<int>(EffectParticleBlendMode::EnumCount); ++i) {
+            psoDesc.BlendState = CreateBlendDesc(static_cast<EffectParticleBlendMode>(i));
+            hr = d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&resources.ribbonBlendPSOs[i]));
+            if (FAILED(hr)) {
+                LOG_ERROR("[EffectParticlePass] Failed to create ribbon blend PSO %d", i);
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -1839,6 +1897,86 @@ namespace
         return true;
     }
 
+    bool CreateTrailPipeline(DX12Device* device, EffectParticleDx12Resources& resources)
+    {
+        if (!device || resources.trailPipelineState) {
+            return resources.trailPipelineState != nullptr;
+        }
+
+        auto* d3dDevice = device->GetDevice();
+        if (!d3dDevice) {
+            return false;
+        }
+
+        // Trail root sig: [0]=b0 CbTrail (ViewProjection matrix)
+        D3D12_ROOT_PARAMETER1 params[1] = {};
+        params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+        D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootDesc = {};
+        rootDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+        rootDesc.Desc_1_1.NumParameters = _countof(params);
+        rootDesc.Desc_1_1.pParameters = params;
+        rootDesc.Desc_1_1.NumStaticSamplers = 0;
+        rootDesc.Desc_1_1.pStaticSamplers = nullptr;
+        rootDesc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+        ComPtr<ID3DBlob> signatureBlob;
+        ComPtr<ID3DBlob> errorBlob;
+        HRESULT hr = D3D12SerializeVersionedRootSignature(&rootDesc, &signatureBlob, &errorBlob);
+        if (FAILED(hr)) {
+            if (errorBlob) {
+                LOG_ERROR("[EffectParticlePass] Trail root signature serialize failed: %s",
+                    static_cast<const char*>(errorBlob->GetBufferPointer()));
+            }
+            return false;
+        }
+
+        hr = d3dDevice->CreateRootSignature(0, signatureBlob->GetBufferPointer(), signatureBlob->GetBufferSize(), IID_PPV_ARGS(&resources.trailRootSignature));
+        if (FAILED(hr)) {
+            LOG_ERROR("[EffectParticlePass] Failed to create trail root signature");
+            return false;
+        }
+
+        ComPtr<ID3DBlob> vsBlob;
+        ComPtr<ID3DBlob> psBlob;
+        if (!LoadBlob(L"Data/Shader/TrailVS.cso", vsBlob) ||
+            !LoadBlob(L"Data/Shader/TrailPS.cso", psBlob)) {
+            return false;
+        }
+
+        D3D12_INPUT_ELEMENT_DESC inputLayout[] =
+        {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = resources.trailRootSignature.Get();
+        psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+        psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+        psoDesc.BlendState = CreateBlendDesc(EffectParticleBlendMode::PremultipliedAlpha);
+        psoDesc.SampleMask = UINT_MAX;
+        psoDesc.RasterizerState = CreateRasterDesc(D3D12_CULL_MODE_NONE);
+        psoDesc.DepthStencilState = CreateReadOnlyDepthDesc();
+        psoDesc.InputLayout = { inputLayout, _countof(inputLayout) };
+        psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        psoDesc.NumRenderTargets = 1;
+        psoDesc.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+        psoDesc.SampleDesc.Count = 1;
+
+        hr = d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&resources.trailPipelineState));
+        if (FAILED(hr)) {
+            LOG_ERROR("[EffectParticlePass] Failed to create trail pipeline state");
+            return false;
+        }
+
+        return true;
+    }
+
     bool CreateTextureDescriptorHeap(DX12Device* device, EffectParticleDx12Resources& resources)
     {
         if (!device || resources.textureHeap) {
@@ -1912,6 +2050,7 @@ namespace
             CreateBillboardPipeline(device, resources) &&
             CreateRibbonPipeline(device, resources) &&
             CreateMeshPipeline(device, resources) &&
+            CreateTrailPipeline(device, resources) &&
             CreateTextureDescriptorHeap(device, resources) &&
             EnsureCurlNoiseTexture(device, resources);
     }
@@ -2331,6 +2470,47 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             (std::max)(packet.curlNoiseScrollSpeed, 0.0f),
             packet.vortexStrength
         };
+        constants.randomParams = {
+            packet.randomSpeedRange,
+            packet.randomSizeRange,
+            packet.randomLifeRange,
+            packet.windStrength
+        };
+        constants.windDirection = {
+            packet.windDirection.x,
+            packet.windDirection.y,
+            packet.windDirection.z,
+            packet.windTurbulence
+        };
+        constants.sizeCurveValues = packet.sizeCurveValues;
+        constants.sizeCurveTimes = packet.sizeCurveTimes;
+        constants.gradientColor0 = packet.gradientColor0;
+        constants.gradientColor1 = packet.gradientColor1;
+        constants.gradientColor2 = packet.gradientColor2;
+        constants.gradientColor3 = packet.gradientColor3;
+        constants.gradientTimes = {
+            0.0f,
+            packet.gradientMidTimes.x,
+            packet.gradientMidTimes.y,
+            1.0f
+        };
+        // Phase 2: Attractors
+        for (int ai = 0; ai < 4; ++ai) {
+            (&constants.attractor0)[ai] = packet.attractors[ai];
+        }
+        constants.attractorRadii = packet.attractorRadii;
+        constants.attractorFalloff = packet.attractorFalloff;
+        // Phase 2: Collision
+        constants.collisionPlane = packet.collisionPlane;
+        for (int ci = 0; ci < 4; ++ci) {
+            (&constants.collisionSphere0)[ci] = packet.collisionSpheres[ci];
+        }
+        constants.collisionParams = {
+            packet.collisionRestitution,
+            packet.collisionFriction,
+            static_cast<float>(packet.collisionSphereCount),
+            static_cast<float>(packet.attractorCount)
+        };
         return constants;
     };
 
@@ -2688,9 +2868,9 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         if (packet->drawMode == EffectParticleDrawMode::Mesh) {
             meshDrawEntries.push_back({ packet, hotGpuVa, headerGpuVa, indirectArgsBuffer, drawCount });
         } else if (packet->drawMode == EffectParticleDrawMode::Ribbon) {
-            ribbonDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, ribbonHistoryGpuVa, indirectArgsBuffer });
+            ribbonDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, ribbonHistoryGpuVa, indirectArgsBuffer, packet->blendMode });
         } else {
-            billboardDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, indirectArgsBuffer, sharedBinIndirectArgsBuffer, binIndexGpuVa, sharedDepthBinIndirectArgsBuffer, depthBinIndexGpuVa });
+            billboardDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, indirectArgsBuffer, sharedBinIndirectArgsBuffer, binIndexGpuVa, sharedDepthBinIndirectArgsBuffer, depthBinIndexGpuVa, packet->blendMode });
         }
     }
 
@@ -2725,11 +2905,20 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
 
     if (!billboardDrawEntries.empty()) {
         nativeCommandList->SetGraphicsRootSignature(particleResources.billboardRootSignature.Get());
-        nativeCommandList->SetPipelineState(particleResources.billboardPipelineState.Get());
         nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
+        EffectParticleBlendMode currentBillboardBlend = EffectParticleBlendMode::EnumCount; // force first set
 
         for (const auto& drawEntry : billboardDrawEntries) {
+            if (drawEntry.blendMode != currentBillboardBlend) {
+                currentBillboardBlend = drawEntry.blendMode;
+                int blendIdx = static_cast<int>(currentBillboardBlend);
+                if (blendIdx >= 0 && blendIdx < static_cast<int>(EffectParticleBlendMode::EnumCount) && particleResources.billboardBlendPSOs[blendIdx]) {
+                    nativeCommandList->SetPipelineState(particleResources.billboardBlendPSOs[blendIdx].Get());
+                } else {
+                    nativeCommandList->SetPipelineState(particleResources.billboardPipelineState.Get());
+                }
+            }
             auto* texture = ResolveParticleTexture(particleResources, *drawEntry.packet);
             if (!texture) {
                 continue;
@@ -2801,11 +2990,20 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
 
     if (!ribbonDrawEntries.empty()) {
         nativeCommandList->SetGraphicsRootSignature(particleResources.ribbonRootSignature.Get());
-        nativeCommandList->SetPipelineState(particleResources.ribbonPipelineState.Get());
         nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
+        EffectParticleBlendMode currentRibbonBlend = EffectParticleBlendMode::EnumCount;
 
         for (const auto& drawEntry : ribbonDrawEntries) {
+            if (drawEntry.blendMode != currentRibbonBlend) {
+                currentRibbonBlend = drawEntry.blendMode;
+                int blendIdx = static_cast<int>(currentRibbonBlend);
+                if (blendIdx >= 0 && blendIdx < static_cast<int>(EffectParticleBlendMode::EnumCount) && particleResources.ribbonBlendPSOs[blendIdx]) {
+                    nativeCommandList->SetPipelineState(particleResources.ribbonBlendPSOs[blendIdx].Get());
+                } else {
+                    nativeCommandList->SetPipelineState(particleResources.ribbonPipelineState.Get());
+                }
+            }
             auto* texture = ResolveParticleTexture(particleResources, *drawEntry.packet);
             if (!texture) {
                 continue;
@@ -2888,6 +3086,40 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 nativeCommandList->IASetIndexBuffer(&ibView);
                 nativeCommandList->DrawIndexedInstanced(meshResource.indexCount, drawEntry.drawCount, 0u, 0, 0u);
             }
+        }
+    }
+
+    // --- Trail rendering ---
+    if (!queue.trailPackets.empty() && particleResources.trailPipelineState)
+    {
+        nativeCommandList->SetGraphicsRootSignature(particleResources.trailRootSignature.Get());
+        nativeCommandList->SetPipelineState(particleResources.trailPipelineState.Get());
+        nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
+
+        for (const auto& trail : queue.trailPackets)
+        {
+            if (trail.vertices.empty() || trail.indices.empty()) continue;
+
+            const uint32_t vbSize = static_cast<uint32_t>(trail.vertices.size() * sizeof(TrailVertex));
+            const uint32_t ibSize = static_cast<uint32_t>(trail.indices.size() * sizeof(uint32_t));
+
+            const auto vbAlloc = dx12CommandList->AllocateDynamicConstantBuffer(trail.vertices.data(), vbSize);
+            const auto ibAlloc = dx12CommandList->AllocateDynamicConstantBuffer(trail.indices.data(), ibSize);
+
+            D3D12_VERTEX_BUFFER_VIEW vbView = {};
+            vbView.BufferLocation = vbAlloc.gpuVA;
+            vbView.SizeInBytes = vbSize;
+            vbView.StrideInBytes = sizeof(TrailVertex);
+
+            D3D12_INDEX_BUFFER_VIEW ibView = {};
+            ibView.BufferLocation = ibAlloc.gpuVA;
+            ibView.SizeInBytes = ibSize;
+            ibView.Format = DXGI_FORMAT_R32_UINT;
+
+            nativeCommandList->IASetVertexBuffers(0, 1, &vbView);
+            nativeCommandList->IASetIndexBuffer(&ibView);
+            nativeCommandList->DrawIndexedInstanced(static_cast<UINT>(trail.indices.size()), 1, 0, 0, 0);
         }
     }
 

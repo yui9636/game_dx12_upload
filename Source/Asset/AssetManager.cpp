@@ -335,7 +335,7 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
 
 
-    std::string baseName = "NewActor";
+    std::string baseName = "NewScript";
 
     std::filesystem::path hPath = parentDir / (baseName + ".h");
 
@@ -348,7 +348,7 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
     while (std::filesystem::exists(hPath, ec) || std::filesystem::exists(cppPath, ec)) {
 
-        baseName = "NewActor_" + std::to_string(count++);
+        baseName = "NewScript_" + std::to_string(count++);
 
         hPath = parentDir / (baseName + ".h");
 
@@ -363,13 +363,11 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
     ofsH << "#pragma once\n\n"
 
-        << "#include \"Actor/Actor.h\"\n\n"
-
-        << "class " << baseName << " : public Actor {\n"
+        << "class " << baseName << " {\n"
 
         << "public:\n"
 
-        << "    void Update(float dt) override;\n"
+        << "    void Update(float dt);\n"
 
         << "};\n";
 

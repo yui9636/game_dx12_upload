@@ -21,3 +21,9 @@ Data/Model/**/*.cereal
 imgui.ini
 Data/Effect/imgui.ini
 Data/Scene/imgui.ini
+
+# Runtime debug logs
+*.log
+stderr.txt
+stderr_runtime.txt
+capture.ps1

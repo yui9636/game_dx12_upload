@@ -1,5 +1,6 @@
 #include "DX12Texture.h"
 #include "Graphics.h"
+#include "Console/Logger.h"
 #include <cassert>
 
 DXGI_FORMAT DX12Texture::ToDXGIFormat(TextureFormat format) {
@@ -109,6 +110,21 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         &heapProps, D3D12_HEAP_FLAG_NONE,
         &texDesc, initialState, pClearValue,
         IID_PPV_ARGS(&m_resource));
+    if (FAILED(hr) && pClearValue != nullptr) {
+        hr = d3dDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE,
+            &texDesc, initialState, nullptr,
+            IID_PPV_ARGS(&m_resource));
+    }
+    if (FAILED(hr)) {
+        LOG_ERROR("[DX12Texture] CreateCommittedResource failed. w=%u h=%u format=%d bind=%u flags=%u hr=0x%08X",
+            width,
+            height,
+            static_cast<int>(format),
+            static_cast<uint32_t>(bindFlags),
+            static_cast<uint32_t>(texDesc.Flags),
+            static_cast<unsigned int>(hr));
+    }
     assert(SUCCEEDED(hr));
 
     // Create views

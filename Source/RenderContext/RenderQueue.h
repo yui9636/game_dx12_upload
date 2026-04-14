@@ -137,6 +137,14 @@ struct EffectMeshPacket {
     uint32_t shaderVariantKey = 0;
     uint64_t sortKey = 0;
     float lifetimeFade = 1.0f;
+
+    // Phase A: Mesh Variant System
+    EffectMeshVariantParams meshVariantParams;
+    std::shared_ptr<ITexture> maskTexture;
+    std::shared_ptr<ITexture> normalMapTexture;
+    std::shared_ptr<ITexture> flowMapTexture;
+    std::shared_ptr<ITexture> subTexture;
+    std::shared_ptr<ITexture> emissionTexture;
 };
 
 struct EffectParticlePacket {
@@ -179,6 +187,47 @@ struct EffectParticlePacket {
     float vortexStrength = 0.0f;
     bool softParticleEnabled = false;
     float softParticleScale = 96.0f;
+    EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
+    float randomSpeedRange = 0.0f;
+    float randomSizeRange = 0.0f;
+    float randomLifeRange = 0.0f;
+    float windStrength = 0.0f;
+    DirectX::XMFLOAT3 windDirection = { 1.0f, 0.0f, 0.0f };
+    float windTurbulence = 0.0f;
+    // Phase 1C: Size curve
+    DirectX::XMFLOAT4 sizeCurveValues = { 0.18f, 0.18f, 0.04f, 0.04f };
+    DirectX::XMFLOAT4 sizeCurveTimes  = { 0.0f,  0.33f, 0.66f, 1.0f };
+    uint32_t sizeCurveKeyCount = 2;
+    // Phase 1C: Color gradient
+    DirectX::XMFLOAT4 gradientColor0 = { 1.0f, 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT4 gradientColor1 = { 1.0f, 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT4 gradientColor2 = { 1.0f, 1.0f, 1.0f, 0.0f };
+    DirectX::XMFLOAT4 gradientColor3 = { 1.0f, 1.0f, 1.0f, 0.0f };
+    DirectX::XMFLOAT2 gradientMidTimes = { 0.33f, 0.66f };
+    uint32_t gradientKeyCount = 2;
+    // Phase 2: Attractor/Repeller
+    DirectX::XMFLOAT4 attractors[4] = {};
+    DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
+    DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f };
+    uint32_t attractorCount = 0;
+    // Phase 2: GPU Collision
+    bool collisionEnabled = false;
+    DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 collisionSpheres[4] = {};
+    uint32_t collisionSphereCount = 0;
+    float collisionRestitution = 0.5f;
+    float collisionFriction = 0.3f;
+};
+
+struct TrailVertex {
+    DirectX::XMFLOAT3 position;
+    DirectX::XMFLOAT4 color;
+    DirectX::XMFLOAT2 texcoord;
+};
+
+struct TrailPacket {
+    std::vector<TrailVertex> vertices;
+    std::vector<uint32_t> indices;
 };
 
 class RenderQueue {
@@ -188,6 +237,7 @@ public:
     std::vector<InstanceBatch> opaqueInstanceBatches;
     std::vector<EffectMeshPacket> effectMeshPackets;
     std::vector<EffectParticlePacket> effectParticlePackets;
+    std::vector<TrailPacket> trailPackets;
     RenderQueueMetrics metrics;
 
     void Clear() {
@@ -196,6 +246,7 @@ public:
         opaqueInstanceBatches.clear();
         effectMeshPackets.clear();
         effectParticlePackets.clear();
+        trailPackets.clear();
         metrics = {};
     }
 };

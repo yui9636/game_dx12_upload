@@ -18,6 +18,8 @@
 #include "Input/InputTextSystem.h"
 #include "Input/InputFeedbackSystem.h"
 #include "Engine/EngineKernel.h"
+#include "Trail/TrailSystem.h"
+#include "Trail/TrailExtractSystem.h"
 #include "Gameplay/PlayerInputSystem.h"
 #include "Gameplay/ActionSystem.h"
 #include "Gameplay/DodgeSystem.h"
@@ -37,6 +39,7 @@
 #include "EffectRuntime/EffectSystems.h"
 #include "Animator/AnimatorService.h"
 #include "Animator/AnimatorSystem.h"
+#include "Sequencer/CinematicService.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
 #include "Component/AudioSettingsComponent.h"
@@ -110,6 +113,7 @@ void GameLayer::Update(const EngineTime& time)
 {
     EffectService::Instance().SetRegistry(&m_registry);
     AnimatorService::Instance().SetRegistry(&m_registry);
+    CinematicService::Instance().SetRegistry(&m_registry);
 
     auto& kernel = EngineKernel::Instance();
     const auto& eventQueue = kernel.GetInputEventQueue();
@@ -134,6 +138,7 @@ void GameLayer::Update(const EngineTime& time)
     TimelineVFXSystem::Update(m_registry);
     TimelineAudioSystem::Update(m_registry);
     TimelineShakeSystem::Update(m_registry, time.dt);
+    CinematicService::Instance().Update(time);
     EffectSpawnSystem::Update(m_registry, time.dt);
     EffectPlaybackSystem::Update(m_registry, time.dt);
     EffectSimulationSystem::Update(m_registry, time.dt);
@@ -148,6 +153,7 @@ void GameLayer::Update(const EngineTime& time)
     transformSys.Update(m_registry);
     NodeAttachmentSystem::Update(m_registry);
     EffectAttachmentSystem::Update(m_registry);
+    TrailSystem::Update(m_registry, time.dt);
 
     AnimatorSystem::Update(m_registry, time.dt);
     ModelUpdateSystem::Update(m_registry);
@@ -204,6 +210,7 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     MeshExtractSystem extractSys;
     extractSys.Extract(m_registry, queue);
     EffectExtractSystem::Extract(m_registry, rc, queue);
+    TrailExtractSystem::Extract(m_registry, queue, rc);
 }
 
 

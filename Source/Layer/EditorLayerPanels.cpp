@@ -65,6 +65,8 @@ void EditorLayer::DrawDockSpace()
 
         ImGui::DockBuilderDockWindow(kConsoleWindowTitle, dock_down);
         ImGui::DockBuilderDockWindow(kAssetBrowserWindowTitle, dock_down);
+        ImGui::DockBuilderDockWindow(kSerializerWindowTitle, dock_down);
+        ImGui::DockBuilderDockWindow(kSequencerWindowTitle, dock_down);
 
         ImGui::DockBuilderDockWindow(kSceneViewWindowTitle, dock_main_id);
         ImGui::DockBuilderDockWindow(kGameViewWindowTitle, dock_main_id);
@@ -238,6 +240,14 @@ void EditorLayer::DrawEffectEditorWorkspace()
         m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
         &effectEditorFocused);
     SetLastFocusedWindow(WindowFocusTarget::EffectEditor, effectEditorFocused);
+}
+
+void EditorLayer::DrawModelSerializer()
+{
+    bool serializerFocused = false;
+    ApplyPendingWindowFocus(WindowFocusTarget::Serializer);
+    m_modelSerializerPanel.Draw(&m_showSerializer, &serializerFocused);
+    SetLastFocusedWindow(WindowFocusTarget::Serializer, serializerFocused);
 }
 
 
@@ -510,6 +520,14 @@ void EditorLayer::DrawGameView()
     }
     ImGui::End();
     ImGui::PopStyleVar();
+}
+
+void EditorLayer::DrawSequencer()
+{
+    bool focused = false;
+    ApplyPendingWindowFocus(WindowFocusTarget::Sequencer);
+    m_sequencerPanel.Draw(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr, &m_showSequencer, &focused);
+    SetLastFocusedWindow(WindowFocusTarget::Sequencer, focused);
 }
 
 void EditorLayer::DrawHierarchy()

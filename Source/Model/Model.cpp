@@ -450,7 +450,7 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 		importer.LoadAnimations(animations, nodes);
 
-		Serialize(cerealPath.string().c_str());
+		// Manual serializer build now owns .cereal output.
 	}
 	else if (!loadedFromCache)
 	{

@@ -1,31 +1,106 @@
 #include "InputMappingTab.h"
 #include <imgui.h>
 #include "Icon/IconsFontAwesome7.h"
+#include "Input/InputBindingComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
+#include "Archetype/Archetype.h"
+#include "Component/ComponentSignature.h"
 #include "Registry/Registry.h"
+#include "System/Dialog.h"
+#include "Type/TypeInfo.h"
+
+namespace
+{
+    constexpr const char* kInputMapFilter =
+        "Input Map (*.inputmap.json)\0*.inputmap.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+}
+
+bool InputMappingTab::OpenActionMap(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    InputActionMapAsset loaded;
+    if (!loaded.LoadFromFile(path)) {
+        return false;
+    }
+
+    m_actionMapPath = path;
+    m_editingMap = std::move(loaded);
+    m_dirty = false;
+    return true;
+}
+
+bool InputMappingTab::SaveActionMap()
+{
+    if (m_actionMapPath.empty()) {
+        return false;
+    }
+
+    if (!m_editingMap.SaveToFile(m_actionMapPath)) {
+        return false;
+    }
+
+    InputActionMapAsset::ClearCache();
+    m_dirty = false;
+    return true;
+}
+
+bool InputMappingTab::SaveActionMapAs(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    m_actionMapPath = path;
+    return SaveActionMap();
+}
+
+bool InputMappingTab::ReloadActionMap()
+{
+    if (m_actionMapPath.empty()) {
+        return false;
+    }
+
+    return OpenActionMap(m_actionMapPath);
+}
 
 void InputMappingTab::SetActionMapPath(const std::string& path)
 {
-    if (path == m_actionMapPath) return;
-    m_actionMapPath = path;
-    if (!path.empty()) {
-        m_editingMap.LoadFromFile(path);
+    if (path == m_actionMapPath) {
+        return;
     }
-    m_dirty = false;
+
+    if (path.empty()) {
+        m_actionMapPath.clear();
+        m_editingMap = InputActionMapAsset{};
+        m_dirty = false;
+        return;
+    }
+
+    OpenActionMap(path);
 }
 
 void InputMappingTab::Draw(Registry* registry)
 {
     // Action map selector
-    ImGui::Text("Action Map: %s", m_actionMapPath.empty() ? "(none)" : m_actionMapPath.c_str());
-    ImGui::SameLine();
+    if (!m_actionMapPath.empty()) {
+        ImGui::Text("Action Map: %s", m_actionMapPath.c_str());
+        ImGui::SameLine();
+    }
     if (ImGui::Button("Load...")) {
-        // Placeholder: in a real implementation, open file dialog
+        char pathBuffer[MAX_PATH] = {};
+        if (!m_actionMapPath.empty()) {
+            strcpy_s(pathBuffer, m_actionMapPath.c_str());
+        }
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kInputMapFilter, "Open Input Map") == DialogResult::OK) {
+            OpenActionMap(pathBuffer);
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save") && !m_actionMapPath.empty()) {
-        m_editingMap.SaveToFile(m_actionMapPath);
-        m_dirty = false;
+        SaveActionMap();
     }
     if (m_dirty) {
         ImGui::SameLine();
@@ -243,20 +318,69 @@ void InputMappingTab::DrawLiveTest(Registry* registry)
     ImGui::Text("Real-time input state from ResolvedInputStateComponent:");
     ImGui::Separator();
 
-    // Find first entity with ResolvedInputStateComponent
-    // For now, just show placeholder
+    Signature sig = CreateSignature<ResolvedInputStateComponent>();
+    const ResolvedInputStateComponent* resolved = nullptr;
+    const InputBindingComponent* binding = nullptr;
+
+    for (auto* arch : registry->GetAllArchetypes()) {
+        if (!SignatureMatches(arch->GetSignature(), sig)) {
+            continue;
+        }
+
+        auto* resolvedCol = arch->GetColumn(TypeManager::GetComponentTypeID<ResolvedInputStateComponent>());
+        auto* bindingCol = arch->GetSignature().test(TypeManager::GetComponentTypeID<InputBindingComponent>())
+            ? arch->GetColumn(TypeManager::GetComponentTypeID<InputBindingComponent>())
+            : nullptr;
+        if (!resolvedCol) {
+            continue;
+        }
+
+        for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+            auto* candidateBinding = bindingCol ? static_cast<InputBindingComponent*>(bindingCol->Get(i)) : nullptr;
+            if (!m_actionMapPath.empty() && candidateBinding && strcmp(candidateBinding->actionMapAssetPath, m_actionMapPath.c_str()) != 0) {
+                continue;
+            }
+
+            resolved = static_cast<ResolvedInputStateComponent*>(resolvedCol->Get(i));
+            binding = candidateBinding;
+            break;
+        }
+
+        if (resolved) {
+            break;
+        }
+    }
+
+    if (!resolved) {
+        ImGui::TextDisabled("No live input source matched the current action map.");
+        return;
+    }
+
+    if (binding && binding->actionMapAssetPath[0] != '\0') {
+        ImGui::TextDisabled("Binding: %s", binding->actionMapAssetPath);
+        ImGui::Separator();
+    }
+
     ImGui::Text("Actions:");
-    for (int i = 0; i < (int)m_editingMap.actions.size(); ++i) {
-        auto& a = m_editingMap.actions[i];
-        // In full implementation: read from ResolvedInputStateComponent
-        ImGui::BulletText("%s: [--]", a.actionName.c_str());
+    const int actionCount = (std::min)(static_cast<int>(m_editingMap.actions.size()), static_cast<int>(resolved->actionCount));
+    for (int i = 0; i < actionCount; ++i) {
+        const auto& action = m_editingMap.actions[i];
+        const auto& state = resolved->actions[i];
+        ImGui::BulletText(
+            "%s: P=%d H=%d R=%d V=%.2f",
+            action.actionName.c_str(),
+            state.pressed ? 1 : 0,
+            state.held ? 1 : 0,
+            state.released ? 1 : 0,
+            state.value);
     }
 
     ImGui::Separator();
     ImGui::Text("Axes:");
-    for (int i = 0; i < (int)m_editingMap.axes.size(); ++i) {
-        auto& ax = m_editingMap.axes[i];
-        ImGui::BulletText("%s: 0.00", ax.axisName.c_str());
+    const int axisCount = (std::min)(static_cast<int>(m_editingMap.axes.size()), static_cast<int>(resolved->axisCount));
+    for (int i = 0; i < axisCount; ++i) {
+        const auto& axis = m_editingMap.axes[i];
+        ImGui::BulletText("%s: %.2f", axis.axisName.c_str(), resolved->axes[i]);
     }
 }
 

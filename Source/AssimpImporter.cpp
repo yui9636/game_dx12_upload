@@ -3,6 +3,7 @@
 #include <stb_image_write.h>
 #include "System/Misc.h"
 #include "AssimpImporter.h"
+#include <Console\Logger.h>
 AssimpImporter::AssimpImporter(const char* filename)
 	:filepath(filename)
 {
@@ -23,7 +24,12 @@ AssimpImporter::AssimpImporter(const char* filename)
 		| aiProcess_CalcTangentSpace;
 
 	aScene = aImporter.ReadFile(filename, aFlags);
-	_ASSERT_EXPR_A(aScene, "3D Model File not found");
+	//_ASSERT_EXPR_A(aScene, "3D Model File not found");
+	if (!aScene) {
+		LOG_WARN("[Assimp] import failed: %s", filename ? filename : "(null)");
+		// ‚±‚±‚Å‘¦assert‚µ‚È‚¢
+		return;
+	}
 
 }
 

@@ -47,17 +47,31 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     const float sizeBias = gShapeParametersSizeBias.w;
     const float alphaBias = gShapeTypeSpinAlphaBias.z;
 
+    const float randomSpeedRange = gRandomParams.x;
+    const float randomSizeRange = gRandomParams.y;
+    const float randomLifeRange = gRandomParams.z;
+
     float3 direction = float3(0.0f, 1.0f, 0.0f);
     const float3 spawnOffset = ComputeSpawnOffset(emitIndex, seed + slot * 13u, shapeType, gShapeParametersSizeBias.xyz, direction);
-    const float randSpeed = lerp(0.65f, 1.35f, Hash01(seed * 3571u + slot * 2137u + emitIndex * 7417u + 131u));
+    const float baseSpeedRand = lerp(0.65f, 1.35f, Hash01(seed * 3571u + slot * 2137u + emitIndex * 7417u + 131u));
     const float randSpin = lerp(-spinRate, spinRate, Hash01(seed * 1597u + slot * 6481u + emitIndex * 3253u + 97u));
+
+    // Per-particle random factors (derived from slot hash)
+    const float randSpeedFactor = lerp(1.0f - randomSpeedRange, 1.0f + randomSpeedRange, Hash01(seed * 4219u + slot * 8837u + 271u));
+    const float randSizeFactor = lerp(1.0f - randomSizeRange, 1.0f + randomSizeRange, Hash01(seed * 5387u + slot * 7193u + 353u));
+    const float randLifeFactor = lerp(1.0f - randomLifeRange, 1.0f + randomLifeRange, Hash01(seed * 6571u + slot * 3911u + 479u));
+
+    const float finalSpeed = speed * baseSpeedRand * randSpeedFactor;
+    const float finalLife = max(particleLifetime * randLifeFactor, 0.01f);
+    const float finalStartSize = startSize * randSizeFactor;
+    const float finalEndSize = endSize * randSizeFactor;
 
     // ── Write Hot stream (32B) ──
     BillboardHot hot;
     hot.position = gOriginCurrentTime.xyz + spawnOffset;
-    hot.ageLifePacked = PackHalf2(0.0f, particleLifetime);
-    hot.velocity = direction * (speed * randSpeed);
-    hot.sizeSpin = PackHalf2(startSize, 0.0f);
+    hot.ageLifePacked = PackHalf2(0.0f, finalLife);
+    hot.velocity = direction * finalSpeed;
+    hot.sizeSpin = PackHalf2(finalStartSize, 0.0f);
     g_BillboardHot[slot] = hot;
 
     // ── Write Warm stream (16B) ──
@@ -72,8 +86,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     BillboardCold cold;
     cold.acceleration = acceleration;
     cold.dragSpinPacked = PackHalf2(drag, randSpin);
-    cold.sizeRange = PackHalf2(startSize, endSize);
-    cold.lifeBias = PackHalf2(particleLifetime, alphaBias);
+    cold.sizeRange = PackHalf2(finalStartSize, finalEndSize);
+    cold.lifeBias = PackHalf2(finalLife, alphaBias);
     cold.sizeFadeBias = PackHalf2(sizeBias, 0.0f); // fadeBias reserved
     cold.emitterSeed = seed;
     g_BillboardCold[slot] = cold;

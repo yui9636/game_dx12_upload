@@ -48,6 +48,7 @@
 #include "Component/EffectPlaybackComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
 #include "Component/EffectSpawnRequestComponent.h"
+#include "Component/SequencerPreviewCameraComponent.h"
 // Input components
 #include "Input/InputUserComponent.h"
 #include "Input/InputContextComponent.h"
@@ -1207,6 +1208,25 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         {
 
             const EntityID entity = selection.GetEntity();
+
+            if (!registry->IsAlive(entity)) {
+                ImGui::TextDisabled("Entity is no longer available.");
+                break;
+            }
+
+            if (registry->GetComponent<SequencerPreviewCameraComponent>(entity)) {
+                ImGui::TextDisabled("Sequencer Camera");
+                ImGui::Separator();
+                ImGui::TextWrapped("This camera actor is generated and managed from Sequencer. Use the Scene view gizmo and Sequencer tracks to edit it.");
+                break;
+            }
+
+            if (registry->GetComponent<EffectPreviewTagComponent>(entity)) {
+                ImGui::TextDisabled("Preview Entity");
+                ImGui::Separator();
+                ImGui::TextWrapped("This entity is generated for editor preview only and is not part of the authored scene.");
+                break;
+            }
 
             ImGui::Text("Entity");
 

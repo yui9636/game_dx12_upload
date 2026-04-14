@@ -434,6 +434,28 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         effectiveMesh,
                         effectiveParticle);
                 }
+                // Multi-parameter overrides (Phase 1B)
+                const size_t scalarCount = (std::min)(overrides[row].scalarNames.size(), overrides[row].scalarValues.size());
+                for (size_t si = 0; si < scalarCount; ++si) {
+                    if (!overrides[row].scalarNames[si].empty()) {
+                        EffectParameterBindings::ApplyFloatParameter(
+                            overrides[row].scalarNames[si],
+                            overrides[row].scalarValues[si],
+                            effectiveMesh,
+                            effectiveParticle,
+                            effectiveDuration);
+                    }
+                }
+                const size_t colorCount = (std::min)(overrides[row].colorNames.size(), overrides[row].colorValues.size());
+                for (size_t ci = 0; ci < colorCount; ++ci) {
+                    if (!overrides[row].colorNames[ci].empty()) {
+                        EffectParameterBindings::ApplyColorParameter(
+                            overrides[row].colorNames[ci],
+                            overrides[row].colorValues[ci],
+                            effectiveMesh,
+                            effectiveParticle);
+                    }
+                }
             }
 
             DirectX::XMFLOAT4 tint = effectiveMesh.tint;
@@ -469,8 +491,26 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     packet.blendState = effectiveMesh.blendState;
                     packet.depthState = effectiveMesh.depthState;
                     packet.rasterizerState = effectiveMesh.rasterizerState;
-                    packet.shaderVariantKey = effectiveMesh.shaderVariantKey;
+                    packet.shaderVariantKey = effectiveMesh.shaderVariantKey != 0
+                        ? effectiveMesh.shaderVariantKey
+                        : effectiveMesh.variantParams.shaderFlags;
                     packet.lifetimeFade = playback.lifetimeFade;
+                    // Phase A: variant params + alphaFade injection
+                    packet.meshVariantParams = effectiveMesh.variantParams;
+                    packet.meshVariantParams.constants.alphaFade = playback.lifetimeFade;
+                    packet.meshVariantParams.constants.effectTime = playback.currentTime;
+                    // Variant textures
+                    auto& vp = effectiveMesh.variantParams;
+                    if (!vp.maskTexturePath.empty())
+                        packet.maskTexture = ResourceManager::Instance().GetTexture(vp.maskTexturePath);
+                    if (!vp.normalMapPath.empty())
+                        packet.normalMapTexture = ResourceManager::Instance().GetTexture(vp.normalMapPath);
+                    if (!vp.flowMapPath.empty())
+                        packet.flowMapTexture = ResourceManager::Instance().GetTexture(vp.flowMapPath);
+                    if (!vp.subTexturePath.empty())
+                        packet.subTexture = ResourceManager::Instance().GetTexture(vp.subTexturePath);
+                    if (!vp.emissionTexPath.empty())
+                        packet.emissionTexture = ResourceManager::Instance().GetTexture(vp.emissionTexPath);
                     const float dx = transform.worldPosition.x - rc.cameraPosition.x;
                     const float dy = transform.worldPosition.y - rc.cameraPosition.y;
                     const float dz = transform.worldPosition.z - rc.cameraPosition.z;
@@ -531,6 +571,32 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 packet.vortexStrength = effectiveParticle.vortexStrength;
                 packet.softParticleEnabled = effectiveParticle.softParticleEnabled;
                 packet.softParticleScale = effectiveParticle.softParticleScale;
+                packet.blendMode = effectiveParticle.blendMode;
+                packet.randomSpeedRange = effectiveParticle.randomSpeedRange;
+                packet.randomSizeRange = effectiveParticle.randomSizeRange;
+                packet.randomLifeRange = effectiveParticle.randomLifeRange;
+                packet.windStrength = effectiveParticle.windStrength;
+                packet.windDirection = effectiveParticle.windDirection;
+                packet.windTurbulence = effectiveParticle.windTurbulence;
+                packet.sizeCurveValues = effectiveParticle.sizeCurveValues;
+                packet.sizeCurveTimes = effectiveParticle.sizeCurveTimes;
+                packet.sizeCurveKeyCount = effectiveParticle.sizeCurveKeyCount;
+                packet.gradientColor0 = effectiveParticle.gradientColor0;
+                packet.gradientColor1 = effectiveParticle.gradientColor1;
+                packet.gradientColor2 = effectiveParticle.gradientColor2;
+                packet.gradientColor3 = effectiveParticle.gradientColor3;
+                packet.gradientMidTimes = effectiveParticle.gradientMidTimes;
+                packet.gradientKeyCount = effectiveParticle.gradientKeyCount;
+                for (int ai = 0; ai < 4; ++ai) packet.attractors[ai] = effectiveParticle.attractors[ai];
+                packet.attractorRadii = effectiveParticle.attractorRadii;
+                packet.attractorFalloff = effectiveParticle.attractorFalloff;
+                packet.attractorCount = effectiveParticle.attractorCount;
+                packet.collisionEnabled = effectiveParticle.collisionEnabled;
+                packet.collisionPlane = effectiveParticle.collisionPlane;
+                for (int ci = 0; ci < 4; ++ci) packet.collisionSpheres[ci] = effectiveParticle.collisionSpheres[ci];
+                packet.collisionSphereCount = effectiveParticle.collisionSphereCount;
+                packet.collisionRestitution = effectiveParticle.collisionRestitution;
+                packet.collisionFriction = effectiveParticle.collisionFriction;
                 packet.tint = effectiveParticle.tint;
                 packet.tintEnd = effectiveParticle.tintEnd;
                 packet.tint.w *= playback.lifetimeFade;

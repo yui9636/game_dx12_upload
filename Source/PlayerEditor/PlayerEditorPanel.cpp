@@ -5,14 +5,35 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <algorithm>
+#include <cctype>
+#include <cfloat>
 #include <cmath>
+#include <filesystem>
+#include <initializer_list>
 #include "Icon/IconsFontAwesome7.h"
 #include "TimelineAssetSerializer.h"
 #include "StateMachineAssetSerializer.h"
 #include "ImGuiRenderer.h"
 #include "Model/Model.h"
+#include "Component/MeshComponent.h"
+#include "Component/NodeSocketComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
+#include "Component/PrefabInstanceComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/NameComponent.h"
+#include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/StateMachineSystem.h"
+#include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/TimelineAssetRuntimeBuilder.h"
+#include "Gameplay/TimelineComponent.h"
+#include "Gameplay/TimelineItemBuffer.h"
+#include "Input/InputBindingComponent.h"
 #include "Registry/Registry.h"
+#include "System/Dialog.h"
+#include "System/ResourceManager.h"
 
 // ============================================================================
 // Constants
@@ -27,6 +48,16 @@ static constexpr float kDetachedTopTabHeight = 34.0f;
 
 static constexpr float kNodeWidth  = 150.0f;
 static constexpr float kNodeHeight = 38.0f;
+static constexpr const char* kModelFileFilter =
+    "Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
+static constexpr const char* kTimelineFileFilter =
+    "Timeline (*.timeline.json)\0*.timeline.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+static constexpr const char* kStateMachineFileFilter =
+    "StateMachine (*.statemachine.json)\0*.statemachine.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+static constexpr const char* kInputMapFileFilter =
+    "Input Map (*.inputmap.json)\0*.inputmap.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
+static constexpr const char* kPrefabFileFilter =
+    "Prefab (*.prefab)\0*.prefab\0All Files (*.*)\0*.*\0";
 
 // ── Window titles (used by DockBuilder) ──
 static constexpr const char* kPEViewportTitle     = ICON_FA_CUBE " Viewport##PE";
@@ -40,6 +71,117 @@ static constexpr const char* kPEInputTitle        = ICON_FA_GAMEPAD " Input##PE"
 static const char* kTrackTypeNames[] = {
     "Animation", "Hitbox", "VFX", "Audio", "CameraShake", "Camera", "Event", "Custom"
 };
+
+static const char* GetStateTypeLabel(StateNodeType type)
+{
+    switch (type) {
+    case StateNodeType::Locomotion: return "Locomotion";
+    case StateNodeType::Action:     return "Action";
+    case StateNodeType::Dodge:      return "Dodge";
+    case StateNodeType::Jump:       return "Jump";
+    case StateNodeType::Damage:     return "Damage";
+    case StateNodeType::Dead:       return "Dead";
+    default:                        return "Custom";
+    }
+}
+
+static std::string GenerateDefaultTrackName(const TimelineAsset& asset, TimelineTrackType type)
+{
+    const char* baseName = "Track";
+    switch (type) {
+    case TimelineTrackType::Hitbox:      baseName = "Hitbox"; break;
+    case TimelineTrackType::VFX:         baseName = "VFX"; break;
+    case TimelineTrackType::Audio:       baseName = "Audio"; break;
+    case TimelineTrackType::CameraShake: baseName = "Shake"; break;
+    case TimelineTrackType::Event:       baseName = "Event"; break;
+    case TimelineTrackType::Animation:   baseName = "Animation"; break;
+    case TimelineTrackType::Camera:      baseName = "Camera"; break;
+    default:                             baseName = "Custom"; break;
+    }
+
+    int nextIndex = 1;
+    for (const auto& track : asset.tracks) {
+        if (track.type == type) {
+            ++nextIndex;
+        }
+    }
+    char buffer[64];
+    snprintf(buffer, sizeof(buffer), "%s %02d", baseName, nextIndex);
+    return buffer;
+}
+
+static TimelineItem CreateDefaultTimelineItem(TimelineTrackType type, int startFrame)
+{
+    TimelineItem item;
+    item.startFrame = (std::max)(0, startFrame);
+
+    switch (type) {
+    case TimelineTrackType::Hitbox:
+        item.endFrame = item.startFrame + 8;
+        item.hitbox.radius = 0.5f;
+        break;
+    case TimelineTrackType::VFX:
+        item.endFrame = item.startFrame + 12;
+        item.vfx.offsetScale = { 1.0f, 1.0f, 1.0f };
+        break;
+    case TimelineTrackType::Audio:
+        item.endFrame = item.startFrame + 18;
+        item.audio.volume = 1.0f;
+        item.audio.pitch = 1.0f;
+        break;
+    case TimelineTrackType::CameraShake:
+        item.endFrame = item.startFrame + 6;
+        item.shake.duration = 0.15f;
+        item.shake.amplitude = 0.5f;
+        item.shake.frequency = 20.0f;
+        break;
+    case TimelineTrackType::Event:
+        item.endFrame = item.startFrame;
+        strcpy_s(item.eventName, "Event");
+        break;
+    default:
+        item.endFrame = item.startFrame + 15;
+        break;
+    }
+
+    return item;
+}
+
+static const char* ResolveConditionTypeLabel(ConditionType type)
+{
+    switch (type) {
+    case ConditionType::Input:     return "Input";
+    case ConditionType::Timer:     return "Timer";
+    case ConditionType::AnimEnd:   return "AnimEnd";
+    case ConditionType::Health:    return "Health";
+    case ConditionType::Stamina:   return "Stamina";
+    default:                       return "Parameter";
+    }
+}
+
+static const char* ResolveCompareOpLabel(CompareOp compare)
+{
+    switch (compare) {
+    case CompareOp::Equal:        return "==";
+    case CompareOp::NotEqual:     return "!=";
+    case CompareOp::Greater:      return ">";
+    case CompareOp::Less:         return "<";
+    case CompareOp::GreaterEqual: return ">=";
+    default:                      return "<=";
+    }
+}
+
+static bool HasExtension(const std::string& path, std::initializer_list<const char*> extensions)
+{
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    for (const char* candidate : extensions) {
+        if (ext == candidate) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static ImU32 StateNodeColor(StateNodeType type)
 {
@@ -113,6 +255,649 @@ static bool DrawDetachedTopTabBar(bool* p_open)
     return true;
 }
 
+void PlayerEditorPanel::Suspend()
+{
+    m_playheadFrame = 0;
+    m_isPlaying = false;
+    SyncPreviewTimelinePlayback();
+    if (m_previewState.IsActive()) {
+        m_previewState.ExitPreview();
+    }
+    DestroyOwnedPreviewEntity();
+}
+
+void PlayerEditorPanel::DestroyOwnedPreviewEntity()
+{
+    if (!m_previewEntityOwned) {
+        return;
+    }
+
+    if (m_previewState.IsActive()) {
+        m_previewState.ExitPreview();
+    }
+
+    if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+        m_registry->DestroyEntity(m_previewEntity);
+    }
+
+    m_previewEntity = Entity::NULL_ID;
+    m_previewEntityOwned = false;
+}
+
+void PlayerEditorPanel::EnsureOwnedPreviewEntity()
+{
+    if (!m_registry || !HasOpenModel()) {
+        return;
+    }
+
+    if (CanUsePreviewEntity()) {
+        return;
+    }
+
+    DestroyOwnedPreviewEntity();
+
+    m_previewEntity = m_registry->CreateEntity();
+    m_previewEntityOwned = true;
+    m_registry->AddComponent(m_previewEntity, NameComponent{ "Player Preview" });
+
+    TransformComponent transform{};
+    transform.localPosition = { 0.0f, 0.0f, 0.0f };
+    transform.localScale = { 1.0f, 1.0f, 1.0f };
+    transform.isDirty = true;
+    m_registry->AddComponent(m_previewEntity, transform);
+
+    MeshComponent mesh{};
+    mesh.modelFilePath = m_currentModelPath;
+    mesh.model = m_ownedModel;
+    mesh.isVisible = true;
+    mesh.castShadow = true;
+    m_registry->AddComponent(m_previewEntity, mesh);
+    m_registry->AddComponent(m_previewEntity, EffectPreviewTagComponent{});
+
+    ApplyEditorBindingsToPreviewEntity();
+}
+
+void PlayerEditorPanel::SetPreviewEntity(EntityID entity)
+{
+    if (m_previewEntity == entity && !m_previewEntityOwned) {
+        return;
+    }
+
+    m_isPlaying = false;
+    if (m_previewState.IsActive()) {
+        m_previewState.ExitPreview();
+    }
+
+    DestroyOwnedPreviewEntity();
+    m_previewEntity = entity;
+    m_previewEntityOwned = false;
+    ImportSocketsFromPreviewEntity();
+}
+
+void PlayerEditorPanel::SyncExternalSelection(EntityID entity, const std::string& modelPath)
+{
+    m_selectedEntity = entity;
+    m_selectedEntityModelPath = modelPath;
+
+    if (!Entity::IsNull(m_previewEntity) && m_registry && !m_registry->IsAlive(m_previewEntity)) {
+        m_previewEntity = Entity::NULL_ID;
+        m_previewEntityOwned = false;
+    }
+}
+
+bool PlayerEditorPanel::DrawToolbarButton(const char* label, bool enabled)
+{
+    if (!enabled) {
+        ImGui::BeginDisabled();
+    }
+    const bool pressed = ImGui::Button(label);
+    if (!enabled) {
+        ImGui::EndDisabled();
+    }
+    return enabled && pressed;
+}
+
+bool PlayerEditorPanel::DrawDocumentPathLabel(const char* label, const std::string& path, bool dirty)
+{
+    if (path.empty() && !dirty) {
+        return false;
+    }
+    ImGui::TextDisabled("%s", label);
+    ImGui::SameLine();
+    if (dirty) {
+        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.15f, 1.0f), "*");
+        ImGui::SameLine(0.0f, 2.0f);
+    }
+    ImGui::TextUnformatted(path.empty() ? "(unsaved)" : path.c_str());
+    return !path.empty();
+}
+
+void PlayerEditorPanel::ResetSelectionState()
+{
+    m_selectionCtx = SelectionContext::None;
+    m_selectedTrackId = -1;
+    m_selectedItemIdx = -1;
+    m_selectedNodeId = 0;
+    m_selectedTransitionId = 0;
+    m_selectedBoneIndex = -1;
+    m_selectedBoneName.clear();
+    m_selectedSocketIdx = -1;
+    m_playheadFrame = 0;
+    m_isPlaying = false;
+}
+
+bool PlayerEditorPanel::HasOpenModel() const
+{
+    return m_model != nullptr;
+}
+
+bool PlayerEditorPanel::HasAnyDirtyDocument() const
+{
+    return m_timelineDirty || m_stateMachineDirty || m_socketDirty || m_inputMappingTab.IsDirty();
+}
+
+bool PlayerEditorPanel::HasSelectedEntityContext() const
+{
+    return !Entity::IsNull(m_selectedEntity) && !m_selectedEntityModelPath.empty();
+}
+
+bool PlayerEditorPanel::CanUsePreviewEntity() const
+{
+    return m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity);
+}
+
+bool PlayerEditorPanel::OpenModelFromPath(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    std::shared_ptr<Model> model = ResourceManager::Instance().GetModel(path);
+    if (!model) {
+        return false;
+    }
+
+    Suspend();
+    m_ownedModel = model;
+    m_model = m_ownedModel.get();
+    m_currentModelPath = path;
+    ResetSelectionState();
+    m_selectedAnimIndex = m_model->GetAnimations().empty() ? -1 : 0;
+    m_previewModelScale = 1.0f;
+
+    if (m_selectedEntityModelPath == path && !Entity::IsNull(m_selectedEntity)) {
+        SetPreviewEntity(m_selectedEntity);
+    } else {
+        EnsureOwnedPreviewEntity();
+    }
+
+    RebuildPreviewTimelineRuntimeData();
+    return true;
+}
+
+bool PlayerEditorPanel::OpenTimelineFromPath(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    TimelineAsset loaded;
+    if (!TimelineAssetSerializer::Load(path, loaded)) {
+        return false;
+    }
+
+    m_timelineAsset = std::move(loaded);
+    m_timelineAssetPath = path;
+    m_timelineDirty = false;
+    m_playheadFrame = 0;
+    if (m_timelineAsset.animationIndex >= 0) {
+        m_selectedAnimIndex = m_timelineAsset.animationIndex;
+    }
+    RebuildPreviewTimelineRuntimeData();
+    return true;
+}
+
+bool PlayerEditorPanel::OpenStateMachineFromPath(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    StateMachineAsset loaded;
+    if (!StateMachineAssetSerializer::Load(path, loaded)) {
+        return false;
+    }
+
+    m_stateMachineAsset = std::move(loaded);
+    m_stateMachineAssetPath = path;
+    m_stateMachineDirty = false;
+    m_selectedNodeId = 0;
+    m_selectedTransitionId = 0;
+    ApplyEditorBindingsToPreviewEntity();
+    return true;
+}
+
+bool PlayerEditorPanel::OpenInputMapFromPath(const std::string& path)
+{
+    return m_inputMappingTab.OpenActionMap(path);
+}
+
+bool PlayerEditorPanel::SaveTimelineDocument(bool saveAs)
+{
+    std::string path = m_timelineAssetPath;
+    if (saveAs || path.empty()) {
+        char pathBuffer[MAX_PATH] = {};
+        if (!path.empty()) {
+            strcpy_s(pathBuffer, path.c_str());
+        } else if (!m_timelineAsset.name.empty()) {
+            strcpy_s(pathBuffer, ("Assets/Timeline/" + m_timelineAsset.name + ".timeline.json").c_str());
+        }
+        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kTimelineFileFilter, "Save Timeline", "json") != DialogResult::OK) {
+            return false;
+        }
+        path = pathBuffer;
+    }
+
+    if (!TimelineAssetSerializer::Save(path, m_timelineAsset)) {
+        return false;
+    }
+
+    m_timelineAssetPath = path;
+    m_timelineDirty = false;
+    StateMachineSystem::InvalidateAssetCache(path.c_str());
+    return true;
+}
+
+bool PlayerEditorPanel::SaveStateMachineDocument(bool saveAs)
+{
+    std::string path = m_stateMachineAssetPath;
+    if (saveAs || path.empty()) {
+        char pathBuffer[MAX_PATH] = {};
+        if (!path.empty()) {
+            strcpy_s(pathBuffer, path.c_str());
+        } else if (!m_stateMachineAsset.name.empty()) {
+            strcpy_s(pathBuffer, ("Assets/StateMachine/" + m_stateMachineAsset.name + ".statemachine.json").c_str());
+        }
+        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kStateMachineFileFilter, "Save State Machine", "json") != DialogResult::OK) {
+            return false;
+        }
+        path = pathBuffer;
+    }
+
+    if (!StateMachineAssetSerializer::Save(path, m_stateMachineAsset)) {
+        return false;
+    }
+
+    m_stateMachineAssetPath = path;
+    m_stateMachineDirty = false;
+    StateMachineSystem::InvalidateAssetCache(path.c_str());
+    return true;
+}
+
+bool PlayerEditorPanel::SaveInputMapDocument(bool saveAs)
+{
+    if (!saveAs) {
+        return m_inputMappingTab.SaveActionMap();
+    }
+
+    char pathBuffer[MAX_PATH] = {};
+    const std::string& currentPath = m_inputMappingTab.GetActionMapPath();
+    if (!currentPath.empty()) {
+        strcpy_s(pathBuffer, currentPath.c_str());
+    }
+    if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kInputMapFileFilter, "Save Input Map", "json") != DialogResult::OK) {
+        return false;
+    }
+    return m_inputMappingTab.SaveActionMapAs(pathBuffer);
+}
+
+bool PlayerEditorPanel::SaveAllDocuments(bool saveAs)
+{
+    bool attempted = false;
+    bool ok = true;
+
+    if (m_timelineDirty || (saveAs && !m_timelineAsset.tracks.empty())) {
+        attempted = true;
+        ok &= SaveTimelineDocument(saveAs);
+    }
+    if (m_stateMachineDirty || (saveAs && !m_stateMachineAsset.states.empty())) {
+        attempted = true;
+        ok &= SaveStateMachineDocument(saveAs);
+    }
+    if (m_inputMappingTab.IsDirty() || (saveAs && !m_inputMappingTab.GetActionMapPath().empty())) {
+        attempted = true;
+        ok &= SaveInputMapDocument(saveAs);
+    }
+    if (m_socketDirty) {
+        attempted = true;
+        ExportSocketsToPreviewEntity();
+    }
+
+    return attempted && ok;
+}
+
+void PlayerEditorPanel::ApplyEditorBindingsToPreviewEntity()
+{
+    if (!CanUsePreviewEntity()) {
+        return;
+    }
+
+    MeshComponent* mesh = m_registry->GetComponent<MeshComponent>(m_previewEntity);
+    if (!mesh) {
+        m_registry->AddComponent<MeshComponent>(m_previewEntity, MeshComponent{});
+        mesh = m_registry->GetComponent<MeshComponent>(m_previewEntity);
+    }
+    if (mesh && !m_currentModelPath.empty()) {
+        mesh->modelFilePath = m_currentModelPath;
+        if (m_ownedModel) {
+            mesh->model = m_ownedModel;
+        }
+    }
+
+    {
+        StateMachineParamsComponent* stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity);
+        if (!stateMachine && !m_stateMachineAssetPath.empty()) {
+            m_registry->AddComponent<StateMachineParamsComponent>(m_previewEntity, StateMachineParamsComponent{});
+            stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity);
+        }
+        if (stateMachine && !m_stateMachineAssetPath.empty()) {
+            strcpy_s(stateMachine->assetPath, m_stateMachineAssetPath.c_str());
+        } else if (stateMachine) {
+            stateMachine->assetPath[0] = '\0';
+        }
+    }
+
+    {
+        InputBindingComponent* inputBinding = m_registry->GetComponent<InputBindingComponent>(m_previewEntity);
+        if (!inputBinding && !m_inputMappingTab.GetActionMapPath().empty()) {
+            m_registry->AddComponent<InputBindingComponent>(m_previewEntity, InputBindingComponent{});
+            inputBinding = m_registry->GetComponent<InputBindingComponent>(m_previewEntity);
+        }
+        if (inputBinding && !m_inputMappingTab.GetActionMapPath().empty()) {
+            strcpy_s(inputBinding->actionMapAssetPath, m_inputMappingTab.GetActionMapPath().c_str());
+        } else if (inputBinding) {
+            inputBinding->actionMapAssetPath[0] = '\0';
+        }
+    }
+
+    ExportSocketsToPreviewEntity();
+}
+
+void PlayerEditorPanel::RebuildPreviewTimelineRuntimeData()
+{
+    if (!CanUsePreviewEntity()) {
+        return;
+    }
+
+    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*m_registry, m_previewEntity);
+
+    TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity);
+    TimelineItemBuffer* buffer = m_registry->GetComponent<TimelineItemBuffer>(m_previewEntity);
+    PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity);
+    if (!timeline || !buffer || !playback) {
+        return;
+    }
+
+    const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+    TimelineAssetRuntimeBuilder::Build(m_timelineAsset, m_selectedAnimIndex, *timeline, *buffer);
+
+    const float durationSeconds = GetSelectedAnimationDurationSeconds();
+    if (timeline->fps <= 0.0f) {
+        timeline->fps = fps;
+    }
+    if (timeline->frameMax <= 0 && durationSeconds > 0.0f) {
+        timeline->frameMax = static_cast<int>(durationSeconds * timeline->fps);
+    }
+    if (timeline->clipLengthSec <= 0.0f) {
+        timeline->clipLengthSec = durationSeconds;
+    }
+
+    playback->clipLength = durationSeconds > 0.0f ? durationSeconds : timeline->clipLengthSec;
+    playback->playSpeed = 1.0f;
+    playback->looping = m_previewState.IsActive() ? m_previewState.GetDriver()->IsLoop() : false;
+    playback->finished = false;
+
+    SyncPreviewTimelinePlayback();
+}
+
+void PlayerEditorPanel::SyncPreviewTimelinePlayback()
+{
+    if (!CanUsePreviewEntity()) {
+        return;
+    }
+
+    TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity);
+    PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity);
+    if (!timeline || !playback) {
+        return;
+    }
+
+    const float fps = timeline->fps > 0.0f ? timeline->fps : 60.0f;
+    const float currentSeconds = fps > 0.0f ? static_cast<float>(m_playheadFrame) / fps : 0.0f;
+    playback->currentSeconds = currentSeconds;
+    playback->playing = m_isPlaying;
+    playback->finished = false;
+    timeline->currentFrame = m_playheadFrame;
+    timeline->playing = m_isPlaying;
+}
+
+bool PlayerEditorPanel::SavePrefabDocument(bool saveAs)
+{
+    if (!CanUsePreviewEntity()) {
+        return false;
+    }
+
+    if (HasAnyDirtyDocument()) {
+        if (!SaveAllDocuments(false) && HasAnyDirtyDocument()) {
+            if (!SaveAllDocuments(true)) {
+                return false;
+            }
+        }
+    }
+
+    ApplyEditorBindingsToPreviewEntity();
+    PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*m_registry, m_previewEntity);
+    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*m_registry, m_previewEntity);
+    PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
+
+    std::string prefabPath;
+    if (!saveAs) {
+        if (const PrefabInstanceComponent* prefab = m_registry->GetComponent<PrefabInstanceComponent>(m_previewEntity)) {
+            prefabPath = prefab->prefabAssetPath;
+        }
+    }
+
+    if (prefabPath.empty()) {
+        char pathBuffer[MAX_PATH] = {};
+        if (const PrefabInstanceComponent* prefab = m_registry->GetComponent<PrefabInstanceComponent>(m_previewEntity);
+            prefab && !prefab->prefabAssetPath.empty()) {
+            strcpy_s(pathBuffer, prefab->prefabAssetPath.c_str());
+        } else {
+            const std::string defaultName = m_currentModelPath.empty()
+                ? "Assets/Prefab/Player.prefab"
+                : ("Assets/Prefab/" + std::filesystem::path(m_currentModelPath).stem().string() + ".prefab");
+            strcpy_s(pathBuffer, defaultName.c_str());
+        }
+
+        if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kPrefabFileFilter, "Save Player Prefab", "prefab") != DialogResult::OK) {
+            return false;
+        }
+        prefabPath = pathBuffer;
+    }
+
+    return PrefabSystem::SaveEntityToPrefabPath(m_previewEntity, *m_registry, prefabPath);
+}
+
+void PlayerEditorPanel::RevertAllDocuments()
+{
+    if (!m_timelineAssetPath.empty()) {
+        OpenTimelineFromPath(m_timelineAssetPath);
+    }
+    if (!m_stateMachineAssetPath.empty()) {
+        OpenStateMachineFromPath(m_stateMachineAssetPath);
+    }
+    if (!m_inputMappingTab.GetActionMapPath().empty()) {
+        m_inputMappingTab.ReloadActionMap();
+    }
+    ImportSocketsFromPreviewEntity();
+    m_socketDirty = false;
+}
+
+void PlayerEditorPanel::ImportSocketsFromPreviewEntity()
+{
+    if (!CanUsePreviewEntity()) {
+        m_sockets.clear();
+        m_socketDirty = false;
+        return;
+    }
+
+    if (NodeSocketComponent* sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity)) {
+        m_sockets = sockets->sockets;
+    } else {
+        m_sockets.clear();
+    }
+    m_socketDirty = false;
+}
+
+void PlayerEditorPanel::ExportSocketsToPreviewEntity()
+{
+    if (!CanUsePreviewEntity()) {
+        return;
+    }
+
+    NodeSocketComponent* sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity);
+    if (!sockets) {
+        m_registry->AddComponent<NodeSocketComponent>(m_previewEntity, NodeSocketComponent{});
+        sockets = m_registry->GetComponent<NodeSocketComponent>(m_previewEntity);
+    }
+    if (!sockets) {
+        return;
+    }
+
+    sockets->sockets = m_sockets;
+    m_socketDirty = false;
+}
+
+void PlayerEditorPanel::ImportFromSelectedEntity()
+{
+    if (!m_registry || Entity::IsNull(m_selectedEntity) || !m_registry->IsAlive(m_selectedEntity)) {
+        return;
+    }
+
+    if (!m_selectedEntityModelPath.empty()) {
+        OpenModelFromPath(m_selectedEntityModelPath);
+    }
+
+    SetPreviewEntity(m_selectedEntity);
+
+    if (StateMachineParamsComponent* stateMachine = m_registry->GetComponent<StateMachineParamsComponent>(m_selectedEntity);
+        stateMachine && stateMachine->assetPath[0] != '\0') {
+        OpenStateMachineFromPath(stateMachine->assetPath);
+    }
+
+    if (InputBindingComponent* inputBinding = m_registry->GetComponent<InputBindingComponent>(m_selectedEntity);
+        inputBinding && inputBinding->actionMapAssetPath[0] != '\0') {
+        OpenInputMapFromPath(inputBinding->actionMapAssetPath);
+    }
+
+    ImportSocketsFromPreviewEntity();
+}
+
+void PlayerEditorPanel::DrawToolbar()
+{
+    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open Model")) {
+        char pathBuffer[MAX_PATH] = {};
+        if (!m_currentModelPath.empty()) {
+            strcpy_s(pathBuffer, m_currentModelPath.c_str());
+        }
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Model") == DialogResult::OK) {
+            OpenModelFromPath(pathBuffer);
+        }
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_ARROW_DOWN " Use Selected", HasSelectedEntityContext())) {
+        ImportFromSelectedEntity();
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_LINK " Bind Selected", HasSelectedEntityContext())) {
+        SetPreviewEntity(m_selectedEntity);
+        ImportSocketsFromPreviewEntity();
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Timeline")) {
+        char pathBuffer[MAX_PATH] = {};
+        if (!m_timelineAssetPath.empty()) {
+            strcpy_s(pathBuffer, m_timelineAssetPath.c_str());
+        }
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kTimelineFileFilter, "Open Timeline") == DialogResult::OK) {
+            OpenTimelineFromPath(pathBuffer);
+        }
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " State")) {
+        char pathBuffer[MAX_PATH] = {};
+        if (!m_stateMachineAssetPath.empty()) {
+            strcpy_s(pathBuffer, m_stateMachineAssetPath.c_str());
+        }
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kStateMachineFileFilter, "Open State Machine") == DialogResult::OK) {
+            OpenStateMachineFromPath(pathBuffer);
+        }
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Input")) {
+        char pathBuffer[MAX_PATH] = {};
+        const std::string& actionMapPath = m_inputMappingTab.GetActionMapPath();
+        if (!actionMapPath.empty()) {
+            strcpy_s(pathBuffer, actionMapPath.c_str());
+        }
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kInputMapFileFilter, "Open Input Map") == DialogResult::OK) {
+            OpenInputMapFromPath(pathBuffer);
+        }
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_CUBES " Save Prefab", CanUsePreviewEntity())) {
+        SavePrefabDocument(false);
+    }
+    ImGui::SameLine();
+    DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save All", HasAnyDirtyDocument()) && SaveAllDocuments(false);
+    ImGui::SameLine();
+    DrawToolbarButton(ICON_FA_FILE_EXPORT " Save As", HasOpenModel() || !m_timelineAsset.tracks.empty() || !m_stateMachineAsset.states.empty() || !m_inputMappingTab.GetActionMapPath().empty()) && SaveAllDocuments(true);
+    ImGui::SameLine();
+    DrawToolbarButton(ICON_FA_ROTATE_LEFT " Revert", HasAnyDirtyDocument()) && (RevertAllDocuments(), true);
+    ImGui::SameLine();
+    if (m_previewState.IsActive()) {
+        if (DrawToolbarButton(ICON_FA_STOP " Stop Preview")) {
+            Suspend();
+        }
+    } else {
+        DrawToolbarButton(ICON_FA_STOP " Stop Preview", false);
+    }
+}
+
+void PlayerEditorPanel::DrawEmptyState()
+{
+    ImGui::Spacing();
+    ImGui::TextDisabled("No model opened.");
+    ImGui::TextWrapped("Open a model first. The current editor only becomes meaningful after a model is resolved.");
+    ImGui::Spacing();
+
+    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open Model...", ImVec2(180.0f, 0.0f))) {
+        char pathBuffer[MAX_PATH] = {};
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Model") == DialogResult::OK) {
+            OpenModelFromPath(pathBuffer);
+        }
+    }
+
+    if (HasSelectedEntityContext()) {
+        if (ImGui::Button(ICON_FA_ARROW_DOWN " Use Selected Entity Model", ImVec2(220.0f, 0.0f))) {
+            ImportFromSelectedEntity();
+        }
+        ImGui::TextDisabled("Selected: %s", m_selectedEntityModelPath.c_str());
+    } else {
+        ImGui::TextDisabled("No selected entity with MeshComponent.modelFilePath.");
+    }
+}
+
 // ============================================================================
 // Main Draw — Host DockSpace
 // ============================================================================
@@ -135,6 +920,11 @@ void PlayerEditorPanel::DrawDetached(Registry* registry, bool* p_open, bool* out
 void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode)
 {
     m_registry = registry;
+    if (!Entity::IsNull(m_previewEntity) && (!m_registry || !m_registry->IsAlive(m_previewEntity))) {
+        m_previewEntity = Entity::NULL_ID;
+        m_previewEntityOwned = false;
+    }
+    EnsureOwnedPreviewEntity();
 
     if (hostMode != m_lastHostMode) {
         m_needsLayoutRebuild = true;
@@ -182,6 +972,9 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
             return;
         }
 
+        DrawToolbar();
+        ImGui::Separator();
+
         const char* dockName = (hostMode == HostMode::Detached)
             ? "PlayerEditorDetachedDock"
             : "PlayerEditorWorkspaceDock";
@@ -215,6 +1008,8 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     }
 
     if (outFocused) *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    DrawToolbar();
+    ImGui::Separator();
 
     // ── Create internal DockSpace ──
     ImGuiID dockId = ImGui::GetID("PlayerEditorDock");
@@ -296,7 +1091,33 @@ void PlayerEditorPanel::DrawViewportPanel()
 {
     if (!ImGui::Begin(kPEViewportTitle)) { ImGui::End(); return; }
 
+    ImGui::SetNextItemWidth(180.0f);
+    ImGui::SliderFloat("Preview Scale", &m_previewModelScale, 0.10f, 5.00f, "%.2f");
+    ImGui::SameLine();
+    if (ImGui::Button("Reset Scale")) {
+        m_previewModelScale = 1.0f;
+    }
+
     ImVec2 avail = ImGui::GetContentRegionAvail();
+    m_previewRenderSize = {
+        (std::max)(avail.x, 0.0f),
+        (std::max)(avail.y, 0.0f)
+    };
+
+    if (!HasOpenModel()) {
+        DrawEmptyState();
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+                const std::string droppedPath(static_cast<const char*>(payload->Data));
+                if (HasExtension(droppedPath, { ".fbx", ".gltf", ".glb", ".obj" })) {
+                    OpenModelFromPath(droppedPath);
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+        ImGui::End();
+        return;
+    }
 
     if (m_viewportTexture) {
         // Display the dedicated render target
@@ -345,6 +1166,56 @@ void PlayerEditorPanel::DrawViewportPanel()
     ImGui::End();
 }
 
+DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraTarget() const
+{
+    if (m_model) {
+        const auto bounds = m_model->GetWorldBounds();
+        DirectX::XMFLOAT3 target = bounds.Center;
+        target.y -= bounds.Extents.y * 0.35f;
+        return target;
+    }
+
+    if (m_registry && !Entity::IsNull(m_previewEntity)) {
+        if (const auto* transform = m_registry->GetComponent<TransformComponent>(m_previewEntity)) {
+            return transform->worldPosition;
+        }
+    }
+
+    return { 0.0f, 1.0f, 0.0f };
+}
+
+DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraDirection() const
+{
+    const float cosPitch = std::cos(m_vpCameraPitch);
+    DirectX::XMFLOAT3 dir = {
+        std::sin(m_vpCameraYaw) * cosPitch,
+        std::sin(m_vpCameraPitch),
+        std::cos(m_vpCameraYaw) * cosPitch
+    };
+
+    const float lenSq = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
+    if (lenSq > 0.0001f) {
+        const float invLen = 1.0f / std::sqrt(lenSq);
+        dir.x *= invLen;
+        dir.y *= invLen;
+        dir.z *= invLen;
+    } else {
+        dir = { 0.0f, 0.0f, 1.0f };
+    }
+    return dir;
+}
+
+DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraPosition() const
+{
+    const DirectX::XMFLOAT3 target = GetPreviewCameraTarget();
+    const DirectX::XMFLOAT3 dir = GetPreviewCameraDirection();
+    return {
+        target.x - dir.x * m_vpCameraDist,
+        target.y - dir.y * m_vpCameraDist,
+        target.z - dir.z * m_vpCameraDist
+    };
+}
+
 // ############################################################################
 //  MODEL SETTER
 // ############################################################################
@@ -352,9 +1223,10 @@ void PlayerEditorPanel::DrawViewportPanel()
 void PlayerEditorPanel::SetModel(const Model* model)
 {
     if (m_model == model) return;
+    Suspend();
+    m_ownedModel.reset();
     m_model = model;
-    m_selectedBoneIndex = -1;
-    m_selectedBoneName.clear();
+    ResetSelectionState();
 }
 
 // ############################################################################
@@ -394,6 +1266,7 @@ void PlayerEditorPanel::DrawSkeletonPanel()
                 case TimelineTrackType::Audio:      item.audio.nodeIndex = m_selectedBoneIndex; break;
                 default: break;
                 }
+                m_timelineDirty = true;
             }
         }
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Set this bone as nodeIndex on selected timeline item");
@@ -493,6 +1366,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
                 if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
                 if (track.type == TimelineTrackType::Hitbox)
                     track.items[m_selectedItemIdx].hitbox.nodeIndex = m_selectedBoneIndex;
+                m_timelineDirty = true;
             }
         }
         if (ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES " Set as VFX Node")) {
@@ -501,6 +1375,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
                 if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
                 if (track.type == TimelineTrackType::VFX)
                     track.items[m_selectedItemIdx].vfx.nodeIndex = m_selectedBoneIndex;
+                m_timelineDirty = true;
             }
         }
         if (ImGui::MenuItem(ICON_FA_PLUG " Create Socket Here")) {
@@ -509,6 +1384,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
             sock.parentBoneName = node.name;
             sock.cachedBoneIndex = nodeIndex;
             m_sockets.push_back(sock);
+            m_socketDirty = true;
         }
         ImGui::EndPopup();
     }
@@ -537,6 +1413,7 @@ void PlayerEditorPanel::DrawSocketList()
             sock.name = "Socket_" + m_selectedBoneName;
         }
         m_sockets.push_back(sock);
+        m_socketDirty = true;
     }
 
     for (int si = 0; si < (int)m_sockets.size(); ++si) {
@@ -562,16 +1439,26 @@ void PlayerEditorPanel::DrawStateMachinePanel()
 {
     if (!ImGui::Begin(kPEStateMachineTitle)) { ImGui::End(); return; }
 
-    // Toolbar
+    const float listWidth = 260.0f;
+    const bool hasSelectedState = m_stateMachineAsset.FindState(m_selectedNodeId) != nullptr;
+
     if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save")) {
-        if (!m_stateMachineAsset.name.empty()) {
-            std::string path = "Assets/StateMachine/" + m_stateMachineAsset.name + ".statemachine.json";
-            StateMachineAssetSerializer::Save(path, m_stateMachineAsset);
-        }
+        SaveStateMachineDocument(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FILE_EXPORT " Save As")) {
+        SaveStateMachineDocument(true);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PLUS " Add State")) {
+        ImGui::OpenPopup("AddStateTemplatePopup");
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_PLAY " Preview State", hasSelectedState)) {
+        PreviewStateNode(m_selectedNodeId, true);
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_ARROWS_TO_CIRCLE " Fit")) {
-        // Reset graph offset to center
         m_graphOffset = { 200, 150 };
         m_graphZoom = 1.0f;
     }
@@ -579,8 +1466,11 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     ImGui::SetNextItemWidth(80);
     ImGui::SliderFloat("Zoom##SM", &m_graphZoom, 0.3f, 3.0f, "%.1f");
     ImGui::SameLine();
+    if (hasSelectedState && ImGui::Button(ICON_FA_STAR " Default")) {
+        m_stateMachineAsset.defaultStateId = m_selectedNodeId;
+        m_stateMachineDirty = true;
+    }
 
-    // Connection mode indicator
     if (m_isConnecting) {
         ImGui::TextColored(ImVec4(1, 0.8f, 0.2f, 1), ICON_FA_LINK " Connecting... (ESC cancel)");
         if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -589,11 +1479,59 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         }
     }
 
-    ImGui::Separator();
+    if (ImGui::BeginPopup("AddStateTemplatePopup")) {
+        if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Action"))     AddStateTemplate(StateNodeType::Action, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Dodge"))      AddStateTemplate(StateNodeType::Dodge, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Jump"))       AddStateTemplate(StateNodeType::Jump, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Damage"))     AddStateTemplate(StateNodeType::Damage, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Dead"))       AddStateTemplate(StateNodeType::Dead, { 0.0f, 0.0f });
+        if (ImGui::MenuItem("Custom"))     AddStateTemplate(StateNodeType::Custom, { 0.0f, 0.0f });
+        ImGui::EndPopup();
+    }
 
-    // Canvas
+    if (DrawDocumentPathLabel("Document", m_stateMachineAssetPath, m_stateMachineDirty)) {
+        ImGui::Separator();
+    }
+
+    ImGui::BeginChild("StateListPane", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders);
+    ImGui::Text(ICON_FA_LIST " States");
+    ImGui::Separator();
+    for (const auto& state : m_stateMachineAsset.states) {
+        const bool selected = (m_selectedNodeId == state.id);
+        std::string label = state.name + "##state_list_" + std::to_string(state.id);
+        if (ImGui::Selectable(label.c_str(), selected)) {
+            m_selectedNodeId = state.id;
+            m_selectedTransitionId = 0;
+            m_selectionCtx = SelectionContext::StateNode;
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+            PreviewStateNode(state.id, true);
+        }
+
+        ImGui::Indent();
+        ImGui::TextDisabled("%s", GetStateTypeLabel(state.type));
+        std::string animLabel = "Animation: ";
+        if (m_model && state.animationIndex >= 0 && state.animationIndex < static_cast<int>(m_model->GetAnimations().size())) {
+            animLabel += m_model->GetAnimations()[state.animationIndex].name;
+        } else {
+            animLabel += "(none)";
+        }
+        ImGui::TextDisabled("%s", animLabel.c_str());
+        const std::string timelineLabel = std::string("Timeline: ") + (state.timelineAssetPath.empty() ? "(none)" : std::filesystem::path(state.timelineAssetPath).filename().string());
+        ImGui::TextDisabled("%s", timelineLabel.c_str());
+        ImGui::TextDisabled("Transitions: %d%s", static_cast<int>(m_stateMachineAsset.GetTransitionsFrom(state.id).size()), m_stateMachineAsset.defaultStateId == state.id ? "  DEFAULT" : "");
+        ImGui::Unindent();
+        ImGui::Separator();
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    ImGui::TextDisabled("Double-click state to preview. Right-click graph to add states.");
     ImVec2 canvasSize = ImGui::GetContentRegionAvail();
     DrawNodeGraph(canvasSize);
+    ImGui::EndGroup();
 
     ImGui::End();
 }
@@ -732,6 +1670,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
                 // Finish connection
                 if (m_connectFromNodeId != state.id) {
                     m_stateMachineAsset.AddTransition(m_connectFromNodeId, state.id);
+                    m_stateMachineDirty = true;
                 }
                 m_isConnecting = false;
                 m_connectFromNodeId = 0;
@@ -745,7 +1684,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         // Double-click: open timeline for this state
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
             if (!state.timelineAssetPath.empty()) {
-                TimelineAssetSerializer::Load(state.timelineAssetPath, m_timelineAsset);
+                OpenTimelineFromPath(state.timelineAssetPath);
             }
         }
 
@@ -754,6 +1693,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             ImVec2 delta = ImGui::GetMouseDragDelta(0);
             state.position.x += delta.x / m_graphZoom;
             state.position.y += delta.y / m_graphZoom;
+            m_stateMachineDirty = true;
             ImGui::ResetMouseDragDelta();
         }
 
@@ -769,6 +1709,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
     if (ImGui::BeginPopup("NodeCtx")) {
         if (ImGui::MenuItem(ICON_FA_STAR " Set Default")) {
             m_stateMachineAsset.defaultStateId = m_selectedNodeId;
+            m_stateMachineDirty = true;
         }
         if (ImGui::MenuItem(ICON_FA_LINK " Connect From Here...")) {
             m_isConnecting = true;
@@ -779,6 +1720,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             m_stateMachineAsset.RemoveState(m_selectedNodeId);
             m_selectedNodeId = 0;
             m_selectionCtx = SelectionContext::None;
+            m_stateMachineDirty = true;
         }
         ImGui::EndPopup();
     }
@@ -814,20 +1756,14 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         float posX = (mousePos.x - origin.x - m_graphOffset.x) / m_graphZoom;
         float posY = (mousePos.y - origin.y - m_graphOffset.y) / m_graphZoom;
 
-        const char* types[] = { "Locomotion", "Action", "Dodge", "Jump", "Damage", "Dead", "Custom" };
-        StateNodeType typeEnums[] = {
-            StateNodeType::Locomotion, StateNodeType::Action, StateNodeType::Dodge,
-            StateNodeType::Jump, StateNodeType::Damage, StateNodeType::Dead, StateNodeType::Custom
-        };
-
         ImGui::TextDisabled("Add State:");
-        for (int i = 0; i < 7; ++i) {
-            if (ImGui::MenuItem(types[i])) {
-                auto* s = m_stateMachineAsset.AddState(types[i], typeEnums[i]);
-                s->position = { posX, posY };
-                if (i == 0) s->loopAnimation = true;
-            }
-        }
+        if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { posX, posY });
+        if (ImGui::MenuItem("Action"))     AddStateTemplate(StateNodeType::Action, { posX, posY });
+        if (ImGui::MenuItem("Dodge"))      AddStateTemplate(StateNodeType::Dodge, { posX, posY });
+        if (ImGui::MenuItem("Jump"))       AddStateTemplate(StateNodeType::Jump, { posX, posY });
+        if (ImGui::MenuItem("Damage"))     AddStateTemplate(StateNodeType::Damage, { posX, posY });
+        if (ImGui::MenuItem("Dead"))       AddStateTemplate(StateNodeType::Dead, { posX, posY });
+        if (ImGui::MenuItem("Custom"))     AddStateTemplate(StateNodeType::Custom, { posX, posY });
         ImGui::EndPopup();
     }
 }
@@ -863,28 +1799,98 @@ void PlayerEditorPanel::DrawTimelinePanel()
 
 void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
 {
+    const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+    const float durationSeconds = GetSelectedAnimationDurationSeconds();
+    const char* currentAnimationName = "(none)";
+    if (m_model && m_selectedAnimIndex >= 0 && m_selectedAnimIndex < static_cast<int>(m_model->GetAnimations().size())) {
+        currentAnimationName = m_model->GetAnimations()[m_selectedAnimIndex].name.c_str();
+    }
+
+    if (m_isPlaying && m_previewState.IsActive()) {
+        m_previewState.AdvanceTime(ImGui::GetIO().DeltaTime, m_timelineAsset);
+        if (durationSeconds > 0.0f) {
+            float previewTime = m_previewState.GetDriver()->GetTime();
+            if (m_previewState.GetDriver()->IsLoop()) {
+                if (previewTime > durationSeconds) {
+                    previewTime = std::fmod(previewTime, durationSeconds);
+                    m_previewState.SetTime(previewTime);
+                }
+            } else if (previewTime > durationSeconds) {
+                previewTime = durationSeconds;
+                m_previewState.SetTime(previewTime);
+            }
+        }
+        m_playheadFrame = m_previewState.GetCurrentFrame(fps);
+        if (durationSeconds > 0.0f) {
+            const int maxPreviewFrame = static_cast<int>(durationSeconds * fps);
+            m_playheadFrame = (std::max)(0, (std::min)(m_playheadFrame, maxPreviewFrame));
+            if (!m_previewState.GetDriver()->IsLoop() && m_playheadFrame >= maxPreviewFrame) {
+                m_isPlaying = false;
+            }
+        }
+        SyncPreviewTimelinePlayback();
+    }
+
     // Play controls
-    if (ImGui::Button(ICON_FA_BACKWARD_STEP)) { m_playheadFrame = 0; m_isPlaying = false; }
+    if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
+        m_playheadFrame = 0;
+        m_isPlaying = false;
+        if (m_previewState.IsActive()) {
+            m_previewState.SetTime(0.0f);
+        }
+        SyncPreviewTimelinePlayback();
+    }
     ImGui::SameLine();
-    if (ImGui::Button(m_isPlaying ? ICON_FA_PAUSE : ICON_FA_PLAY)) { m_isPlaying = !m_isPlaying; }
+    if (ImGui::Button(m_isPlaying ? ICON_FA_PAUSE : ICON_FA_PLAY)) {
+        if (m_isPlaying) {
+            m_isPlaying = false;
+            SyncPreviewTimelinePlayback();
+        } else if (m_previewState.IsActive()) {
+            m_isPlaying = true;
+            SyncPreviewTimelinePlayback();
+        } else {
+            StartSelectedAnimationPreview();
+        }
+    }
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_STOP)) { m_isPlaying = false; m_playheadFrame = 0; }
+    if (ImGui::Button(ICON_FA_STOP)) {
+        m_isPlaying = false;
+        m_playheadFrame = 0;
+        if (m_previewState.IsActive()) {
+            m_previewState.SetTime(0.0f);
+        }
+        SyncPreviewTimelinePlayback();
+    }
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FORWARD_STEP)) { m_playheadFrame++; }
+    if (ImGui::Button(ICON_FA_FORWARD_STEP)) {
+        ++m_playheadFrame;
+        if (m_previewState.IsActive()) {
+            m_previewState.SetTime(m_playheadFrame / fps);
+        }
+        SyncPreviewTimelinePlayback();
+    }
     ImGui::SameLine();
 
     // Frame display
     int maxFrame = m_timelineAsset.GetFrameCount();
+    if (maxFrame <= 0 && durationSeconds > 0.0f) {
+        maxFrame = static_cast<int>(durationSeconds * fps);
+    }
     if (maxFrame <= 0) maxFrame = 600;
     ImGui::SetNextItemWidth(100);
-    ImGui::DragInt("##Frame", &m_playheadFrame, 1.0f, 0, maxFrame);
+    if (ImGui::DragInt("##Frame", &m_playheadFrame, 1.0f, 0, maxFrame) && m_previewState.IsActive()) {
+        m_previewState.SetTime(m_playheadFrame / fps);
+        SyncPreviewTimelinePlayback();
+    }
     ImGui::SameLine();
     ImGui::Text("/ %d", maxFrame);
     ImGui::SameLine();
 
     // FPS
     ImGui::SetNextItemWidth(50);
-    ImGui::DragFloat("FPS", &m_timelineAsset.fps, 1.0f, 1.0f, 120.0f, "%.0f");
+    if (ImGui::DragFloat("FPS", &m_timelineAsset.fps, 1.0f, 1.0f, 120.0f, "%.0f")) {
+        m_timelineDirty = true;
+    }
     ImGui::SameLine();
 
     // Zoom
@@ -894,32 +1900,59 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
 
     // Save
     if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-        if (!m_timelineAsset.name.empty()) {
-            std::string path = "Assets/Timeline/" + m_timelineAsset.name + ".timeline.json";
-            TimelineAssetSerializer::Save(path, m_timelineAsset);
-        }
+        SaveTimelineDocument(false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_FILE_EXPORT)) {
+        SaveTimelineDocument(true);
     }
 
     // Duration
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
-    ImGui::DragFloat("Dur(s)", &m_timelineAsset.duration, 0.1f, 0.1f, 300.0f, "%.1f");
+    if (ImGui::DragFloat("Dur(s)", &m_timelineAsset.duration, 0.1f, 0.1f, 300.0f, "%.1f")) {
+        m_timelineDirty = true;
+    }
 
-    ImGui::Separator();
+    if (DrawDocumentPathLabel("Document", m_timelineAssetPath, m_timelineDirty)) {
+        ImGui::Separator();
+    }
+    ImGui::TextDisabled("Animation: %s", currentAnimationName);
+    ImGui::SameLine();
+    ImGui::TextDisabled("Model: %s", m_currentModelPath.empty() ? "(none)" : std::filesystem::path(m_currentModelPath).filename().string().c_str());
 }
 
 void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
 {
-    // Add track button
     if (ImGui::Button(ICON_FA_PLUS " Track")) {
         ImGui::OpenPopup("AddTrackPopup");
     }
 
     if (ImGui::BeginPopup("AddTrackPopup")) {
-        for (int i = 0; i < 8; ++i) {
-            if (ImGui::MenuItem(kTrackTypeNames[i])) {
-                m_timelineAsset.AddTrack(static_cast<TimelineTrackType>(i), kTrackTypeNames[i]);
-            }
+        if (ImGui::MenuItem("Hitbox")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Hitbox, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Hitbox));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Hitbox, m_playheadFrame));
+            m_timelineDirty = true;
+        }
+        if (ImGui::MenuItem("VFX")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::VFX, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::VFX));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::VFX, m_playheadFrame));
+            m_timelineDirty = true;
+        }
+        if (ImGui::MenuItem("Audio")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Audio, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Audio));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Audio, m_playheadFrame));
+            m_timelineDirty = true;
+        }
+        if (ImGui::MenuItem("CameraShake")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::CameraShake, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::CameraShake));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::CameraShake, m_playheadFrame));
+            m_timelineDirty = true;
+        }
+        if (ImGui::MenuItem("Event")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Event, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Event));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Event, m_playheadFrame));
+            m_timelineDirty = true;
         }
         ImGui::EndPopup();
     }
@@ -948,18 +1981,17 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
 
         // Context menu
         if (ImGui::BeginPopupContextItem()) {
-            ImGui::Checkbox("Muted", &track.muted);
-            ImGui::Checkbox("Locked", &track.locked);
+            if (ImGui::Checkbox("Muted", &track.muted)) m_timelineDirty = true;
+            if (ImGui::Checkbox("Locked", &track.locked)) m_timelineDirty = true;
             ImGui::Separator();
-            if (ImGui::MenuItem("Add Item Here")) {
-                TimelineItem item;
-                item.startFrame = m_playheadFrame;
-                item.endFrame = m_playheadFrame + 15;
-                track.items.push_back(item);
+            if (ImGui::MenuItem(track.type == TimelineTrackType::Event ? "Add Event Here" : "Add Range Here")) {
+                track.items.push_back(CreateDefaultTimelineItem(track.type, m_playheadFrame));
+                m_timelineDirty = true;
             }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_TRASH " Delete Track")) {
                 m_timelineAsset.RemoveTrack(track.id);
+                m_timelineDirty = true;
                 ImGui::EndPopup();
                 ImGui::PopID();
                 break;
@@ -1020,6 +2052,9 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             auto& item = track.items[ii];
             float x0 = canvasPos.x + item.startFrame * ppf;
             float x1 = canvasPos.x + item.endFrame * ppf;
+            if (track.type == TimelineTrackType::Event) {
+                x1 = x0 + (std::max)(12.0f, ppf * 0.75f);
+            }
             float y0 = trackY + 2;
             float y1 = trackY + kTrackHeight - 2;
 
@@ -1054,9 +2089,39 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 int frameDelta = (int)(dx / ppf);
                 if (frameDelta != 0) {
                     item.startFrame += frameDelta;
-                    item.endFrame += frameDelta;
+                    if (track.type == TimelineTrackType::Event) {
+                        item.endFrame = item.startFrame;
+                    } else {
+                        item.endFrame += frameDelta;
+                    }
                     if (item.startFrame < 0) { item.endFrame -= item.startFrame; item.startFrame = 0; }
+                    m_timelineDirty = true;
                     ImGui::ResetMouseDragDelta();
+                }
+            }
+
+            if (!track.locked && track.type != TimelineTrackType::Event) {
+                const float handleWidth = 6.0f;
+                ImGui::SetCursorScreenPos(ImVec2(x0 - handleWidth * 0.5f, y0));
+                ImGui::InvisibleButton(("item_l_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
+                    if (frameDelta != 0) {
+                        item.startFrame = (std::max)(0, (std::min)(item.endFrame - 1, item.startFrame + frameDelta));
+                        m_timelineDirty = true;
+                        ImGui::ResetMouseDragDelta();
+                    }
+                }
+
+                ImGui::SetCursorScreenPos(ImVec2(x1 - handleWidth * 0.5f, y0));
+                ImGui::InvisibleButton(("item_r_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
+                    if (frameDelta != 0) {
+                        item.endFrame = (std::max)(item.startFrame + 1, item.endFrame + frameDelta);
+                        m_timelineDirty = true;
+                        ImGui::ResetMouseDragDelta();
+                    }
                 }
             }
 
@@ -1076,13 +2141,11 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         if (ImGui::IsItemClicked(1) && !track.locked) {
             float mx = ImGui::GetMousePos().x - canvasPos.x;
             int clickFrame = (int)(mx / ppf);
-            TimelineItem item;
-            item.startFrame = clickFrame;
-            item.endFrame = clickFrame + 15;
-            track.items.push_back(item);
+            track.items.push_back(CreateDefaultTimelineItem(track.type, clickFrame));
             m_selectedTrackId = track.id;
             m_selectedItemIdx = (int)track.items.size() - 1;
             m_selectionCtx = SelectionContext::TimelineItem;
+            m_timelineDirty = true;
         }
 
         yOff += kTrackHeight;
@@ -1099,6 +2162,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     copy.startFrame += 10;
                     copy.endFrame += 10;
                     track.items.push_back(copy);
+                    m_timelineDirty = true;
                     break;
                 }
             }
@@ -1111,6 +2175,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     track.items.erase(track.items.begin() + m_selectedItemIdx);
                     m_selectedItemIdx = -1;
                     m_selectionCtx = SelectionContext::None;
+                    m_timelineDirty = true;
                     break;
                 }
             }
@@ -1134,6 +2199,10 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
     if (ImGui::IsItemActive()) {
         float mx = ImGui::GetMousePos().x - canvasPos.x;
         m_playheadFrame = (std::max)(0, (std::min)(totalFrames, (int)(mx / ppf)));
+        if (m_previewState.IsActive()) {
+            const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+            m_previewState.SetTime(m_playheadFrame / fps);
+        }
     }
 
     // Zoom with scroll wheel
@@ -1179,14 +2248,16 @@ void PlayerEditorPanel::DrawPropertiesPanel()
             if ((int)track.id != m_selectedTrackId) continue;
             char nameBuf[64];
             strncpy_s(nameBuf, track.name.c_str(), _TRUNCATE);
-            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) track.name = nameBuf;
+            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) { track.name = nameBuf; m_timelineDirty = true; }
 
             int typeInt = static_cast<int>(track.type);
-            if (ImGui::Combo("Type", &typeInt, kTrackTypeNames, 8))
+            if (ImGui::Combo("Type", &typeInt, kTrackTypeNames, 8)) {
                 track.type = static_cast<TimelineTrackType>(typeInt);
+                m_timelineDirty = true;
+            }
 
-            ImGui::Checkbox("Muted", &track.muted);
-            ImGui::Checkbox("Locked", &track.locked);
+            if (ImGui::Checkbox("Muted", &track.muted)) m_timelineDirty = true;
+            if (ImGui::Checkbox("Locked", &track.locked)) m_timelineDirty = true;
 
             ImU32 col = track.color;
             float rgba[4] = {
@@ -1196,6 +2267,7 @@ void PlayerEditorPanel::DrawPropertiesPanel()
                 track.color = IM_COL32(
                     (int)(rgba[0] * 255), (int)(rgba[1] * 255),
                     (int)(rgba[2] * 255), (int)(rgba[3] * 255));
+                m_timelineDirty = true;
             }
             break;
         }
@@ -1230,7 +2302,7 @@ void PlayerEditorPanel::DrawPropertiesPanel()
             auto& sock = m_sockets[m_selectedSocketIdx];
             char nameBuf[128];
             strncpy_s(nameBuf, sock.name.c_str(), _TRUNCATE);
-            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) sock.name = nameBuf;
+            if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) { sock.name = nameBuf; m_socketDirty = true; }
 
             ImGui::Text("Parent Bone: %s [%d]", sock.parentBoneName.c_str(), sock.cachedBoneIndex);
             if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
@@ -1238,12 +2310,13 @@ void PlayerEditorPanel::DrawPropertiesPanel()
                 if (ImGui::SmallButton("Use Selected")) {
                     sock.parentBoneName = m_selectedBoneName;
                     sock.cachedBoneIndex = m_selectedBoneIndex;
+                    m_socketDirty = true;
                 }
             }
 
-            ImGui::DragFloat3("Offset Pos", &sock.offsetPos.x, 0.01f);
-            ImGui::DragFloat3("Offset Rot", &sock.offsetRotDeg.x, 0.1f);
-            ImGui::DragFloat3("Offset Scale", &sock.offsetScale.x, 0.01f, 0.01f, 10.0f);
+            if (ImGui::DragFloat3("Offset Pos", &sock.offsetPos.x, 0.01f)) m_socketDirty = true;
+            if (ImGui::DragFloat3("Offset Rot", &sock.offsetRotDeg.x, 0.1f)) m_socketDirty = true;
+            if (ImGui::DragFloat3("Offset Scale", &sock.offsetScale.x, 0.01f, 0.01f, 10.0f)) m_socketDirty = true;
 
             ImGui::Separator();
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
@@ -1251,19 +2324,174 @@ void PlayerEditorPanel::DrawPropertiesPanel()
                 m_sockets.erase(m_sockets.begin() + m_selectedSocketIdx);
                 m_selectedSocketIdx = -1;
                 m_selectionCtx = SelectionContext::None;
+                m_socketDirty = true;
             }
             ImGui::PopStyleColor();
         }
         break;
     }
     default:
-        ImGui::TextDisabled("Select a state, transition, track,");
-        ImGui::TextDisabled("item, bone, or socket to view");
-        ImGui::TextDisabled("its properties here.");
+        if (!m_stateMachineAsset.states.empty() || !m_stateMachineAsset.parameters.empty()) {
+            DrawStateMachineParameterList();
+        } else {
+            ImGui::TextDisabled("Select a state, transition, track,");
+            ImGui::TextDisabled("item, bone, or socket to view");
+            ImGui::TextDisabled("its properties here.");
+        }
         break;
     }
 
     ImGui::End();
+}
+
+bool PlayerEditorPanel::DrawAnimationSelector(const char* label, int* animIndex)
+{
+    if (!animIndex) return false;
+
+    std::string preview = "None";
+    const auto* selectedAnimation = m_model &&
+        *animIndex >= 0 &&
+        *animIndex < static_cast<int>(m_model->GetAnimations().size())
+        ? &m_model->GetAnimations()[*animIndex]
+        : nullptr;
+
+    if (selectedAnimation) {
+        preview = "[" + std::to_string(*animIndex) + "] " + selectedAnimation->name;
+    } else if (*animIndex >= 0) {
+        preview = "[" + std::to_string(*animIndex) + "] <invalid>";
+    }
+
+    bool changed = false;
+    if (ImGui::BeginCombo(label, preview.c_str())) {
+        const bool noneSelected = (*animIndex < 0);
+        if (ImGui::Selectable("None", noneSelected)) {
+            *animIndex = -1;
+            changed = true;
+        }
+        if (noneSelected) {
+            ImGui::SetItemDefaultFocus();
+        }
+
+        if (m_model) {
+            const auto& animations = m_model->GetAnimations();
+            for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+                const bool selected = (*animIndex == i);
+                std::string itemLabel = "[" + std::to_string(i) + "] " + animations[i].name;
+                if (ImGui::Selectable(itemLabel.c_str(), selected)) {
+                    *animIndex = i;
+                    changed = true;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+
+        ImGui::EndCombo();
+    }
+
+    if (m_model) {
+        ImGui::TextDisabled("%d animation(s)", static_cast<int>(m_model->GetAnimations().size()));
+    } else {
+        ImGui::TextDisabled("No model assigned.");
+    }
+
+    return changed;
+}
+
+float PlayerEditorPanel::GetSelectedAnimationDurationSeconds() const
+{
+    if (m_timelineAsset.duration > 0.0f) {
+        return m_timelineAsset.duration;
+    }
+
+    if (m_model &&
+        m_selectedAnimIndex >= 0 &&
+        m_selectedAnimIndex < static_cast<int>(m_model->GetAnimations().size())) {
+        return (std::max)(0.0f, m_model->GetAnimations()[m_selectedAnimIndex].secondsLength);
+    }
+
+    return 10.0f;
+}
+
+void PlayerEditorPanel::AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition)
+{
+    StateNode* state = m_stateMachineAsset.AddState(GetStateTypeLabel(type), type);
+    if (!state) {
+        return;
+    }
+
+    state->position = graphPosition;
+    state->loopAnimation = (type == StateNodeType::Locomotion);
+    state->canInterrupt = (type == StateNodeType::Locomotion);
+    state->animSpeed = 1.0f;
+
+    if (m_stateMachineAsset.defaultStateId == 0) {
+        m_stateMachineAsset.defaultStateId = state->id;
+    }
+
+    m_selectedNodeId = state->id;
+    m_selectedTransitionId = 0;
+    m_selectionCtx = SelectionContext::StateNode;
+    m_stateMachineDirty = true;
+}
+
+void PlayerEditorPanel::StartSelectedAnimationPreview()
+{
+    const bool hasPreviewTarget = m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity);
+    if (!hasPreviewTarget) {
+        return;
+    }
+
+    if (!m_model || m_model->GetAnimations().empty()) {
+        return;
+    }
+
+    if (m_selectedAnimIndex < 0 || m_selectedAnimIndex >= static_cast<int>(m_model->GetAnimations().size())) {
+        m_selectedAnimIndex = 0;
+    }
+
+    AnimatorService::Instance().EnsureAnimator(m_previewEntity);
+    if (!m_previewState.IsActive()) {
+        m_previewState.EnterPreview(m_previewEntity);
+    }
+
+    RebuildPreviewTimelineRuntimeData();
+    m_playheadFrame = 0;
+    m_previewState.SetAnimationIndex(m_selectedAnimIndex);
+    m_previewState.SetTime(0.0f);
+    m_isPlaying = true;
+    SyncPreviewTimelinePlayback();
+}
+
+void PlayerEditorPanel::PreviewStateNode(uint32_t stateId, bool restartTimeline)
+{
+    StateNode* state = m_stateMachineAsset.FindState(stateId);
+    if (!state) {
+        return;
+    }
+
+    m_selectedNodeId = stateId;
+    m_selectionCtx = SelectionContext::StateNode;
+
+    if (state->animationIndex >= 0) {
+        m_selectedAnimIndex = state->animationIndex;
+    }
+    if (!state->timelineAssetPath.empty() && (restartTimeline || m_timelineAssetPath != state->timelineAssetPath)) {
+        OpenTimelineFromPath(state->timelineAssetPath);
+    } else {
+        RebuildPreviewTimelineRuntimeData();
+    }
+
+    StartSelectedAnimationPreview();
+    if (m_previewState.IsActive()) {
+        m_previewState.SetLoop(state->loopAnimation);
+    }
+    if (CanUsePreviewEntity()) {
+        if (PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity)) {
+            playback->looping = state->loopAnimation;
+        }
+    }
 }
 
 void PlayerEditorPanel::DrawStateNodeInspector()
@@ -1272,35 +2500,53 @@ void PlayerEditorPanel::DrawStateNodeInspector()
     if (!state) { ImGui::TextDisabled("No state selected"); return; }
 
     ImGui::Text(ICON_FA_CIRCLE_NODES " State: %s", state->name.c_str());
+    if (m_stateMachineAsset.defaultStateId == state->id) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[Default]");
+    }
     ImGui::Separator();
 
     char nameBuf[128];
     strncpy_s(nameBuf, state->name.c_str(), _TRUNCATE);
-    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) state->name = nameBuf;
+    if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) { state->name = nameBuf; m_stateMachineDirty = true; }
 
     int typeInt = static_cast<int>(state->type);
     const char* typeNames[] = { "Locomotion", "Action", "Dodge", "Jump", "Damage", "Dead", "Custom" };
-    if (ImGui::Combo("Type", &typeInt, typeNames, IM_ARRAYSIZE(typeNames)))
+    if (ImGui::Combo("Type", &typeInt, typeNames, IM_ARRAYSIZE(typeNames))) {
         state->type = static_cast<StateNodeType>(typeInt);
+        m_stateMachineDirty = true;
+    }
 
     ImGui::Separator();
     ImGui::Text("Animation");
-    ImGui::DragInt("Anim Index", &state->animationIndex, 1, -1, 200);
-    ImGui::Checkbox("Loop", &state->loopAnimation);
-    ImGui::DragFloat("Speed", &state->animSpeed, 0.01f, 0.0f, 5.0f, "%.2f");
-    ImGui::Checkbox("Can Interrupt", &state->canInterrupt);
+    if (DrawAnimationSelector("Animation", &state->animationIndex)) m_stateMachineDirty = true;
+    if (ImGui::Checkbox("Loop", &state->loopAnimation)) m_stateMachineDirty = true;
+    if (ImGui::DragFloat("Speed", &state->animSpeed, 0.01f, 0.0f, 5.0f, "%.2f")) m_stateMachineDirty = true;
+    if (ImGui::Checkbox("Can Interrupt", &state->canInterrupt)) m_stateMachineDirty = true;
+    if (ImGui::Button(ICON_FA_PLAY " Preview State")) {
+        PreviewStateNode(state->id, false);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_ROTATE_LEFT " Preview From Start")) {
+        PreviewStateNode(state->id, true);
+    }
 
     ImGui::Separator();
     ImGui::Text("Timeline Asset");
     char pathBuf[256];
     strncpy_s(pathBuf, state->timelineAssetPath.c_str(), _TRUNCATE);
-    if (ImGui::InputText("Path", pathBuf, sizeof(pathBuf))) state->timelineAssetPath = pathBuf;
+    if (ImGui::InputText("Path", pathBuf, sizeof(pathBuf))) { state->timelineAssetPath = pathBuf; m_stateMachineDirty = true; }
     if (!state->timelineAssetPath.empty()) {
         if (ImGui::Button(ICON_FA_ARROW_RIGHT " Open in Timeline")) {
-            TimelineAssetSerializer::Load(state->timelineAssetPath, m_timelineAsset);
+            OpenTimelineFromPath(state->timelineAssetPath);
         }
     }
 
+    ImGui::Separator();
+    ImGui::Text("Input Map");
+    const auto& editingMap = m_inputMappingTab.GetEditingMap();
+    ImGui::TextDisabled("Action Map: %s", m_inputMappingTab.GetActionMapPath().empty() ? "(none)" : std::filesystem::path(m_inputMappingTab.GetActionMapPath()).filename().string().c_str());
+    ImGui::TextDisabled("Actions: %d / Axes: %d", static_cast<int>(editingMap.actions.size()), static_cast<int>(editingMap.axes.size()));
     ImGui::Separator();
     ImGui::Text("Outgoing Transitions");
     auto transitions = m_stateMachineAsset.GetTransitionsFrom(m_selectedNodeId);
@@ -1314,6 +2560,52 @@ void PlayerEditorPanel::DrawStateNodeInspector()
     }
 }
 
+void PlayerEditorPanel::DrawStateMachineParameterList()
+{
+    ImGui::Text(ICON_FA_SLIDERS " Parameters");
+    ImGui::Separator();
+
+    for (int i = 0; i < static_cast<int>(m_stateMachineAsset.parameters.size()); ++i) {
+        auto& parameter = m_stateMachineAsset.parameters[i];
+        ImGui::PushID(i);
+
+        char nameBuf[64];
+        strncpy_s(nameBuf, parameter.name.c_str(), _TRUNCATE);
+        if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+            parameter.name = nameBuf;
+            m_stateMachineDirty = true;
+        }
+
+        int typeInt = static_cast<int>(parameter.type);
+        const char* typeNames[] = { "Float", "Int", "Bool", "Trigger" };
+        if (ImGui::Combo("Type", &typeInt, typeNames, IM_ARRAYSIZE(typeNames))) {
+            parameter.type = static_cast<ParameterType>(typeInt);
+            m_stateMachineDirty = true;
+        }
+
+        if (ImGui::DragFloat("Default", &parameter.defaultValue, 0.1f)) {
+            m_stateMachineDirty = true;
+        }
+
+        if (ImGui::Button(ICON_FA_TRASH " Remove")) {
+            m_stateMachineAsset.parameters.erase(m_stateMachineAsset.parameters.begin() + i);
+            m_stateMachineDirty = true;
+            ImGui::PopID();
+            break;
+        }
+
+        ImGui::Separator();
+        ImGui::PopID();
+    }
+
+    if (ImGui::Button(ICON_FA_PLUS " Add Parameter")) {
+        ParameterDef parameter;
+        parameter.name = "Param";
+        m_stateMachineAsset.parameters.push_back(std::move(parameter));
+        m_stateMachineDirty = true;
+    }
+}
+
 void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
 {
     auto* from = m_stateMachineAsset.FindState(trans->fromState);
@@ -1323,13 +2615,34 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
     ImGui::Text("%s -> %s", from ? from->name.c_str() : "?", to ? to->name.c_str() : "?");
     ImGui::Separator();
 
-    ImGui::DragInt("Priority", &trans->priority, 1, 0, 100);
-    ImGui::Checkbox("Has Exit Time", &trans->hasExitTime);
+    if (ImGui::DragInt("Priority", &trans->priority, 1, 0, 100)) m_stateMachineDirty = true;
+    if (ImGui::Checkbox("Has Exit Time", &trans->hasExitTime)) m_stateMachineDirty = true;
     if (trans->hasExitTime) {
-        ImGui::DragFloat("Exit Time (0-1)", &trans->exitTimeNormalized, 0.01f, 0.0f, 1.0f);
+        if (ImGui::DragFloat("Exit Time (0-1)", &trans->exitTimeNormalized, 0.01f, 0.0f, 1.0f)) m_stateMachineDirty = true;
     }
-    ImGui::DragFloat("Blend Duration", &trans->blendDuration, 0.01f, 0.0f, 2.0f);
+    if (ImGui::DragFloat("Blend Duration", &trans->blendDuration, 0.01f, 0.0f, 2.0f)) m_stateMachineDirty = true;
 
+    ImGui::Separator();
+    ImGui::TextDisabled("Summary");
+    for (int ci = 0; ci < (int)trans->conditions.size(); ++ci) {
+        const auto& cond = trans->conditions[ci];
+        std::string summary = std::string(ResolveConditionTypeLabel(cond.type)) + " ";
+        if (cond.type == ConditionType::Input || cond.type == ConditionType::Parameter) {
+            summary += (cond.param[0] != '\0') ? cond.param : "(unset)";
+            summary += " ";
+        }
+        summary += ResolveCompareOpLabel(cond.compare);
+        summary += " ";
+        if (cond.type == ConditionType::AnimEnd) {
+            summary += (cond.value != 0.0f) ? "true" : "false";
+        } else {
+            summary += std::to_string(cond.value);
+        }
+        ImGui::BulletText("%s", summary.c_str());
+    }
+    if (trans->conditions.empty()) {
+        ImGui::TextDisabled("No conditions.");
+    }
     ImGui::Separator();
     ImGui::Text("Conditions (%d):", (int)trans->conditions.size());
 
@@ -1340,27 +2653,50 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
         int typeInt = static_cast<int>(cond.type);
         const char* condTypes[] = { "Input", "Timer", "AnimEnd", "Health", "Stamina", "Parameter" };
         ImGui::SetNextItemWidth(90);
-        if (ImGui::Combo("##T", &typeInt, condTypes, IM_ARRAYSIZE(condTypes)))
+        if (ImGui::Combo("##T", &typeInt, condTypes, IM_ARRAYSIZE(condTypes))) {
             cond.type = static_cast<ConditionType>(typeInt);
+            m_stateMachineDirty = true;
+        }
 
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(70);
-        ImGui::InputText("##P", cond.param, sizeof(cond.param));
+        ImGui::SetNextItemWidth(140);
+        if (cond.type == ConditionType::Input && !m_inputMappingTab.GetEditingMap().actions.empty()) {
+            const auto& actions = m_inputMappingTab.GetEditingMap().actions;
+            const char* preview = cond.param[0] != '\0' ? cond.param : "(select action)";
+            if (ImGui::BeginCombo("##P", preview)) {
+                for (const auto& action : actions) {
+                    const bool selected = strcmp(cond.param, action.actionName.c_str()) == 0;
+                    if (ImGui::Selectable(action.actionName.c_str(), selected)) {
+                        strncpy_s(cond.param, action.actionName.c_str(), _TRUNCATE);
+                        m_stateMachineDirty = true;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+        } else if (ImGui::InputText("##P", cond.param, sizeof(cond.param))) {
+            m_stateMachineDirty = true;
+        }
 
         ImGui::SameLine();
         int cmpInt = static_cast<int>(cond.compare);
         const char* cmpOps[] = { "==", "!=", ">", "<", ">=", "<=" };
         ImGui::SetNextItemWidth(45);
-        if (ImGui::Combo("##C", &cmpInt, cmpOps, IM_ARRAYSIZE(cmpOps)))
+        if (ImGui::Combo("##C", &cmpInt, cmpOps, IM_ARRAYSIZE(cmpOps))) {
             cond.compare = static_cast<CompareOp>(cmpInt);
+            m_stateMachineDirty = true;
+        }
 
         ImGui::SameLine();
         ImGui::SetNextItemWidth(55);
-        ImGui::DragFloat("##V", &cond.value, 0.1f);
+        if (ImGui::DragFloat("##V", &cond.value, 0.1f)) m_stateMachineDirty = true;
 
         ImGui::SameLine();
         if (ImGui::Button(ICON_FA_XMARK)) {
             trans->conditions.erase(trans->conditions.begin() + ci);
+            m_stateMachineDirty = true;
             ImGui::PopID();
             break;
         }
@@ -1370,6 +2706,7 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
 
     if (ImGui::Button(ICON_FA_PLUS " Condition")) {
         trans->conditions.push_back(TransitionCondition{});
+        m_stateMachineDirty = true;
     }
 
     ImGui::Separator();
@@ -1378,6 +2715,7 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
         m_stateMachineAsset.RemoveTransition(m_selectedTransitionId);
         m_selectedTransitionId = 0;
         m_selectionCtx = SelectionContext::None;
+        m_stateMachineDirty = true;
     }
     ImGui::PopStyleColor();
 }
@@ -1394,8 +2732,11 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         auto& item = track.items[m_selectedItemIdx];
 
         ImGui::Text("Track: %s", track.name.c_str());
-        ImGui::DragInt("Start Frame", &item.startFrame, 1.0f, 0, 99999);
-        ImGui::DragInt("End Frame", &item.endFrame, 1.0f, 0, 99999);
+        if (ImGui::DragInt("Start Frame", &item.startFrame, 1.0f, 0, 99999)) m_timelineDirty = true;
+        if (track.type == TimelineTrackType::Event) {
+            item.endFrame = item.startFrame;
+            ImGui::TextDisabled("Event track uses point timing.");
+        } else if (ImGui::DragInt("End Frame", &item.endFrame, 1.0f, 0, 99999)) m_timelineDirty = true;
 
         int dur = item.endFrame - item.startFrame;
         ImGui::Text("Duration: %d frames (%.3fs)", dur,
@@ -1407,9 +2748,27 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         switch (track.type) {
         case TimelineTrackType::Hitbox:
             ImGui::Text(ICON_FA_CROSSHAIRS " Hitbox Payload");
-            ImGui::DragInt("Node Index", &item.hitbox.nodeIndex, 1, 0, 200);
-            ImGui::DragFloat3("Offset", &item.hitbox.offsetLocal.x, 0.01f);
-            ImGui::DragFloat("Radius", &item.hitbox.radius, 0.01f, 0.0f, 10.0f);
+            if (ImGui::DragInt("Node Index", &item.hitbox.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
+            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
+                if (ImGui::Button("Use Selected Bone")) {
+                    item.hitbox.nodeIndex = m_selectedBoneIndex;
+                    m_timelineDirty = true;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
+            }
+            if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
+                const NodeSocket& socket = m_sockets[m_selectedSocketIdx];
+                if (ImGui::Button("Use Selected Socket")) {
+                    item.hitbox.nodeIndex = socket.cachedBoneIndex;
+                    item.hitbox.offsetLocal = socket.offsetPos;
+                    m_timelineDirty = true;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", socket.name.c_str());
+            }
+            if (ImGui::DragFloat3("Offset", &item.hitbox.offsetLocal.x, 0.01f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Radius", &item.hitbox.radius, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
             {
                 float rgba[4] = {
                     ((item.hitbox.rgba >> 24) & 0xFF) / 255.0f,
@@ -1422,35 +2781,70 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                         ((uint32_t)(rgba[1] * 255) << 16) |
                         ((uint32_t)(rgba[2] * 255) << 8) |
                         (uint32_t)(rgba[3] * 255);
+                    m_timelineDirty = true;
                 }
             }
             break;
 
         case TimelineTrackType::VFX:
             ImGui::Text(ICON_FA_WAND_MAGIC_SPARKLES " VFX Payload");
-            ImGui::InputText("Asset ID", item.vfx.assetId, sizeof(item.vfx.assetId));
-            ImGui::DragInt("Node Index", &item.vfx.nodeIndex, 1, 0, 200);
-            ImGui::DragFloat3("Offset", &item.vfx.offsetLocal.x, 0.01f);
-            ImGui::DragFloat3("Rotation", &item.vfx.offsetRotDeg.x, 0.1f);
-            ImGui::DragFloat3("Scale", &item.vfx.offsetScale.x, 0.01f, 0.01f, 10.0f);
+            if (ImGui::InputText("Asset ID", item.vfx.assetId, sizeof(item.vfx.assetId))) m_timelineDirty = true;
+            if (ImGui::DragInt("Node Index", &item.vfx.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
+            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
+                if (ImGui::Button("Use Selected Bone##VFX")) {
+                    item.vfx.nodeIndex = m_selectedBoneIndex;
+                    m_timelineDirty = true;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
+            }
+            if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
+                const NodeSocket& socket = m_sockets[m_selectedSocketIdx];
+                if (ImGui::Button("Use Selected Socket##VFX")) {
+                    item.vfx.nodeIndex = socket.cachedBoneIndex;
+                    item.vfx.offsetLocal = socket.offsetPos;
+                    item.vfx.offsetRotDeg = socket.offsetRotDeg;
+                    item.vfx.offsetScale = socket.offsetScale;
+                    m_timelineDirty = true;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", socket.name.c_str());
+            }
+            if (ImGui::DragFloat3("Offset", &item.vfx.offsetLocal.x, 0.01f)) m_timelineDirty = true;
+            if (ImGui::DragFloat3("Rotation", &item.vfx.offsetRotDeg.x, 0.1f)) m_timelineDirty = true;
+            if (ImGui::DragFloat3("Scale", &item.vfx.offsetScale.x, 0.01f, 0.01f, 10.0f)) m_timelineDirty = true;
             break;
 
         case TimelineTrackType::Audio:
             ImGui::Text(ICON_FA_VOLUME_HIGH " Audio Payload");
-            ImGui::InputText("Asset ID", item.audio.assetId, sizeof(item.audio.assetId));
-            ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f);
-            ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f);
-            ImGui::Checkbox("3D Audio", &item.audio.is3D);
-            ImGui::DragInt("Node Index", &item.audio.nodeIndex, 1, 0, 200);
-            ImGui::Checkbox("Loop", &item.audio.loop);
+            if (ImGui::InputText("Asset ID", item.audio.assetId, sizeof(item.audio.assetId))) m_timelineDirty = true;
+            if (ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f)) m_timelineDirty = true;
+            if (ImGui::Checkbox("3D Audio", &item.audio.is3D)) m_timelineDirty = true;
+            if (ImGui::DragInt("Node Index", &item.audio.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
+            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
+                if (ImGui::Button("Use Selected Bone##Audio")) {
+                    item.audio.nodeIndex = m_selectedBoneIndex;
+                    m_timelineDirty = true;
+                }
+                ImGui::SameLine();
+                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
+            }
+            if (ImGui::Checkbox("Loop", &item.audio.loop)) m_timelineDirty = true;
             break;
 
         case TimelineTrackType::CameraShake:
             ImGui::Text(ICON_FA_CAMERA " Camera Shake Payload");
-            ImGui::DragFloat("Duration", &item.shake.duration, 0.01f, 0.0f, 5.0f);
-            ImGui::DragFloat("Amplitude", &item.shake.amplitude, 0.01f, 0.0f, 10.0f);
-            ImGui::DragFloat("Frequency", &item.shake.frequency, 0.1f, 0.0f, 100.0f);
-            ImGui::DragFloat("Decay", &item.shake.decay, 0.01f, 0.0f, 10.0f);
+            if (ImGui::DragFloat("Duration", &item.shake.duration, 0.01f, 0.0f, 5.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Amplitude", &item.shake.amplitude, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Frequency", &item.shake.frequency, 0.1f, 0.0f, 100.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Decay", &item.shake.decay, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
+            break;
+
+        case TimelineTrackType::Event:
+            ImGui::Text(ICON_FA_BOLT " Event Payload");
+            if (ImGui::InputText("Event Name", item.eventName, sizeof(item.eventName))) m_timelineDirty = true;
+            if (ImGui::InputTextMultiline("Event Data", item.eventData, sizeof(item.eventData), ImVec2(-FLT_MIN, 80.0f))) m_timelineDirty = true;
             break;
 
         default:
@@ -1476,38 +2870,62 @@ void PlayerEditorPanel::DrawAnimatorPanel()
     if (previewing) {
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), ICON_FA_CIRCLE " Preview Active");
         ImGui::Separator();
-
-        ImGui::DragInt("Animation Index", &m_selectedAnimIndex, 1, -1, 200);
-        m_previewState.SetAnimationIndex(m_selectedAnimIndex);
-
-        float t = m_previewState.GetDriver()->GetTime();
-        float maxT = m_timelineAsset.duration > 0 ? m_timelineAsset.duration : 10.0f;
-        if (ImGui::SliderFloat("Time", &t, 0.0f, maxT, "%.3f")) {
-            m_previewState.SetTime(t);
-        }
-
-        bool loop = m_previewState.GetDriver()->IsLoop();
-        if (ImGui::Checkbox("Loop", &loop)) m_previewState.SetLoop(loop);
-
-        ImGui::Separator();
-        if (ImGui::Button(ICON_FA_STOP " Stop Preview")) {
-            m_previewState.ExitPreview();
-        }
     } else {
         ImGui::TextDisabled("Select an entity with AnimatorComponent");
-        ImGui::TextDisabled("and start preview to scrub animation.");
+        ImGui::TextDisabled("Double-click an animation to start timeline playback.");
         ImGui::Separator();
-        ImGui::DragInt("Animation Index", &m_selectedAnimIndex, 1, -1, 200);
-        if (hasPreviewTarget) {
-            if (ImGui::Button(ICON_FA_PLAY " Start Preview")) {
-                AnimatorService::Instance().EnsureAnimator(m_previewEntity);
-                m_previewState.EnterPreview(m_previewEntity);
-                m_previewState.SetAnimationIndex(m_selectedAnimIndex);
-            }
+    }
+
+    if (!hasPreviewTarget) {
+        ImGui::TextDisabled("No valid preview target.");
+    }
+
+    const float listHeight = previewing
+        ? -ImGui::GetFrameHeightWithSpacing() * 2.0f - 8.0f
+        : 0.0f;
+    ImGui::BeginChild("AnimatorAnimationList", ImVec2(0, listHeight), ImGuiChildFlags_Borders);
+    if (!m_model) {
+        ImGui::TextDisabled("No model assigned.");
+    } else {
+        const auto& animations = m_model->GetAnimations();
+        if (animations.empty()) {
+            ImGui::TextDisabled("Model has no animations.");
         } else {
-            ImGui::BeginDisabled();
-            ImGui::Button(ICON_FA_PLAY " Start Preview");
-            ImGui::EndDisabled();
+            for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+                const bool selected = (m_selectedAnimIndex == i);
+                std::string label = "[" + std::to_string(i) + "] " + animations[i].name;
+                if (ImGui::Selectable(label.c_str(), selected)) {
+                    m_selectedAnimIndex = i;
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Length: %.3fs", animations[i].secondsLength);
+                    if (ImGui::IsMouseDoubleClicked(0) && hasPreviewTarget) {
+                        m_selectedAnimIndex = i;
+                        StartSelectedAnimationPreview();
+                    }
+                }
+            }
+        }
+    }
+    ImGui::EndChild();
+
+    if (previewing) {
+        ImGui::Separator();
+        bool loop = m_previewState.GetDriver()->IsLoop();
+        if (ImGui::Checkbox("Loop", &loop)) {
+            m_previewState.SetLoop(loop);
+            if (CanUsePreviewEntity()) {
+                if (PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity)) {
+                    playback->looping = loop;
+                }
+            }
+        }
+
+        if (ImGui::Button(ICON_FA_STOP " Stop Preview")) {
+            m_isPlaying = false;
+            m_playheadFrame = 0;
+            SyncPreviewTimelinePlayback();
+            m_previewState.ExitPreview();
         }
     }
 

@@ -4,7 +4,6 @@
 #include <memory>
 #include <vector>
 #include "Actor/Actor.h"
-#include "Camera/CameraController.h"
 #include "EffectRuntime/EffectService.h"
 #include "Message/Messenger.h"
 #include "Message/MessageData.h"
@@ -47,25 +46,19 @@ namespace Cinematic
     class CameraTrack : public Track
     {
     public:
-        CameraController* targetController = nullptr;
-
         Curve<DirectX::XMFLOAT3> eyeCurve;
         Curve<DirectX::XMFLOAT3> focusCurve;
         Curve<float> fovCurve;
 
         TrackType GetType() const override { return TrackType::Camera; }
 
-        void Bind(void* target) override {
-            targetController = static_cast<CameraController*>(target);
-        }
+        void Bind(void* target) override {}
 
         void Evaluate(float time) override
         {
-            if (isMuted || !targetController) return;
-            DirectX::XMFLOAT3 eye = eyeCurve.Evaluate(time);
-            DirectX::XMFLOAT3 focus = focusCurve.Evaluate(time);
-            // float fov = fovCurve.Evaluate(time);
-            targetController->ResetCameraState(eye, focus);
+            if (isMuted) return;
+            // Legacy CameraController playback was removed.
+            // Cinematic camera tracks currently preserve authored data only.
         }
 
         void Serialize(json& out) const override {

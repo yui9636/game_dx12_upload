@@ -3,7 +3,6 @@
 #include "Actor/Actor.h"
 #include "Graphics.h"
 #include "Camera/Camera.h"
-#include "Camera/CameraController.h"
 #include "System/Dialog.h"
 #include"Model\/Model.h"
 #include <imgui.h>

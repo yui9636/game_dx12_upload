@@ -1,12 +1,15 @@
 #include "TimelineVFXSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
+#include "Component/MeshComponent.h"
 #include "Component/TransformComponent.h"
 #include "EffectRuntime/EffectService.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
+#include "Transform/NodeAttachmentUtils.h"
 #include <DirectXMath.h>
 
 namespace
@@ -20,6 +23,48 @@ namespace
         DirectX::XMFLOAT4 result;
         DirectX::XMStoreFloat4(&result, rotation);
         return result;
+    }
+
+    DirectX::XMFLOAT3 ResolveTimelineNodeWorldPosition(
+        Registry& registry,
+        EntityID entity,
+        const TransformComponent* transform,
+        int nodeIndex,
+        const DirectX::XMFLOAT3& offsetLocal)
+    {
+        if (!transform) {
+            return offsetLocal;
+        }
+
+        auto* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model || nodeIndex < 0 || nodeIndex >= static_cast<int>(mesh->model->GetNodes().size())) {
+            return {
+                transform->worldPosition.x + offsetLocal.x,
+                transform->worldPosition.y + offsetLocal.y,
+                transform->worldPosition.z + offsetLocal.z
+            };
+        }
+
+        DirectX::XMFLOAT4X4 world;
+        int cacheIndex = nodeIndex;
+        if (NodeAttachmentUtils::TryGetBoneWorldMatrix(
+            mesh->model.get(),
+            transform->worldMatrix,
+            mesh->model->GetNodes()[nodeIndex].name,
+            cacheIndex,
+            offsetLocal,
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 1.0f },
+            NodeAttachmentSpace::NodeLocal,
+            world)) {
+            return { world._41, world._42, world._43 };
+        }
+
+        return {
+            transform->worldPosition.x + offsetLocal.x,
+            transform->worldPosition.y + offsetLocal.y,
+            transform->worldPosition.z + offsetLocal.z
+        };
     }
 }
 
@@ -38,20 +83,17 @@ void TimelineVFXSystem::Update(Registry& registry) {
             auto& buf = *static_cast<TimelineItemBuffer*>(bufCol->Get(i));
             const EntityID ownerEntity = entities[i];
 
-            DirectX::XMFLOAT3 worldPos = { 0, 0, 0 };
-            if (txCol) {
-                auto& tx = *static_cast<TransformComponent*>(txCol->Get(i));
-                worldPos = tx.worldPosition;
-            }
+            TransformComponent* tx = txCol ? static_cast<TransformComponent*>(txCol->Get(i)) : nullptr;
 
             for (auto& item : buf.items) {
                 if (item.type != 2) continue;
                 bool inside = tl.currentFrame >= item.start && tl.currentFrame <= item.end;
-                const DirectX::XMFLOAT3 spawnPos = {
-                    worldPos.x + item.vfx.offsetLocal.x,
-                    worldPos.y + item.vfx.offsetLocal.y,
-                    worldPos.z + item.vfx.offsetLocal.z
-                };
+                const DirectX::XMFLOAT3 spawnPos = ResolveTimelineNodeWorldPosition(
+                    registry,
+                    ownerEntity,
+                    tx,
+                    item.vfx.nodeIndex,
+                    item.vfx.offsetLocal);
                 const DirectX::XMFLOAT4 spawnRot = QuaternionFromEulerDeg(item.vfx.offsetRotDeg);
 
                 if (inside && !item.vfxActive) {

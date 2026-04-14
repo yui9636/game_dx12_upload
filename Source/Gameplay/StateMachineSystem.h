@@ -11,4 +11,5 @@ class StateMachineSystem
 {
 public:
     static void Update(Registry& registry, float dt);
+    static void InvalidateAssetCache(const char* path = nullptr);
 };

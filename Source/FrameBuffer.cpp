@@ -211,7 +211,10 @@ FrameBuffer::FrameBuffer(IResourceFactory* factory, uint32_t width, uint32_t hei
     }
     for (TextureFormat fmt : colorFormats) {
         desc.format = fmt;
-        desc.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource | TextureBindFlags::UnorderedAccess;
+        // View history / preview framebuffers are sampled and rendered to,
+        // but never used as UAVs. Requesting UAV here widens format/flag
+        // requirements and was tripping DX12 resource creation in PlayerEditor.
+        desc.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
         m_colorTextures.push_back(factory->CreateTexture("fb_color", desc));
     }
     desc.format = depthFormat;

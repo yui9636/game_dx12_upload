@@ -32,6 +32,8 @@
 #include "RHI/DX12/DX12Texture.h"
 #include "Console/Logger.h"
 #include "Input/SDLInputBackend.h"
+#include "Model/Model.h"
+#include "PlayerEditor/PlayerModelPreviewStudio.h"
 #include <wrl/client.h>
 #include <cfloat>
 #include <DirectXCollision.h>
@@ -903,6 +905,38 @@ EngineKernel& EngineKernel::Instance()
     return instance;
 }
 
+void EngineKernel::RenderPlayerPreviewOffscreen()
+{
+    if (!m_editorLayer) {
+        return;
+    }
+    m_editorLayer->SetPlayerPreviewTexture(nullptr);
+
+    auto& previewStudio = PlayerModelPreviewStudio::Instance();
+    if (!previewStudio.IsReady()) {
+        return;
+    }
+
+    const Model* previewModel = m_editorLayer->GetPlayerEditorPanel().GetPreviewModel();
+    if (!previewModel) {
+        return;
+    }
+    const DirectX::XMFLOAT2 renderSize = m_editorLayer->GetPlayerPreviewRenderSize();
+    const float width = (std::max)(renderSize.x, 1.0f);
+    const float height = (std::max)(renderSize.y, 1.0f);
+    previewStudio.RenderPreview(
+        previewModel,
+        m_editorLayer->GetPlayerPreviewCameraPosition(),
+        m_editorLayer->GetPlayerPreviewCameraTarget(),
+        width / height,
+        m_editorLayer->GetPlayerPreviewCameraFovY(),
+        m_editorLayer->GetPlayerPreviewNearZ(),
+        m_editorLayer->GetPlayerPreviewFarZ(),
+        m_editorLayer->GetPlayerPreviewClearColor(),
+        m_editorLayer->GetPlayerEditorPanel().GetPreviewModelScale());
+    m_editorLayer->SetPlayerPreviewTexture(previewStudio.GetPreviewTexture());
+}
+
 void EngineKernel::Initialize()
 {
     time = EngineTime();
@@ -954,10 +988,12 @@ void EngineKernel::Initialize()
     if (m_sharedOffscreen->Initialize()) {
         ThumbnailGenerator::Instance().Initialize(m_sharedOffscreen.get());
         MaterialPreviewStudio::Instance().Initialize(m_sharedOffscreen.get());
+        PlayerModelPreviewStudio::Instance().Initialize(m_sharedOffscreen.get());
     } else {
         LOG_ERROR("[EngineKernel] Failed to initialize shared OffscreenRenderer.");
         ThumbnailGenerator::Instance().Initialize(nullptr);
         MaterialPreviewStudio::Instance().Initialize(nullptr);
+        PlayerModelPreviewStudio::Instance().Initialize(nullptr);
     }
 
     // SDL3 input backend
@@ -1049,7 +1085,9 @@ void EngineKernel::Render()
     // Priority dispatch: MaterialPreview (active editing) > Thumbnails (background)
     // 1 job per frame on shared OffscreenRenderer to avoid GPU contention
     static int s_thumbnailSkipCounter = 0;
-    if (m_sharedOffscreen && m_sharedOffscreen->IsGpuIdle()) {
+    const bool usePlayerPreviewAsPrimary = false;
+    const bool wantsPlayerPreview = m_editorLayer && m_editorLayer->ShouldRenderPlayerPreview();
+    if (m_sharedOffscreen && m_sharedOffscreen->IsGpuIdle() && !wantsPlayerPreview) {
         if (MaterialPreviewStudio::Instance().IsDirty())
             MaterialPreviewStudio::Instance().PumpPreview();
         else if (ThumbnailGenerator::Instance().HasPending() && ++s_thumbnailSkipCounter >= 2) {
@@ -1072,8 +1110,9 @@ void EngineKernel::Render()
     }
     std::vector<RenderPipeline::RenderViewContext> views;
     if (m_editorLayer) {
+        m_editorLayer->SetPlayerPreviewTexture(nullptr);
         m_editorLayer->SetEffectPreviewTexture(nullptr);
-        const bool useEffectPreviewAsPrimary = m_editorLayer->ShouldRenderEffectPreview();
+        const bool useEffectPreviewAsPrimary = !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
         if (!m_editorLayer->HasEditorCameraUserOverride() && !m_editorLayer->HasEditorCameraAutoFramed()) {
             DirectX::BoundingBox mergedBounds{};
             bool hasMergedBounds = false;
@@ -1129,14 +1168,61 @@ void EngineKernel::Render()
                 m_editorLayer->SetEditorCameraLookAt(rc.cameraPosition, target);
             }
         }
-        const DirectX::XMFLOAT2 sceneViewSize = useEffectPreviewAsPrimary
-            ? m_editorLayer->GetEffectPreviewRenderSize()
-            : m_editorLayer->GetSceneViewSize();
+        const DirectX::XMFLOAT2 sceneViewSize = usePlayerPreviewAsPrimary
+            ? m_editorLayer->GetPlayerPreviewRenderSize()
+            : (useEffectPreviewAsPrimary
+                ? m_editorLayer->GetEffectPreviewRenderSize()
+                : m_editorLayer->GetSceneViewSize());
         const uint32_t panelWidth = static_cast<uint32_t>((std::max)(sceneViewSize.x, 0.0f));
         const uint32_t panelHeight = static_cast<uint32_t>((std::max)(sceneViewSize.y, 0.0f));
         auto primaryView = m_renderPipeline->BuildPrimaryViewContext(rc, panelWidth, panelHeight);
         auto& state = primaryView.state;
-        if (useEffectPreviewAsPrimary) {
+        if (usePlayerPreviewAsPrimary) {
+            const uint32_t previewWidth = (std::max)(panelWidth, 64u);
+            const uint32_t previewHeight = (std::max)(panelHeight, 64u);
+            state.historyKey = 0x50450001ull;
+            state.panelWidth = previewWidth;
+            state.panelHeight = previewHeight;
+            state.renderWidth = previewWidth;
+            state.renderHeight = previewHeight;
+            state.displayWidth = previewWidth;
+            state.displayHeight = previewHeight;
+            state.viewport = RhiViewport(0.0f, 0.0f, static_cast<float>(previewWidth), static_cast<float>(previewHeight));
+            state.cameraPosition = m_editorLayer->GetPlayerPreviewCameraPosition();
+            state.cameraDirection = m_editorLayer->GetPlayerPreviewCameraDirection();
+            state.fovY = m_editorLayer->GetPlayerPreviewCameraFovY();
+            state.nearZ = m_editorLayer->GetPlayerPreviewNearZ();
+            state.farZ = m_editorLayer->GetPlayerPreviewFarZ();
+            state.aspect = static_cast<float>(previewWidth) / static_cast<float>(previewHeight);
+            state.enableComputeCulling = false;
+            state.enableAsyncCompute = false;
+            state.enableGTAO = false;
+            state.enableSSGI = false;
+            state.enableVolumetricFog = false;
+            state.enableSSR = false;
+            state.enableSkybox = m_editorLayer->ShouldPlayerPreviewUseSkybox();
+            state.clearColor = m_editorLayer->GetPlayerPreviewClearColor();
+            rc.bloomData = {};
+            rc.colorFilterData = {};
+            rc.dofData = {};
+            rc.motionBlurData = {};
+            {
+                using namespace DirectX;
+                const XMFLOAT3 previewTarget = m_editorLayer->GetPlayerPreviewCameraTarget();
+                const XMVECTOR eye = XMLoadFloat3(&state.cameraPosition);
+                const XMVECTOR target = XMLoadFloat3(&previewTarget);
+                const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+                const XMMATRIX view = XMMatrixLookAtLH(eye, target, up);
+                const XMMATRIX projection = XMMatrixPerspectiveFovLH(
+                    state.fovY,
+                    state.aspect,
+                    state.nearZ,
+                    state.farZ);
+                XMStoreFloat4x4(&state.viewMatrix, view);
+                XMStoreFloat4x4(&state.projectionMatrix, projection);
+                XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
+            }
+        } else if (useEffectPreviewAsPrimary) {
             const uint32_t previewWidth = (std::max)(panelWidth, 64u);
             const uint32_t previewHeight = (std::max)(panelHeight, 64u);
             state.historyKey = 0xEFFE0001ull;
@@ -1266,7 +1352,9 @@ void EngineKernel::Render()
             nullptr,
             primaryView.debugDepth ? primaryView.debugDepth : rc.debugGBufferDepth);
 
-        if (m_editorLayer->ShouldRenderEffectPreview()) {
+        if (m_editorLayer->ShouldRenderPlayerPreview()) {
+            RenderPlayerPreviewOffscreen();
+        } else if (m_editorLayer->ShouldRenderEffectPreview()) {
             ITexture* effectPreviewTexture = primaryView.sceneViewTexture
                 ? primaryView.sceneViewTexture
                 : primaryView.displayTexture;

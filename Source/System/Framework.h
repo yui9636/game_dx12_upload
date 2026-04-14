@@ -20,4 +20,10 @@ private:
 private:
     const HWND              hWnd;
     HighResolutionTimer     timer;
+    bool                    m_minimized = false;
+    bool                    m_needsResize = false;
+    bool                    m_inSizeMove = false;
+    bool                    m_ready = false;
+    uint32_t                m_pendingWidth = 0;
+    uint32_t                m_pendingHeight = 0;
 };

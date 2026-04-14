@@ -8,6 +8,7 @@
 #include <vector>
 #include <DirectXMath.h>
 #include "RenderContext/RenderState.h"
+#include "EffectRuntime/EffectMeshVariant.h"
 
 enum class EffectGraphNodeType : uint8_t
 {
@@ -59,6 +60,16 @@ enum class EffectParticleSortMode : uint8_t
     None = 0,
     BackToFront,
     FrontToBack
+};
+
+enum class EffectParticleBlendMode : uint8_t
+{
+    PremultipliedAlpha = 0,  // ONE / INV_SRC_ALPHA (default, smoke/dust)
+    Additive,                // ONE / ONE (sparks, glow)
+    AlphaBlend,              // SRC_ALPHA / INV_SRC_ALPHA (general purpose)
+    Multiply,                // DEST_COLOR / ZERO (shadow/dark)
+    SoftAdditive,            // ONE / INV_SRC_COLOR (soft glow)
+    EnumCount
 };
 
 enum class EffectSpawnShapeType : uint8_t
@@ -153,7 +164,17 @@ struct EffectGraphNode
     DirectX::XMFLOAT4 vectorValue2 = { 0.0f, 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 vectorValue3 = { 0.0f, 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 vectorValue4 = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 vectorValue5 = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 vectorValue6 = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 vectorValue7 = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 vectorValue8 = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 vectorValue9 = { 0.0f, 0.0f, 0.0f, 0.0f };
     std::string stringValue;
+    std::string stringValue2;
+    std::string stringValue3;
+    std::string stringValue4;
+    std::string stringValue5;
+    std::string stringValue6;
     int intValue = 0;
     int intValue2 = 0;
     bool boolValue = false;
@@ -453,6 +474,9 @@ struct EffectMeshRendererDescriptor
     DepthState depthState = DepthState::TestOnly;
     RasterizerState rasterizerState = RasterizerState::SolidCullBack;
     DirectX::XMFLOAT4 tint = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+    // Phase A: Mesh Variant System
+    EffectMeshVariantParams variantParams;
 };
 
 struct EffectParticleSimulationLayout
@@ -489,6 +513,40 @@ struct EffectParticleSimulationLayout
     float vortexStrength = 0.0f;
     bool softParticleEnabled = false;
     float softParticleScale = 96.0f;
+    EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
+    float randomSpeedRange = 0.0f;  // 0..1, e.g. 0.3 = ±30%
+    float randomSizeRange = 0.0f;
+    float randomLifeRange = 0.0f;
+    float windStrength = 0.0f;
+    DirectX::XMFLOAT3 windDirection = { 1.0f, 0.0f, 0.0f };
+    float windTurbulence = 0.0f;
+
+    // Phase 1C: Size curve (4 keys, per-emitter via CBV)
+    DirectX::XMFLOAT4 sizeCurveValues = { 0.18f, 0.18f, 0.04f, 0.04f }; // s0,s1,s2,s3
+    DirectX::XMFLOAT4 sizeCurveTimes  = { 0.0f,  0.33f, 0.66f, 1.0f };  // t0,t1,t2,t3
+    uint32_t sizeCurveKeyCount = 2; // 2=legacy start/end, 3 or 4=multi-key
+
+    // Phase 1C: Color gradient (4 keys, per-emitter via CBV)
+    DirectX::XMFLOAT4 gradientColor0 = { 1.0f, 1.0f, 1.0f, 1.0f }; // t=0
+    DirectX::XMFLOAT4 gradientColor1 = { 1.0f, 1.0f, 1.0f, 1.0f }; // t=t1
+    DirectX::XMFLOAT4 gradientColor2 = { 1.0f, 1.0f, 1.0f, 0.0f }; // t=t2
+    DirectX::XMFLOAT4 gradientColor3 = { 1.0f, 1.0f, 1.0f, 0.0f }; // t=1
+    DirectX::XMFLOAT2 gradientMidTimes = { 0.33f, 0.66f }; // t1, t2
+    uint32_t gradientKeyCount = 2; // 2=legacy start/end, 3 or 4=multi-key
+
+    // Phase 2: Attractor/Repeller (max 4)
+    DirectX::XMFLOAT4 attractors[4] = {}; // xyz=position, w=strength (>0=attract, <0=repel)
+    DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
+    DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f }; // 0=constant,1=linear,2=quadratic
+    uint32_t attractorCount = 0;
+
+    // Phase 2: GPU Collision
+    bool collisionEnabled = false;
+    DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f }; // normal.xyz + d
+    DirectX::XMFLOAT4 collisionSpheres[4] = {}; // xyz=center, w=radius
+    uint32_t collisionSphereCount = 0;
+    float collisionRestitution = 0.5f;
+    float collisionFriction = 0.3f;
 };
 
 struct CompiledEffectAsset

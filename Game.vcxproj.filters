@@ -49,9 +49,6 @@
     <Filter Include="Source\Model">
       <UniqueIdentifier>{f315a324-3783-4de0-b5d9-63aeab08aaaf}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source\Actor">
-      <UniqueIdentifier>{20b8f9c9-af60-4c69-aa3e-8b461336350b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source\Storage">
       <UniqueIdentifier>{aa62901b-5a86-4f9c-b2e5-b3928dbdd965}</UniqueIdentifier>
     </Filter>
@@ -187,6 +184,9 @@
     <Filter Include="Source\EffectEditor">
       <UniqueIdentifier>{9f7f0b42-5a9d-4d3e-bf3e-c29f093cc991}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Sequencer">
+      <UniqueIdentifier>{5db0a212-5da9-4f63-9957-76a7d6d7bf72}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\EffectRuntime">
       <UniqueIdentifier>{4e9cfe5a-02fd-4ce6-b947-c25b1a8c0d26}</UniqueIdentifier>
     </Filter>
@@ -221,15 +221,6 @@
     </ClInclude>
     <ClInclude Include="Source\SkyBox.h">
       <Filter>Source</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Input\GamePad.h">
-      <Filter>Source\Input</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Input\Input.h">
-      <Filter>Source\Input</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Input\Mouse.h">
-      <Filter>Source\Input</Filter>
     </ClInclude>
     <ClInclude Include="Source\easing.h">
       <Filter>Source</Filter>
@@ -315,12 +306,6 @@
     <ClInclude Include="Source\Collision\CollisionManager.h">
       <Filter>Source\Collision</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Input\InputActionComponent.h">
-      <Filter>Source\Input</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Component\Component.h">
-      <Filter>Source\Component</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Component\NodeAttachmentComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
@@ -338,9 +323,6 @@
     </ClInclude>
     <ClInclude Include="Source\Model\ModelRenderer.h">
       <Filter>Source\Model</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Actor\Actor.h">
-      <Filter>Source\Actor</Filter>
     </ClInclude>
     <ClInclude Include="Source\Storage\GameplayAsset.h">
       <Filter>Source\Storage</Filter>
@@ -630,6 +612,12 @@
     <ClInclude Include="Source\Asset\AssetManager.h">
       <Filter>Source\Asset</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Asset\ModelAssetSerializer.h">
+      <Filter>Source\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Asset\ModelSerializerPanel.h">
+      <Filter>Source\Asset</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Asset\PrefabSystem.h">
       <Filter>Source\Asset</Filter>
     </ClInclude>
@@ -666,16 +654,7 @@
     <ClInclude Include="Source\Component\CameraBehaviorComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Component\AudioEmitterComponent.h">
-      <Filter>Source\Component</Filter>
-    </ClInclude>
     <ClInclude Include="Source\Component\AudioBusSendComponent.h">
-      <Filter>Source\Component</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Component\AudioListenerComponent.h">
-      <Filter>Source\Component</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Component\AudioSettingsComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\CameraComponent.h">
@@ -697,9 +676,6 @@
       <Filter>Source\Camera</Filter>
     </ClInclude>
     <ClInclude Include="Source\Camera\Camera.h">
-      <Filter>Source\Camera</Filter>
-    </ClInclude>
-    <ClInclude Include="Source\Camera\CameraController.h">
       <Filter>Source\Camera</Filter>
     </ClInclude>
     <ClInclude Include="Source\Hierarchy\HierarchyECSUI.h">
@@ -895,6 +871,18 @@
     <ClInclude Include="Source\PlayerEditor\PreviewState.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Sequencer\CinematicSequenceAsset.h">
+      <Filter>Source\Sequencer</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Sequencer\CinematicSequenceSerializer.h">
+      <Filter>Source\Sequencer</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Sequencer\CinematicService.h">
+      <Filter>Source\Sequencer</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Sequencer\SequencerPanel.h">
+      <Filter>Source\Sequencer</Filter>
+    </ClInclude>
     <ClInclude Include="Source\PlayerEditor\GizmoOverlay.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
@@ -934,6 +922,63 @@
     <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Audio\AudioAssetSystem.h" />
+    <ClInclude Include="Source\Audio\AudioClipAsset.h" />
+    <ClInclude Include="Source\Input\EditorInputBridge.h" />
+    <ClInclude Include="Source\Input\IInputBackend.h" />
+    <ClInclude Include="Source\Input\InputActionMapAsset.h" />
+    <ClInclude Include="Source\Input\InputBindingComponent.h" />
+    <ClInclude Include="Source\Input\InputBindingProfileAsset.h" />
+    <ClInclude Include="Source\Input\InputConsumeTag.h" />
+    <ClInclude Include="Source\Input\InputContextComponent.h" />
+    <ClInclude Include="Source\Input\InputContextSystem.h" />
+    <ClInclude Include="Source\Input\InputDebugStateComponent.h" />
+    <ClInclude Include="Source\Input\InputDebugSystem.h" />
+    <ClInclude Include="Source\Input\InputEvent.h" />
+    <ClInclude Include="Source\Input\InputEventQueue.h" />
+    <ClInclude Include="Source\Input\InputFeedbackSystem.h" />
+    <ClInclude Include="Source\Input\InputResolveSystem.h" />
+    <ClInclude Include="Source\Input\InputTextFieldComponent.h" />
+    <ClInclude Include="Source\Input\InputTextSystem.h" />
+    <ClInclude Include="Source\Input\InputUserComponent.h" />
+    <ClInclude Include="Source\Input\ResolvedInputStateComponent.h" />
+    <ClInclude Include="Source\Input\SDLInputBackend.h" />
+    <ClInclude Include="Source\Input\VibrationRequestComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlayerTagComponent.h" />
+    <ClInclude Include="Source\Gameplay\CharacterPhysicsComponent.h" />
+    <ClInclude Include="Source\Gameplay\HealthComponent.h" />
+    <ClInclude Include="Source\Gameplay\StaminaComponent.h" />
+    <ClInclude Include="Source\Gameplay\LocomotionStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\ActionStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\ActionDatabaseComponent.h" />
+    <ClInclude Include="Source\Gameplay\DodgeStateComponent.h" />
+    <ClInclude Include="Source\Gameplay\HitboxTrackingComponent.h" />
+    <ClInclude Include="Source\Gameplay\StageBoundsComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackRangeComponent.h" />
+    <ClInclude Include="Source\Gameplay\TimelineComponent.h" />
+    <ClInclude Include="Source\Gameplay\TimelineItemBuffer.h" />
+    <ClInclude Include="Source\Gameplay\SpeedCurveComponent.h" />
+    <ClInclude Include="Source\Gameplay\HitStopComponent.h" />
+    <ClInclude Include="Source\Gameplay\PlayerInputSystem.h" />
+    <ClInclude Include="Source\Gameplay\LocomotionSystem.h" />
+    <ClInclude Include="Source\Gameplay\ActionSystem.h" />
+    <ClInclude Include="Source\Gameplay\DodgeSystem.h" />
+    <ClInclude Include="Source\Gameplay\StaminaSystem.h" />
+    <ClInclude Include="Source\Gameplay\HealthSystem.h" />
+    <ClInclude Include="Source\Gameplay\CharacterPhysicsSystem.h" />
+    <ClInclude Include="Source\Gameplay\PlaybackSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineHitboxSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineVFXSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineAudioSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineShakeSystem.h" />
+    <ClInclude Include="Source\Gameplay\HitboxTrackingSystem.h" />
+    <ClInclude Include="Source\Model\ModelUpdateSystem.h" />
+    <ClInclude Include="Source\RenderPass\ExtractVisibleInstancesPass.h" />
+    <ClInclude Include="Source\RenderPass\BuildInstanceBufferPass.h" />
+    <ClInclude Include="Source\RenderPass\BuildIndirectCommandPass.h" />
+    <ClInclude Include="Source\RenderPass\ComputeCullingPass.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\ImGuiRenderer.cpp">
@@ -962,15 +1007,6 @@
     </ClCompile>
     <ClCompile Include="Source\SkyBox.cpp">
       <Filter>Source</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Input\GamePad.cpp">
-      <Filter>Source\Input</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Input\Input.cpp">
-      <Filter>Source\Input</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Input\Mouse.cpp">
-      <Filter>Source\Input</Filter>
     </ClCompile>
     <ClCompile Include="Source\Stage\Stage.cpp">
       <Filter>Source\Stage</Filter>
@@ -1038,9 +1074,6 @@
     <ClCompile Include="Source\Collision\CollisionManager.cpp">
       <Filter>Source\Collision</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Input\InputActionComponent.cpp">
-      <Filter>Source\Input</Filter>
-    </ClCompile>
     <ClCompile Include="External\imgui-docking\imgui_tables.cpp">
       <Filter>External\imgui-docking</Filter>
     </ClCompile>
@@ -1058,9 +1091,6 @@
     </ClCompile>
     <ClCompile Include="Source\Model\ModelRenderer.cpp">
       <Filter>Source\Model</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Actor\Actor.cpp">
-      <Filter>Source\Actor</Filter>
     </ClCompile>
     <ClCompile Include="Source\ShaderClass\HologramShader.cpp">
       <Filter>Source\ShaderClass</Filter>
@@ -1170,8 +1200,14 @@
     <ClCompile Include="External\meshoptimizer-cpp-master\src\simplifier.cpp">
       <Filter>External\meshoptimizer</Filter>
     </ClCompile>
-    <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp">
-      <Filter>Source\Cinematic</Filter>
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\overdrawoptimizer.cpp">
+      <Filter>External\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\vcacheoptimizer.cpp">
+      <Filter>External\meshoptimizer</Filter>
+    </ClCompile>
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\vfetchoptimizer.cpp">
+      <Filter>External\meshoptimizer</Filter>
     </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorRuntime.cpp">
       <Filter>Source\Animator</Filter>
@@ -1275,6 +1311,12 @@
     <ClCompile Include="Source\Asset\AssetManager.cpp">
       <Filter>Source\Asset</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Asset\ModelAssetSerializer.cpp">
+      <Filter>Source\Asset</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Asset\ModelSerializerPanel.cpp">
+      <Filter>Source\Asset</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Asset\PrefabSystem.cpp">
       <Filter>Source\Asset</Filter>
     </ClCompile>
@@ -1324,9 +1366,6 @@
       <Filter>Source\Camera</Filter>
     </ClCompile>
     <ClCompile Include="Source\Camera\Camera.cpp">
-      <Filter>Source\Camera</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Camera\CameraController.cpp">
       <Filter>Source\Camera</Filter>
     </ClCompile>
     <ClCompile Include="Source\Hierarchy\HierarchyECSUI.cpp">
@@ -1491,6 +1530,18 @@
     <ClCompile Include="Source\PlayerEditor\InputMappingTab.cpp">
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Sequencer\CinematicSequenceAsset.cpp">
+      <Filter>Source\Sequencer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Sequencer\CinematicSequenceSerializer.cpp">
+      <Filter>Source\Sequencer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Sequencer\CinematicService.cpp">
+      <Filter>Source\Sequencer</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Sequencer\SequencerPanel.cpp">
+      <Filter>Source\Sequencer</Filter>
+    </ClCompile>
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp">
       <Filter>Source\EffectEditor</Filter>
     </ClCompile>
@@ -1520,6 +1571,90 @@
     </ClCompile>
     <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp">
       <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\EditorInputBridge.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputActionMapAsset.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputBindingProfileAsset.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputContextSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputDebugSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputFeedbackSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputResolveSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\InputTextSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Input\SDLInputBackend.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\PlayerInputSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\LocomotionSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\ActionSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\DodgeSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\StaminaSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\HealthSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\CharacterPhysicsSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\PlaybackSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineHitboxSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineVFXSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineAudioSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Model\ModelUpdateSystem.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\ExtractVisibleInstancesPass.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\BuildInstanceBufferPass.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\BuildIndirectCommandPass.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\RenderPass\ComputeCullingPass.cpp">
+      <Filter>Source</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -1560,9 +1695,6 @@
     <None Include="Shader\SwordTrail.hlsli">
       <Filter>Shader</Filter>
     </None>
-    <None Include="Shader\Effect.hlsl">
-      <Filter>Shader</Filter>
-    </None>
     <None Include="Shader\compute_particle.hlsli">
       <Filter>Shader</Filter>
     </None>
@@ -1573,9 +1705,6 @@
       <Filter>Shader</Filter>
     </None>
     <None Include="Shader\Hologram.hlsl">
-      <Filter>Shader</Filter>
-    </None>
-    <None Include="Shader\ParticleMesh.hlsli">
       <Filter>Shader</Filter>
     </None>
   </ItemGroup>
@@ -1749,6 +1878,18 @@
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\SSRPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\FrustumCullCS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\PBRInstancedVS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\PhongInstancedVS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\ShadowMapInstancedVS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
   </ItemGroup>

@@ -1820,6 +1820,14 @@ void EffectEditorPanel::DrawGuiPanel()
                     m_compileDirty = true;
                 }
 
+                const char* particleBlendModes[] = { "Premultiplied Alpha", "Additive", "Alpha Blend", "Multiply", "Soft Additive" };
+                int blendMode = static_cast<int>(spriteNode->scalar2);
+                if (blendMode < 0 || blendMode >= IM_ARRAYSIZE(particleBlendModes)) blendMode = 0;
+                if (ImGui::Combo("Blend Mode", &blendMode, particleBlendModes, IM_ARRAYSIZE(particleBlendModes))) {
+                    spriteNode->scalar2 = static_cast<float>(blendMode);
+                    m_compileDirty = true;
+                }
+
                 m_compileDirty |= ImGui::DragFloat("Ribbon Width", &spriteNode->vectorValue2.x, 0.005f, 0.01f, 10.0f, "%.3f");
                 m_compileDirty |= ImGui::DragFloat("Velocity Stretch", &spriteNode->vectorValue2.y, 0.01f, 0.05f, 20.0f, "%.2f");
                 m_compileDirty |= ImGui::DragFloat("Alpha Scale", &spriteNode->vectorValue2.z, 0.01f, 0.01f, 4.0f, "%.2f");
@@ -1832,6 +1840,14 @@ void EffectEditorPanel::DrawGuiPanel()
                 if (spriteNode->boolValue) {
                     m_compileDirty |= ImGui::DragFloat("Soft Fade Scale", &spriteNode->scalar, 1.0f, 1.0f, 512.0f, "%.1f");
                 }
+                ImGui::Separator();
+                ImGui::TextDisabled("Per-Particle Randomization");
+                m_compileDirty |= ImGui::SliderFloat("Speed Random", &spriteNode->vectorValue4.x, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                m_compileDirty |= ImGui::SliderFloat("Size Random", &spriteNode->vectorValue4.y, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                m_compileDirty |= ImGui::SliderFloat("Life Random", &spriteNode->vectorValue4.z, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                ImGui::Separator();
+                ImGui::TextDisabled("Wind");
+                m_compileDirty |= ImGui::DragFloat("Wind Strength", &spriteNode->vectorValue4.w, 0.1f, 0.0f, 50.0f, "%.1f");
                 int subUvColumns = (std::max)(1, static_cast<int>(std::round(spriteNode->vectorValue3.z > 0.0f ? spriteNode->vectorValue3.z : 1.0f)));
                 int subUvRows = (std::max)(1, static_cast<int>(std::round(spriteNode->vectorValue3.w > 0.0f ? spriteNode->vectorValue3.w : 1.0f)));
                 if (ImGui::DragInt("Flipbook Columns", &subUvColumns, 1.0f, 1, 32)) {
@@ -2291,6 +2307,58 @@ void EffectEditorPanel::DrawTimelinePanel()
                 const float alphaValue = lerpSample(colorNode->vectorValue.w, colorNode->vectorValue2.w, alphaT) * alphaScale;
                 ImGui::Text("Sample Size: %.3f", sizeValue);
                 ImGui::Text("Sample Alpha: %.3f", alphaValue);
+
+                // Phase 1C: Size Curve Multi-Key
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::TextUnformatted("Size Curve (Multi-Key)");
+                int sizeKeyCount = static_cast<int>(spriteNode->vectorValue6.w);
+                if (sizeKeyCount < 2) sizeKeyCount = 2;
+                if (ImGui::SliderInt("Key Count##SizeCurve", &sizeKeyCount, 2, 4)) {
+                    spriteNode->vectorValue6.w = static_cast<float>(sizeKeyCount);
+                    if (sizeKeyCount >= 3) {
+                        if (spriteNode->vectorValue5.x <= 0.0f) spriteNode->vectorValue5.x = emitterNode->vectorValue.y;
+                        if (spriteNode->vectorValue5.y <= 0.0f) spriteNode->vectorValue5.y = (emitterNode->vectorValue.y + emitterNode->vectorValue.z) * 0.5f;
+                        if (spriteNode->vectorValue5.z <= 0.0f) spriteNode->vectorValue5.z = emitterNode->vectorValue.z;
+                        if (spriteNode->vectorValue5.w <= 0.0f) spriteNode->vectorValue5.w = emitterNode->vectorValue.z;
+                        if (spriteNode->vectorValue6.x <= 0.0f) spriteNode->vectorValue6.x = 0.33f;
+                        if (spriteNode->vectorValue6.y <= 0.0f) spriteNode->vectorValue6.y = 0.66f;
+                    }
+                    m_compileDirty = true;
+                }
+                if (sizeKeyCount >= 3) {
+                    m_compileDirty |= ImGui::DragFloat("S0 (t=0)##SC", &spriteNode->vectorValue5.x, 0.01f, 0.0f, 25.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat("S1##SC", &spriteNode->vectorValue5.y, 0.01f, 0.0f, 25.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat("T1##SC", &spriteNode->vectorValue6.x, 0.005f, 0.01f, 0.99f, "%.2f");
+                    if (sizeKeyCount >= 4) {
+                        m_compileDirty |= ImGui::DragFloat("S2##SC", &spriteNode->vectorValue5.z, 0.01f, 0.0f, 25.0f, "%.2f");
+                        m_compileDirty |= ImGui::DragFloat("T2##SC", &spriteNode->vectorValue6.y, 0.005f, 0.01f, 0.99f, "%.2f");
+                    }
+                    m_compileDirty |= ImGui::DragFloat("S3 (t=1)##SC", &spriteNode->vectorValue5.w, 0.01f, 0.0f, 25.0f, "%.2f");
+                }
+
+                // Phase 1C: Color Gradient Multi-Key
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::TextUnformatted("Color Gradient (Multi-Key)");
+                int gradKeyCount = colorNode->intValue;
+                if (gradKeyCount < 2) gradKeyCount = 2;
+                if (ImGui::SliderInt("Key Count##Gradient", &gradKeyCount, 2, 4)) {
+                    colorNode->intValue = gradKeyCount;
+                    if (gradKeyCount >= 3) {
+                        if (colorNode->scalar <= 0.0f) colorNode->scalar = 0.33f;
+                        if (colorNode->scalar2 <= 0.0f) colorNode->scalar2 = 0.66f;
+                    }
+                    m_compileDirty = true;
+                }
+                if (gradKeyCount >= 3) {
+                    m_compileDirty |= ImGui::ColorEdit4("Mid Color 1##GC", &colorNode->vectorValue3.x);
+                    m_compileDirty |= ImGui::DragFloat("Time 1##GC", &colorNode->scalar, 0.005f, 0.01f, 0.99f, "%.2f");
+                    if (gradKeyCount >= 4) {
+                        m_compileDirty |= ImGui::ColorEdit4("Mid Color 2##GC", &colorNode->vectorValue4.x);
+                        m_compileDirty |= ImGui::DragFloat("Time 2##GC", &colorNode->scalar2, 0.005f, 0.01f, 0.99f, "%.2f");
+                    }
+                }
             }
             ImGui::EndChild();
 
@@ -2390,6 +2458,113 @@ void EffectEditorPanel::DrawTimelinePanel()
                     alphaSample);
             }
             ImGui::EndChild();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Parameters")) {
+            if (m_asset.exposedParameters.empty()) {
+                ImGui::TextDisabled("No exposed parameters. Add parameters in the Blackboard.");
+            } else {
+                auto* overrideComponent = (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity))
+                    ? m_registry->GetComponent<EffectParameterOverrideComponent>(m_previewEntity)
+                    : nullptr;
+
+                if (overrideComponent) {
+                    if (overrideComponent->scalarNames.size() != m_asset.exposedParameters.size()) {
+                        overrideComponent->scalarNames.clear();
+                        overrideComponent->scalarValues.clear();
+                        overrideComponent->colorNames.clear();
+                        overrideComponent->colorValues.clear();
+                        for (const auto& param : m_asset.exposedParameters) {
+                            if (param.valueType == EffectValueType::Float) {
+                                overrideComponent->scalarNames.push_back(param.name);
+                                overrideComponent->scalarValues.push_back(param.defaultValue.x);
+                            } else if (param.valueType == EffectValueType::Color) {
+                                overrideComponent->colorNames.push_back(param.name);
+                                overrideComponent->colorValues.push_back(param.defaultValue);
+                            }
+                        }
+                        overrideComponent->enabled = true;
+                    }
+
+                    ImGui::TextDisabled("Drag sliders to adjust parameters in real-time");
+                    ImGui::Separator();
+
+                    for (size_t i = 0; i < overrideComponent->scalarNames.size() && i < overrideComponent->scalarValues.size(); ++i) {
+                        const std::string& name = overrideComponent->scalarNames[i];
+                        ImGui::DragFloat(name.c_str(), &overrideComponent->scalarValues[i], 0.01f, 0.0f, 100.0f, "%.3f");
+                        if (const char* desc = EffectParameterBindings::DescribeBinding(EffectValueType::Float, name)) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("(%s)", desc);
+                        }
+                    }
+                    if (!overrideComponent->scalarNames.empty() && !overrideComponent->colorNames.empty()) {
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::Spacing();
+                    }
+                    for (size_t i = 0; i < overrideComponent->colorNames.size() && i < overrideComponent->colorValues.size(); ++i) {
+                        const std::string& name = overrideComponent->colorNames[i];
+                        ImGui::ColorEdit4(name.c_str(), &overrideComponent->colorValues[i].x);
+                        if (const char* desc = EffectParameterBindings::DescribeBinding(EffectValueType::Color, name)) {
+                            ImGui::SameLine();
+                            ImGui::TextDisabled("(%s)", desc);
+                        }
+                    }
+                } else {
+                    ImGui::TextDisabled("Start preview to enable live parameter editing.");
+                }
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem(ICON_FA_FOLDER_OPEN " Presets")) {
+            ImGui::TextDisabled("Save / Load effect presets");
+            ImGui::Separator();
+
+            if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save as Preset")) {
+                std::filesystem::path presetDir = "Data/Effect/Presets";
+                std::error_code ec;
+                std::filesystem::create_directories(presetDir, ec);
+                std::string presetName = m_asset.name.empty() ? "Untitled" : m_asset.name;
+                std::string presetPath = (presetDir / (presetName + ".effectgraph.json")).string();
+                EffectGraphSerializer::Save(presetPath, m_asset);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Refresh")) {
+                // Trigger rescan on next frame
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::TextDisabled("Available presets:");
+
+            std::error_code ec;
+            const std::filesystem::path presetDir = "Data/Effect/Presets";
+            if (std::filesystem::exists(presetDir, ec)) {
+                for (const auto& entry : std::filesystem::directory_iterator(presetDir, ec)) {
+                    if (!entry.is_regular_file()) continue;
+                    const auto& path = entry.path();
+                    if (path.extension() != ".json") continue;
+                    std::string filename = path.stem().string();
+                    // Remove .effectgraph suffix if present
+                    if (filename.size() > 12 && filename.substr(filename.size() - 12) == ".effectgraph") {
+                        filename = filename.substr(0, filename.size() - 12);
+                    }
+                    if (ImGui::Selectable(filename.c_str())) {
+                        EffectGraphAsset loaded;
+                        if (EffectGraphSerializer::Load(path.string(), loaded)) {
+                            m_asset = std::move(loaded);
+                            m_compileDirty = true;
+                            m_syncNodePositions = true;
+                            CompileDocument();
+                            QueuePreviewSpawn();
+                        }
+                    }
+                }
+            } else {
+                ImGui::TextDisabled("No presets directory found. Save a preset to create it.");
+            }
             ImGui::EndTabItem();
         }
 
@@ -2595,6 +2770,25 @@ void EffectEditorPanel::DrawDetailsPanel()
                 m_compileDirty |= ImGui::DragFloat3("Shape Params", &node->vectorValue3.x, 0.01f, -50.0f, 50.0f, "%.2f");
                 m_compileDirty |= ImGui::DragFloat("Spin Rate", &node->vectorValue3.w, 0.05f, -64.0f, 64.0f, "%.2f");
             }
+            if (ImGui::CollapsingHeader("Attractor / Repeller")) {
+                ImGui::TextDisabled("Strength > 0 = attract, < 0 = repel");
+                m_compileDirty |= ImGui::DragFloat3("Attractor 0 Pos", &node->vectorValue5.x, 0.1f);
+                m_compileDirty |= ImGui::DragFloat("Strength 0", &node->vectorValue5.w, 0.1f, -50.0f, 50.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Radius 0", &node->vectorValue7.x, 0.1f, 0.1f, 100.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Falloff 0", &node->vectorValue7.z, 0.1f, 0.0f, 2.0f, "%.1f");
+                ImGui::Spacing();
+                m_compileDirty |= ImGui::DragFloat3("Attractor 1 Pos", &node->vectorValue6.x, 0.1f);
+                m_compileDirty |= ImGui::DragFloat("Strength 1", &node->vectorValue6.w, 0.1f, -50.0f, 50.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Radius 1", &node->vectorValue7.y, 0.1f, 0.1f, 100.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Falloff 1", &node->vectorValue7.w, 0.1f, 0.0f, 2.0f, "%.1f");
+            }
+            if (ImGui::CollapsingHeader("Collision")) {
+                ImGui::TextDisabled("Ground plane collision");
+                m_compileDirty |= ImGui::DragFloat3("Plane Normal", &node->vectorValue8.x, 0.01f, -1.0f, 1.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Plane D", &node->vectorValue8.w, 0.1f, -100.0f, 100.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Restitution", &node->vectorValue9.x, 0.01f, 0.0f, 1.0f, "%.2f");
+                m_compileDirty |= ImGui::DragFloat("Friction", &node->vectorValue9.y, 0.01f, 0.0f, 1.0f, "%.2f");
+            }
             break;
         case EffectGraphNodeType::Lifetime:
             if (ImGui::CollapsingHeader("System State", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -2633,7 +2827,136 @@ void EffectEditorPanel::DrawDetailsPanel()
                     node->intValue = blendState;
                     m_compileDirty = true;
                 }
-                m_compileDirty |= InputTextString("Material Asset", node->stringValue);
+                DrawAssetSlotControl("Base Texture", node->stringValue, AssetPickerKind::Texture, node->id, false);
+            }
+
+            // B3: Preset Templates
+            if (ImGui::CollapsingHeader("Effect Presets", ImGuiTreeNodeFlags_None)) {
+                struct PresetEntry { const char* label; uint32_t flags; };
+                static const PresetEntry kPresets[] = {
+                    { "Slash Basic",        0x00004003u },
+                    { "Slash Glow",         0x00006003u },
+                    { "Slash Flow",         0x00014021u },
+                    { "Slash Full",         0x00036023u },
+                    { "Magic Circle",       0x00014011u },
+                    { "Magic Summon",       0x0000080Bu },
+                    { "Magic Aura",         0x00024021u },
+                    { "Magic Explosion",    0x00004105u },
+                    { "Universal Glow",     0x00084021u },
+                    { "Universal Flow",     0x00018001u },
+                };
+                for (const auto& preset : kPresets) {
+                    if (ImGui::Button(preset.label, ImVec2(130.0f, 0.0f))) {
+                        node->intValue2 = static_cast<int>(preset.flags);
+                        m_compileDirty = true;
+                    }
+                    ImGui::SameLine();
+                }
+                ImGui::NewLine();
+                ImGui::Text("Current Key: 0x%08X", static_cast<uint32_t>(node->intValue2));
+            }
+
+            // B1: Shader Feature Flags
+            if (ImGui::CollapsingHeader("Shader Features", ImGuiTreeNodeFlags_DefaultOpen)) {
+                uint32_t flags = static_cast<uint32_t>(node->intValue2);
+                bool dirty = false;
+                auto FlagCheck = [&](const char* label, uint32_t bit) {
+                    bool v = (flags & bit) != 0;
+                    if (ImGui::Checkbox(label, &v)) {
+                        flags = v ? (flags | bit) : (flags & ~bit);
+                        dirty = true;
+                    }
+                };
+
+                ImGui::TextDisabled("-- Base --");
+                FlagCheck("Texture",          1u << 0);
+                FlagCheck("AlphaFade",         1u << 14);
+
+                ImGui::TextDisabled("-- Surface --");
+                FlagCheck("NormalMap",         1u << 11);
+                FlagCheck("Distort",           1u << 2);
+                FlagCheck("Mask",              1u << 4);
+
+                ImGui::TextDisabled("-- Motion --");
+                FlagCheck("FlowMap",           1u << 12);
+                FlagCheck("Scroll",            1u << 20);
+                FlagCheck("Flipbook",          1u << 6);
+
+                ImGui::TextDisabled("-- Dissolve --");
+                FlagCheck("Dissolve",          1u << 1);
+                FlagCheck("DissolveGlow",      1u << 9);
+
+                ImGui::TextDisabled("-- Lighting --");
+                FlagCheck("Lighting",          1u << 3);
+                FlagCheck("Fresnel",           1u << 5);
+                FlagCheck("RimLight",          1u << 17);
+                FlagCheck("MatCap",            1u << 10);
+                FlagCheck("Toon",              1u << 16);
+
+                ImGui::TextDisabled("-- Color --");
+                FlagCheck("GradientMap",       1u << 7);
+                FlagCheck("ChromaticAberration", 1u << 8);
+                FlagCheck("VertexColorBlend",  1u << 18);
+                FlagCheck("SubTexture",        1u << 15);
+                FlagCheck("Emission",          1u << 19);
+                FlagCheck("SideFade",          1u << 13);
+
+                if (dirty) {
+                    node->intValue2 = static_cast<int>(flags);
+                    m_compileDirty = true;
+                }
+            }
+
+            // B2: Effect Parameters (shown only when relevant flags are set)
+            {
+                const uint32_t flags = static_cast<uint32_t>(node->intValue2);
+
+                if ((flags & (1u << 1)) && ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Amount##D",    &node->vectorValue2.x, 0.01f, 0.0f, 1.0f, "%.3f");
+                    m_compileDirty |= ImGui::DragFloat("Edge Width##D",&node->vectorValue2.y, 0.001f, 0.0f, 0.5f, "%.4f");
+                    if (flags & (1u << 9)) {
+                        m_compileDirty |= ImGui::ColorEdit4("Glow Color##D", &node->vectorValue5.x);
+                    }
+                    DrawAssetSlotControl("Mask Tex##D", node->stringValue2, AssetPickerKind::Texture, node->id, false);
+                }
+
+                if ((flags & (1u << 12)) && ImGui::CollapsingHeader("Flow Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Strength##F",  &node->vectorValue2.w, 0.01f, 0.0f, 2.0f, "%.3f");
+                    m_compileDirty |= ImGui::DragFloat2("Speed##F",    &node->vectorValue3.x, 0.005f, -2.0f, 2.0f, "%.3f");
+                    DrawAssetSlotControl("Flow Map Tex##F", node->stringValue4, AssetPickerKind::Texture, node->id, false);
+                }
+
+                if ((flags & (1u << 20)) && ImGui::CollapsingHeader("Scroll", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat2("Scroll Speed##S", &node->vectorValue3.z, 0.005f, -2.0f, 2.0f, "%.3f");
+                }
+
+                if ((flags & (1u << 5)) && ImGui::CollapsingHeader("Fresnel", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Power##Fr",    &node->vectorValue2.z, 0.1f, 0.1f, 10.0f, "%.2f");
+                    m_compileDirty |= ImGui::ColorEdit4("Color##Fr",   &node->vectorValue6.x);
+                }
+
+                if ((flags & (1u << 17)) && ImGui::CollapsingHeader("Rim Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Rim Power##RL",  &node->vectorValue4.x, 0.1f, 0.1f, 10.0f, "%.2f");
+                    m_compileDirty |= ImGui::ColorEdit4("Rim Color##RL", &node->vectorValue7.x);
+                }
+
+                if ((flags & (1u << 19)) && ImGui::CollapsingHeader("Emission", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Intensity##Em",  &node->vectorValue4.y, 0.1f, 0.0f, 20.0f, "%.2f");
+                    m_compileDirty |= ImGui::ColorEdit4("Color##Em",     &node->vectorValue8.x);
+                    DrawAssetSlotControl("Emission Tex##Em", node->stringValue6, AssetPickerKind::Texture, node->id, false);
+                }
+
+                if ((flags & (1u << 2)) && ImGui::CollapsingHeader("Distortion", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    m_compileDirty |= ImGui::DragFloat("Strength##Dist", &node->vectorValue4.z, 0.005f, 0.0f, 1.0f, "%.4f");
+                }
+
+                if ((flags & (1u << 11)) && ImGui::CollapsingHeader("Normal Map", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    DrawAssetSlotControl("Normal Tex##NM", node->stringValue3, AssetPickerKind::Texture, node->id, false);
+                }
+
+                if ((flags & (1u << 15)) && ImGui::CollapsingHeader("Sub Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
+                    DrawAssetSlotControl("Sub Tex##Sub", node->stringValue5, AssetPickerKind::Texture, node->id, false);
+                }
             }
             break;
         }

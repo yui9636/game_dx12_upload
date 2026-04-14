@@ -61,6 +61,7 @@ public:
 	static bool IsShuttingDown();
 
 	void Initialize(HWND hWnd, GraphicsAPI api = GraphicsAPI::DX11);
+	void OnResize(uint32_t width, uint32_t height);
 	void Present(UINT syncInterval);
 	HWND GetWindowHandle() const { return m_windowHandle; }
 

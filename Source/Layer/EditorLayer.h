@@ -2,10 +2,12 @@
 #include "Layer.h"
 #include "GameLayer.h"
 #include "Asset/AssetBrowser.h"
+#include "Asset/ModelSerializerPanel.h"
 #include "Input/EditorInputBridge.h"
 #include "PlayerEditor/PlayerEditorPanel.h"
 #include "PlayerEditor/PlayerEditorWindow.h"
 #include "EffectEditor/EffectEditorPanel.h"
+#include "Sequencer/SequencerPanel.h"
 #include <memory>
 #include <array>
 #include <DirectXMath.h>
@@ -83,7 +85,9 @@ public:
         Hierarchy,
         Inspector,
         AssetBrowser,
+        Serializer,
         Console,
+        Sequencer,
         Lighting,
         Audio,
         RenderPasses,
@@ -144,7 +148,20 @@ public:
     void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
     void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
     void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
+    void SetPlayerPreviewTexture(ITexture* texture) { m_playerEditorPanel.SetViewportTexture(texture); }
     void SetEffectPreviewTexture(ITexture* texture) { m_effectEditorPanel.SetViewportTexture(texture); }
+    PlayerEditorPanel& GetPlayerEditorPanel() { return m_playerEditorPanel; }
+    const PlayerEditorPanel& GetPlayerEditorPanel() const { return m_playerEditorPanel; }
+    bool ShouldRenderPlayerPreview() const { return m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor && m_playerEditorPanel.CanRenderPreview(); }
+    DirectX::XMFLOAT2 GetPlayerPreviewRenderSize() const { return m_playerEditorPanel.GetPreviewRenderSize(); }
+    DirectX::XMFLOAT3 GetPlayerPreviewCameraPosition() const { return m_playerEditorPanel.GetPreviewCameraPosition(); }
+    DirectX::XMFLOAT3 GetPlayerPreviewCameraTarget() const { return m_playerEditorPanel.GetPreviewCameraTarget(); }
+    DirectX::XMFLOAT3 GetPlayerPreviewCameraDirection() const { return m_playerEditorPanel.GetPreviewCameraDirection(); }
+    float GetPlayerPreviewCameraFovY() const { return m_playerEditorPanel.GetPreviewCameraFovY(); }
+    float GetPlayerPreviewNearZ() const { return m_playerEditorPanel.GetPreviewNearZ(); }
+    float GetPlayerPreviewFarZ() const { return m_playerEditorPanel.GetPreviewFarZ(); }
+    DirectX::XMFLOAT4 GetPlayerPreviewClearColor() const { return m_playerEditorPanel.GetPreviewClearColor(); }
+    bool ShouldPlayerPreviewUseSkybox() const { return m_playerEditorPanel.ShouldPreviewUseSkybox(); }
     SceneViewMode GetSceneViewMode() const { return m_sceneViewMode; }
     float GetSceneGridCellSize() const { return m_sceneGridCellSize; }
     int GetSceneGridHalfLineCount() const { return m_sceneGridHalfLineCount; }
@@ -168,6 +185,7 @@ public:
 private:
     GameLayer* m_gameLayer;
     std::unique_ptr<AssetBrowser> m_assetBrowser;
+    ModelSerializerPanel m_modelSerializerPanel;
     EditorInputBridge m_inputBridge;
 
     EntityID m_selectedEntity = Entity::NULL_ID;
@@ -176,7 +194,9 @@ private:
     bool m_showHierarchy = true;
     bool m_showInspector = true;
     bool m_showAssetBrowser = true;
+    bool m_showSerializer = false;
     bool m_showConsole = true;
+    bool m_showSequencer = false;
     bool m_showLightingWindow = false;
     bool m_showAudioWindow = false;
     bool m_showRenderPassesWindow = false;
@@ -200,6 +220,7 @@ private:
     WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
     PlayerEditorPanel m_playerEditorPanel;
     EffectEditorPanel m_effectEditorPanel;
+    SequencerPanel m_sequencerPanel;
     std::unique_ptr<PlayerEditorWindow> m_playerEditorWindow;
     SceneShadingMode m_sceneShadingMode = SceneShadingMode::Lit;
     DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };
@@ -258,10 +279,12 @@ private:
     void DrawMainToolbar();
     void DrawPlayerEditorWorkspace();
     void DrawEffectEditorWorkspace();
+    void DrawSequencer();
     void DrawSceneView();
     void DrawGameView();
     void DrawHierarchy();
     void DrawInspector();
+    void DrawModelSerializer();
     void DrawLightingWindow();
     void DrawAudioWindow();
     void DrawRenderPassesWindow();
@@ -358,6 +381,9 @@ private:
     void DrawSceneIconOverlay(const DirectX::XMFLOAT4& viewRect,
                               const DirectX::XMFLOAT4X4& view,
                               const DirectX::XMFLOAT4X4& projection) const;
+    void DrawSequencerCameraOverlay(const DirectX::XMFLOAT4& viewRect,
+                                    const DirectX::XMFLOAT4X4& view,
+                                    const DirectX::XMFLOAT4X4& projection) const;
     void DrawSceneBoundsOverlay(const DirectX::XMFLOAT4& viewRect,
                                 const DirectX::XMFLOAT4X4& view,
                                 const DirectX::XMFLOAT4X4& projection) const;

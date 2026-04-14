@@ -14,6 +14,7 @@
 #include "Component/CameraComponent.h"
 #include "Component/CameraEffectComponent.h"
 #include "Component/EnvironmentComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
 #include "Component/GizmoComponent.h"
 #include "Component/GridComponent.h"
 #include "Component/HierarchyComponent.h"
@@ -21,15 +22,27 @@
 #include "Component/MaterialComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
+#include "Component/NodeSocketComponent.h"
 #include "Component/PrefabInstanceComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/RectTransformComponent.h"
+#include "Component/SequencerPreviewCameraComponent.h"
 #include "Component/ShadowSettingsComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/StaminaComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputUserComponent.h"
 #include "JSONManager.h"
 #include "Registry/Registry.h"
 #include "Undo/EntitySnapshot.h"
@@ -351,6 +364,127 @@ namespace
                 });
             }
             writeComponent("ColliderComponent", colliderJson);
+        }
+
+        if (const auto& sockets = std::get<std::optional<NodeSocketComponent>>(node.components); sockets.has_value()) {
+            json value;
+            value["sockets"] = json::array();
+            for (const auto& socket : sockets->sockets) {
+                value["sockets"].push_back(json{
+                    {"name", socket.name},
+                    {"parentBoneName", socket.parentBoneName},
+                    {"offsetPos", socket.offsetPos},
+                    {"offsetRotDeg", socket.offsetRotDeg},
+                    {"offsetScale", socket.offsetScale}
+                });
+            }
+            writeComponent("NodeSocketComponent", value);
+        }
+
+        if (const auto& inputBinding = std::get<std::optional<InputBindingComponent>>(node.components); inputBinding.has_value()) {
+            writeComponent("InputBindingComponent", json{
+                {"actionMapAssetPath", inputBinding->actionMapAssetPath},
+                {"bindingProfilePath", inputBinding->bindingProfilePath},
+                {"runtimeOverrideProfilePath", inputBinding->runtimeOverrideProfilePath}
+            });
+        }
+
+        if (const auto& inputContext = std::get<std::optional<InputContextComponent>>(node.components); inputContext.has_value()) {
+            json value{
+                {"priority", static_cast<int>(inputContext->priority)},
+                {"activeMapCount", inputContext->activeMapCount},
+                {"consumeLowerPriority", inputContext->consumeLowerPriority},
+                {"textInputEnabled", inputContext->textInputEnabled},
+                {"uiNavigationEnabled", inputContext->uiNavigationEnabled},
+                {"pointerEnabled", inputContext->pointerEnabled},
+                {"enabled", inputContext->enabled}
+            };
+            value["activeMapIndices"] = json::array();
+            for (uint8_t i = 0; i < inputContext->activeMapCount && i < 4; ++i) {
+                value["activeMapIndices"].push_back(inputContext->activeMapIndices[i]);
+            }
+            writeComponent("InputContextComponent", value);
+        }
+
+        if (const auto& inputUser = std::get<std::optional<InputUserComponent>>(node.components); inputUser.has_value()) {
+            writeComponent("InputUserComponent", json{
+                {"userId", inputUser->userId},
+                {"deviceMask", inputUser->deviceMask},
+                {"profileName", inputUser->profileName},
+                {"isEditorUser", inputUser->isEditorUser},
+                {"isPrimary", inputUser->isPrimary}
+            });
+        }
+
+        if (const auto& characterPhysics = std::get<std::optional<CharacterPhysicsComponent>>(node.components); characterPhysics.has_value()) {
+            writeComponent("CharacterPhysicsComponent", json{
+                {"gravity", characterPhysics->gravity},
+                {"friction", characterPhysics->friction},
+                {"maxMoveSpeed", characterPhysics->maxMoveSpeed},
+                {"acceleration", characterPhysics->acceleration},
+                {"height", characterPhysics->height},
+                {"stepOffset", characterPhysics->stepOffset}
+            });
+        }
+
+        if (const auto& health = std::get<std::optional<HealthComponent>>(node.components); health.has_value()) {
+            writeComponent("HealthComponent", json{
+                {"health", health->health},
+                {"maxHealth", health->maxHealth}
+            });
+        }
+
+        if (const auto& stamina = std::get<std::optional<StaminaComponent>>(node.components); stamina.has_value()) {
+            writeComponent("StaminaComponent", json{
+                {"current", stamina->current},
+                {"max", stamina->max},
+                {"costPerUse", stamina->costPerUse},
+                {"recoveryRate", stamina->recoveryRate},
+                {"recoveryDelay", stamina->recoveryDelay}
+            });
+        }
+
+        if (const auto& actionDatabase = std::get<std::optional<ActionDatabaseComponent>>(node.components); actionDatabase.has_value()) {
+            json value;
+            value["nodeCount"] = actionDatabase->nodeCount;
+            value["nodes"] = json::array();
+            for (uint8_t i = 0; i < actionDatabase->nodeCount && i < ActionDatabaseComponent::MAX_NODES; ++i) {
+                const ActionNode& nodeDef = actionDatabase->nodes[i];
+                value["nodes"].push_back(json{
+                    {"animIndex", nodeDef.animIndex},
+                    {"nextLight", nodeDef.nextLight},
+                    {"nextHeavy", nodeDef.nextHeavy},
+                    {"nextDodge", nodeDef.nextDodge},
+                    {"inputStart", nodeDef.inputStart},
+                    {"inputEnd", nodeDef.inputEnd},
+                    {"comboStart", nodeDef.comboStart},
+                    {"cancelStart", nodeDef.cancelStart},
+                    {"magnetismRange", nodeDef.magnetismRange},
+                    {"magnetismSpeed", nodeDef.magnetismSpeed},
+                    {"damageVal", nodeDef.damageVal},
+                    {"animSpeed", nodeDef.animSpeed}
+                });
+            }
+            writeComponent("ActionDatabaseComponent", value);
+        }
+
+        if (const auto& playerTag = std::get<std::optional<PlayerTagComponent>>(node.components); playerTag.has_value()) {
+            writeComponent("PlayerTagComponent", json{
+                {"playerId", playerTag->playerId}
+            });
+        }
+
+        if (const auto& stateMachine = std::get<std::optional<StateMachineParamsComponent>>(node.components); stateMachine.has_value()) {
+            json value;
+            value["assetPath"] = stateMachine->assetPath;
+            value["params"] = json::array();
+            for (uint8_t i = 0; i < stateMachine->paramCount && i < StateMachineParamsComponent::MAX_PARAMS; ++i) {
+                value["params"].push_back(json{
+                    {"name", stateMachine->params[i].name},
+                    {"value", stateMachine->params[i].value}
+                });
+            }
+            writeComponent("StateMachineParamsComponent", value);
         }
 
         out["components"] = std::move(components);
@@ -694,6 +828,156 @@ namespace
             }
             SetOptional(node.components, component);
         }
+
+        if (components.contains("NodeSocketComponent")) {
+            NodeSocketComponent component;
+            const json& value = components["NodeSocketComponent"];
+            if (value.contains("sockets") && value["sockets"].is_array()) {
+                for (const auto& socketJson : value["sockets"]) {
+                    NodeSocket socket;
+                    socket.name = socketJson.value("name", socket.name);
+                    socket.parentBoneName = socketJson.value("parentBoneName", socket.parentBoneName);
+                    socket.offsetPos = socketJson.value("offsetPos", socket.offsetPos);
+                    socket.offsetRotDeg = socketJson.value("offsetRotDeg", socket.offsetRotDeg);
+                    socket.offsetScale = socketJson.value("offsetScale", socket.offsetScale);
+                    socket.cachedBoneIndex = -1;
+                    component.sockets.push_back(std::move(socket));
+                }
+            }
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("InputBindingComponent")) {
+            InputBindingComponent component;
+            const json& value = components["InputBindingComponent"];
+            strncpy_s(component.actionMapAssetPath, value.value("actionMapAssetPath", std::string{}).c_str(), _TRUNCATE);
+            strncpy_s(component.bindingProfilePath, value.value("bindingProfilePath", std::string{}).c_str(), _TRUNCATE);
+            strncpy_s(component.runtimeOverrideProfilePath, value.value("runtimeOverrideProfilePath", std::string{}).c_str(), _TRUNCATE);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("InputContextComponent")) {
+            InputContextComponent component;
+            const json& value = components["InputContextComponent"];
+            component.priority = static_cast<InputContextPriority>(value.value("priority", static_cast<int>(component.priority)));
+            component.activeMapCount = value.value("activeMapCount", component.activeMapCount);
+            component.consumeLowerPriority = value.value("consumeLowerPriority", component.consumeLowerPriority);
+            component.textInputEnabled = value.value("textInputEnabled", component.textInputEnabled);
+            component.uiNavigationEnabled = value.value("uiNavigationEnabled", component.uiNavigationEnabled);
+            component.pointerEnabled = value.value("pointerEnabled", component.pointerEnabled);
+            component.enabled = value.value("enabled", component.enabled);
+            component.consumed = false;
+            if (value.contains("activeMapIndices") && value["activeMapIndices"].is_array()) {
+                component.activeMapCount = static_cast<uint8_t>(std::min<size_t>(value["activeMapIndices"].size(), 4));
+                for (uint8_t i = 0; i < component.activeMapCount; ++i) {
+                    component.activeMapIndices[i] = value["activeMapIndices"][i].get<uint32_t>();
+                }
+            }
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("InputUserComponent")) {
+            InputUserComponent component;
+            const json& value = components["InputUserComponent"];
+            component.userId = value.value("userId", component.userId);
+            component.deviceMask = value.value("deviceMask", component.deviceMask);
+            strncpy_s(component.profileName, value.value("profileName", std::string{}).c_str(), _TRUNCATE);
+            component.isEditorUser = value.value("isEditorUser", component.isEditorUser);
+            component.isPrimary = value.value("isPrimary", component.isPrimary);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("CharacterPhysicsComponent")) {
+            CharacterPhysicsComponent component;
+            const json& value = components["CharacterPhysicsComponent"];
+            component.gravity = value.value("gravity", component.gravity);
+            component.friction = value.value("friction", component.friction);
+            component.maxMoveSpeed = value.value("maxMoveSpeed", component.maxMoveSpeed);
+            component.acceleration = value.value("acceleration", component.acceleration);
+            component.height = value.value("height", component.height);
+            component.stepOffset = value.value("stepOffset", component.stepOffset);
+            component.velocity = { 0.0f, 0.0f, 0.0f };
+            component.verticalVelocity = 0.0f;
+            component.isGround = true;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("HealthComponent")) {
+            HealthComponent component;
+            const json& value = components["HealthComponent"];
+            component.health = value.value("health", component.health);
+            component.maxHealth = value.value("maxHealth", component.maxHealth);
+            component.invincibleTimer = 0.0f;
+            component.isInvincible = false;
+            component.isDead = false;
+            component.lastDamage = 0;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("StaminaComponent")) {
+            StaminaComponent component;
+            const json& value = components["StaminaComponent"];
+            component.current = value.value("current", component.current);
+            component.max = value.value("max", component.max);
+            component.costPerUse = value.value("costPerUse", component.costPerUse);
+            component.recoveryRate = value.value("recoveryRate", component.recoveryRate);
+            component.recoveryDelay = value.value("recoveryDelay", component.recoveryDelay);
+            component.recoveryTimer = 0.0f;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("ActionDatabaseComponent")) {
+            ActionDatabaseComponent component;
+            const json& value = components["ActionDatabaseComponent"];
+            component.nodeCount = 0;
+            if (value.contains("nodes") && value["nodes"].is_array()) {
+                component.nodeCount = static_cast<uint8_t>(std::min<size_t>(value["nodes"].size(), ActionDatabaseComponent::MAX_NODES));
+                for (uint8_t i = 0; i < component.nodeCount; ++i) {
+                    const auto& nodeJson = value["nodes"][i];
+                    ActionNode& nodeDef = component.nodes[i];
+                    nodeDef.animIndex = nodeJson.value("animIndex", nodeDef.animIndex);
+                    nodeDef.nextLight = nodeJson.value("nextLight", nodeDef.nextLight);
+                    nodeDef.nextHeavy = nodeJson.value("nextHeavy", nodeDef.nextHeavy);
+                    nodeDef.nextDodge = nodeJson.value("nextDodge", nodeDef.nextDodge);
+                    nodeDef.inputStart = nodeJson.value("inputStart", nodeDef.inputStart);
+                    nodeDef.inputEnd = nodeJson.value("inputEnd", nodeDef.inputEnd);
+                    nodeDef.comboStart = nodeJson.value("comboStart", nodeDef.comboStart);
+                    nodeDef.cancelStart = nodeJson.value("cancelStart", nodeDef.cancelStart);
+                    nodeDef.magnetismRange = nodeJson.value("magnetismRange", nodeDef.magnetismRange);
+                    nodeDef.magnetismSpeed = nodeJson.value("magnetismSpeed", nodeDef.magnetismSpeed);
+                    nodeDef.damageVal = nodeJson.value("damageVal", nodeDef.damageVal);
+                    nodeDef.animSpeed = nodeJson.value("animSpeed", nodeDef.animSpeed);
+                }
+            }
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("PlayerTagComponent")) {
+            PlayerTagComponent component;
+            component.playerId = components["PlayerTagComponent"].value("playerId", component.playerId);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("StateMachineParamsComponent")) {
+            StateMachineParamsComponent component;
+            const json& value = components["StateMachineParamsComponent"];
+            strncpy_s(component.assetPath, value.value("assetPath", std::string{}).c_str(), _TRUNCATE);
+            component.paramCount = 0;
+            if (value.contains("params") && value["params"].is_array()) {
+                for (const auto& paramJson : value["params"]) {
+                    if (component.paramCount >= StateMachineParamsComponent::MAX_PARAMS) {
+                        break;
+                    }
+                    auto& param = component.params[component.paramCount++];
+                    strncpy_s(param.name, paramJson.value("name", std::string{}).c_str(), _TRUNCATE);
+                    param.value = paramJson.value("value", 0.0f);
+                }
+            }
+            component.currentStateId = 0;
+            component.stateTimer = 0.0f;
+            component.animFinished = false;
+            SetOptional(node.components, component);
+        }
     }
 
     void StripPrefabMetadata(EntitySnapshot::Snapshot& snapshot)
@@ -744,6 +1028,10 @@ namespace
                 }
 
                 if (Entity::IsNull(parent)) {
+                    if (registry.GetComponent<SequencerPreviewCameraComponent>(entity) ||
+                        registry.GetComponent<EffectPreviewTagComponent>(entity)) {
+                        continue;
+                    }
                     roots.push_back(entity);
                 }
             }
@@ -1007,6 +1295,11 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
     }
 
     EntitySnapshot::RestoreResult restore = EntitySnapshot::RestoreSubtree(snapshot, registry);
+    if (!Entity::IsNull(restore.root) && PlayerRuntimeSetup::HasMinimumPlayerAuthoringComponents(registry, restore.root)) {
+        PlayerRuntimeSetup::EnsurePlayerPersistentComponents(registry, restore.root);
+        PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(registry, restore.root);
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(registry, restore.root);
+    }
     return restore.root;
 }
 
@@ -1108,4 +1401,3 @@ bool PrefabSystem::CanDuplicate(EntityID entity, Registry& registry)
     EntityID prefabRoot = FindPrefabRoot(entity, registry);
     return Entity::IsNull(prefabRoot) || prefabRoot == entity;
 }
-

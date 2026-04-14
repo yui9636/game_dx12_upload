@@ -313,6 +313,90 @@ void EditorLayer::DrawSceneIconOverlay(const DirectX::XMFLOAT4& viewRect,
     }
 }
 
+void EditorLayer::DrawSequencerCameraOverlay(const DirectX::XMFLOAT4& viewRect,
+                                             const DirectX::XMFLOAT4X4& view,
+                                             const DirectX::XMFLOAT4X4& projection) const
+{
+    if (!m_gameLayer || m_sceneViewMode == SceneViewMode::Mode2D || !m_sequencerPanel.ShouldDrawCameraPaths()) {
+        return;
+    }
+
+    const CinematicSequenceAsset& sequence = m_sequencerPanel.GetSequence();
+    const uint64_t selectedSectionId = m_sequencerPanel.GetSelectedSectionId();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    auto drawCameraPoint = [&](const DirectX::XMFLOAT3& worldPos, ImU32 color, bool selected) {
+        ImVec2 screen{};
+        if (!ProjectWorldToSceneScreen(viewRect, view, projection, worldPos, screen)) {
+            return;
+        }
+        const float radius = selected ? 6.5f : 4.5f;
+        drawList->AddCircleFilled(screen, radius, color, 12);
+        drawList->AddCircle(screen, radius, IM_COL32(12, 16, 24, 220), 12, selected ? 2.0f : 1.0f);
+    };
+
+    auto drawCameraSection = [&](const CinematicSection& section) {
+        if (section.trackType != CinematicTrackType::Camera || section.muted || section.locked) {
+            return;
+        }
+
+        const bool selected = (section.sectionId == selectedSectionId);
+        const ImU32 pathColor = selected ? IM_COL32(255, 214, 102, 255) : IM_COL32(120, 170, 255, 220);
+        const ImU32 startColor = selected ? IM_COL32(255, 170, 80, 255) : IM_COL32(120, 255, 180, 220);
+        const ImU32 endColor = selected ? IM_COL32(255, 96, 96, 255) : IM_COL32(255, 120, 160, 220);
+
+        constexpr int kSegments = 16;
+        DirectX::XMFLOAT3 previous = {};
+        bool hasPrevious = false;
+        for (int segment = 0; segment <= kSegments; ++segment) {
+            const float t = static_cast<float>(segment) / static_cast<float>(kSegments);
+            DirectX::XMFLOAT3 point =
+                (section.camera.cameraMode == CinematicCameraMode::LookAtCamera)
+                ? DirectX::XMFLOAT3{
+                    section.camera.startEye.x + (section.camera.endEye.x - section.camera.startEye.x) * t,
+                    section.camera.startEye.y + (section.camera.endEye.y - section.camera.startEye.y) * t,
+                    section.camera.startEye.z + (section.camera.endEye.z - section.camera.startEye.z) * t
+                }
+                : DirectX::XMFLOAT3{
+                    section.camera.startPosition.x + (section.camera.endPosition.x - section.camera.startPosition.x) * t,
+                    section.camera.startPosition.y + (section.camera.endPosition.y - section.camera.startPosition.y) * t,
+                    section.camera.startPosition.z + (section.camera.endPosition.z - section.camera.startPosition.z) * t
+                };
+
+            if (hasPrevious) {
+                ImVec2 a{};
+                ImVec2 b{};
+                if (ProjectWorldToSceneScreen(viewRect, view, projection, previous, a) &&
+                    ProjectWorldToSceneScreen(viewRect, view, projection, point, b)) {
+                    drawList->AddLine(a, b, pathColor, selected ? 2.5f : 1.5f);
+                }
+            }
+            previous = point;
+            hasPrevious = true;
+        }
+
+        const DirectX::XMFLOAT3 start =
+            (section.camera.cameraMode == CinematicCameraMode::LookAtCamera) ? section.camera.startEye : section.camera.startPosition;
+        const DirectX::XMFLOAT3 end =
+            (section.camera.cameraMode == CinematicCameraMode::LookAtCamera) ? section.camera.endEye : section.camera.endPosition;
+        drawCameraPoint(start, startColor, selected);
+        drawCameraPoint(end, endColor, selected);
+    };
+
+    for (const auto& track : sequence.masterTracks) {
+        for (const auto& section : track.sections) {
+            drawCameraSection(section);
+        }
+    }
+    for (const auto& binding : sequence.bindings) {
+        for (const auto& track : binding.tracks) {
+            for (const auto& section : track.sections) {
+                drawCameraSection(section);
+            }
+        }
+    }
+}
+
 void EditorLayer::DrawSceneBoundsOverlay(const DirectX::XMFLOAT4& viewRect,
                                          const DirectX::XMFLOAT4X4& view,
                                          const DirectX::XMFLOAT4X4& projection) const

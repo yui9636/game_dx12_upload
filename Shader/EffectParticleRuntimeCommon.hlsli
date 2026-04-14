@@ -25,6 +25,30 @@ cbuffer EffectParticleSimulationParams : register(b0)
     float4 gSizeSeed;
     float4 gSubUvParams;
     float4 gMotionParams;
+    float4 gRandomParams;      // x=speedRange, y=sizeRange, z=lifeRange, w=windStrength
+    float4 gWindDirection;     // xyz=direction, w=turbulence
+    // Phase 1C
+    float4 gSizeCurveValues;   // s0,s1,s2,s3
+    float4 gSizeCurveTimes;    // t0,t1,t2,t3
+    float4 gGradientColor0;    // RGBA at t=0
+    float4 gGradientColor1;    // RGBA at t=t1
+    float4 gGradientColor2;    // RGBA at t=t2
+    float4 gGradientColor3;    // RGBA at t=1
+    float4 gGradientTimes;     // t0,t1,t2,t3
+    // Phase 2: Attractors
+    float4 gAttractor0;        // xyz=pos, w=strength
+    float4 gAttractor1;
+    float4 gAttractor2;
+    float4 gAttractor3;
+    float4 gAttractorRadii;    // per-attractor radius
+    float4 gAttractorFalloff;  // 0=constant,1=linear,2=quadratic
+    // Phase 2: Collision
+    float4 gCollisionPlane;    // normal.xyz + d
+    float4 gCollisionSphere0;  // xyz=center, w=radius
+    float4 gCollisionSphere1;
+    float4 gCollisionSphere2;
+    float4 gCollisionSphere3;
+    float4 gCollisionParams;   // x=restitution, y=friction, z=sphereCount, w=attractorCount
 }
 
 Texture3D<float4> gCurlNoiseTexture : register(t1);
@@ -105,6 +129,43 @@ float3 SampleCurlNoiseVolume(float3 worldPosition, float ageSeconds)
 float ComputeBiasedAge(float normalizedAge, float bias)
 {
     return saturate(pow(saturate(normalizedAge), max(bias, 0.05f)));
+}
+
+// Phase 1C: 4-key size curve evaluation
+float EvaluateSizeCurve(float normalizedAge)
+{
+    float t = saturate(normalizedAge);
+    float4 sv = gSizeCurveValues;
+    float4 st = gSizeCurveTimes;
+
+    if (t <= st.y) {
+        float segT = (st.y > st.x) ? saturate((t - st.x) / (st.y - st.x)) : 0.0f;
+        return lerp(sv.x, sv.y, segT);
+    }
+    if (t <= st.z) {
+        float segT = (st.z > st.y) ? saturate((t - st.y) / (st.z - st.y)) : 0.0f;
+        return lerp(sv.y, sv.z, segT);
+    }
+    float segT = (st.w > st.z) ? saturate((t - st.z) / (st.w - st.z)) : 0.0f;
+    return lerp(sv.z, sv.w, segT);
+}
+
+// Phase 1C: 4-key color gradient evaluation
+float4 EvaluateColorGradient(float normalizedAge)
+{
+    float t = saturate(normalizedAge);
+    float4 gt = gGradientTimes;
+
+    if (t <= gt.y) {
+        float segT = (gt.y > gt.x) ? saturate((t - gt.x) / (gt.y - gt.x)) : 0.0f;
+        return lerp(gGradientColor0, gGradientColor1, segT);
+    }
+    if (t <= gt.z) {
+        float segT = (gt.z > gt.y) ? saturate((t - gt.y) / (gt.z - gt.y)) : 0.0f;
+        return lerp(gGradientColor1, gGradientColor2, segT);
+    }
+    float segT = (gt.w > gt.z) ? saturate((t - gt.z) / (gt.w - gt.z)) : 0.0f;
+    return lerp(gGradientColor2, gGradientColor3, segT);
 }
 
 float3 ComputeSpawnOffset(uint emitIndex, uint seed, uint shapeType, float3 shapeParams, out float3 direction)

@@ -24,6 +24,9 @@ public:
     uint32_t                    GetDSVDescriptorSize() const { return m_dsvDescriptorSize; }
     uint32_t                    GetCBVSRVUAVDescriptorSize() const { return m_cbvSrvUavDescriptorSize; }
 
+    // Resize
+    void ResizeSwapChain(uint32_t width, uint32_t height);
+
     // Frame sync
     void WaitForGPU();
     void MoveToNextFrame();

@@ -167,6 +167,12 @@ void EditorLayer::Update(const EngineTime& time)
     }
 
     XMStoreFloat3(&m_editorCameraPosition, pos);
+
+    if (m_showSequencer && m_gameLayer && m_activeWorkspace == WorkspaceTab::LevelEditor) {
+        m_sequencerPanel.Update(time, &m_gameLayer->GetRegistry());
+    } else if (m_gameLayer) {
+        m_sequencerPanel.Suspend(&m_gameLayer->GetRegistry());
+    }
 }
 
 void EditorLayer::RenderUI()
@@ -184,6 +190,9 @@ void EditorLayer::RenderUI()
     const bool showPlayerWorkspace = m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor;
     const bool showEffectWorkspace = m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor;
     const bool showSecondaryWorkspace = showPlayerWorkspace || showEffectWorkspace;
+    if (!showPlayerWorkspace) {
+        m_playerEditorPanel.Suspend();
+    }
     if (showPlayerWorkspace && m_maximizedWindow == WindowFocusTarget::PlayerEditor) {
         m_maximizedWindow = WindowFocusTarget::None;
     }
@@ -206,7 +215,9 @@ void EditorLayer::RenderUI()
     const bool maximizeLeft = (m_maximizedWindow == WindowFocusTarget::Hierarchy);
     const bool maximizeRight = (m_maximizedWindow == WindowFocusTarget::Inspector);
     const bool maximizeBottomAsset = (m_maximizedWindow == WindowFocusTarget::AssetBrowser);
+    const bool maximizeBottomSerializer = (m_maximizedWindow == WindowFocusTarget::Serializer);
     const bool maximizeBottomConsole = (m_maximizedWindow == WindowFocusTarget::Console);
+    const bool maximizeBottomSequencer = (m_maximizedWindow == WindowFocusTarget::Sequencer);
     const bool maximizeTool = (m_maximizedWindow == WindowFocusTarget::Lighting ||
         m_maximizedWindow == WindowFocusTarget::Audio ||
         m_maximizedWindow == WindowFocusTarget::RenderPasses ||
@@ -259,6 +270,12 @@ void EditorLayer::RenderUI()
         Console::Instance().Draw(kConsoleWindowTitle, &m_showConsole, &consoleFocused);
         SetLastFocusedWindow(WindowFocusTarget::Console, consoleFocused);
     }
+    if (!showSecondaryWorkspace && m_showSequencer && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomSequencer)) {
+        DrawSequencer();
+    }
+    if (!showSecondaryWorkspace && m_showSerializer && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomSerializer)) {
+        DrawModelSerializer();
+    }
     if (!showSecondaryWorkspace && m_assetBrowser && m_showAssetBrowser && (m_maximizedWindow == WindowFocusTarget::None || maximizeBottomAsset)) {
         m_assetBrowser->SetRegistry(m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr);
         bool assetFocused = false;
@@ -276,23 +293,21 @@ void EditorLayer::RenderDetachedWindows()
 void EditorLayer::SyncPlayerEditorPanelState()
 {
     if (!m_gameLayer) {
-        m_playerEditorPanel.SetModel(nullptr);
-        m_playerEditorPanel.SetPreviewEntity(Entity::NULL_ID);
+        m_playerEditorPanel.SyncExternalSelection(Entity::NULL_ID, "");
         return;
     }
 
     Registry& registry = m_gameLayer->GetRegistry();
     const EntityID selectedEntity = EditorSelection::Instance().GetPrimaryEntity();
 
-    const Model* selectedModel = nullptr;
+    std::string selectedModelPath;
     if (!Entity::IsNull(selectedEntity) && registry.IsAlive(selectedEntity)) {
-        if (auto* mesh = registry.GetComponent<MeshComponent>(selectedEntity); mesh && mesh->model) {
-            selectedModel = mesh->model.get();
+        if (auto* mesh = registry.GetComponent<MeshComponent>(selectedEntity)) {
+            selectedModelPath = mesh->modelFilePath;
         }
     }
 
-    m_playerEditorPanel.SetModel(selectedModel);
-    m_playerEditorPanel.SetPreviewEntity(selectedEntity);
+    m_playerEditorPanel.SyncExternalSelection(selectedEntity, selectedModelPath);
 }
 
 void EditorLayer::SyncEffectEditorPanelState()

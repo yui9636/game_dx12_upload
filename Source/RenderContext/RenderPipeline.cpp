@@ -342,16 +342,17 @@ void RenderPipeline::EnsureViewFrameBuffers(ViewHistoryState& history, const Ren
         return;
     }
 
-    const uint32_t renderWidth = viewState.renderWidth;
-    const uint32_t renderHeight = viewState.renderHeight;
+    const uint32_t renderWidth = (std::max)(1u, (std::min)(viewState.renderWidth, 8192u));
+    const uint32_t renderHeight = (std::max)(1u, (std::min)(viewState.renderHeight, 8192u));
     const uint32_t displayWidth = viewState.displayWidth > 0 ? viewState.displayWidth : renderWidth;
     const uint32_t displayHeight = viewState.displayHeight > 0 ? viewState.displayHeight : renderHeight;
+    const uint32_t safeDisplayWidth = (std::max)(1u, (std::min)(displayWidth, 8192u));
+    const uint32_t safeDisplayHeight = (std::max)(1u, (std::min)(displayHeight, 8192u));
 
     const bool renderSizeChanged =
         history.frameBuffers.renderWidth != renderWidth ||
         history.frameBuffers.renderHeight != renderHeight;
-    if (renderWidth > 0 && renderHeight > 0 &&
-        (!history.frameBuffers.scene || !history.frameBuffers.prevScene || renderSizeChanged)) {
+    if (!history.frameBuffers.scene || !history.frameBuffers.prevScene || renderSizeChanged) {
         std::vector<TextureFormat> hdr = { TextureFormat::R16G16B16A16_FLOAT };
         history.frameBuffers.scene = std::make_unique<FrameBuffer>(factory, renderWidth, renderHeight, hdr);
         history.frameBuffers.prevScene = std::make_unique<FrameBuffer>(factory, renderWidth, renderHeight, hdr);
@@ -360,14 +361,13 @@ void RenderPipeline::EnsureViewFrameBuffers(ViewHistoryState& history, const Ren
     }
 
     const bool displaySizeChanged =
-        history.frameBuffers.displayWidth != displayWidth ||
-        history.frameBuffers.displayHeight != displayHeight;
-    if (displayWidth > 0 && displayHeight > 0 &&
-        (!history.frameBuffers.display || displaySizeChanged)) {
+        history.frameBuffers.displayWidth != safeDisplayWidth ||
+        history.frameBuffers.displayHeight != safeDisplayHeight;
+    if (!history.frameBuffers.display || displaySizeChanged) {
         std::vector<TextureFormat> ldr = { TextureFormat::RGBA8_UNORM };
-        history.frameBuffers.display = std::make_unique<FrameBuffer>(factory, displayWidth, displayHeight, ldr);
-        history.frameBuffers.displayWidth = displayWidth;
-        history.frameBuffers.displayHeight = displayHeight;
+        history.frameBuffers.display = std::make_unique<FrameBuffer>(factory, safeDisplayWidth, safeDisplayHeight, ldr);
+        history.frameBuffers.displayWidth = safeDisplayWidth;
+        history.frameBuffers.displayHeight = safeDisplayHeight;
     }
 }
 

@@ -671,7 +671,6 @@
 #include "System/Misc.h"
 #include "GpuResourceUtils.h"
 #include "RenderContext/RenderContext.h"
-#include "Actor/Actor.h"
 #include <algorithm>
 #include <cmath>
 

@@ -358,6 +358,36 @@ std::shared_ptr<Model> ResourceManager::CreateModelInstance(const std::string& p
     return std::make_shared<Model>(resolved.c_str(), scaling, sourceOnly);
 }
 
+void ResourceManager::InvalidateModel(const std::string& path)
+{
+    if (path.empty()) {
+        return;
+    }
+
+    std::vector<std::string> keysToErase;
+    auto collectKeys = [&](const std::string& basePath) {
+        if (basePath.empty()) {
+            return;
+        }
+
+        const std::string prefix = basePath + "_";
+        for (const auto& entry : modelMap) {
+            if (entry.first.rfind(prefix, 0) == 0) {
+                keysToErase.push_back(entry.first);
+            }
+        }
+    };
+
+    collectKeys(path);
+    collectKeys(PathResolver::Resolve(path));
+
+    std::sort(keysToErase.begin(), keysToErase.end());
+    keysToErase.erase(std::unique(keysToErase.begin(), keysToErase.end()), keysToErase.end());
+    for (const std::string& key : keysToErase) {
+        modelMap.erase(key);
+    }
+}
+
 std::shared_ptr<ITexture> ResourceManager::GetTexture(const std::string& path)
 {
     if (path.empty()) return nullptr;

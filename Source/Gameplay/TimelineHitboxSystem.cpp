@@ -2,12 +2,69 @@
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
 #include "Component/ColliderComponent.h"
+#include "Component/MeshComponent.h"
 #include "Component/TransformComponent.h"
 #include "Collision/CollisionManager.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
+#include "Transform/NodeAttachmentUtils.h"
+
+namespace
+{
+    DirectX::XMFLOAT3 ResolveTimelineNodeWorldPosition(
+        Registry& registry,
+        EntityID entity,
+        const TransformComponent* transform,
+        int nodeIndex,
+        const DirectX::XMFLOAT3& offsetLocal)
+    {
+        if (!transform) {
+            return offsetLocal;
+        }
+
+        auto* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model || nodeIndex < 0) {
+            return {
+                transform->worldPosition.x + offsetLocal.x,
+                transform->worldPosition.y + offsetLocal.y,
+                transform->worldPosition.z + offsetLocal.z
+            };
+        }
+
+        const auto& nodes = mesh->model->GetNodes();
+        if (nodeIndex >= static_cast<int>(nodes.size())) {
+            return {
+                transform->worldPosition.x + offsetLocal.x,
+                transform->worldPosition.y + offsetLocal.y,
+                transform->worldPosition.z + offsetLocal.z
+            };
+        }
+
+        DirectX::XMFLOAT4X4 world;
+        int cacheIndex = nodeIndex;
+        if (NodeAttachmentUtils::TryGetBoneWorldMatrix(
+            mesh->model.get(),
+            transform->worldMatrix,
+            nodes[nodeIndex].name,
+            cacheIndex,
+            offsetLocal,
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 1.0f },
+            NodeAttachmentSpace::NodeLocal,
+            world)) {
+            return { world._41, world._42, world._43 };
+        }
+
+        return {
+            transform->worldPosition.x + offsetLocal.x,
+            transform->worldPosition.y + offsetLocal.y,
+            transform->worldPosition.z + offsetLocal.z
+        };
+    }
+}
 
 void TimelineHitboxSystem::Update(Registry& registry) {
     Signature sig = CreateSignature<TimelineComponent, TimelineItemBuffer, ColliderComponent>();
@@ -25,13 +82,10 @@ void TimelineHitboxSystem::Update(Registry& registry) {
             auto& tl  = *static_cast<TimelineComponent*>(tlCol->Get(i));
             auto& buf = *static_cast<TimelineItemBuffer*>(bufCol->Get(i));
             auto& col = *static_cast<ColliderComponent*>(colCol->Get(i));
+            const EntityID ownerEntity = arch->GetEntities()[i];
 
             // Entity world position (for sphere center offset)
-            DirectX::XMFLOAT3 worldPos = { 0, 0, 0 };
-            if (txCol) {
-                auto& tx = *static_cast<TransformComponent*>(txCol->Get(i));
-                worldPos = tx.worldPosition;
-            }
+            TransformComponent* tx = txCol ? static_cast<TransformComponent*>(txCol->Get(i)) : nullptr;
 
             // Collect active hitbox item indices
             for (int idx = 0; idx < static_cast<int>(buf.items.size()); ++idx) {
@@ -48,11 +102,12 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                 }
 
                 if (active) {
-                    DirectX::XMFLOAT3 center = {
-                        worldPos.x + item.hb.offsetLocal.x,
-                        worldPos.y + item.hb.offsetLocal.y,
-                        worldPos.z + item.hb.offsetLocal.z
-                    };
+                    DirectX::XMFLOAT3 center = ResolveTimelineNodeWorldPosition(
+                        registry,
+                        ownerEntity,
+                        tx,
+                        item.hb.nodeIndex,
+                        item.hb.offsetLocal);
                     if (found) {
                         // Update existing
                         found->radius = item.hb.radius;

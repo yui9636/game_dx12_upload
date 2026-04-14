@@ -145,7 +145,6 @@
     <ClInclude Include="External\ImGuizmo\ImGuizmo.h" />
     <ClInclude Include="External\ImGuizmo\ImSequencer.h" />
     <ClInclude Include="External\meshoptimizer-cpp-master\src\meshoptimizer.h" />
-    <ClInclude Include="Source\Actor\Actor.h" />
     <ClInclude Include="Source\Animator\AnimatorComponent.h" />
     <ClInclude Include="Source\Animator\AnimatorRuntime.h" />
     <ClInclude Include="Source\Animator\AnimatorService.h" />
@@ -154,6 +153,8 @@
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
     <ClInclude Include="Source\Asset\AssetManager.h" />
+    <ClInclude Include="Source\Asset\ModelAssetSerializer.h" />
+    <ClInclude Include="Source\Asset\ModelSerializerPanel.h" />
     <ClInclude Include="Source\Asset\PrefabSystem.h" />
     <ClInclude Include="Source\Asset\ThumbnailGenerator.h" />
     <ClInclude Include="Source\Audio\AudioWorldSystem.h" />
@@ -161,7 +162,6 @@
     <ClInclude Include="Source\Audio\AudioClipAsset.h" />
     <ClInclude Include="Source\AssimpImporter.h" />
     <ClInclude Include="Source\Camera\Camera.h" />
-    <ClInclude Include="Source\Camera\CameraController.h" />
     <ClInclude Include="Source\Camera\CameraFinalizeSystem.h" />
     <ClInclude Include="Source\Camera\FreeCameraSystem.h" />
     <ClInclude Include="Source\Camera\ThirdPersonCameraSystem.h" />
@@ -179,7 +179,6 @@
     <ClInclude Include="Source\Component\CameraEffectComponent.h" />
     <ClInclude Include="Source\Component\AudioBusSendComponent.h" />
     <ClInclude Include="Source\Component\ColliderComponent.h" />
-    <ClInclude Include="Source\Component\Component.h" />
     <ClInclude Include="Source\Component\ComponentColumn.h" />
     <ClInclude Include="Source\Component\ComponentSignature.h" />
     <ClInclude Include="Source\Component\EnvironmentComponent.h" />
@@ -281,6 +280,8 @@
     <ClInclude Include="Source\Gameplay\HitboxTrackingSystem.h" />
     <ClInclude Include="Source\Gameplay\StateMachineParamsComponent.h" />
     <ClInclude Include="Source\Gameplay\StateMachineSystem.h" />
+    <ClInclude Include="Source\Gameplay\PlayerRuntimeSetup.h" />
+    <ClInclude Include="Source\Gameplay\TimelineAssetRuntimeBuilder.h" />
     <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h" />
     <ClInclude Include="Source\Inspector\InspectorECSUI.h" />
     <ClInclude Include="Source\JSONManager.h" />
@@ -313,6 +314,7 @@
     <ClInclude Include="Source\EffectRuntime\EffectRuntimeRegistry.h" />
     <ClInclude Include="Source\EffectRuntime\EffectSystems.h" />
     <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h" />
+    <ClInclude Include="Source\PlayerEditor\PlayerModelPreviewStudio.h" />
     <ClInclude Include="Source\PlayerEditor\PlayerEditorWindow.h" />
     <ClInclude Include="Source\PlayerEditor\StateMachineAsset.h" />
     <ClInclude Include="Source\PlayerEditor\StateMachineAssetSerializer.h" />
@@ -322,6 +324,10 @@
     <ClInclude Include="Source\PlayerEditor\PreviewState.h" />
     <ClInclude Include="Source\PlayerEditor\GizmoOverlay.h" />
     <ClInclude Include="Source\PlayerEditor\InputMappingTab.h" />
+    <ClInclude Include="Source\Sequencer\CinematicSequenceAsset.h" />
+    <ClInclude Include="Source\Sequencer\CinematicSequenceSerializer.h" />
+    <ClInclude Include="Source\Sequencer\CinematicService.h" />
+    <ClInclude Include="Source\Sequencer\SequencerPanel.h" />
     <ClInclude Include="Source\PostEffect.h" />
     <ClInclude Include="Source\PostEffect\BloomExtractSystem.h" />
     <ClInclude Include="Source\PostEffect\ColorFilterExtractSystem.h" />
@@ -343,6 +349,8 @@
     <ClInclude Include="Source\RenderPass\DrawObjectsPass.h" />
     <ClInclude Include="Source\RenderPass\EffectMeshPass.h" />
     <ClInclude Include="Source\RenderPass\EffectParticlePass.h" />
+    <ClInclude Include="Source\RenderPass\EffectMeshVariantPipeline.h" />
+    <ClInclude Include="Source\EffectRuntime\EffectMeshVariant.h" />
     <ClInclude Include="Source\RenderPass\ForwardTransparentPass.h" />
     <ClInclude Include="Source\RenderPass\GBufferPass.h" />
     <ClInclude Include="Source\RenderPass\ExtractVisibleInstancesPass.h" />
@@ -407,6 +415,9 @@
     <ClInclude Include="Source\Stage\Stage.h" />
     <ClInclude Include="Source\Storage\GameplayAsset.h" />
     <ClInclude Include="Source\SwordTrail.h" />
+    <ClInclude Include="Source\Trail\TrailSystem.h" />
+    <ClInclude Include="Source\Trail\TrailExtractSystem.h" />
+    <ClInclude Include="Source\Component\TrailComponent.h" />
     <ClInclude Include="Source\System\Dialog.h" />
     <ClInclude Include="Source\System\Framework.h" />
     <ClInclude Include="Source\System\HighResolutionTimer.h" />
@@ -468,7 +479,18 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="Source\Actor\Actor.cpp" />
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\overdrawoptimizer.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\vcacheoptimizer.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="External\meshoptimizer-cpp-master\src\vfetchoptimizer.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorRuntime.cpp" />
     <ClCompile Include="Source\Animator\AnimatorService.cpp" />
     <ClCompile Include="Source\Animator\AnimatorSystem.cpp" />
@@ -476,6 +498,8 @@
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
     <ClCompile Include="Source\Asset\AssetManager.cpp" />
+    <ClCompile Include="Source\Asset\ModelAssetSerializer.cpp" />
+    <ClCompile Include="Source\Asset\ModelSerializerPanel.cpp" />
     <ClCompile Include="Source\Asset\PrefabSystem.cpp" />
     <ClCompile Include="Source\Asset\ThumbnailGenerator.cpp" />
     <ClCompile Include="Source\Audio\AudioWorldSystem.cpp" />
@@ -483,11 +507,9 @@
     <ClCompile Include="External\miniaudio-master\miniaudio.c" />
     <ClCompile Include="Source\AssimpImporter.cpp" />
     <ClCompile Include="Source\Camera\Camera.cpp" />
-    <ClCompile Include="Source\Camera\CameraController.cpp" />
     <ClCompile Include="Source\Camera\CameraFinalizeSystem.cpp" />
     <ClCompile Include="Source\Camera\FreeCameraSystem.cpp" />
     <ClCompile Include="Source\Camera\ThirdPersonCameraSystem.cpp" />
-    <ClCompile Include="Source\Cinematic\CinematicSequencerComponent.cpp" />
     <ClCompile Include="Source\Collision\CollisionFunctions.cpp" />
     <ClCompile Include="Source\Collision\CollisionManager.cpp" />
     <ClCompile Include="Source\Collision\CollisionSystem.cpp" />
@@ -540,6 +562,8 @@
     <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp" />
     <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\PlayerRuntimeSetup.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp" />
     <ClCompile Include="Source\Inspector\InspectorECSUI.cpp" />
     <ClCompile Include="Source\JSONManager.cpp" />
@@ -571,6 +595,7 @@
     <ClCompile Include="Source\EffectRuntime\EffectRuntimeRegistry.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectSystems.cpp" />
     <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp" />
+    <ClCompile Include="Source\PlayerEditor\PlayerModelPreviewStudio.cpp" />
     <ClCompile Include="Source\PlayerEditor\PlayerEditorWindow.cpp" />
     <ClCompile Include="Source\PlayerEditor\StateMachineAssetSerializer.cpp" />
     <ClCompile Include="Source\PlayerEditor\TimelineAssetSerializer.cpp" />
@@ -578,6 +603,10 @@
     <ClCompile Include="Source\PlayerEditor\PreviewState.cpp" />
     <ClCompile Include="Source\PlayerEditor\GizmoOverlay.cpp" />
     <ClCompile Include="Source\PlayerEditor\InputMappingTab.cpp" />
+    <ClCompile Include="Source\Sequencer\CinematicSequenceAsset.cpp" />
+    <ClCompile Include="Source\Sequencer\CinematicSequenceSerializer.cpp" />
+    <ClCompile Include="Source\Sequencer\CinematicService.cpp" />
+    <ClCompile Include="Source\Sequencer\SequencerPanel.cpp" />
     <ClCompile Include="Source\PostEffect.cpp" />
     <ClCompile Include="Source\PostEffect\BloomExtractSystem.cpp" />
     <ClCompile Include="Source\PostEffect\ColorFilterExtractSystem.cpp" />
@@ -594,6 +623,7 @@
     <ClCompile Include="Source\RenderPass\DrawObjectsPass.cpp" />
     <ClCompile Include="Source\RenderPass\EffectMeshPass.cpp" />
     <ClCompile Include="Source\RenderPass\EffectParticlePass.cpp" />
+    <ClCompile Include="Source\RenderPass\EffectMeshVariantPipeline.cpp" />
     <ClCompile Include="Source\RenderPass\ForwardTransparentPass.cpp" />
     <ClCompile Include="Source\RenderPass\GBufferPass.cpp" />
     <ClCompile Include="Source\RenderPass\ExtractVisibleInstancesPass.cpp" />
@@ -640,6 +670,8 @@
     <ClCompile Include="Source\Sprite\Sprite3D.cpp" />
     <ClCompile Include="Source\Stage\Stage.cpp" />
     <ClCompile Include="Source\SwordTrail.cpp" />
+    <ClCompile Include="Source\Trail\TrailSystem.cpp" />
+    <ClCompile Include="Source\Trail\TrailExtractSystem.cpp" />
     <ClCompile Include="Source\System\Dialog.cpp" />
     <ClCompile Include="Source\System\Framework.cpp" />
     <ClCompile Include="Source\System\Main.cpp" />

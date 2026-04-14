@@ -388,6 +388,7 @@ void EditorLayer::ExecuteCloseSecondaryWindows()
     m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
+    m_showSequencer = false;
     m_showPlayerEditor = false;
     m_showEffectEditor = false;
     m_activeWorkspace = WorkspaceTab::LevelEditor;
@@ -396,6 +397,7 @@ void EditorLayer::ExecuteCloseSecondaryWindows()
         m_maximizedWindow == WindowFocusTarget::RenderPasses ||
         m_maximizedWindow == WindowFocusTarget::GridSettings ||
         m_maximizedWindow == WindowFocusTarget::GBufferDebug ||
+        m_maximizedWindow == WindowFocusTarget::Sequencer ||
         m_maximizedWindow == WindowFocusTarget::PlayerEditor ||
         m_maximizedWindow == WindowFocusTarget::EffectEditor) {
         m_maximizedWindow = WindowFocusTarget::None;
@@ -409,12 +411,14 @@ void EditorLayer::ExecuteResetLayout()
     m_showHierarchy = true;
     m_showInspector = true;
     m_showAssetBrowser = true;
+    m_showSerializer = false;
     m_showConsole = true;
     m_showLightingWindow = false;
     m_showAudioWindow = false;
     m_showRenderPassesWindow = false;
     m_showGridSettingsWindow = false;
     m_showGBufferDebug = false;
+    m_showSequencer = false;
     m_showStatusBar = true;
     m_showMainToolbar = true;
     m_showSceneGrid = true;
@@ -465,7 +469,9 @@ void EditorLayer::RequestWindowFocus(WindowFocusTarget target)
     case WindowFocusTarget::Hierarchy: m_showHierarchy = true; break;
     case WindowFocusTarget::Inspector: m_showInspector = true; break;
     case WindowFocusTarget::AssetBrowser: m_showAssetBrowser = true; break;
+    case WindowFocusTarget::Serializer: m_showSerializer = true; break;
     case WindowFocusTarget::Console: m_showConsole = true; break;
+    case WindowFocusTarget::Sequencer: m_showSequencer = true; break;
     case WindowFocusTarget::Lighting: m_showLightingWindow = true; break;
     case WindowFocusTarget::Audio: m_showAudioWindow = true; break;
     case WindowFocusTarget::RenderPasses: m_showRenderPassesWindow = true; break;
@@ -779,7 +785,9 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kHierarchyWindowTitle, nullptr, &m_showHierarchy);
             ImGui::MenuItem(kInspectorWindowTitle, nullptr, &m_showInspector);
             ImGui::MenuItem(kAssetBrowserWindowTitle, nullptr, &m_showAssetBrowser);
+            ImGui::MenuItem(kSerializerWindowTitle, nullptr, &m_showSerializer);
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
+            ImGui::MenuItem(kSequencerWindowTitle, nullptr, &m_showSequencer);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
             ImGui::MenuItem(kAudioWindowTitle, nullptr, &m_showAudioWindow);
@@ -813,7 +821,9 @@ void EditorLayer::DrawMenuBar()
             if (ImGui::MenuItem("Focus Hierarchy")) RequestWindowFocus(WindowFocusTarget::Hierarchy);
             if (ImGui::MenuItem("Focus Inspector")) RequestWindowFocus(WindowFocusTarget::Inspector);
             if (ImGui::MenuItem("Focus Asset Browser")) RequestWindowFocus(WindowFocusTarget::AssetBrowser);
+            if (ImGui::MenuItem("Focus Serializer", nullptr, false, m_showSerializer)) RequestWindowFocus(WindowFocusTarget::Serializer);
             if (ImGui::MenuItem("Focus Console")) RequestWindowFocus(WindowFocusTarget::Console);
+            if (ImGui::MenuItem("Focus Sequencer", nullptr, false, m_showSequencer)) RequestWindowFocus(WindowFocusTarget::Sequencer);
             if (ImGui::MenuItem("Focus Audio", nullptr, false, m_showAudioWindow)) RequestWindowFocus(WindowFocusTarget::Audio);
             if (ImGui::MenuItem("Focus Render Passes", nullptr, false, m_showRenderPassesWindow)) RequestWindowFocus(WindowFocusTarget::RenderPasses);
             if (ImGui::MenuItem("Focus Grid Settings", nullptr, false, m_showGridSettingsWindow)) RequestWindowFocus(WindowFocusTarget::GridSettings);

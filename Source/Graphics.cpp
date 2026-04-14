@@ -250,6 +250,64 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	frameBuffers[static_cast<int>(FrameBufferId::EditorLuminance)] = std::make_unique<FrameBuffer>(device.Get(), w, h, hdrFormat);
 }
 
+void Graphics::OnResize(uint32_t width, uint32_t height)
+{
+	if (width == 0 || height == 0) return;
+	if (static_cast<uint32_t>(screenWidth) == width && static_cast<uint32_t>(screenHeight) == height) return;
+
+	screenWidth = static_cast<float>(width);
+	screenHeight = static_cast<float>(height);
+
+	if (m_api == GraphicsAPI::DX12 && m_dx12Device) {
+		// Release back buffer texture references BEFORE resizing swap chain
+		backBufferTexture.reset();
+		m_dx12BackBuffers[0].reset();
+		m_dx12BackBuffers[1].reset();
+
+		m_dx12Device->ResizeSwapChain(width, height);
+
+		// Rebuild back buffer textures
+		m_dx12BackBuffers[0] = std::make_shared<DX12Texture>(
+			m_dx12Device.get(), m_dx12Device->GetBackBuffer(0), 0);
+		m_dx12BackBuffers[1] = std::make_shared<DX12Texture>(
+			m_dx12Device.get(), m_dx12Device->GetBackBuffer(1), 1);
+		backBufferTexture = m_dx12BackBuffers[m_dx12Device->GetCurrentBackBufferIndex()];
+
+		// Recreate all frame buffers at new resolution
+		auto* factory = resourceFactory.get();
+		UINT renderW = static_cast<UINT>(width * m_renderScale);
+		UINT renderH = static_cast<UINT>(height * m_renderScale);
+		UINT halfW = renderW / 2;
+		UINT halfH = renderH / 2;
+
+		std::vector<TextureFormat> gBufFmt = {
+			TextureFormat::R16G16B16A16_FLOAT, TextureFormat::R16G16B16A16_FLOAT,
+			TextureFormat::R32G32B32A32_FLOAT, TextureFormat::R32G32_FLOAT };
+		std::vector<TextureFormat> hdr = { TextureFormat::R16G16B16A16_FLOAT };
+		std::vector<TextureFormat> ldr = { TextureFormat::RGBA8_UNORM };
+		std::vector<TextureFormat> ao  = { TextureFormat::R8_UNORM };
+
+		frameBuffers[static_cast<int>(FrameBufferId::GBuffer)]          = std::make_unique<FrameBuffer>(factory, renderW, renderH, gBufFmt);
+		frameBuffers[static_cast<int>(FrameBufferId::Scene)]            = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::PrevScene)]        = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorScene)]      = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorPrevScene)]  = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::PostProcess)]      = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorPostProcess)] = std::make_unique<FrameBuffer>(factory, renderW, renderH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::Display)]          = std::make_unique<FrameBuffer>(factory, width, height, ldr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorDisplay)]    = std::make_unique<FrameBuffer>(factory, width, height, ldr);
+		frameBuffers[static_cast<int>(FrameBufferId::Luminance)]        = std::make_unique<FrameBuffer>(factory, width, height, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::EditorLuminance)]  = std::make_unique<FrameBuffer>(factory, width, height, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::GTAO)]             = std::make_unique<FrameBuffer>(factory, renderW, renderH, ao);
+		frameBuffers[static_cast<int>(FrameBufferId::SSGI)]             = std::make_unique<FrameBuffer>(factory, halfW, halfH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::SSGIBlur)]         = std::make_unique<FrameBuffer>(factory, halfW, halfH, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::VolumetricFog)]    = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::VolumetricFogBlur)]= std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::SSR)]              = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
+		frameBuffers[static_cast<int>(FrameBufferId::SSRBlur)]          = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
+	}
+}
+
 static void DumpDRED(ID3D12Device* device) {
 	ComPtr<ID3D12DeviceRemovedExtendedData> dred;
 	if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dred)))) return;

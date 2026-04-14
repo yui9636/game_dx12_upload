@@ -55,9 +55,11 @@ struct ComponentMeta;
 #include "Component/PrefabInstanceComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
+#include "Component/SequencerPreviewCameraComponent.h"
 #include "Component/ShadowSettingsComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
+#include "Component/TrailComponent.h"
 #include "Component/TransformComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Input/InputContextComponent.h"
@@ -301,7 +303,11 @@ struct ComponentMeta<EffectParameterOverrideComponent> {
         MakeField("scalarParameter", &EffectParameterOverrideComponent::scalarParameter),
         MakeField("scalarValue", &EffectParameterOverrideComponent::scalarValue),
         MakeField("colorParameter", &EffectParameterOverrideComponent::colorParameter),
-        MakeField("colorValue", &EffectParameterOverrideComponent::colorValue)
+        MakeField("colorValue", &EffectParameterOverrideComponent::colorValue),
+        MakeField("scalarNames", &EffectParameterOverrideComponent::scalarNames),
+        MakeField("scalarValues", &EffectParameterOverrideComponent::scalarValues),
+        MakeField("colorNames", &EffectParameterOverrideComponent::colorNames),
+        MakeField("colorValues", &EffectParameterOverrideComponent::colorValues)
     );
 };
 
@@ -521,6 +527,16 @@ struct ComponentMeta<ReflectionProbeComponent> {
 };
 
 template <>
+struct ComponentMeta<SequencerPreviewCameraComponent> {
+    static constexpr std::string_view Name = "SequencerPreviewCameraComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("bindingId", &SequencerPreviewCameraComponent::bindingId),
+        MakeField("hideFromHierarchy", &SequencerPreviewCameraComponent::hideFromHierarchy),
+        MakeField("hideFromInspector", &SequencerPreviewCameraComponent::hideFromInspector)
+    );
+};
+
+template <>
 struct ComponentMeta<ShadowSettingsComponent> {
     static constexpr std::string_view Name = "ShadowSettingsComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -549,6 +565,21 @@ struct ComponentMeta<TextComponent> {
         MakeField("alignment", &TextComponent::alignment),
         MakeField("lineSpacing", &TextComponent::lineSpacing),
         MakeField("wrapping", &TextComponent::wrapping)
+    );
+};
+
+template <>
+struct ComponentMeta<TrailComponent> {
+    static constexpr std::string_view Name = "TrailComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enabled", &TrailComponent::enabled),
+        MakeField("width", &TrailComponent::width),
+        MakeField("lifetime", &TrailComponent::lifetime),
+        MakeField("minDistance", &TrailComponent::minDistance),
+        MakeField("maxPoints", &TrailComponent::maxPoints),
+        MakeField("colorStart", &TrailComponent::colorStart),
+        MakeField("colorEnd", &TrailComponent::colorEnd),
+        MakeField("totalTime", &TrailComponent::totalTime)
     );
 };
 
@@ -896,9 +927,11 @@ using AllComponentTypes = std::tuple<
     PrefabInstanceComponent,
     RectTransformComponent,
     ReflectionProbeComponent,
+    SequencerPreviewCameraComponent,
     ShadowSettingsComponent,
     SpriteComponent,
     TextComponent,
+    TrailComponent,
     TransformComponent,
     InputBindingComponent,
     InputContextComponent,

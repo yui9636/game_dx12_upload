@@ -35,6 +35,7 @@
 #include "Gameplay/TimelineItemBuffer.h"
 #include "Gameplay/SpeedCurveComponent.h"
 #include "Gameplay/HitStopComponent.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
 #include "Component/MeshComponent.h"
 #include "Component/LightComponent.h"
 #include "Component/AudioEmitterComponent.h"
@@ -44,6 +45,8 @@
 #include "Component/CanvasItemComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
+#include "Component/SequencerPreviewCameraComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/EnvironmentComponent.h"
@@ -92,7 +95,9 @@ namespace
     bool SubtreeMatchesFilter(Registry& registry, EntityID entity)
     {
         if (registry.GetComponent<EnvironmentComponent>(entity) ||
-            registry.GetComponent<ReflectionProbeComponent>(entity)) {
+            registry.GetComponent<ReflectionProbeComponent>(entity) ||
+            registry.GetComponent<EffectPreviewTagComponent>(entity) ||
+            registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
             return false;
         }
         if (s_hierarchyFilterLower.empty()) {
@@ -571,7 +576,8 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             if (!hier || Entity::IsNull(hier->parent)) {
                 if (registry->GetComponent<EnvironmentComponent>(entity) ||
                     registry->GetComponent<ReflectionProbeComponent>(entity) ||
-                    registry->GetComponent<AudioSettingsComponent>(entity)) {
+                    registry->GetComponent<AudioSettingsComponent>(entity) ||
+                    registry->GetComponent<SequencerPreviewCameraComponent>(entity)) {
                     continue;
                 }
                 if (!SubtreeMatchesFilter(*registry, entity)) {
@@ -725,21 +731,9 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, NameComponent{ "Player" });
                 registry->AddComponent(e, TransformComponent{});
                 registry->AddComponent(e, HierarchyComponent{});
-                PlayerTagComponent tag{}; tag.playerId = 1;
-                registry->AddComponent(e, tag);
-                registry->AddComponent(e, CharacterPhysicsComponent{});
-                registry->AddComponent(e, HealthComponent{});
-                registry->AddComponent(e, StaminaComponent{});
-                registry->AddComponent(e, LocomotionStateComponent{});
-                registry->AddComponent(e, ActionStateComponent{});
-                registry->AddComponent(e, ActionDatabaseComponent{});
-                registry->AddComponent(e, DodgeStateComponent{});
-                registry->AddComponent(e, HitboxTrackingComponent{});
-                registry->AddComponent(e, PlaybackComponent{});
-                registry->AddComponent(e, TimelineComponent{});
-                registry->AddComponent(e, TimelineItemBuffer{});
-                registry->AddComponent(e, InputContextComponent{});
-                registry->AddComponent(e, ResolvedInputStateComponent{});
+                PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*registry, e);
+                PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*registry, e);
+                PlayerRuntimeSetup::ResetPlayerRuntimeState(*registry, e);
             }
             if (ImGui::MenuItem("Character")) {
                 EntityID e = registry->CreateEntity();
@@ -772,6 +766,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         registry->GetComponent<EnvironmentComponent>(entity) ||
         registry->GetComponent<ReflectionProbeComponent>(entity) ||
         registry->GetComponent<AudioSettingsComponent>(entity) ||
+        registry->GetComponent<SequencerPreviewCameraComponent>(entity) ||
         !SubtreeMatchesFilter(*registry, entity)) {
         return;
     }

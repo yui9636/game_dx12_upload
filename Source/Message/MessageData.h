@@ -4,8 +4,6 @@
 #include <vector>
 #include <string>
 
-class Actor;
-
 struct CameraMotionData
 {
 	float time;
@@ -26,8 +24,6 @@ namespace	MessageData
 	{
 		DirectX::XMFLOAT3	start;
 		DirectX::XMFLOAT3	target;
-			
-		const Actor* targetActor = nullptr;
 	};
 
 	static constexpr char* CAMERACHANGEFOLLOWMODE = "CAMERA CHANGE FOLLOWMODE";
@@ -65,6 +61,9 @@ namespace	MessageData
 	struct CINEMATIC_EVENT_TRIGGER_DATA
 	{
 		std::string eventName;
+		std::string eventCategory;
+		std::string payloadType;
+		std::string payloadJson;
 	};
 
 };
