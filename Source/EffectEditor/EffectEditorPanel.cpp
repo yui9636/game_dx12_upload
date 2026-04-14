@@ -622,6 +622,121 @@ void EffectEditorPanel::DrawToolbar()
                     0.16f, 0.22f, 0.24f, 2.10f,
                     { 0.30f, 0.95f, 1.00f, 0.95f }, { 0.08f, 0.28f, 1.00f, 0.0f });
             }
+
+            ImGui::Separator();
+            ImGui::TextDisabled("-- Mesh Effects --");
+
+            // applyMeshTemplate: sets up MeshSource + MeshRenderer nodes
+            const auto applyMeshTemplate = [&](
+                const char* effectName,
+                float duration,
+                const char* meshPath,
+                int blendState,          // 2=Additive
+                int shaderFlags,
+                const DirectX::XMFLOAT4& tint,
+                // vectorValue2: {dissolveAmount, dissolveEdge, fresnelPower, flowStrength}
+                float dissolveAmount, float dissolveEdge, float fresnelPower, float flowStrength,
+                // vectorValue3: {flowSpeedX, flowSpeedY, scrollSpeedX, scrollSpeedY}
+                float flowSpeedX, float flowSpeedY, float scrollSpeedX, float scrollSpeedY,
+                // colors
+                const DirectX::XMFLOAT4& dissolveGlowColor,
+                const DirectX::XMFLOAT4& fresnelColor,
+                // textures
+                const char* baseTexPath,
+                const char* maskTexPath,
+                const char* flowMapPath)
+            {
+                m_asset.name = effectName;
+                m_asset.previewDefaults.duration = duration;
+                m_asset.previewDefaults.previewMeshPath = meshPath ? meshPath : "";
+
+                EffectGraphNode* lifetimeNode  = EnsureNodeByType(EffectGraphNodeType::Lifetime);
+                EffectGraphNode* meshSrcNode   = EnsureNodeByType(EffectGraphNodeType::MeshSource);
+                EffectGraphNode* meshRendNode  = EnsureNodeByType(EffectGraphNodeType::MeshRenderer);
+
+                lifetimeNode->scalar = duration;
+
+                meshSrcNode->stringValue = meshPath ? meshPath : "";
+
+                meshRendNode->intValue  = blendState;
+                meshRendNode->intValue2 = shaderFlags;
+                meshRendNode->vectorValue  = tint;
+                meshRendNode->vectorValue2 = { dissolveAmount, dissolveEdge, fresnelPower, flowStrength };
+                meshRendNode->vectorValue3 = { flowSpeedX, flowSpeedY, scrollSpeedX, scrollSpeedY };
+                meshRendNode->vectorValue5 = dissolveGlowColor;
+                meshRendNode->vectorValue6 = fresnelColor;
+                meshRendNode->stringValue  = baseTexPath  ? baseTexPath  : "";
+                meshRendNode->stringValue2 = maskTexPath  ? maskTexPath  : "";
+                meshRendNode->stringValue4 = flowMapPath  ? flowMapPath  : "";
+
+                EnsureGuiAuthoringLinks(m_asset);
+                m_compileDirty = true;
+                m_syncNodePositions = true;
+                ImGui::CloseCurrentPopup();
+            };
+
+            // Texture | Dissolve | DissolveGlow | AlphaFade
+            static constexpr int kMeshFlag_SlashGlow  = 0x001 | 0x002 | 0x200 | 0x4000; // 0x4203
+            // Texture | FlowMap | Scroll | AlphaFade
+            static constexpr int kMeshFlag_MagicCircle = 0x001 | 0x1000 | 0x100000 | 0x4000; // 0x105001
+            // Texture | Dissolve | AlphaFade
+            static constexpr int kMeshFlag_Shockwave  = 0x001 | 0x002 | 0x4000; // 0x4003
+            // Texture | Fresnel | FlowMap | AlphaFade
+            static constexpr int kMeshFlag_TornadoAura = 0x001 | 0x020 | 0x1000 | 0x4000; // 0x5021
+
+            if (ImGui::MenuItem("Sword Slash Glow")) {
+                applyMeshTemplate(
+                    "Sword Slash Glow", 1.2f,
+                    "Data/Model/Slash/fbx_slash_001_1.fbx",
+                    2, kMeshFlag_SlashGlow,
+                    { 1.0f, 0.9f, 0.35f, 1.0f },
+                    0.0f, 0.06f, 1.0f, 0.0f,
+                    0.0f, 0.0f, 0.0f, 0.0f,
+                    { 1.0f, 0.5f, 0.1f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f },
+                    "Data/Effect/Effect/Aura01_T.png",
+                    "Data/Effect/Mask/dissolve_animation.png",
+                    nullptr);
+            }
+            if (ImGui::MenuItem("Magic Circle")) {
+                applyMeshTemplate(
+                    "Magic Circle", 3.0f,
+                    "Data/Model/ring/fbx_ring_002.fbx",
+                    2, kMeshFlag_MagicCircle,
+                    { 0.55f, 0.25f, 1.0f, 1.0f },
+                    0.0f, 0.05f, 1.0f, 0.3f,
+                    0.2f, 0.1f, 0.15f, 0.0f,
+                    { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.6f, 0.3f, 1.0f, 1.0f },
+                    "Data/Effect/Effect/AuroraRing.png",
+                    nullptr,
+                    "Data/Effect/Flow/Flow.png");
+            }
+            if (ImGui::MenuItem("Shockwave")) {
+                applyMeshTemplate(
+                    "Shockwave", 0.6f,
+                    "Data/Model/shockwave/fbx_shockwave_001.fbx",
+                    2, kMeshFlag_Shockwave,
+                    { 0.75f, 0.95f, 1.0f, 1.0f },
+                    0.0f, 0.05f, 1.0f, 0.0f,
+                    0.0f, 0.0f, 0.0f, 0.0f,
+                    { 1.0f, 1.0f, 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f },
+                    "Data/Effect/Effect/Burst01.png",
+                    "Data/Effect/Mask/dissolve_animation.png",
+                    nullptr);
+            }
+            if (ImGui::MenuItem("Tornado Aura")) {
+                applyMeshTemplate(
+                    "Tornado Aura", 4.0f,
+                    "Data/Model/cylinderTornade/fbx_cylinderTornade_001.fbx",
+                    2, kMeshFlag_TornadoAura,
+                    { 0.25f, 1.0f, 0.45f, 1.0f },
+                    0.0f, 0.05f, 2.5f, 0.4f,
+                    0.1f, 0.3f, 0.0f, 0.0f,
+                    { 1.0f, 1.0f, 1.0f, 1.0f }, { 0.2f, 1.0f, 0.5f, 1.0f },
+                    "Data/Effect/Effect/Aura.png",
+                    nullptr,
+                    "Data/Effect/Flow/Flow.png");
+            }
+
             ImGui::EndPopup();
         }
         ImGui::SameLine();
