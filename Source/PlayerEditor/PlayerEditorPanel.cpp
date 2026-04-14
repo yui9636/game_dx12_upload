@@ -197,6 +197,68 @@ static ImU32 StateNodeColor(StateNodeType type)
     }
 }
 
+static bool ProjectBoneMarkerToViewport(
+    const Model* model,
+    int boneIndex,
+    float previewScale,
+    const DirectX::XMFLOAT3& cameraPosition,
+    const DirectX::XMFLOAT3& cameraTarget,
+    float fovY,
+    float nearZ,
+    float farZ,
+    const ImVec2& imageMin,
+    const ImVec2& imageSize,
+    ImVec2& outScreenPos)
+{
+    if (!model) {
+        return false;
+    }
+
+    const auto& nodes = model->GetNodes();
+    if (boneIndex < 0 || boneIndex >= static_cast<int>(nodes.size())) {
+        return false;
+    }
+
+    const auto& node = nodes[boneIndex];
+    const float scale = (std::max)(previewScale, 0.01f);
+
+    using namespace DirectX;
+    const XMVECTOR localPos = XMVectorSet(
+        node.worldTransform._41 * scale,
+        node.worldTransform._42 * scale,
+        node.worldTransform._43 * scale,
+        1.0f);
+
+    const float aspect = imageSize.y > 0.0f ? (imageSize.x / imageSize.y) : 1.0f;
+    const float safeAspect = aspect > 0.01f ? aspect : 1.0f;
+    const float safeNearZ = nearZ > 0.0001f ? nearZ : 0.03f;
+    const float safeFarZ = farZ > safeNearZ ? farZ : (safeNearZ + 500.0f);
+    const float safeFovY = fovY > 0.01f ? fovY : 0.785398f;
+
+    const XMVECTOR eye = XMLoadFloat3(&cameraPosition);
+    const XMVECTOR at = XMLoadFloat3(&cameraTarget);
+    const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    const XMMATRIX view = XMMatrixLookAtLH(eye, at, up);
+    const XMMATRIX proj = XMMatrixPerspectiveFovLH(safeFovY, safeAspect, safeNearZ, safeFarZ);
+    const XMVECTOR clip = XMVector4Transform(localPos, view * proj);
+
+    const float clipW = XMVectorGetW(clip);
+    if (clipW <= 0.0001f) {
+        return false;
+    }
+
+    const float ndcX = XMVectorGetX(clip) / clipW;
+    const float ndcY = XMVectorGetY(clip) / clipW;
+    const float ndcZ = XMVectorGetZ(clip) / clipW;
+    if (ndcZ < 0.0f || ndcZ > 1.0f) {
+        return false;
+    }
+
+    outScreenPos.x = imageMin.x + (ndcX * 0.5f + 0.5f) * imageSize.x;
+    outScreenPos.y = imageMin.y + (-ndcY * 0.5f + 0.5f) * imageSize.y;
+    return true;
+}
+
 static bool DrawDetachedTopTabBar(bool* p_open)
 {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -266,6 +328,13 @@ void PlayerEditorPanel::DestroyOwnedPreviewEntity()
     PlayerEditorSession::DestroyOwnedPreviewEntity(*this);
 }
 
+void PlayerEditorPanel::SetSharedSceneCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction, float fovY)
+{
+    m_sharedSceneCameraPosition = position;
+    m_sharedSceneCameraDirection = direction;
+    m_sharedSceneCameraFovY = fovY;
+}
+
 void PlayerEditorPanel::EnsureOwnedPreviewEntity()
 {
     PlayerEditorSession::EnsureOwnedPreviewEntity(*this);
@@ -316,6 +385,7 @@ void PlayerEditorPanel::ResetSelectionState()
     m_selectedNodeId = 0;
     m_selectedTransitionId = 0;
     m_selectedBoneIndex = -1;
+    m_hoveredBoneIndex = -1;
     m_selectedBoneName.clear();
     m_selectedSocketIdx = -1;
     m_playheadFrame = 0;
@@ -607,8 +677,8 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
 
         ImGui::End();
 
-        DrawViewportPanel();
         DrawSkeletonPanel();
+        DrawViewportPanel();
         DrawStateMachinePanel();
         DrawTimelinePanel();
         DrawPropertiesPanel();
@@ -642,8 +712,8 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     ImGui::End(); // Host window
 
     // ── Draw each sub-window (they dock into the host's DockSpace) ──
-    DrawViewportPanel();
     DrawSkeletonPanel();
+    DrawViewportPanel();
     DrawStateMachinePanel();
     DrawTimelinePanel();
     DrawPropertiesPanel();
@@ -708,22 +778,44 @@ void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)
 
 void PlayerEditorPanel::DrawViewportPanel()
 {
-    if (!ImGui::Begin(kPEViewportTitle)) { ImGui::End(); return; }
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    const bool open = ImGui::Begin(kPEViewportTitle);
+    ImGui::PopStyleVar();
+    if (!open) { ImGui::End(); return; }
 
-    ImGui::SetNextItemWidth(180.0f);
-    ImGui::SliderFloat("Preview Scale", &m_previewModelScale, 0.10f, 5.00f, "%.2f");
-    ImGui::SameLine();
-    if (ImGui::Button("Reset Scale")) {
-        m_previewModelScale = 1.0f;
+    const float sharedDirLengthSq =
+        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
+        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
+        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
+    const bool usingSharedSceneView = sharedDirLengthSq > 0.0001f;
+
+    const float toolbarTop = 4.0f;
+    const float toolbarLeft = 6.0f;
+    const float toolbarHeight = ImGui::GetFrameHeightWithSpacing() + 8.0f;
+
+    float contentTop = 0.0f;
+    if (!usingSharedSceneView) {
+        ImGui::SetCursorPos(ImVec2(toolbarLeft, toolbarTop));
+        ImGui::SetNextItemWidth(180.0f);
+        ImGui::SliderFloat("Preview Scale", &m_previewModelScale, 0.01f, 5.00f, "%.2f");
+        ImGui::SameLine();
+        if (ImGui::Button("Reset Scale")) {
+            m_previewModelScale = 1.0f;
+        }
+        contentTop = toolbarHeight;
     }
 
+    ImGui::SetCursorPos(ImVec2(0.0f, contentTop));
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_previewRenderSize = {
         (std::max)(avail.x, 0.0f),
         (std::max)(avail.y, 0.0f)
     };
+    m_viewportHovered = false;
+    m_viewportRect = { 0.0f, 0.0f, avail.x, avail.y };
 
-    if (!HasOpenModel()) {
+    if (!HasOpenModel() && !m_viewportTexture) {
+        ImGui::SetCursorPos(ImVec2(12.0f, toolbarHeight + 12.0f));
         DrawEmptyState();
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
@@ -743,11 +835,73 @@ void PlayerEditorPanel::DrawViewportPanel()
         void* texId = ImGuiRenderer::GetTextureID(m_viewportTexture);
         if (texId) {
             ImGui::Image((ImTextureID)texId, avail);
+
+            const ImVec2 imageMin = ImGui::GetItemRectMin();
+            const ImVec2 imageMax = ImGui::GetItemRectMax();
+            const ImVec2 imageSize = ImVec2(imageMax.x - imageMin.x, imageMax.y - imageMin.y);
+            m_viewportRect = { imageMin.x, imageMin.y, imageSize.x, imageSize.y };
+            m_viewportHovered = ImGui::IsItemHovered();
+            const int markerBoneIndex = (m_hoveredBoneIndex >= 0) ? m_hoveredBoneIndex : m_selectedBoneIndex;
+            if (m_model && markerBoneIndex >= 0) {
+                ImVec2 markerPos{};
+                if (ProjectBoneMarkerToViewport(
+                    m_model,
+                    markerBoneIndex,
+                    usingSharedSceneView ? 1.0f : m_previewModelScale,
+                    GetPreviewCameraPosition(),
+                    GetPreviewCameraTarget(),
+                    GetPreviewCameraFovY(),
+                    GetPreviewNearZ(),
+                    GetPreviewFarZ(),
+                    imageMin,
+                    imageSize,
+                    markerPos))
+                {
+                    const auto& nodes = m_model->GetNodes();
+                    const char* boneName = (markerBoneIndex >= 0 && markerBoneIndex < static_cast<int>(nodes.size()))
+                        ? nodes[markerBoneIndex].name.c_str()
+                        : "";
+
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    dl->PushClipRect(imageMin, imageMax, true);
+                    dl->AddCircleFilled(markerPos, 5.0f, IM_COL32(255, 230, 80, 255));
+                    dl->AddCircle(markerPos, 9.0f, IM_COL32(255, 255, 255, 220), 0, 1.5f);
+                    dl->AddLine(ImVec2(markerPos.x - 10.0f, markerPos.y), ImVec2(markerPos.x - 3.0f, markerPos.y), IM_COL32(255, 255, 255, 220), 2.0f);
+                    dl->AddLine(ImVec2(markerPos.x + 3.0f, markerPos.y), ImVec2(markerPos.x + 10.0f, markerPos.y), IM_COL32(255, 255, 255, 220), 2.0f);
+                    dl->AddLine(ImVec2(markerPos.x, markerPos.y - 10.0f), ImVec2(markerPos.x, markerPos.y - 3.0f), IM_COL32(255, 255, 255, 220), 2.0f);
+                    dl->AddLine(ImVec2(markerPos.x, markerPos.y + 3.0f), ImVec2(markerPos.x, markerPos.y + 10.0f), IM_COL32(255, 255, 255, 220), 2.0f);
+                    if (boneName && boneName[0] != '\0') {
+                        ImVec2 labelSize = ImGui::CalcTextSize(boneName);
+                        const float margin = 6.0f;
+                        ImVec2 labelPos(markerPos.x + 12.0f, markerPos.y - labelSize.y - 8.0f);
+                        if (labelPos.x + labelSize.x + 8.0f > imageMax.x - margin) {
+                            labelPos.x = markerPos.x - labelSize.x - 16.0f;
+                        }
+                        if (labelPos.x < imageMin.x + margin) {
+                            labelPos.x = imageMin.x + margin;
+                        }
+                        if (labelPos.y < imageMin.y + margin) {
+                            labelPos.y = markerPos.y + 12.0f;
+                        }
+                        if (labelPos.y + labelSize.y + 4.0f > imageMax.y - margin) {
+                            labelPos.y = imageMax.y - labelSize.y - 4.0f - margin;
+                        }
+                        dl->AddRectFilled(
+                            ImVec2(labelPos.x - 4.0f, labelPos.y - 2.0f),
+                            ImVec2(labelPos.x + labelSize.x + 4.0f, labelPos.y + labelSize.y + 2.0f),
+                            IM_COL32(20, 20, 20, 220),
+                            4.0f);
+                        dl->AddText(labelPos, IM_COL32(255, 255, 255, 240), boneName);
+                    }
+                    dl->PopClipRect();
+                }
+            }
         }
     } else {
         // Placeholder: dark background with instructions
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
+        m_viewportRect = { pos.x, pos.y, avail.x, avail.y };
         dl->AddRectFilled(pos, ImVec2(pos.x + avail.x, pos.y + avail.y), IM_COL32(20, 20, 25, 255));
 
         // Center text
@@ -765,7 +919,7 @@ void PlayerEditorPanel::DrawViewportPanel()
     }
 
     // Orbit camera controls (mouse drag on viewport)
-    if (ImGui::IsItemHovered()) {
+    if (ImGui::IsItemHovered() && !usingSharedSceneView && !m_viewportTexture) {
         // Right-drag: orbit
         if (ImGui::IsMouseDragging(1)) {
             ImVec2 delta = ImGui::GetMouseDragDelta(1);
@@ -787,10 +941,22 @@ void PlayerEditorPanel::DrawViewportPanel()
 
 DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraTarget() const
 {
+    const float dirLengthSq =
+        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
+        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
+        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
+    if (dirLengthSq > 0.0001f) {
+        return {
+            m_sharedSceneCameraPosition.x + m_sharedSceneCameraDirection.x,
+            m_sharedSceneCameraPosition.y + m_sharedSceneCameraDirection.y,
+            m_sharedSceneCameraPosition.z + m_sharedSceneCameraDirection.z
+        };
+    }
+
     if (m_model) {
         const auto bounds = m_model->GetWorldBounds();
         DirectX::XMFLOAT3 target = bounds.Center;
-        target.y -= bounds.Extents.y * 0.35f;
+        target.y += bounds.Extents.y * 0.12f;
         return target;
     }
 
@@ -805,6 +971,14 @@ DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraTarget() const
 
 DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraDirection() const
 {
+    const float sharedDirLengthSq =
+        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
+        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
+        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
+    if (sharedDirLengthSq > 0.0001f) {
+        return m_sharedSceneCameraDirection;
+    }
+
     const float cosPitch = std::cos(m_vpCameraPitch);
     DirectX::XMFLOAT3 dir = {
         std::sin(m_vpCameraYaw) * cosPitch,
@@ -826,6 +1000,14 @@ DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraDirection() const
 
 DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraPosition() const
 {
+    const float sharedDirLengthSq =
+        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
+        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
+        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
+    if (sharedDirLengthSq > 0.0001f) {
+        return m_sharedSceneCameraPosition;
+    }
+
     const DirectX::XMFLOAT3 target = GetPreviewCameraTarget();
     const DirectX::XMFLOAT3 dir = GetPreviewCameraDirection();
     return {
@@ -833,6 +1015,18 @@ DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraPosition() const
         target.y - dir.y * m_vpCameraDist,
         target.z - dir.z * m_vpCameraDist
     };
+}
+
+float PlayerEditorPanel::GetPreviewCameraFovY() const
+{
+    const float sharedDirLengthSq =
+        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
+        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
+        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
+    if (sharedDirLengthSq > 0.0001f) {
+        return m_sharedSceneCameraFovY;
+    }
+    return 0.785398f;
 }
 
 // ############################################################################
@@ -855,6 +1049,8 @@ void PlayerEditorPanel::SetModel(const Model* model)
 void PlayerEditorPanel::DrawSkeletonPanel()
 {
     if (!ImGui::Begin(kPESkeletonTitle)) { ImGui::End(); return; }
+
+    m_hoveredBoneIndex = -1;
 
     if (!m_model) {
         ImGui::TextDisabled("No model assigned.");
@@ -925,6 +1121,10 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     std::string label = std::string(icon) + " " + node.name;
 
     bool open = ImGui::TreeNodeEx(("##bone_" + std::to_string(nodeIndex)).c_str(), flags, "%s", label.c_str());
+
+    if (ImGui::IsItemHovered()) {
+        m_hoveredBoneIndex = nodeIndex;
+    }
 
     // Click to select
     if (ImGui::IsItemClicked(0)) {

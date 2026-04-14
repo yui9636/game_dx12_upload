@@ -209,12 +209,20 @@ void EditorLayer::DrawPlayerEditorWorkspace()
         (std::max)(1.0f, viewport->WorkSize.y - workspaceTabHeight - statusBarHeight)));
 
     SyncPlayerEditorPanelState();
+    m_playerEditorPanel.SetSharedSceneCamera(
+        GetEditorCameraPosition(),
+        GetEditorCameraDirection(),
+        GetEditorCameraFovY());
 
     bool playerEditorFocused = false;
     ApplyPendingWindowFocus(WindowFocusTarget::PlayerEditor);
     m_playerEditorPanel.DrawWorkspace(
         m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
         &playerEditorFocused);
+    m_sceneViewRect = m_playerEditorPanel.GetViewportRect();
+    m_sceneViewSize = { m_sceneViewRect.z, m_sceneViewRect.w };
+    m_sceneViewHovered = m_playerEditorPanel.IsViewportHovered();
+    m_sceneViewToolbarHovered = false;
     SetLastFocusedWindow(WindowFocusTarget::PlayerEditor, playerEditorFocused);
 }
 

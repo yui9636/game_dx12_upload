@@ -1086,7 +1086,8 @@ void EngineKernel::Render()
     // 1 job per frame on shared OffscreenRenderer to avoid GPU contention
     static int s_thumbnailSkipCounter = 0;
     const bool usePlayerPreviewAsPrimary = false;
-    const bool wantsPlayerPreview = m_editorLayer && m_editorLayer->ShouldRenderPlayerPreview();
+    const bool usePlayerWorkspaceScene = m_editorLayer && m_editorLayer->IsPlayerWorkspaceActive();
+    const bool wantsPlayerPreview = false;
     if (m_sharedOffscreen && m_sharedOffscreen->IsGpuIdle() && !wantsPlayerPreview) {
         if (MaterialPreviewStudio::Instance().IsDirty())
             MaterialPreviewStudio::Instance().PumpPreview();
@@ -1112,7 +1113,7 @@ void EngineKernel::Render()
     if (m_editorLayer) {
         m_editorLayer->SetPlayerPreviewTexture(nullptr);
         m_editorLayer->SetEffectPreviewTexture(nullptr);
-        const bool useEffectPreviewAsPrimary = !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
+        const bool useEffectPreviewAsPrimary = !usePlayerWorkspaceScene && !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
         if (!m_editorLayer->HasEditorCameraUserOverride() && !m_editorLayer->HasEditorCameraAutoFramed()) {
             DirectX::BoundingBox mergedBounds{};
             bool hasMergedBounds = false;
@@ -1168,11 +1169,13 @@ void EngineKernel::Render()
                 m_editorLayer->SetEditorCameraLookAt(rc.cameraPosition, target);
             }
         }
-        const DirectX::XMFLOAT2 sceneViewSize = usePlayerPreviewAsPrimary
+        const DirectX::XMFLOAT2 sceneViewSize = usePlayerWorkspaceScene
+            ? m_editorLayer->GetPlayerPreviewRenderSize()
+            : (usePlayerPreviewAsPrimary
             ? m_editorLayer->GetPlayerPreviewRenderSize()
             : (useEffectPreviewAsPrimary
                 ? m_editorLayer->GetEffectPreviewRenderSize()
-                : m_editorLayer->GetSceneViewSize());
+                : m_editorLayer->GetSceneViewSize()));
         const uint32_t panelWidth = static_cast<uint32_t>((std::max)(sceneViewSize.x, 0.0f));
         const uint32_t panelHeight = static_cast<uint32_t>((std::max)(sceneViewSize.y, 0.0f));
         auto primaryView = m_renderPipeline->BuildPrimaryViewContext(rc, panelWidth, panelHeight);
@@ -1352,7 +1355,9 @@ void EngineKernel::Render()
             nullptr,
             primaryView.debugDepth ? primaryView.debugDepth : rc.debugGBufferDepth);
 
-        if (m_editorLayer->ShouldRenderPlayerPreview()) {
+        if (m_editorLayer->IsPlayerWorkspaceActive()) {
+            m_editorLayer->SetPlayerPreviewTexture(sceneViewTexture);
+        } else if (m_editorLayer->ShouldRenderPlayerPreview()) {
             RenderPlayerPreviewOffscreen();
         } else if (m_editorLayer->ShouldRenderEffectPreview()) {
             ITexture* effectPreviewTexture = primaryView.sceneViewTexture

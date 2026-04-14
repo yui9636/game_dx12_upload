@@ -152,7 +152,8 @@ public:
     void SetEffectPreviewTexture(ITexture* texture) { m_effectEditorPanel.SetViewportTexture(texture); }
     PlayerEditorPanel& GetPlayerEditorPanel() { return m_playerEditorPanel; }
     const PlayerEditorPanel& GetPlayerEditorPanel() const { return m_playerEditorPanel; }
-    bool ShouldRenderPlayerPreview() const { return m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor && m_playerEditorPanel.CanRenderPreview(); }
+    bool IsPlayerWorkspaceActive() const { return m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor; }
+    bool ShouldRenderPlayerPreview() const { return IsPlayerWorkspaceActive(); }
     DirectX::XMFLOAT2 GetPlayerPreviewRenderSize() const { return m_playerEditorPanel.GetPreviewRenderSize(); }
     DirectX::XMFLOAT3 GetPlayerPreviewCameraPosition() const { return m_playerEditorPanel.GetPreviewCameraPosition(); }
     DirectX::XMFLOAT3 GetPlayerPreviewCameraTarget() const { return m_playerEditorPanel.GetPreviewCameraTarget(); }

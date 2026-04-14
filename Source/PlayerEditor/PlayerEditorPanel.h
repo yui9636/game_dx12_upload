@@ -34,12 +34,15 @@ public:
 
     // Viewport texture (set by EditorLayer/Renderer)
     void SetViewportTexture(ITexture* tex) { m_viewportTexture = tex; }
+    void SetSharedSceneCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction, float fovY);
     bool CanRenderPreview() const { return HasOpenModel(); }
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
+    DirectX::XMFLOAT4 GetViewportRect() const { return m_viewportRect; }
+    bool IsViewportHovered() const { return m_viewportHovered; }
     DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const;
     DirectX::XMFLOAT3 GetPreviewCameraDirection() const;
-    float GetPreviewCameraFovY() const { return 0.785398f; }
+    float GetPreviewCameraFovY() const;
     float GetPreviewNearZ() const { return 0.03f; }
     float GetPreviewFarZ() const { return 500.0f; }
     DirectX::XMFLOAT4 GetPreviewClearColor() const { return { 0.12f, 0.12f, 0.12f, 1.0f }; }
@@ -175,6 +178,7 @@ private:
     std::shared_ptr<Model> m_ownedModel;
     const Model* m_model             = nullptr;
     int          m_selectedBoneIndex  = -1;
+    int          m_hoveredBoneIndex   = -1;
     std::string  m_selectedBoneName;
     char         m_boneSearchFilter[128] = {};
     std::vector<NodeSocket> m_sockets;         // Editable socket list
@@ -191,8 +195,13 @@ private:
     // 笏笏 Viewport 笏笏
     ITexture* m_viewportTexture = nullptr;
     DirectX::XMFLOAT2 m_previewRenderSize = { 0.0f, 0.0f };
+    DirectX::XMFLOAT4 m_viewportRect = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 m_sharedSceneCameraPosition = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 m_sharedSceneCameraDirection = { 0.0f, 0.0f, 1.0f };
+    float m_sharedSceneCameraFovY = 0.785398f;
+    bool m_viewportHovered = false;
     float m_vpCameraYaw   = 0.0f;
-    float m_vpCameraPitch = 0.2f;
+    float m_vpCameraPitch = 0.05f;
     float m_vpCameraDist  = 5.0f;
     float m_previewModelScale = 1.0f;
 
