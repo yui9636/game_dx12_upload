@@ -1601,11 +1601,6 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
             if (ImGui::Checkbox("Muted", &track.muted)) m_timelineDirty = true;
             if (ImGui::Checkbox("Locked", &track.locked)) m_timelineDirty = true;
             ImGui::Separator();
-            if (ImGui::MenuItem(track.type == TimelineTrackType::Event ? "Add Event Here" : "Add Range Here")) {
-                track.items.push_back(CreateDefaultTimelineItem(track.type, m_playheadFrame));
-                m_timelineDirty = true;
-            }
-            ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_TRASH " Delete Track")) {
                 m_timelineAsset.RemoveTrack(track.id);
                 m_timelineDirty = true;
@@ -1676,6 +1671,9 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             float y1 = trackY + kTrackHeight - 2;
 
             bool isSelItem = (m_selectedTrackId == (int)track.id && m_selectedItemIdx == ii);
+            bool leftResizeHovered = false;
+            bool rightResizeHovered = false;
+            bool resizingItem = false;
 
             // Item body with rounded corners
             dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), itemCol, 4.0f);
@@ -1689,7 +1687,40 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 dl->AddText(ImVec2(x0 + 3, y0 + 1), IM_COL32(255, 255, 255, 180), lbl);
             }
 
-            // Click / drag
+            if (!track.locked && track.type != TimelineTrackType::Event) {
+                const float handleWidth = 10.0f;
+                ImGui::SetCursorScreenPos(ImVec2(x0 - handleWidth * 0.5f, y0));
+                ImGui::InvisibleButton(("item_l_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
+                leftResizeHovered = ImGui::IsItemHovered();
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
+                    if (frameDelta != 0) {
+                        item.startFrame = (std::max)(0, (std::min)(item.endFrame - 1, item.startFrame + frameDelta));
+                        m_timelineDirty = true;
+                        ImGui::ResetMouseDragDelta();
+                    }
+                    resizingItem = true;
+                }
+
+                ImGui::SetCursorScreenPos(ImVec2(x1 - handleWidth * 0.5f, y0));
+                ImGui::InvisibleButton(("item_r_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
+                rightResizeHovered = ImGui::IsItemHovered();
+                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
+                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
+                    if (frameDelta != 0) {
+                        item.endFrame = (std::max)(item.startFrame + 1, item.endFrame + frameDelta);
+                        m_timelineDirty = true;
+                        ImGui::ResetMouseDragDelta();
+                    }
+                    resizingItem = true;
+                }
+
+                if (leftResizeHovered || rightResizeHovered) {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                }
+            }
+
+            // Click / drag body after resize handles so the edges win.
             ImGui::SetCursorScreenPos(ImVec2(x0, y0));
             ImGui::InvisibleButton(("item_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(),
                 ImVec2((std::max)(x1 - x0, 4.0f), y1 - y0));
@@ -1700,8 +1731,8 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 m_selectionCtx = SelectionContext::TimelineItem;
             }
 
-            // Drag to move
-            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0) && !track.locked) {
+            // Drag to move only when not resizing.
+            if (!resizingItem && ImGui::IsItemActive() && ImGui::IsMouseDragging(0) && !track.locked) {
                 float dx = ImGui::GetMouseDragDelta(0).x;
                 int frameDelta = (int)(dx / ppf);
                 if (frameDelta != 0) {
@@ -1717,31 +1748,6 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 }
             }
 
-            if (!track.locked && track.type != TimelineTrackType::Event) {
-                const float handleWidth = 6.0f;
-                ImGui::SetCursorScreenPos(ImVec2(x0 - handleWidth * 0.5f, y0));
-                ImGui::InvisibleButton(("item_l_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
-                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
-                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
-                    if (frameDelta != 0) {
-                        item.startFrame = (std::max)(0, (std::min)(item.endFrame - 1, item.startFrame + frameDelta));
-                        m_timelineDirty = true;
-                        ImGui::ResetMouseDragDelta();
-                    }
-                }
-
-                ImGui::SetCursorScreenPos(ImVec2(x1 - handleWidth * 0.5f, y0));
-                ImGui::InvisibleButton(("item_r_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(), ImVec2(handleWidth, y1 - y0));
-                if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0)) {
-                    int frameDelta = static_cast<int>(ImGui::GetMouseDragDelta(0).x / ppf);
-                    if (frameDelta != 0) {
-                        item.endFrame = (std::max)(item.startFrame + 1, item.endFrame + frameDelta);
-                        m_timelineDirty = true;
-                        ImGui::ResetMouseDragDelta();
-                    }
-                }
-            }
-
             // Right-click: delete item
             if (ImGui::IsItemClicked(1)) {
                 m_selectedTrackId = track.id;
@@ -1751,42 +1757,19 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             }
         }
 
-        // Right-click on empty track area
-        ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, trackY));
-        ImGui::InvisibleButton(("trow_" + std::to_string(track.id)).c_str(),
-            ImVec2(drawWidth, kTrackHeight));
-        if (ImGui::IsItemClicked(1) && !track.locked) {
-            float mx = ImGui::GetMousePos().x - canvasPos.x;
-            int clickFrame = (int)(mx / ppf);
-            track.items.push_back(CreateDefaultTimelineItem(track.type, clickFrame));
-            m_selectedTrackId = track.id;
-            m_selectedItemIdx = (int)track.items.size() - 1;
-            m_selectionCtx = SelectionContext::TimelineItem;
-            m_timelineDirty = true;
-        }
+          // Right-click on empty track area is intentionally disabled.
+          ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, trackY));
+          ImGui::InvisibleButton(("trow_" + std::to_string(track.id)).c_str(),
+              ImVec2(drawWidth, kTrackHeight));
 
         yOff += kTrackHeight;
     }
 
-    // Item context menu
-    if (ImGui::BeginPopup("ItemCtx")) {
-        if (ImGui::MenuItem(ICON_FA_COPY " Duplicate")) {
-            for (auto& track : m_timelineAsset.tracks) {
-                if ((int)track.id == m_selectedTrackId && m_selectedItemIdx >= 0 &&
-                    m_selectedItemIdx < (int)track.items.size())
-                {
-                    auto copy = track.items[m_selectedItemIdx];
-                    copy.startFrame += 10;
-                    copy.endFrame += 10;
-                    track.items.push_back(copy);
-                    m_timelineDirty = true;
-                    break;
-                }
-            }
-        }
-        if (ImGui::MenuItem(ICON_FA_TRASH " Delete")) {
-            for (auto& track : m_timelineAsset.tracks) {
-                if ((int)track.id == m_selectedTrackId && m_selectedItemIdx >= 0 &&
+      // Item context menu
+      if (ImGui::BeginPopup("ItemCtx")) {
+          if (ImGui::MenuItem(ICON_FA_TRASH " Delete")) {
+              for (auto& track : m_timelineAsset.tracks) {
+                  if ((int)track.id == m_selectedTrackId && m_selectedItemIdx >= 0 &&
                     m_selectedItemIdx < (int)track.items.size())
                 {
                     track.items.erase(track.items.begin() + m_selectedItemIdx);
@@ -2349,15 +2332,7 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         auto& item = track.items[m_selectedItemIdx];
 
         ImGui::Text("Track: %s", track.name.c_str());
-        if (ImGui::DragInt("Start Frame", &item.startFrame, 1.0f, 0, 99999)) m_timelineDirty = true;
-        if (track.type == TimelineTrackType::Event) {
-            item.endFrame = item.startFrame;
-            ImGui::TextDisabled("Event track uses point timing.");
-        } else if (ImGui::DragInt("End Frame", &item.endFrame, 1.0f, 0, 99999)) m_timelineDirty = true;
-
-        int dur = item.endFrame - item.startFrame;
-        ImGui::Text("Duration: %d frames (%.3fs)", dur,
-            m_timelineAsset.fps > 0 ? dur / m_timelineAsset.fps : 0.0f);
+        ImGui::TextDisabled("Resize the bar directly on the timeline.");
 
         ImGui::Separator();
 
