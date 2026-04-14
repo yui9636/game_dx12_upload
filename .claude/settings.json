@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& { $j=[Console]::In.ReadToEnd() | ConvertFrom-Json; if($j.tool_input.file_path -match \"\\.hlsli?$\") { Start-Process -FilePath 'cmd' -ArgumentList '/c','Scripts\\CompileMeshVariants.bat' -WorkingDirectory 'C:\\Users\\yuito\\Documents\\MyEngine_Workspace\\game_dx12_upload' -NoNewWindow -Wait } }",
+            "statusMessage": "Compiling HLSL shader variants...",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}
