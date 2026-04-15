@@ -1,6 +1,11 @@
 /Linux*
 /WASM*
-/VS20*
+/VS20*/
+!/VS2022_CL/
+/VS2022_CL/**
+!/VS2022_CL/Debug/
+/VS2022_CL/Debug/**
+!/VS2022_CL/Debug/Jolt.lib
 /XCode*
 /MinGW*
 /Doxygen
