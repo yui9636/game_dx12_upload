@@ -130,10 +130,15 @@ public:
     DirectX::XMFLOAT2 GetGameViewSize() const { return m_gameViewSize; }
     DirectX::XMFLOAT4 GetSceneViewRect() const { return m_sceneViewRect; }
     bool ShouldRenderSceneGrid3D() const {
-        return m_activeWorkspace == WorkspaceTab::LevelEditor &&
+        const bool isGridWorkspace =
+            m_activeWorkspace == WorkspaceTab::LevelEditor ||
+            m_activeWorkspace == WorkspaceTab::PlayerEditor;
+
+        return isGridWorkspace &&
             m_showSceneGrid &&
             m_sceneViewMode == SceneViewMode::Mode3D;
     }
+
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
         return (m_sceneViewMode == SceneViewMode::Mode2D)
             ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
@@ -146,7 +151,9 @@ public:
     bool HasEditorCameraUserOverride() const { return m_editorCameraUserOverride; }
     bool HasEditorCameraAutoFramed() const { return m_editorCameraAutoFramed; }
     void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
-    void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
+    void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture;
+    m_playerEditorPanel.SetViewportTexture(texture);
+    }
     void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
     void SetPlayerPreviewTexture(ITexture* texture) { m_playerEditorPanel.SetViewportTexture(texture); }
     void SetEffectPreviewTexture(ITexture* texture) { m_effectEditorPanel.SetViewportTexture(texture); }
