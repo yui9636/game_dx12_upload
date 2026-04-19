@@ -32,6 +32,14 @@ namespace
         registry.AddComponent(entity, T{});
         return registry.GetComponent<T>(entity);
     }
+
+    void ResetLocomotionStateMachineParams(StateMachineParamsComponent& stateMachine)
+    {
+        stateMachine.SetParam("MoveX", 0.0f);
+        stateMachine.SetParam("MoveY", 0.0f);
+        stateMachine.SetParam("MoveMagnitude", 0.0f);
+        stateMachine.SetParam("IsMoving", 0.0f);
+    }
 }
 
 namespace PlayerRuntimeSetup
@@ -96,6 +104,7 @@ namespace PlayerRuntimeSetup
             stateMachine->currentStateId = 0;
             stateMachine->stateTimer = 0.0f;
             stateMachine->animFinished = false;
+            ResetLocomotionStateMachineParams(*stateMachine);
         }
 
         if (auto* inputContext = registry.GetComponent<InputContextComponent>(entity)) {

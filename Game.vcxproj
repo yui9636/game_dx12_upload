@@ -404,6 +404,7 @@
     <ClInclude Include="Source\Scene\SceneDataUploadSystem.h" />
     <ClInclude Include="Source\ShaderClass\GBufferPBRShader.h" />
     <ClInclude Include="Source\ShaderClass\HologramShader.h" />
+    <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
     <ClInclude Include="Source\ShaderClass\PBRShader.h" />
     <ClInclude Include="Source\ShaderClass\PhongShader.h" />
     <ClInclude Include="Source\ShaderClass\Shader.h" />
@@ -662,6 +663,7 @@
     <ClCompile Include="Source\Scene\SceneDataUploadSystem.cpp" />
     <ClCompile Include="Source\ShaderClass\GBufferPBRShader.cpp" />
     <ClCompile Include="Source\ShaderClass\HologramShader.cpp" />
+    <ClCompile Include="Source\ShaderClass\EffectMeshShader.cpp" />
     <ClCompile Include="Source\ShaderClass\PBRShader.cpp" />
     <ClCompile Include="Source\ShaderClass\PhongShader.cpp" />
     <ClCompile Include="Source\ShaderClass\ShaderCompiler.cpp" />
@@ -989,6 +991,18 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectMeshUberVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\EffectMeshUberPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\PBRInstancedVS.hlsl">

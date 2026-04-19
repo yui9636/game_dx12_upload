@@ -98,10 +98,6 @@ void InputMappingTab::Draw(Registry* registry)
             OpenActionMap(pathBuffer);
         }
     }
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save") && !m_actionMapPath.empty()) {
-        SaveActionMap();
-    }
     if (m_dirty) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "(unsaved)");

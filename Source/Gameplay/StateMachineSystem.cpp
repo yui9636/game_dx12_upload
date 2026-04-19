@@ -6,6 +6,7 @@
 #include "Input/InputBindingComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
 #include "Gameplay/HealthComponent.h"
+#include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/StaminaComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/TimelineAssetRuntimeBuilder.h"
@@ -105,6 +106,20 @@ static void ApplyTimelineStateAsset(Registry& registry, EntityID entity, const S
     TimelineAssetRuntimeBuilder::BuildFromPath(state.timelineAssetPath, state.animationIndex, *timeline, *buffer);
 }
 
+static void SyncLocomotionParameters(
+    StateMachineParamsComponent& params,
+    const LocomotionStateComponent* locomotion)
+{
+    if (!locomotion) {
+        return;
+    }
+
+    params.SetParam("MoveX", locomotion->moveInput.x);
+    params.SetParam("MoveY", locomotion->moveInput.y);
+    params.SetParam("MoveMagnitude", locomotion->inputStrength);
+    params.SetParam("IsMoving", locomotion->gaitIndex > 0 ? 1.0f : 0.0f);
+}
+
 // ============================================================================
 // Condition evaluation
 // ============================================================================
@@ -174,11 +189,13 @@ void StateMachineSystem::Update(Registry& registry, float dt)
         auto inputId   = TypeManager::GetComponentTypeID<ResolvedInputStateComponent>();
         auto bindingId = TypeManager::GetComponentTypeID<InputBindingComponent>();
         auto healthId  = TypeManager::GetComponentTypeID<HealthComponent>();
+        auto locoId    = TypeManager::GetComponentTypeID<LocomotionStateComponent>();
         auto staminaId = TypeManager::GetComponentTypeID<StaminaComponent>();
 
         auto* inputCol   = arch->GetSignature().test(inputId)   ? arch->GetColumn(inputId)   : nullptr;
         auto* bindingCol = arch->GetSignature().test(bindingId) ? arch->GetColumn(bindingId) : nullptr;
         auto* healthCol  = arch->GetSignature().test(healthId)  ? arch->GetColumn(healthId)  : nullptr;
+        auto* locoCol    = arch->GetSignature().test(locoId)    ? arch->GetColumn(locoId)    : nullptr;
         auto* staminaCol = arch->GetSignature().test(staminaId) ? arch->GetColumn(staminaId) : nullptr;
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
@@ -189,10 +206,13 @@ void StateMachineSystem::Update(Registry& registry, float dt)
             auto* input   = inputCol   ? static_cast<ResolvedInputStateComponent*>(inputCol->Get(i))   : nullptr;
             auto* binding = bindingCol ? static_cast<InputBindingComponent*>(bindingCol->Get(i)) : nullptr;
             auto* health  = healthCol  ? static_cast<HealthComponent*>(healthCol->Get(i))  : nullptr;
+            auto* loco    = locoCol    ? static_cast<LocomotionStateComponent*>(locoCol->Get(i)) : nullptr;
             auto* stamina = staminaCol ? static_cast<StaminaComponent*>(staminaCol->Get(i)) : nullptr;
 
             const StateMachineAsset* asset = GetCachedAsset(smp.assetPath);
             if (!asset) continue;
+
+            SyncLocomotionParameters(smp, loco);
 
             // Initialize
             if (smp.currentStateId == 0) {

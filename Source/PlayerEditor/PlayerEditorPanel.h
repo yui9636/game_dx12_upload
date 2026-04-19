@@ -2,6 +2,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <initializer_list>
 #include "TimelineAsset.h"
 #include "StateMachineAsset.h"
 #include "PreviewState.h"
@@ -134,8 +135,15 @@ private:
     void DrawNodeGraph(ImVec2 canvasSize);
     void DrawStateNodeInspector();
     void DrawStateMachineParameterList();
+    void DrawStateMachineRuntimeStatus();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
     void AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition);
+    void ApplyLocomotionStateMachinePreset();
+    void ApplyLocomotionTransitionPreset(struct StateTransition& trans, bool enteringMove);
+    void EnsureStateMachineParameter(const char* name, ParameterType type, float defaultValue);
+    StateNode* FindStateByName(const char* name);
+    struct StateTransition* FindTransition(uint32_t fromState, uint32_t toState);
+    int FindAnimationIndexByKeyword(std::initializer_list<const char*> keywords) const;
 
     // 笏笏 Connection mode (drag-wire) 笏笏
     bool     m_isConnecting      = false;
@@ -191,6 +199,9 @@ private:
     std::string m_selectedEntityModelPath;
     EntityID m_previewEntity = Entity::NULL_ID;
     bool m_previewEntityOwned = false;
+    uint32_t m_runtimeObservedStateId = 0;
+    uint32_t m_runtimePreviousStateId = 0;
+    std::string m_runtimeLastTransitionLabel;
 
     // 笏笏 Viewport 笏笏
     ITexture* m_viewportTexture = nullptr;

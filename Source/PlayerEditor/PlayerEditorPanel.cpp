@@ -24,7 +24,9 @@
 #include "Component/NameComponent.h"
 #include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
+#include "Animator/AnimatorComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/StateMachineSystem.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/PlaybackComponent.h"
@@ -182,6 +184,24 @@ static bool HasExtension(const std::string& path, std::initializer_list<const ch
         }
     }
     return false;
+}
+
+static std::string ToLowerAscii(std::string value)
+{
+    std::transform(
+        value.begin(),
+        value.end(),
+        value.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+static bool EqualsIgnoreCase(const std::string& value, const char* rhs)
+{
+    if (!rhs) {
+        return false;
+    }
+    return ToLowerAscii(value) == ToLowerAscii(rhs);
 }
 
 static ImU32 StateNodeColor(StateNodeType type)
@@ -504,62 +524,13 @@ void PlayerEditorPanel::DrawToolbar()
         }
     }
     ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_ARROW_DOWN " Use Selected", HasSelectedEntityContext())) {
-        ImportFromSelectedEntity();
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_LINK " Bind Selected", HasSelectedEntityContext())) {
-        SetPreviewEntity(m_selectedEntity);
-        ImportSocketsFromPreviewEntity();
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Timeline")) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!m_timelineAssetPath.empty()) {
-            strcpy_s(pathBuffer, m_timelineAssetPath.c_str());
+    const bool canSaveWorkspace = HasAnyDirtyDocument() || CanUsePreviewEntity();
+    if (DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save", canSaveWorkspace)) {
+        if (CanUsePreviewEntity()) {
+            SavePrefabDocument(false);
+        } else {
+            SaveAllDocuments(false);
         }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kTimelineFileFilter, "Open Timeline") == DialogResult::OK) {
-            OpenTimelineFromPath(pathBuffer);
-        }
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " State")) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!m_stateMachineAssetPath.empty()) {
-            strcpy_s(pathBuffer, m_stateMachineAssetPath.c_str());
-        }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kStateMachineFileFilter, "Open State Machine") == DialogResult::OK) {
-            OpenStateMachineFromPath(pathBuffer);
-        }
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Input")) {
-        char pathBuffer[MAX_PATH] = {};
-        const std::string& actionMapPath = m_inputMappingTab.GetActionMapPath();
-        if (!actionMapPath.empty()) {
-            strcpy_s(pathBuffer, actionMapPath.c_str());
-        }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kInputMapFileFilter, "Open Input Map") == DialogResult::OK) {
-            OpenInputMapFromPath(pathBuffer);
-        }
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_CUBES " Save Prefab", CanUsePreviewEntity())) {
-        SavePrefabDocument(false);
-    }
-    ImGui::SameLine();
-    DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save All", HasAnyDirtyDocument()) && SaveAllDocuments(false);
-    ImGui::SameLine();
-    DrawToolbarButton(ICON_FA_FILE_EXPORT " Save As", HasOpenModel() || !m_timelineAsset.tracks.empty() || !m_stateMachineAsset.states.empty() || !m_inputMappingTab.GetActionMapPath().empty()) && SaveAllDocuments(true);
-    ImGui::SameLine();
-    DrawToolbarButton(ICON_FA_ROTATE_LEFT " Revert", HasAnyDirtyDocument()) && (RevertAllDocuments(), true);
-    ImGui::SameLine();
-    if (m_previewState.IsActive()) {
-        if (DrawToolbarButton(ICON_FA_STOP " Stop Preview")) {
-            Suspend();
-        }
-    } else {
-        DrawToolbarButton(ICON_FA_STOP " Stop Preview", false);
     }
 }
 
@@ -701,7 +672,7 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     ImGui::Separator();
 
     // ── Create internal DockSpace ──
-    ImGuiID dockId = ImGui::GetID("PlayerEditorDock");
+    ImGuiID dockId = ImGui::GetID("PlayerEditorDock_v2");
     ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
 
     if (m_needsLayoutRebuild) {
@@ -742,31 +713,29 @@ void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)
     ImGui::DockBuilderAddNode(dockId, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockId, ImVec2(1500, 850));
 
-    ImGuiID mainId = dockId;
+    ImGuiID topId = dockId;
 
-    // 1. Bottom: Timeline (full width, 35% height  Elike UE's Notify/Track panel)
-    ImGuiID bottomId;
-    ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Down, 0.35f, &bottomId, &mainId);
+    ImGuiID bottomId = 0;
+    ImGui::DockBuilderSplitNode(topId, ImGuiDir_Down, 0.34f, &bottomId, &topId);
 
-    // 2. Left: StateMachine (25% width of top area)
-    ImGuiID leftId;
-    ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Left, 0.46f, &leftId, &mainId);
+    ImGuiID skeletonId = 0;
+    ImGui::DockBuilderSplitNode(topId, ImGuiDir_Left, 0.21f, &skeletonId, &topId);
 
-    // 3. Right: Properties + Animator/Input (22% width)
-    ImGuiID rightId;
-    ImGui::DockBuilderSplitNode(mainId, ImGuiDir_Right, 0.22f, &rightId, &mainId);
+    ImGuiID rightColumnId = 0;
+    ImGui::DockBuilderSplitNode(topId, ImGuiDir_Right, 0.23f, &rightColumnId, &topId);
 
-    // 4. Split right column: Properties top (60%), Animator/Input bottom (40%)
-    ImGuiID rightBottomId;
-    ImGui::DockBuilderSplitNode(rightId, ImGuiDir_Down, 0.40f, &rightBottomId, &rightId);
+    ImGuiID viewportId = 0;
+    ImGui::DockBuilderSplitNode(topId, ImGuiDir_Right, 0.34f, &viewportId, &topId);
 
-    // mainId = center = Viewport (largest area, like UE)
-    ImGui::DockBuilderDockWindow(kPEViewportTitle,     mainId);
-    ImGui::DockBuilderDockWindow(kPESkeletonTitle,     leftId);     // tabbed left
-    ImGui::DockBuilderDockWindow(kPEStateMachineTitle, leftId);     // tabbed left
-    ImGui::DockBuilderDockWindow(kPEPropertiesTitle,   rightId);
+    ImGuiID rightBottomId = 0;
+    ImGui::DockBuilderSplitNode(rightColumnId, ImGuiDir_Down, 0.42f, &rightBottomId, &rightColumnId);
+
+    ImGui::DockBuilderDockWindow(kPESkeletonTitle,     skeletonId);
+    ImGui::DockBuilderDockWindow(kPEStateMachineTitle, topId);
+    ImGui::DockBuilderDockWindow(kPEViewportTitle,     viewportId);
+    ImGui::DockBuilderDockWindow(kPEPropertiesTitle,   rightColumnId);
     ImGui::DockBuilderDockWindow(kPEAnimatorTitle,     rightBottomId);
-    ImGui::DockBuilderDockWindow(kPEInputTitle,        rightBottomId); // tabbed
+    ImGui::DockBuilderDockWindow(kPEInputTitle,        rightBottomId);
     ImGui::DockBuilderDockWindow(kPETimelineTitle,     bottomId);
 
     ImGui::DockBuilderFinish(dockId);
@@ -1223,6 +1192,243 @@ void PlayerEditorPanel::DrawSocketList(float height)
     ImGui::EndChild();
 }
 
+StateNode* PlayerEditorPanel::FindStateByName(const char* name)
+{
+    if (!name || name[0] == '\0') {
+        return nullptr;
+    }
+
+    for (auto& state : m_stateMachineAsset.states) {
+        if (EqualsIgnoreCase(state.name, name)) {
+            return &state;
+        }
+    }
+    return nullptr;
+}
+
+StateTransition* PlayerEditorPanel::FindTransition(uint32_t fromState, uint32_t toState)
+{
+    for (auto& transition : m_stateMachineAsset.transitions) {
+        if (transition.fromState == fromState && transition.toState == toState) {
+            return &transition;
+        }
+    }
+    return nullptr;
+}
+
+void PlayerEditorPanel::EnsureStateMachineParameter(const char* name, ParameterType type, float defaultValue)
+{
+    if (!name || name[0] == '\0') {
+        return;
+    }
+
+    for (auto& parameter : m_stateMachineAsset.parameters) {
+        if (EqualsIgnoreCase(parameter.name, name)) {
+            parameter.name = name;
+            parameter.type = type;
+            parameter.defaultValue = defaultValue;
+            return;
+        }
+    }
+
+    ParameterDef parameter;
+    parameter.name = name;
+    parameter.type = type;
+    parameter.defaultValue = defaultValue;
+    m_stateMachineAsset.parameters.push_back(std::move(parameter));
+}
+
+int PlayerEditorPanel::FindAnimationIndexByKeyword(std::initializer_list<const char*> keywords) const
+{
+    if (!m_model) {
+        return -1;
+    }
+
+    const auto& animations = m_model->GetAnimations();
+    for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+        const std::string loweredName = ToLowerAscii(animations[i].name);
+        for (const char* keyword : keywords) {
+            if (!keyword || keyword[0] == '\0') {
+                continue;
+            }
+
+            const std::string loweredKeyword = ToLowerAscii(keyword);
+            if (loweredName.find(loweredKeyword) != std::string::npos) {
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+void PlayerEditorPanel::ApplyLocomotionTransitionPreset(StateTransition& trans, bool enteringMove)
+{
+    trans.conditions.clear();
+    trans.priority = 100;
+    trans.hasExitTime = false;
+    trans.exitTimeNormalized = 0.0f;
+    trans.blendDuration = 0.15f;
+
+    TransitionCondition condition;
+    condition.type = ConditionType::Parameter;
+    strncpy_s(condition.param, enteringMove ? "IsMoving" : "IsMoving", _TRUNCATE);
+    condition.compare = enteringMove ? CompareOp::GreaterEqual : CompareOp::LessEqual;
+    condition.value = enteringMove ? 1.0f : 0.0f;
+    trans.conditions.push_back(condition);
+}
+
+void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
+{
+    EnsureStateMachineParameter("MoveX", ParameterType::Float, 0.0f);
+    EnsureStateMachineParameter("MoveY", ParameterType::Float, 0.0f);
+    EnsureStateMachineParameter("MoveMagnitude", ParameterType::Float, 0.0f);
+    EnsureStateMachineParameter("IsMoving", ParameterType::Bool, 0.0f);
+
+    uint32_t idleId = 0;
+    if (StateNode* idle = FindStateByName("Idle")) {
+        idleId = idle->id;
+    } else if (StateNode* idle = m_stateMachineAsset.AddState("Idle", StateNodeType::Locomotion)) {
+        idleId = idle->id;
+    }
+
+    uint32_t moveId = 0;
+    if (StateNode* move = FindStateByName("Move")) {
+        moveId = move->id;
+    } else if (StateNode* move = m_stateMachineAsset.AddState("Move", StateNodeType::Locomotion)) {
+        moveId = move->id;
+    }
+
+    StateNode* idle = idleId != 0 ? m_stateMachineAsset.FindState(idleId) : nullptr;
+    StateNode* move = moveId != 0 ? m_stateMachineAsset.FindState(moveId) : nullptr;
+    if (!idle || !move) {
+        return;
+    }
+
+    idle->name = "Idle";
+    idle->type = StateNodeType::Locomotion;
+    idle->loopAnimation = true;
+    idle->canInterrupt = true;
+    idle->animSpeed = 1.0f;
+    if (idle->position.x == 0.0f && idle->position.y == 0.0f) {
+        idle->position = { 0.0f, 0.0f };
+    }
+
+    move->name = "Move";
+    move->type = StateNodeType::Locomotion;
+    move->loopAnimation = true;
+    move->canInterrupt = true;
+    move->animSpeed = 1.0f;
+    if (move->position.x == 0.0f && move->position.y == 0.0f) {
+        move->position = { 280.0f, 0.0f };
+    }
+
+    if (idle->animationIndex < 0) {
+        idle->animationIndex = FindAnimationIndexByKeyword({ "idle" });
+    }
+    if (move->animationIndex < 0) {
+        move->animationIndex = FindAnimationIndexByKeyword({ "walk", "move", "run", "jog", "locomotion" });
+    }
+
+    m_stateMachineAsset.defaultStateId = idle->id;
+
+    StateTransition* idleToMove = FindTransition(idle->id, move->id);
+    if (!idleToMove) {
+        idleToMove = m_stateMachineAsset.AddTransition(idle->id, move->id);
+    }
+    if (idleToMove) {
+        ApplyLocomotionTransitionPreset(*idleToMove, true);
+    }
+
+    StateTransition* moveToIdle = FindTransition(move->id, idle->id);
+    if (!moveToIdle) {
+        moveToIdle = m_stateMachineAsset.AddTransition(move->id, idle->id);
+    }
+    if (moveToIdle) {
+        ApplyLocomotionTransitionPreset(*moveToIdle, false);
+    }
+
+    m_selectedNodeId = idle->id;
+    m_selectedTransitionId = 0;
+    m_selectionCtx = SelectionContext::StateNode;
+    m_stateMachineDirty = true;
+}
+
+void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
+{
+    ImGui::Text(ICON_FA_PERSON_RUNNING " Preview Runtime");
+    ImGui::Separator();
+
+    if (!CanUsePreviewEntity()) {
+        m_runtimeObservedStateId = 0;
+        m_runtimePreviousStateId = 0;
+        m_runtimeLastTransitionLabel.clear();
+        ImGui::TextDisabled("Preview entity is not available.");
+        return;
+    }
+
+    const StateMachineParamsComponent* params = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity);
+    if (!params) {
+        m_runtimeObservedStateId = 0;
+        m_runtimePreviousStateId = 0;
+        m_runtimeLastTransitionLabel.clear();
+        ImGui::TextDisabled("StateMachineParamsComponent is missing.");
+        return;
+    }
+
+    const uint32_t currentStateId = params->currentStateId;
+    if (currentStateId == 0) {
+        m_runtimeObservedStateId = 0;
+        m_runtimePreviousStateId = 0;
+        m_runtimeLastTransitionLabel.clear();
+    } else if (m_runtimeObservedStateId != currentStateId) {
+        if (m_runtimeObservedStateId != 0) {
+            m_runtimePreviousStateId = m_runtimeObservedStateId;
+            const StateNode* previousState = m_stateMachineAsset.FindState(m_runtimeObservedStateId);
+            const StateNode* currentState = m_stateMachineAsset.FindState(currentStateId);
+            const char* previousName = previousState ? previousState->name.c_str() : "Unknown";
+            const char* currentName = currentState ? currentState->name.c_str() : "Unknown";
+            m_runtimeLastTransitionLabel = std::string(previousName) + " -> " + currentName;
+        }
+        m_runtimeObservedStateId = currentStateId;
+    }
+
+    const StateNode* currentState = m_stateMachineAsset.FindState(currentStateId);
+    const StateNode* previousState = m_stateMachineAsset.FindState(m_runtimePreviousStateId);
+    const AnimatorComponent* animator = m_registry->GetComponent<AnimatorComponent>(m_previewEntity);
+    const LocomotionStateComponent* locomotion = m_registry->GetComponent<LocomotionStateComponent>(m_previewEntity);
+
+    std::string currentAnimation = "(none)";
+    if (animator && m_model) {
+        const int animationIndex = animator->baseLayer.currentAnimIndex;
+        const auto& animations = m_model->GetAnimations();
+        if (animationIndex >= 0 && animationIndex < static_cast<int>(animations.size())) {
+            currentAnimation = "[" + std::to_string(animationIndex) + "] " + animations[animationIndex].name;
+        } else if (animationIndex >= 0) {
+            currentAnimation = "[" + std::to_string(animationIndex) + "]";
+        }
+    }
+
+    ImGui::Text("Current State: %s", currentState ? currentState->name.c_str() : "(none)");
+    ImGui::Text("Previous State: %s", previousState ? previousState->name.c_str() : "(none)");
+    ImGui::Text("Last Transition: %s", m_runtimeLastTransitionLabel.empty() ? "(none)" : m_runtimeLastTransitionLabel.c_str());
+    ImGui::Text("State Timer: %.2fs", params->stateTimer);
+    ImGui::Text("Animation: %s", currentAnimation.c_str());
+
+    const float moveX = params->GetParam("MoveX");
+    const float moveY = params->GetParam("MoveY");
+    const float moveMagnitude = params->GetParam("MoveMagnitude");
+    const float isMoving = params->GetParam("IsMoving");
+    ImGui::Separator();
+    ImGui::Text("MoveX: %.3f", moveX);
+    ImGui::Text("MoveY: %.3f", moveY);
+    ImGui::Text("MoveMagnitude: %.3f", moveMagnitude);
+    ImGui::Text("IsMoving: %.0f", isMoving);
+    if (locomotion) {
+        ImGui::TextDisabled("Gait: %u  InputStrength: %.3f", static_cast<unsigned>(locomotion->gaitIndex), locomotion->inputStrength);
+    }
+}
+
 // ############################################################################
 //  STATE MACHINE PANEL
 // ############################################################################
@@ -1231,19 +1437,27 @@ void PlayerEditorPanel::DrawStateMachinePanel()
 {
     if (!ImGui::Begin(kPEStateMachineTitle)) { ImGui::End(); return; }
 
-    const float listWidth = 260.0f;
+    const float panelWidth = ImGui::GetContentRegionAvail().x;
+    static float stateListWidth = 320.0f;
+    float minListWidth = 280.0f;
+    float maxListWidth = panelWidth - 260.0f;
+    if (maxListWidth < minListWidth) {
+        maxListWidth = minListWidth;
+    }
+    if (stateListWidth < minListWidth) {
+        stateListWidth = minListWidth;
+    }
+    if (stateListWidth > maxListWidth) {
+        stateListWidth = maxListWidth;
+    }
     const bool hasSelectedState = m_stateMachineAsset.FindState(m_selectedNodeId) != nullptr;
 
-    if (ImGui::Button(ICON_FA_FLOPPY_DISK " Save")) {
-        SaveStateMachineDocument(false);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FILE_EXPORT " Save As")) {
-        SaveStateMachineDocument(true);
-    }
-    ImGui::SameLine();
     if (ImGui::Button(ICON_FA_PLUS " Add State")) {
         ImGui::OpenPopup("AddStateTemplatePopup");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move")) {
+        ApplyLocomotionStateMachinePreset();
     }
     ImGui::SameLine();
     if (DrawToolbarButton(ICON_FA_PLAY " Preview State", hasSelectedState)) {
@@ -1272,6 +1486,8 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     }
 
     if (ImGui::BeginPopup("AddStateTemplatePopup")) {
+        if (ImGui::MenuItem("Idle / Move Preset")) ApplyLocomotionStateMachinePreset();
+        ImGui::Separator();
         if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { 0.0f, 0.0f });
         if (ImGui::MenuItem("Action"))     AddStateTemplate(StateNodeType::Action, { 0.0f, 0.0f });
         if (ImGui::MenuItem("Dodge"))      AddStateTemplate(StateNodeType::Dodge, { 0.0f, 0.0f });
@@ -1282,17 +1498,15 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         ImGui::EndPopup();
     }
 
-    if (DrawDocumentPathLabel("Document", m_stateMachineAssetPath, m_stateMachineDirty)) {
-        ImGui::Separator();
-    }
+    ImGui::Separator();
 
-    ImGui::BeginChild("StateListPane", ImVec2(listWidth, 0.0f), ImGuiChildFlags_Borders);
-    ImGui::Text(ICON_FA_LIST " States");
+    ImGui::BeginChild("StateListPane", ImVec2(stateListWidth, 0.0f), ImGuiChildFlags_Borders);
+    ImGui::Text(ICON_FA_LIST " States (%d)", static_cast<int>(m_stateMachineAsset.states.size()));
     ImGui::Separator();
     for (const auto& state : m_stateMachineAsset.states) {
         const bool selected = (m_selectedNodeId == state.id);
         std::string label = state.name + "##state_list_" + std::to_string(state.id);
-        if (ImGui::Selectable(label.c_str(), selected)) {
+        if (ImGui::Selectable(label.c_str(), selected, 0, ImVec2(-FLT_MIN, 22.0f))) {
             m_selectedNodeId = state.id;
             m_selectedTransitionId = 0;
             m_selectionCtx = SelectionContext::StateNode;
@@ -1300,30 +1514,52 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
             PreviewStateNode(state.id, true);
         }
-
-        ImGui::Indent();
-        ImGui::TextDisabled("%s", GetStateTypeLabel(state.type));
-        std::string animLabel = "Animation: ";
-        if (m_model && state.animationIndex >= 0 && state.animationIndex < static_cast<int>(m_model->GetAnimations().size())) {
-            animLabel += m_model->GetAnimations()[state.animationIndex].name;
-        } else {
-            animLabel += "(none)";
+        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseDelta.x == 0.0f && ImGui::GetIO().MouseDelta.y == 0.0f) {
+            ImGui::SetTooltip("%s", state.name.c_str());
         }
-        ImGui::TextDisabled("%s", animLabel.c_str());
-        const std::string timelineLabel = std::string("Timeline: ") + (state.timelineAssetPath.empty() ? "(none)" : std::filesystem::path(state.timelineAssetPath).filename().string());
-        ImGui::TextDisabled("%s", timelineLabel.c_str());
-        ImGui::TextDisabled("Transitions: %d%s", static_cast<int>(m_stateMachineAsset.GetTransitionsFrom(state.id).size()), m_stateMachineAsset.defaultStateId == state.id ? "  DEFAULT" : "");
-        ImGui::Unindent();
+
+        std::string subLabel = GetStateTypeLabel(state.type);
+        if (m_stateMachineAsset.defaultStateId == state.id) {
+            subLabel += "  DEFAULT";
+        }
+        subLabel += "  |  T:";
+        subLabel += std::to_string(static_cast<int>(m_stateMachineAsset.GetTransitionsFrom(state.id).size()));
+        ImGui::TextDisabled("%s", subLabel.c_str());
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("%s", subLabel.c_str());
+        }
+        if (m_model && state.animationIndex >= 0 && state.animationIndex < static_cast<int>(m_model->GetAnimations().size())) {
+            ImGui::TextDisabled("%s", m_model->GetAnimations()[state.animationIndex].name.c_str());
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("%s", m_model->GetAnimations()[state.animationIndex].name.c_str());
+            }
+        } else {
+            ImGui::TextDisabled("(No Animation)");
+        }
         ImGui::Separator();
     }
     ImGui::EndChild();
 
     ImGui::SameLine();
-    ImGui::BeginGroup();
-    ImGui::TextDisabled("Double-click state to preview. Right-click graph to add states.");
+    ImGui::InvisibleButton("StateListSplitter", ImVec2(6.0f, ImGui::GetContentRegionAvail().y));
+    if (ImGui::IsItemActive()) {
+        stateListWidth += ImGui::GetIO().MouseDelta.x;
+        if (stateListWidth < minListWidth) {
+            stateListWidth = minListWidth;
+        }
+        if (stateListWidth > maxListWidth) {
+            stateListWidth = maxListWidth;
+        }
+    }
+    if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+        ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+    }
+
+    ImGui::SameLine();
+    ImGui::BeginChild("StateMachineGraphPane", ImVec2(0.0f, 0.0f), false);
     ImVec2 canvasSize = ImGui::GetContentRegionAvail();
     DrawNodeGraph(canvasSize);
-    ImGui::EndGroup();
+    ImGui::EndChild();
 
     ImGui::End();
 }
@@ -1549,6 +1785,8 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         float posY = (mousePos.y - origin.y - m_graphOffset.y) / m_graphZoom;
 
         ImGui::TextDisabled("Add State:");
+        if (ImGui::MenuItem("Idle / Move Preset")) ApplyLocomotionStateMachinePreset();
+        ImGui::Separator();
         if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { posX, posY });
         if (ImGui::MenuItem("Action"))     AddStateTemplate(StateNodeType::Action, { posX, posY });
         if (ImGui::MenuItem("Dodge"))      AddStateTemplate(StateNodeType::Dodge, { posX, posY });
@@ -1557,6 +1795,28 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         if (ImGui::MenuItem("Dead"))       AddStateTemplate(StateNodeType::Dead, { posX, posY });
         if (ImGui::MenuItem("Custom"))     AddStateTemplate(StateNodeType::Custom, { posX, posY });
         ImGui::EndPopup();
+    }
+
+    if (m_stateMachineAsset.states.empty()) {
+        const float buttonWidth = 180.0f;
+        const float buttonHeight = ImGui::GetFrameHeight();
+        const float centerX = origin.x + canvasSize.x * 0.5f - buttonWidth * 0.5f;
+        const float centerY = origin.y + canvasSize.y * 0.5f - buttonHeight - 8.0f;
+
+        ImGui::SetCursorScreenPos(ImVec2(centerX, centerY));
+        if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move##Graph", ImVec2(buttonWidth, 0.0f))) {
+            ApplyLocomotionStateMachinePreset();
+        }
+
+        ImGui::SetCursorScreenPos(ImVec2(centerX, centerY + buttonHeight + 8.0f));
+        if (ImGui::Button(ICON_FA_PLUS " Add Locomotion State##Graph", ImVec2(buttonWidth, 0.0f))) {
+            AddStateTemplate(StateNodeType::Locomotion, { 0.0f, 0.0f });
+        }
+
+        dl->AddText(
+            ImVec2(centerX - 8.0f, centerY - 26.0f),
+            IM_COL32(180, 180, 180, 255),
+            "Right-click graph to add states");
     }
 }
 
@@ -1680,16 +1940,6 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
 
     ImGui::SetNextItemWidth(80);
     ImGui::SliderFloat("Zoom##TL", &m_timelineZoom, 0.2f, 5.0f, "%.1f");
-    ImGui::SameLine();
-
-    if (ImGui::Button(ICON_FA_FLOPPY_DISK)) {
-        SaveTimelineDocument(false);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_FILE_EXPORT)) {
-        SaveTimelineDocument(true);
-    }
-
     ImGui::SameLine();
     ImGui::SetNextItemWidth(80);
     if (ImGui::DragFloat("Dur(s)", &m_timelineAsset.duration, 0.1f, 0.1f, 300.0f, "%.1f")) {
@@ -2322,9 +2572,29 @@ void PlayerEditorPanel::DrawStateMachineParameterList()
     ImGui::Text(ICON_FA_SLIDERS " Parameters");
     ImGui::Separator();
 
+    if (ImGui::Button(ICON_FA_PLUS " Add Move Params")) {
+        EnsureStateMachineParameter("MoveX", ParameterType::Float, 0.0f);
+        EnsureStateMachineParameter("MoveY", ParameterType::Float, 0.0f);
+        EnsureStateMachineParameter("MoveMagnitude", ParameterType::Float, 0.0f);
+        EnsureStateMachineParameter("IsMoving", ParameterType::Bool, 0.0f);
+        m_stateMachineDirty = true;
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move")) {
+        ApplyLocomotionStateMachinePreset();
+    }
+
+    ImGui::Separator();
+    DrawStateMachineRuntimeStatus();
+    ImGui::Separator();
+
     for (int i = 0; i < static_cast<int>(m_stateMachineAsset.parameters.size()); ++i) {
         auto& parameter = m_stateMachineAsset.parameters[i];
         ImGui::PushID(i);
+
+        const StateMachineParamsComponent* runtimeParams =
+            CanUsePreviewEntity() ? m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity) : nullptr;
 
         char nameBuf[64];
         strncpy_s(nameBuf, parameter.name.c_str(), _TRUNCATE);
@@ -2342,6 +2612,10 @@ void PlayerEditorPanel::DrawStateMachineParameterList()
 
         if (ImGui::DragFloat("Default", &parameter.defaultValue, 0.1f)) {
             m_stateMachineDirty = true;
+        }
+
+        if (runtimeParams) {
+            ImGui::TextDisabled("Runtime: %.3f", runtimeParams->GetParam(parameter.name.c_str()));
         }
 
         if (ImGui::Button(ICON_FA_TRASH " Remove")) {
@@ -2400,6 +2674,17 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
     if (trans->conditions.empty()) {
         ImGui::TextDisabled("No conditions.");
     }
+    ImGui::Separator();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Use IsMoving >= 1")) {
+        ApplyLocomotionTransitionPreset(*trans, true);
+        m_stateMachineDirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Use IsMoving <= 0")) {
+        ApplyLocomotionTransitionPreset(*trans, false);
+        m_stateMachineDirty = true;
+    }
+
     ImGui::Separator();
     ImGui::Text("Conditions (%d):", (int)trans->conditions.size());
 
