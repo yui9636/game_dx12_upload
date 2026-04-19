@@ -97,6 +97,7 @@ struct TimelineTrack
 
 struct TimelineAsset
 {
+    uint32_t      id            = 0;
     std::string   name;
     float         fps           = 60.0f;
     float         duration      = 0.0f;   // seconds

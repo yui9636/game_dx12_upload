@@ -1,7 +1,7 @@
 #include "InputMappingTab.h"
 #include <imgui.h>
 #include "Icon/IconsFontAwesome7.h"
-#include "Input/InputBindingComponent.h"
+#include "Input/InputActionMapComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
 #include "Archetype/Archetype.h"
 #include "Component/ComponentSignature.h"
@@ -80,6 +80,20 @@ void InputMappingTab::SetActionMapPath(const std::string& path)
     }
 
     OpenActionMap(path);
+}
+
+void InputMappingTab::SetEditingMap(const InputActionMapAsset& map)
+{
+    m_actionMapPath.clear();
+    m_editingMap = map;
+    m_dirty = false;
+}
+
+void InputMappingTab::ClearEditingMap()
+{
+    m_actionMapPath.clear();
+    m_editingMap = InputActionMapAsset{};
+    m_dirty = false;
 }
 
 void InputMappingTab::Draw(Registry* registry)
@@ -314,9 +328,9 @@ void InputMappingTab::DrawLiveTest(Registry* registry)
     ImGui::Text("Real-time input state from ResolvedInputStateComponent:");
     ImGui::Separator();
 
-    Signature sig = CreateSignature<ResolvedInputStateComponent>();
+    Signature sig = CreateSignature<ResolvedInputStateComponent, InputActionMapComponent>();
     const ResolvedInputStateComponent* resolved = nullptr;
-    const InputBindingComponent* binding = nullptr;
+    const InputActionMapComponent* actionMap = nullptr;
 
     for (auto* arch : registry->GetAllArchetypes()) {
         if (!SignatureMatches(arch->GetSignature(), sig)) {
@@ -324,21 +338,23 @@ void InputMappingTab::DrawLiveTest(Registry* registry)
         }
 
         auto* resolvedCol = arch->GetColumn(TypeManager::GetComponentTypeID<ResolvedInputStateComponent>());
-        auto* bindingCol = arch->GetSignature().test(TypeManager::GetComponentTypeID<InputBindingComponent>())
-            ? arch->GetColumn(TypeManager::GetComponentTypeID<InputBindingComponent>())
-            : nullptr;
-        if (!resolvedCol) {
+        auto* actionMapCol = arch->GetColumn(TypeManager::GetComponentTypeID<InputActionMapComponent>());
+        if (!resolvedCol || !actionMapCol) {
             continue;
         }
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-            auto* candidateBinding = bindingCol ? static_cast<InputBindingComponent*>(bindingCol->Get(i)) : nullptr;
-            if (!m_actionMapPath.empty() && candidateBinding && strcmp(candidateBinding->actionMapAssetPath, m_actionMapPath.c_str()) != 0) {
+            auto* candidateMap = static_cast<InputActionMapComponent*>(actionMapCol->Get(i));
+            if (!candidateMap) {
+                continue;
+            }
+
+            if (!m_editingMap.name.empty() && !candidateMap->asset.name.empty() && candidateMap->asset.name != m_editingMap.name) {
                 continue;
             }
 
             resolved = static_cast<ResolvedInputStateComponent*>(resolvedCol->Get(i));
-            binding = candidateBinding;
+            actionMap = candidateMap;
             break;
         }
 
@@ -352,8 +368,8 @@ void InputMappingTab::DrawLiveTest(Registry* registry)
         return;
     }
 
-    if (binding && binding->actionMapAssetPath[0] != '\0') {
-        ImGui::TextDisabled("Binding: %s", binding->actionMapAssetPath);
+    if (actionMap && !actionMap->asset.name.empty()) {
+        ImGui::TextDisabled("Map: %s", actionMap->asset.name.c_str());
         ImGui::Separator();
     }
 

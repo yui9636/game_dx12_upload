@@ -71,7 +71,7 @@ static nlohmann::json StateToJson(const StateNode& s)
     j["name"]              = s.name;
     j["type"]              = static_cast<int>(s.type);
     j["animationIndex"]    = s.animationIndex;
-    j["timelineAssetPath"] = s.timelineAssetPath;
+    j["timelineId"]        = s.timelineId;
     j["loopAnimation"]     = s.loopAnimation;
     j["animSpeed"]         = s.animSpeed;
     j["canInterrupt"]      = s.canInterrupt;
@@ -93,7 +93,7 @@ static StateNode StateFromJson(const nlohmann::json& j)
     s.name              = j.value("name", "");
     s.type              = static_cast<StateNodeType>(j.value("type", 0));
     s.animationIndex    = j.value("animationIndex", -1);
-    s.timelineAssetPath = j.value("timelineAssetPath", "");
+    s.timelineId        = j.value("timelineId", 0u);
     s.loopAnimation     = j.value("loopAnimation", false);
     s.animSpeed         = j.value("animSpeed", 1.0f);
     s.canInterrupt      = j.value("canInterrupt", true);
@@ -129,7 +129,7 @@ static ParameterDef ParamFromJson(const nlohmann::json& j)
 // Save / Load
 // ============================================================================
 
-bool StateMachineAssetSerializer::Save(const std::string& path, const StateMachineAsset& asset)
+nlohmann::json StateMachineAssetSerializer::ToJson(const StateMachineAsset& asset)
 {
     nlohmann::json root;
     root["name"]           = asset.name;
@@ -148,21 +148,11 @@ bool StateMachineAssetSerializer::Save(const std::string& path, const StateMachi
     for (auto& p : asset.parameters)
         root["parameters"].push_back(ParamToJson(p));
 
-    std::ofstream ofs(path);
-    if (!ofs.is_open()) return false;
-    ofs << root.dump(2);
-    return true;
+    return root;
 }
 
-bool StateMachineAssetSerializer::Load(const std::string& path, StateMachineAsset& outAsset)
+bool StateMachineAssetSerializer::FromJson(const nlohmann::json& root, StateMachineAsset& outAsset)
 {
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) return false;
-
-    nlohmann::json root;
-    try { ifs >> root; }
-    catch (...) { return false; }
-
     outAsset = {};
     outAsset.name           = root.value("name", "");
     outAsset.defaultStateId = root.value("defaultStateId", 0u);
@@ -181,4 +171,25 @@ bool StateMachineAssetSerializer::Load(const std::string& path, StateMachineAsse
             outAsset.parameters.push_back(ParamFromJson(jp));
 
     return true;
+}
+
+bool StateMachineAssetSerializer::Save(const std::string& path, const StateMachineAsset& asset)
+{
+    nlohmann::json root = ToJson(asset);
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) return false;
+    ofs << root.dump(2);
+    return true;
+}
+
+bool StateMachineAssetSerializer::Load(const std::string& path, StateMachineAsset& outAsset)
+{
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) return false;
+
+    nlohmann::json root;
+    try { ifs >> root; }
+    catch (...) { return false; }
+
+    return FromJson(root, outAsset);
 }

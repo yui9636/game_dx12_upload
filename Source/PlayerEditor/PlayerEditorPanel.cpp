@@ -27,12 +27,15 @@
 #include "Animator/AnimatorComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineSystem.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/TimelineAssetRuntimeBuilder.h"
+#include "Gameplay/TimelineLibraryComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
+#include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
@@ -184,6 +187,15 @@ static bool HasExtension(const std::string& path, std::initializer_list<const ch
         }
     }
     return false;
+}
+
+static bool HasTimelineAssetContent(const TimelineAsset& asset)
+{
+    return asset.id != 0
+        || !asset.name.empty()
+        || !asset.tracks.empty()
+        || asset.animationIndex >= 0
+        || asset.duration > 0.0f;
 }
 
 static std::string ToLowerAscii(std::string value)
@@ -1709,11 +1721,9 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             }
         }
 
-        // Double-click: open timeline for this state
+        // Double-click: preview this state using the embedded timeline selection
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-            if (!state.timelineAssetPath.empty()) {
-                OpenTimelineFromPath(state.timelineAssetPath);
-            }
+            PreviewStateNode(state.id, true);
         }
 
         // Drag node
@@ -2484,11 +2494,8 @@ void PlayerEditorPanel::PreviewStateNode(uint32_t stateId, bool restartTimeline)
     if (state->animationIndex >= 0) {
         m_selectedAnimIndex = state->animationIndex;
     }
-    if (!state->timelineAssetPath.empty() && (restartTimeline || m_timelineAssetPath != state->timelineAssetPath)) {
-        OpenTimelineFromPath(state->timelineAssetPath);
-    } else {
-        RebuildPreviewTimelineRuntimeData();
-    }
+    (void)restartTimeline;
+    RebuildPreviewTimelineRuntimeData();
 
     StartSelectedAnimationPreview();
     if (m_previewState.IsActive()) {
@@ -2539,20 +2546,80 @@ void PlayerEditorPanel::DrawStateNodeInspector()
     }
 
     ImGui::Separator();
-    ImGui::Text("Timeline Asset");
-    char pathBuf[256];
-    strncpy_s(pathBuf, state->timelineAssetPath.c_str(), _TRUNCATE);
-    if (ImGui::InputText("Path", pathBuf, sizeof(pathBuf))) { state->timelineAssetPath = pathBuf; m_stateMachineDirty = true; }
-    if (!state->timelineAssetPath.empty()) {
-        if (ImGui::Button(ICON_FA_ARROW_RIGHT " Open in Timeline")) {
-            OpenTimelineFromPath(state->timelineAssetPath);
+    ImGui::Text("Timeline");
+    const TimelineLibraryComponent* timelineLibrary =
+        CanUsePreviewEntity() ? m_registry->GetComponent<TimelineLibraryComponent>(m_previewEntity) : nullptr;
+
+    std::string selectedTimelineLabel = "None";
+    if (state->timelineId != 0) {
+        if (timelineLibrary) {
+            for (const auto& asset : timelineLibrary->assets) {
+                if (asset.id == state->timelineId) {
+                    selectedTimelineLabel = asset.name.empty()
+                        ? ("Timeline #" + std::to_string(asset.id))
+                        : asset.name;
+                    break;
+                }
+            }
         }
+        if (selectedTimelineLabel == "None" && HasTimelineAssetContent(m_timelineAsset) && m_timelineAsset.id == state->timelineId) {
+            selectedTimelineLabel = m_timelineAsset.name.empty()
+                ? ("Timeline #" + std::to_string(m_timelineAsset.id))
+                : m_timelineAsset.name;
+        }
+    }
+
+    if (ImGui::BeginCombo("Timeline", selectedTimelineLabel.c_str())) {
+        const bool noneSelected = state->timelineId == 0;
+        if (ImGui::Selectable("None", noneSelected)) {
+            state->timelineId = 0;
+            m_stateMachineDirty = true;
+        }
+        if (noneSelected) {
+            ImGui::SetItemDefaultFocus();
+        }
+
+        if (HasTimelineAssetContent(m_timelineAsset)) {
+            const std::string currentTimelineLabel = m_timelineAsset.name.empty()
+                ? ("Current Timeline #" + std::to_string(m_timelineAsset.id == 0 ? 1 : m_timelineAsset.id))
+                : ("Current: " + m_timelineAsset.name);
+            const uint32_t currentTimelineId = m_timelineAsset.id == 0 ? 1u : m_timelineAsset.id;
+            const bool selected = state->timelineId == currentTimelineId;
+            if (ImGui::Selectable(currentTimelineLabel.c_str(), selected)) {
+                state->timelineId = currentTimelineId;
+                m_stateMachineDirty = true;
+            }
+        }
+
+        if (timelineLibrary) {
+            for (const auto& asset : timelineLibrary->assets) {
+                if (HasTimelineAssetContent(m_timelineAsset) && asset.id == m_timelineAsset.id) {
+                    continue;
+                }
+
+                const std::string itemLabel = asset.name.empty()
+                    ? ("Timeline #" + std::to_string(asset.id))
+                    : asset.name;
+                const bool selected = state->timelineId == asset.id;
+                if (ImGui::Selectable(itemLabel.c_str(), selected)) {
+                    state->timelineId = asset.id;
+                    m_stateMachineDirty = true;
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (HasTimelineAssetContent(m_timelineAsset)) {
+        ImGui::TextDisabled("Current Editing Timeline: %s", m_timelineAsset.name.empty() ? "(unnamed)" : m_timelineAsset.name.c_str());
+    } else {
+        ImGui::TextDisabled("Current Editing Timeline: (none)");
     }
 
     ImGui::Separator();
     ImGui::Text("Input Map");
     const auto& editingMap = m_inputMappingTab.GetEditingMap();
-    ImGui::TextDisabled("Action Map: %s", m_inputMappingTab.GetActionMapPath().empty() ? "(none)" : std::filesystem::path(m_inputMappingTab.GetActionMapPath()).filename().string().c_str());
+    ImGui::TextDisabled("Action Map: %s", editingMap.name.empty() ? "(none)" : editingMap.name.c_str());
     ImGui::TextDisabled("Actions: %d / Axes: %d", static_cast<int>(editingMap.actions.size()), static_cast<int>(editingMap.axes.size()));
     ImGui::Separator();
     ImGui::Text("Outgoing Transitions");

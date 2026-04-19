@@ -1,4 +1,5 @@
 #include "EditorInputBridge.h"
+#include "InputActionMapComponent.h"
 #include "InputUserComponent.h"
 #include "InputContextComponent.h"
 #include "InputBindingComponent.h"
@@ -20,9 +21,11 @@ void EditorInputBridge::Initialize(Registry& registry) {
     strncpy(user.profileName, "Editor", sizeof(user.profileName) - 1);
     registry.AddComponent(m_editorUser, user);
 
-    InputBindingComponent binding{};
-    strncpy(binding.actionMapAssetPath, "Data/Input/EditorGlobal.inputmap", sizeof(binding.actionMapAssetPath) - 1);
-    registry.AddComponent(m_editorUser, binding);
+    registry.AddComponent(m_editorUser, InputBindingComponent{});
+
+    InputActionMapComponent actionMapComponent{};
+    actionMapComponent.asset.LoadFromFile("Data/Input/EditorGlobal.inputmap");
+    registry.AddComponent(m_editorUser, actionMapComponent);
 
     registry.AddComponent(m_editorUser, ResolvedInputStateComponent{});
     registry.AddComponent(m_editorUser, InputDebugStateComponent{});

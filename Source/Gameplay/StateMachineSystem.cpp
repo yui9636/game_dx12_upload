@@ -1,292 +1,324 @@
 #include "StateMachineSystem.h"
-#include "StateMachineParamsComponent.h"
-#include "PlayerEditor/StateMachineAsset.h"
-#include "PlayerEditor/StateMachineAssetSerializer.h"
-#include "Input/InputActionMapAsset.h"
-#include "Input/InputBindingComponent.h"
-#include "Input/ResolvedInputStateComponent.h"
+
+#include "Animator/AnimatorComponent.h"
+#include "Animator/AnimatorService.h"
+#include "Component/ComponentSignature.h"
+#include "Component/MeshComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
-#include "Gameplay/StaminaComponent.h"
 #include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
+#include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/StaminaComponent.h"
 #include "Gameplay/TimelineAssetRuntimeBuilder.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
-#include "Animator/AnimatorService.h"
-#include "Animator/AnimatorComponent.h"
-#include "Component/MeshComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
+#include "Input/InputActionMapComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
 #include "Model/Model.h"
+#include "PlayerEditor/StateMachineAsset.h"
 #include "Registry/Registry.h"
-#include "Component/ComponentSignature.h"
 #include "System/Query.h"
 
-#include <cstdlib>
-#include <string>
-#include <unordered_map>
 #include <algorithm>
+#include <cstdlib>
 
-// ============================================================================
-// Cached assets
-// ============================================================================
-
-static std::unordered_map<std::string, StateMachineAsset> s_assetCache;
-
-static const StateMachineAsset* GetCachedAsset(const char* path)
+namespace
 {
-    if (!path || path[0] == '\0') return nullptr;
-    std::string key(path);
-    auto it = s_assetCache.find(key);
-    if (it != s_assetCache.end()) return &it->second;
-
-    StateMachineAsset asset;
-    if (StateMachineAssetSerializer::Load(key, asset)) {
-        s_assetCache[key] = std::move(asset);
-        return &s_assetCache[key];
-    }
-    return nullptr;
-}
-
-static int ResolveInputActionIndex(const char* param, const InputBindingComponent* binding)
-{
-    if (!param || param[0] == '\0') {
-        return -1;
-    }
-
-    bool numeric = true;
-    for (const char* p = param; *p != '\0'; ++p) {
-        if (*p < '0' || *p > '9') {
-            numeric = false;
-            break;
+    int ResolveInputActionIndex(const char* param, const InputActionMapComponent* inputActionMap)
+    {
+        if (!param || param[0] == '\0') {
+            return -1;
         }
-    }
-    if (numeric) {
-        return atoi(param);
-    }
 
-    if (!binding || binding->actionMapAssetPath[0] == '\0') {
-        return -1;
-    }
-
-    InputActionMapAsset* actionMap = InputActionMapAsset::Get(binding->actionMapAssetPath);
-    if (!actionMap) {
-        return -1;
-    }
-
-    for (int i = 0; i < static_cast<int>(actionMap->actions.size()); ++i) {
-        if (actionMap->actions[i].actionName == param) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-static float ResolveStateAnimationClipLength(Registry& registry, EntityID entity, const StateNode& state)
-{
-    const MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
-    if (!mesh || !mesh->model || state.animationIndex < 0) {
-        return 0.0f;
-    }
-
-    const auto& animations = mesh->model->GetAnimations();
-    if (state.animationIndex < 0 || state.animationIndex >= static_cast<int>(animations.size())) {
-        return 0.0f;
-    }
-
-    return (std::max)(0.0f, animations[state.animationIndex].secondsLength);
-}
-
-static void ApplyTimelineStateAsset(Registry& registry, EntityID entity, const StateNode& state)
-{
-    TimelineItemBuffer* buffer = registry.GetComponent<TimelineItemBuffer>(entity);
-    TimelineComponent* timeline = registry.GetComponent<TimelineComponent>(entity);
-    if (!buffer || !timeline) {
-        return;
-    }
-
-    TimelineAssetRuntimeBuilder::BuildFromPath(state.timelineAssetPath, state.animationIndex, *timeline, *buffer);
-}
-
-static void SyncLocomotionParameters(
-    StateMachineParamsComponent& params,
-    const LocomotionStateComponent* locomotion)
-{
-    if (!locomotion) {
-        return;
-    }
-
-    params.SetParam("MoveX", locomotion->moveInput.x);
-    params.SetParam("MoveY", locomotion->moveInput.y);
-    params.SetParam("MoveMagnitude", locomotion->inputStrength);
-    params.SetParam("IsMoving", locomotion->gaitIndex > 0 ? 1.0f : 0.0f);
-}
-
-// ============================================================================
-// Condition evaluation
-// ============================================================================
-
-static bool EvaluateCondition(const TransitionCondition& cond,
-    const StateMachineParamsComponent& params,
-    const InputBindingComponent* binding,
-    const ResolvedInputStateComponent* input,
-    const HealthComponent* health,
-    const StaminaComponent* stamina)
-{
-    float lhs = 0.0f;
-
-    switch (cond.type) {
-    case ConditionType::Input:
-        if (input) {
-            int idx = ResolveInputActionIndex(cond.param, binding);
-            if (idx >= 0 && idx < ResolvedInputStateComponent::MAX_ACTIONS) {
-                lhs = input->actions[idx].pressed ? 1.0f : 0.0f;
+        bool numeric = true;
+        for (const char* p = param; *p != '\0'; ++p) {
+            if (*p < '0' || *p > '9') {
+                numeric = false;
+                break;
             }
         }
-        break;
-    case ConditionType::Timer:
-        lhs = params.stateTimer;
-        break;
-    case ConditionType::AnimEnd:
-        lhs = params.animFinished ? 1.0f : 0.0f;
-        break;
-    case ConditionType::Health:
-        if (health) lhs = (float)health->health;
-        break;
-    case ConditionType::Stamina:
-        if (stamina) lhs = stamina->current;
-        break;
-    case ConditionType::Parameter:
-        lhs = params.GetParam(cond.param);
-        break;
+        if (numeric) {
+            return atoi(param);
+        }
+
+        if (!inputActionMap) {
+            return -1;
+        }
+
+        const auto& actions = inputActionMap->asset.actions;
+        for (int i = 0; i < static_cast<int>(actions.size()); ++i) {
+            if (actions[i].actionName == param) {
+                return i;
+            }
+        }
+        return -1;
     }
 
-    switch (cond.compare) {
-    case CompareOp::Equal:        return lhs == cond.value;
-    case CompareOp::NotEqual:     return lhs != cond.value;
-    case CompareOp::Greater:      return lhs > cond.value;
-    case CompareOp::Less:         return lhs < cond.value;
-    case CompareOp::GreaterEqual: return lhs >= cond.value;
-    case CompareOp::LessEqual:    return lhs <= cond.value;
+    float ResolveStateAnimationClipLength(Registry& registry, EntityID entity, const StateNode& state)
+    {
+        const MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model || state.animationIndex < 0) {
+            return 0.0f;
+        }
+
+        const auto& animations = mesh->model->GetAnimations();
+        if (state.animationIndex < 0 || state.animationIndex >= static_cast<int>(animations.size())) {
+            return 0.0f;
+        }
+
+        return animations[state.animationIndex].secondsLength > 0.0f
+            ? animations[state.animationIndex].secondsLength
+            : 0.0f;
     }
-    return false;
+
+    const TimelineAsset* FindTimelineAssetById(const TimelineLibraryComponent* timelineLibrary, uint32_t timelineId)
+    {
+        if (!timelineLibrary || timelineId == 0) {
+            return nullptr;
+        }
+
+        for (const auto& asset : timelineLibrary->assets) {
+            if (asset.id == timelineId) {
+                return &asset;
+            }
+        }
+        return nullptr;
+    }
+
+    void ResetTimelineRuntime(Registry& registry, EntityID entity)
+    {
+        if (TimelineComponent* timeline = registry.GetComponent<TimelineComponent>(entity)) {
+            *timeline = TimelineComponent{};
+        }
+        if (TimelineItemBuffer* buffer = registry.GetComponent<TimelineItemBuffer>(entity)) {
+            buffer->items.clear();
+        }
+    }
+
+    void ApplyTimelineStateAsset(
+        Registry& registry,
+        EntityID entity,
+        const StateNode& state,
+        const TimelineLibraryComponent* timelineLibrary)
+    {
+        TimelineItemBuffer* buffer = registry.GetComponent<TimelineItemBuffer>(entity);
+        TimelineComponent* timeline = registry.GetComponent<TimelineComponent>(entity);
+        if (!buffer || !timeline) {
+            return;
+        }
+
+        const TimelineAsset* asset = FindTimelineAssetById(timelineLibrary, state.timelineId);
+        if (!asset) {
+            ResetTimelineRuntime(registry, entity);
+            return;
+        }
+
+        TimelineAssetRuntimeBuilder::Build(*asset, state.animationIndex, *timeline, *buffer);
+    }
+
+    void SyncLocomotionParameters(
+        StateMachineParamsComponent& params,
+        const LocomotionStateComponent* locomotion)
+    {
+        if (!locomotion) {
+            return;
+        }
+
+        params.SetParam("MoveX", locomotion->moveInput.x);
+        params.SetParam("MoveY", locomotion->moveInput.y);
+        params.SetParam("MoveMagnitude", locomotion->inputStrength);
+        params.SetParam("IsMoving", locomotion->gaitIndex > 0 ? 1.0f : 0.0f);
+    }
+
+    bool EvaluateCondition(
+        const TransitionCondition& cond,
+        const StateMachineParamsComponent& params,
+        const InputActionMapComponent* inputActionMap,
+        const ResolvedInputStateComponent* input,
+        const HealthComponent* health,
+        const StaminaComponent* stamina)
+    {
+        float lhs = 0.0f;
+
+        switch (cond.type) {
+        case ConditionType::Input:
+            if (input) {
+                const int idx = ResolveInputActionIndex(cond.param, inputActionMap);
+                if (idx >= 0 && idx < ResolvedInputStateComponent::MAX_ACTIONS) {
+                    lhs = input->actions[idx].pressed ? 1.0f : 0.0f;
+                }
+            }
+            break;
+        case ConditionType::Timer:
+            lhs = params.stateTimer;
+            break;
+        case ConditionType::AnimEnd:
+            lhs = params.animFinished ? 1.0f : 0.0f;
+            break;
+        case ConditionType::Health:
+            if (health) {
+                lhs = static_cast<float>(health->health);
+            }
+            break;
+        case ConditionType::Stamina:
+            if (stamina) {
+                lhs = stamina->current;
+            }
+            break;
+        case ConditionType::Parameter:
+            lhs = params.GetParam(cond.param);
+            break;
+        }
+
+        switch (cond.compare) {
+        case CompareOp::Equal:        return lhs == cond.value;
+        case CompareOp::NotEqual:     return lhs != cond.value;
+        case CompareOp::Greater:      return lhs > cond.value;
+        case CompareOp::Less:         return lhs < cond.value;
+        case CompareOp::GreaterEqual: return lhs >= cond.value;
+        case CompareOp::LessEqual:    return lhs <= cond.value;
+        }
+        return false;
+    }
 }
-
-// ============================================================================
-// System Update
-// ============================================================================
 
 void StateMachineSystem::Update(Registry& registry, float dt)
 {
-    Signature sig = CreateSignature<StateMachineParamsComponent, PlaybackComponent>();
+    Signature sig = CreateSignature<StateMachineParamsComponent, PlaybackComponent, StateMachineAssetComponent>();
 
     for (auto* arch : registry.GetAllArchetypes()) {
-        if (!SignatureMatches(arch->GetSignature(), sig)) continue;
+        if (!SignatureMatches(arch->GetSignature(), sig)) {
+            continue;
+        }
 
         auto* smpCol = arch->GetColumn(TypeManager::GetComponentTypeID<StateMachineParamsComponent>());
-        auto* pbCol  = arch->GetColumn(TypeManager::GetComponentTypeID<PlaybackComponent>());
-        if (!smpCol || !pbCol) continue;
+        auto* pbCol = arch->GetColumn(TypeManager::GetComponentTypeID<PlaybackComponent>());
+        auto* assetCol = arch->GetColumn(TypeManager::GetComponentTypeID<StateMachineAssetComponent>());
+        if (!smpCol || !pbCol || !assetCol) {
+            continue;
+        }
 
-        // Optional columns
-        auto inputId   = TypeManager::GetComponentTypeID<ResolvedInputStateComponent>();
-        auto bindingId = TypeManager::GetComponentTypeID<InputBindingComponent>();
-        auto healthId  = TypeManager::GetComponentTypeID<HealthComponent>();
-        auto locoId    = TypeManager::GetComponentTypeID<LocomotionStateComponent>();
-        auto staminaId = TypeManager::GetComponentTypeID<StaminaComponent>();
+        const auto inputId = TypeManager::GetComponentTypeID<ResolvedInputStateComponent>();
+        const auto inputMapId = TypeManager::GetComponentTypeID<InputActionMapComponent>();
+        const auto healthId = TypeManager::GetComponentTypeID<HealthComponent>();
+        const auto locoId = TypeManager::GetComponentTypeID<LocomotionStateComponent>();
+        const auto staminaId = TypeManager::GetComponentTypeID<StaminaComponent>();
+        const auto timelineLibraryId = TypeManager::GetComponentTypeID<TimelineLibraryComponent>();
 
-        auto* inputCol   = arch->GetSignature().test(inputId)   ? arch->GetColumn(inputId)   : nullptr;
-        auto* bindingCol = arch->GetSignature().test(bindingId) ? arch->GetColumn(bindingId) : nullptr;
-        auto* healthCol  = arch->GetSignature().test(healthId)  ? arch->GetColumn(healthId)  : nullptr;
-        auto* locoCol    = arch->GetSignature().test(locoId)    ? arch->GetColumn(locoId)    : nullptr;
+        auto* inputCol = arch->GetSignature().test(inputId) ? arch->GetColumn(inputId) : nullptr;
+        auto* inputMapCol = arch->GetSignature().test(inputMapId) ? arch->GetColumn(inputMapId) : nullptr;
+        auto* healthCol = arch->GetSignature().test(healthId) ? arch->GetColumn(healthId) : nullptr;
+        auto* locoCol = arch->GetSignature().test(locoId) ? arch->GetColumn(locoId) : nullptr;
         auto* staminaCol = arch->GetSignature().test(staminaId) ? arch->GetColumn(staminaId) : nullptr;
+        auto* timelineLibraryCol = arch->GetSignature().test(timelineLibraryId) ? arch->GetColumn(timelineLibraryId) : nullptr;
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
             const EntityID entity = arch->GetEntities()[i];
             auto& smp = *static_cast<StateMachineParamsComponent*>(smpCol->Get(i));
-            auto& pb  = *static_cast<PlaybackComponent*>(pbCol->Get(i));
+            auto& pb = *static_cast<PlaybackComponent*>(pbCol->Get(i));
+            const auto& stateMachineAssetComponent = *static_cast<StateMachineAssetComponent*>(assetCol->Get(i));
 
-            auto* input   = inputCol   ? static_cast<ResolvedInputStateComponent*>(inputCol->Get(i))   : nullptr;
-            auto* binding = bindingCol ? static_cast<InputBindingComponent*>(bindingCol->Get(i)) : nullptr;
-            auto* health  = healthCol  ? static_cast<HealthComponent*>(healthCol->Get(i))  : nullptr;
-            auto* loco    = locoCol    ? static_cast<LocomotionStateComponent*>(locoCol->Get(i)) : nullptr;
+            auto* input = inputCol ? static_cast<ResolvedInputStateComponent*>(inputCol->Get(i)) : nullptr;
+            auto* inputActionMap = inputMapCol ? static_cast<InputActionMapComponent*>(inputMapCol->Get(i)) : nullptr;
+            auto* health = healthCol ? static_cast<HealthComponent*>(healthCol->Get(i)) : nullptr;
+            auto* loco = locoCol ? static_cast<LocomotionStateComponent*>(locoCol->Get(i)) : nullptr;
             auto* stamina = staminaCol ? static_cast<StaminaComponent*>(staminaCol->Get(i)) : nullptr;
+            auto* timelineLibrary = timelineLibraryCol ? static_cast<TimelineLibraryComponent*>(timelineLibraryCol->Get(i)) : nullptr;
 
-            const StateMachineAsset* asset = GetCachedAsset(smp.assetPath);
-            if (!asset) continue;
+            const StateMachineAsset& asset = stateMachineAssetComponent.asset;
+            if (asset.states.empty()) {
+                continue;
+            }
 
             SyncLocomotionParameters(smp, loco);
 
-            // Initialize
             if (smp.currentStateId == 0) {
-                smp.currentStateId = asset->defaultStateId;
+                smp.currentStateId = asset.defaultStateId;
                 smp.stateTimer = 0.0f;
-                if (const StateNode* initialState = asset->FindState(smp.currentStateId)) {
-                    AnimatorService::Instance().PlayBase(entity, initialState->animationIndex, initialState->loopAnimation, 0.0f, initialState->animSpeed);
+
+                if (const StateNode* initialState = asset.FindState(smp.currentStateId)) {
+                    AnimatorService::Instance().PlayBase(
+                        entity,
+                        initialState->animationIndex,
+                        initialState->loopAnimation,
+                        0.0f,
+                        initialState->animSpeed);
                     pb.currentSeconds = 0.0f;
                     pb.clipLength = ResolveStateAnimationClipLength(registry, entity, *initialState);
                     pb.playing = true;
                     pb.looping = initialState->loopAnimation;
                     pb.playSpeed = initialState->animSpeed;
                     pb.finished = false;
-                    ApplyTimelineStateAsset(registry, entity, *initialState);
+                    ApplyTimelineStateAsset(registry, entity, *initialState, timelineLibrary);
                 }
             }
 
             smp.stateTimer += dt;
             smp.animFinished = pb.finished;
 
-            // Evaluate transitions
-            auto transitions = asset->GetTransitionsFrom(smp.currentStateId);
+            auto transitions = asset.GetTransitionsFrom(smp.currentStateId);
             const StateTransition* best = nullptr;
-            int bestPri = -1;
+            int bestPriority = -1;
 
-            for (auto* trans : transitions) {
-                if (trans->hasExitTime) {
-                    float norm = (pb.clipLength > 0) ? pb.currentSeconds / pb.clipLength : 1.0f;
-                    if (norm < trans->exitTimeNormalized) continue;
+            for (const StateTransition* transition : transitions) {
+                if (transition->hasExitTime) {
+                    float normalizedTime = 1.0f;
+                    if (pb.clipLength > 0.0f) {
+                        normalizedTime = pb.currentSeconds / pb.clipLength;
+                    }
+                    if (normalizedTime < transition->exitTimeNormalized) {
+                        continue;
+                    }
                 }
 
-                bool allMet = true;
-                for (auto& cond : trans->conditions) {
-                    if (!EvaluateCondition(cond, smp, binding, input, health, stamina)) {
-                        allMet = false;
+                bool allConditionsMet = true;
+                for (const auto& condition : transition->conditions) {
+                    if (!EvaluateCondition(condition, smp, inputActionMap, input, health, stamina)) {
+                        allConditionsMet = false;
                         break;
                     }
                 }
 
-                if (allMet && trans->priority > bestPri) {
-                    best = trans;
-                    bestPri = trans->priority;
+                if (allConditionsMet && transition->priority > bestPriority) {
+                    best = transition;
+                    bestPriority = transition->priority;
                 }
             }
 
-            if (best) {
-                smp.currentStateId = best->toState;
-                smp.stateTimer = 0.0f;
-                smp.animFinished = false;
-
-                const StateNode* newState = asset->FindState(best->toState);
-                if (newState) {
-                    pb.currentSeconds = 0.0f;
-                    pb.clipLength = ResolveStateAnimationClipLength(registry, entity, *newState);
-                    pb.playing = true;
-                    pb.looping = newState->loopAnimation;
-                    pb.playSpeed = newState->animSpeed;
-                    pb.finished = false;
-                    AnimatorService::Instance().PlayBase(entity, newState->animationIndex, newState->loopAnimation, best->blendDuration, newState->animSpeed);
-                    ApplyTimelineStateAsset(registry, entity, *newState);
-                }
+            if (!best) {
+                continue;
             }
+
+            smp.currentStateId = best->toState;
+            smp.stateTimer = 0.0f;
+            smp.animFinished = false;
+
+            const StateNode* newState = asset.FindState(best->toState);
+            if (!newState) {
+                continue;
+            }
+
+            pb.currentSeconds = 0.0f;
+            pb.clipLength = ResolveStateAnimationClipLength(registry, entity, *newState);
+            pb.playing = true;
+            pb.looping = newState->loopAnimation;
+            pb.playSpeed = newState->animSpeed;
+            pb.finished = false;
+
+            AnimatorService::Instance().PlayBase(
+                entity,
+                newState->animationIndex,
+                newState->loopAnimation,
+                best->blendDuration,
+                newState->animSpeed);
+            ApplyTimelineStateAsset(registry, entity, *newState, timelineLibrary);
         }
     }
 }
 
-void StateMachineSystem::InvalidateAssetCache(const char* path)
+void StateMachineSystem::InvalidateAssetCache(const char* /*path*/)
 {
-    if (!path || path[0] == '\0') {
-        s_assetCache.clear();
-        TimelineAssetRuntimeBuilder::InvalidateAssetCache();
-        return;
-    }
-
-    s_assetCache.erase(path);
-    TimelineAssetRuntimeBuilder::InvalidateAssetCache(path);
+    TimelineAssetRuntimeBuilder::InvalidateAssetCache();
 }

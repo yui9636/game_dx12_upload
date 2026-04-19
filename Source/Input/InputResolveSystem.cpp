@@ -1,48 +1,81 @@
 #include "InputResolveSystem.h"
-#include "InputUserComponent.h"
+
+#include "Archetype/Archetype.h"
+#include "Component/ComponentSignature.h"
+#include "InputActionMapAsset.h"
+#include "InputActionMapComponent.h"
 #include "InputBindingComponent.h"
 #include "InputContextComponent.h"
-#include "ResolvedInputStateComponent.h"
-#include "InputActionMapAsset.h"
 #include "InputEventQueue.h"
+#include "InputUserComponent.h"
 #include "Registry/Registry.h"
-#include "Component/ComponentSignature.h"
+#include "ResolvedInputStateComponent.h"
 #include "Type/TypeInfo.h"
-#include "Archetype/Archetype.h"
+
 #include <cmath>
 #include <cstring>
 
-namespace {
-    float ApplyDeadzone(float value, float deadzone) {
-        if (std::abs(value) < deadzone) return 0.0f;
-        float sign = (value > 0.0f) ? 1.0f : -1.0f;
+namespace
+{
+    float ApplyDeadzone(float value, float deadzone)
+    {
+        if (std::abs(value) < deadzone) {
+            return 0.0f;
+        }
+        const float sign = (value > 0.0f) ? 1.0f : -1.0f;
         return sign * (std::abs(value) - deadzone) / (1.0f - deadzone);
+    }
+
+    const InputActionMapAsset* ResolveActionMap(const InputActionMapComponent& component)
+    {
+        if (component.asset.name.empty() &&
+            component.asset.contextCategory.empty() &&
+            component.asset.actions.empty() &&
+            component.asset.axes.empty())
+        {
+            return nullptr;
+        }
+        return &component.asset;
     }
 }
 
-void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue, float dt) {
-    Signature sig = CreateSignature<InputUserComponent, InputBindingComponent,
-                                     InputContextComponent, ResolvedInputStateComponent>();
+void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue, float dt)
+{
+    Signature sig = CreateSignature<
+        InputUserComponent,
+        InputBindingComponent,
+        InputActionMapComponent,
+        InputContextComponent,
+        ResolvedInputStateComponent>();
+
     auto archetypes = registry.GetAllArchetypes();
 
     for (auto* arch : archetypes) {
-        if (!SignatureMatches(arch->GetSignature(), sig)) continue;
+        if (!SignatureMatches(arch->GetSignature(), sig)) {
+            continue;
+        }
 
         auto* userCol = arch->GetColumn(TypeManager::GetComponentTypeID<InputUserComponent>());
         auto* bindCol = arch->GetColumn(TypeManager::GetComponentTypeID<InputBindingComponent>());
-        auto* ctxCol  = arch->GetColumn(TypeManager::GetComponentTypeID<InputContextComponent>());
+        auto* actionMapCol = arch->GetColumn(TypeManager::GetComponentTypeID<InputActionMapComponent>());
+        auto* ctxCol = arch->GetColumn(TypeManager::GetComponentTypeID<InputContextComponent>());
         auto* stateCol = arch->GetColumn(TypeManager::GetComponentTypeID<ResolvedInputStateComponent>());
-        if (!userCol || !bindCol || !ctxCol || !stateCol) continue;
+        if (!userCol || !bindCol || !actionMapCol || !ctxCol || !stateCol) {
+            continue;
+        }
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-            auto& user  = *static_cast<InputUserComponent*>(userCol->Get(i));
-            auto& bind  = *static_cast<InputBindingComponent*>(bindCol->Get(i));
-            auto& ctx   = *static_cast<InputContextComponent*>(ctxCol->Get(i));
+            auto& user = *static_cast<InputUserComponent*>(userCol->Get(i));
+            auto& bind = *static_cast<InputBindingComponent*>(bindCol->Get(i));
+            auto& actionMapComponent = *static_cast<InputActionMapComponent*>(actionMapCol->Get(i));
+            auto& ctx = *static_cast<InputContextComponent*>(ctxCol->Get(i));
             auto& state = *static_cast<ResolvedInputStateComponent*>(stateCol->Get(i));
 
-            // Skip consumed contexts
+            (void)user;
+            (void)bind;
+            const InputActionMapAsset* actionMap = ResolveActionMap(actionMapComponent);
+
             if (ctx.consumed || !ctx.enabled) {
-                // Reset transient states
                 for (int a = 0; a < state.actionCount; ++a) {
                     state.actions[a].pressed = false;
                     state.actions[a].released = false;
@@ -56,33 +89,28 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                 continue;
             }
 
-            // Load action map
-            InputActionMapAsset* actionMap = nullptr;
-            if (bind.actionMapAssetPath[0] != '\0') {
-                actionMap = InputActionMapAsset::Get(bind.actionMapAssetPath);
-            }
-
-            // Ensure action/axis counts match
             if (actionMap) {
                 state.actionCount = static_cast<uint8_t>(
-                    (actionMap->actions.size() < ResolvedInputStateComponent::MAX_ACTIONS)
-                    ? actionMap->actions.size() : ResolvedInputStateComponent::MAX_ACTIONS);
+                    actionMap->actions.size() < ResolvedInputStateComponent::MAX_ACTIONS
+                        ? actionMap->actions.size()
+                        : ResolvedInputStateComponent::MAX_ACTIONS);
                 state.axisCount = static_cast<uint8_t>(
-                    (actionMap->axes.size() < ResolvedInputStateComponent::MAX_AXES)
-                    ? actionMap->axes.size() : ResolvedInputStateComponent::MAX_AXES);
+                    actionMap->axes.size() < ResolvedInputStateComponent::MAX_AXES
+                        ? actionMap->axes.size()
+                        : ResolvedInputStateComponent::MAX_AXES);
+            } else {
+                state.actionCount = 0;
+                state.axisCount = 0;
             }
 
-            // Save previous held states for edge detection
             bool prevHeld[ResolvedInputStateComponent::MAX_ACTIONS] = {};
             for (int a = 0; a < state.actionCount; ++a) {
                 prevHeld[a] = state.actions[a].held;
             }
 
-            // Track raw key states for this frame (accumulate from events)
             bool keyDownThisFrame[ResolvedInputStateComponent::MAX_ACTIONS] = {};
             bool keyUpThisFrame[ResolvedInputStateComponent::MAX_ACTIONS] = {};
 
-            // Reset per-frame mouse deltas
             state.deltaX = 0.0f;
             state.deltaY = 0.0f;
             state.scrollX = 0.0f;
@@ -90,11 +118,9 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
             state.textLength = 0;
             state.textBuffer[0] = '\0';
 
-            // Reset gamepad axes (will be accumulated)
-            float gamepadAxes[ResolvedInputStateComponent::MAX_AXES] = {};
+            float axisValues[ResolvedInputStateComponent::MAX_AXES] = {};
 
-            // Process events
-            for (auto& ev : queue.GetEvents()) {
+            for (const auto& ev : queue.GetEvents()) {
                 switch (ev.type) {
                 case InputEventType::KeyDown:
                     state.lastDeviceType = InputDeviceType::Keyboard;
@@ -104,12 +130,13 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                                 keyDownThisFrame[a] = true;
                             }
                         }
-                        // Keyboard axis contribution
                         for (int ax = 0; ax < state.axisCount; ++ax) {
-                            if (actionMap->axes[ax].positiveKey == ev.key.scancode)
-                                gamepadAxes[ax] += 1.0f;
-                            if (actionMap->axes[ax].negativeKey == ev.key.scancode)
-                                gamepadAxes[ax] -= 1.0f;
+                            if (actionMap->axes[ax].positiveKey == ev.key.scancode) {
+                                axisValues[ax] += 1.0f;
+                            }
+                            if (actionMap->axes[ax].negativeKey == ev.key.scancode) {
+                                axisValues[ax] -= 1.0f;
+                            }
                         }
                     }
                     break;
@@ -137,7 +164,8 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                     if (actionMap) {
                         for (int a = 0; a < state.actionCount; ++a) {
                             if (actionMap->actions[a].mouseButton == ev.mouseButton.button &&
-                                actionMap->actions[a].mouseButton != 0) {
+                                actionMap->actions[a].mouseButton != 0)
+                            {
                                 keyDownThisFrame[a] = true;
                             }
                         }
@@ -148,7 +176,8 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                     if (actionMap) {
                         for (int a = 0; a < state.actionCount; ++a) {
                             if (actionMap->actions[a].mouseButton == ev.mouseButton.button &&
-                                actionMap->actions[a].mouseButton != 0) {
+                                actionMap->actions[a].mouseButton != 0)
+                            {
                                 keyUpThisFrame[a] = true;
                             }
                         }
@@ -186,14 +215,15 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                     if (actionMap) {
                         for (int ax = 0; ax < state.axisCount; ++ax) {
                             if (actionMap->axes[ax].gamepadAxis == ev.gamepadAxis.axis) {
-                                gamepadAxes[ax] = ev.gamepadAxis.value;
+                                axisValues[ax] = ev.gamepadAxis.value;
                             }
                         }
                     }
                     break;
 
-                case InputEventType::TextInput: {
-                    size_t len = strlen(ev.textInput.text);
+                case InputEventType::TextInput:
+                {
+                    const size_t len = strlen(ev.textInput.text);
                     if (state.textLength + len < sizeof(state.textBuffer) - 1) {
                         memcpy(state.textBuffer + state.textLength, ev.textInput.text, len);
                         state.textLength += static_cast<uint16_t>(len);
@@ -207,10 +237,9 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                 }
             }
 
-            // Update action edge states
             for (int a = 0; a < state.actionCount; ++a) {
                 auto& action = state.actions[a];
-                bool wasHeld = prevHeld[a];
+                const bool wasHeld = prevHeld[a];
 
                 if (keyDownThisFrame[a]) {
                     action.held = true;
@@ -236,15 +265,23 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                 }
             }
 
-            // Update axes with deadzone
             for (int ax = 0; ax < state.axisCount; ++ax) {
-                float deadzone = actionMap ? actionMap->axes[ax].deadzone : 0.15f;
-                float sens = actionMap ? actionMap->axes[ax].sensitivity : 1.0f;
-                state.axes[ax] = ApplyDeadzone(gamepadAxes[ax], deadzone) * sens;
-                // Clamp
-                if (state.axes[ax] > 1.0f) state.axes[ax] = 1.0f;
-                if (state.axes[ax] < -1.0f) state.axes[ax] = -1.0f;
+                float deadzone = 0.15f;
+                float sensitivity = 1.0f;
+                if (actionMap) {
+                    deadzone = actionMap->axes[ax].deadzone;
+                    sensitivity = actionMap->axes[ax].sensitivity;
+                }
+                state.axes[ax] = ApplyDeadzone(axisValues[ax], deadzone) * sensitivity;
+                if (state.axes[ax] > 1.0f) {
+                    state.axes[ax] = 1.0f;
+                }
+                if (state.axes[ax] < -1.0f) {
+                    state.axes[ax] = -1.0f;
+                }
             }
+
+            (void)dt;
         }
     }
 }

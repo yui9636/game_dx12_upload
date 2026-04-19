@@ -38,11 +38,16 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StaminaComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
+#include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Input/InputContextComponent.h"
 #include "Input/InputUserComponent.h"
+#include "PlayerEditor/StateMachineAssetSerializer.h"
+#include "PlayerEditor/TimelineAssetSerializer.h"
 #include "JSONManager.h"
 #include "Registry/Registry.h"
 #include "Undo/EntitySnapshot.h"
@@ -383,10 +388,13 @@ namespace
 
         if (const auto& inputBinding = std::get<std::optional<InputBindingComponent>>(node.components); inputBinding.has_value()) {
             writeComponent("InputBindingComponent", json{
-                {"actionMapAssetPath", inputBinding->actionMapAssetPath},
                 {"bindingProfilePath", inputBinding->bindingProfilePath},
                 {"runtimeOverrideProfilePath", inputBinding->runtimeOverrideProfilePath}
             });
+        }
+
+        if (const auto& inputActionMap = std::get<std::optional<InputActionMapComponent>>(node.components); inputActionMap.has_value()) {
+            writeComponent("InputActionMapComponent", InputActionMapAsset::ToJson(inputActionMap->asset));
         }
 
         if (const auto& inputContext = std::get<std::optional<InputContextComponent>>(node.components); inputContext.has_value()) {
@@ -474,9 +482,12 @@ namespace
             });
         }
 
+        if (const auto& stateMachineAsset = std::get<std::optional<StateMachineAssetComponent>>(node.components); stateMachineAsset.has_value()) {
+            writeComponent("StateMachineAssetComponent", StateMachineAssetSerializer::ToJson(stateMachineAsset->asset));
+        }
+
         if (const auto& stateMachine = std::get<std::optional<StateMachineParamsComponent>>(node.components); stateMachine.has_value()) {
             json value;
-            value["assetPath"] = stateMachine->assetPath;
             value["params"] = json::array();
             for (uint8_t i = 0; i < stateMachine->paramCount && i < StateMachineParamsComponent::MAX_PARAMS; ++i) {
                 value["params"].push_back(json{
@@ -485,6 +496,16 @@ namespace
                 });
             }
             writeComponent("StateMachineParamsComponent", value);
+        }
+
+        if (const auto& timelineLibrary = std::get<std::optional<TimelineLibraryComponent>>(node.components); timelineLibrary.has_value()) {
+            json value;
+            value["nextTimelineId"] = timelineLibrary->nextTimelineId;
+            value["assets"] = json::array();
+            for (const auto& asset : timelineLibrary->assets) {
+                value["assets"].push_back(TimelineAssetSerializer::ToJson(asset));
+            }
+            writeComponent("TimelineLibraryComponent", value);
         }
 
         out["components"] = std::move(components);
@@ -850,10 +871,16 @@ namespace
         if (components.contains("InputBindingComponent")) {
             InputBindingComponent component;
             const json& value = components["InputBindingComponent"];
-            strncpy_s(component.actionMapAssetPath, value.value("actionMapAssetPath", std::string{}).c_str(), _TRUNCATE);
             strncpy_s(component.bindingProfilePath, value.value("bindingProfilePath", std::string{}).c_str(), _TRUNCATE);
             strncpy_s(component.runtimeOverrideProfilePath, value.value("runtimeOverrideProfilePath", std::string{}).c_str(), _TRUNCATE);
             SetOptional(node.components, component);
+        }
+
+        if (components.contains("InputActionMapComponent")) {
+            InputActionMapComponent component;
+            if (InputActionMapAsset::FromJson(components["InputActionMapComponent"], component.asset)) {
+                SetOptional(node.components, component);
+            }
         }
 
         if (components.contains("InputContextComponent")) {
@@ -958,10 +985,16 @@ namespace
             SetOptional(node.components, component);
         }
 
+        if (components.contains("StateMachineAssetComponent")) {
+            StateMachineAssetComponent component;
+            if (StateMachineAssetSerializer::FromJson(components["StateMachineAssetComponent"], component.asset)) {
+                SetOptional(node.components, component);
+            }
+        }
+
         if (components.contains("StateMachineParamsComponent")) {
             StateMachineParamsComponent component;
             const json& value = components["StateMachineParamsComponent"];
-            strncpy_s(component.assetPath, value.value("assetPath", std::string{}).c_str(), _TRUNCATE);
             component.paramCount = 0;
             if (value.contains("params") && value["params"].is_array()) {
                 for (const auto& paramJson : value["params"]) {
@@ -976,6 +1009,21 @@ namespace
             component.currentStateId = 0;
             component.stateTimer = 0.0f;
             component.animFinished = false;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("TimelineLibraryComponent")) {
+            TimelineLibraryComponent component;
+            const json& value = components["TimelineLibraryComponent"];
+            component.nextTimelineId = value.value("nextTimelineId", component.nextTimelineId);
+            if (value.contains("assets") && value["assets"].is_array()) {
+                for (const auto& assetJson : value["assets"]) {
+                    TimelineAsset asset;
+                    if (TimelineAssetSerializer::FromJson(assetJson, asset)) {
+                        component.assets.push_back(std::move(asset));
+                    }
+                }
+            }
             SetOptional(node.components, component);
         }
     }

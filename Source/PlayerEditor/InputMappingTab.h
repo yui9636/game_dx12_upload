@@ -18,6 +18,9 @@ public:
     bool SaveActionMapAs(const std::string& path);
     bool ReloadActionMap();
     void SetActionMapPath(const std::string& path);
+    void SetEditingMap(const InputActionMapAsset& map);
+    InputActionMapAsset& GetEditingMapMutable() { return m_editingMap; }
+    void ClearEditingMap();
     const std::string& GetActionMapPath() const { return m_actionMapPath; }
     const InputActionMapAsset& GetEditingMap() const { return m_editingMap; }
     bool IsDirty() const { return m_dirty; }

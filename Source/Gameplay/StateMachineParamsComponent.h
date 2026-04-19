@@ -23,9 +23,6 @@ struct StateMachineParamsComponent
     float    stateTimer         = 0.0f;
     bool     animFinished       = false;
 
-    // Asset path
-    char     assetPath[256]     = {};
-
     // Helpers
     float GetParam(const char* name) const
     {

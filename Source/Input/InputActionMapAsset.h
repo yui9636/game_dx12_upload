@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
+#include <nlohmann/json_fwd.hpp>
 
 enum class ActionTriggerType : uint8_t {
     Pressed, Released, Held, DoubleTap
@@ -37,6 +38,8 @@ struct InputActionMapAsset {
 
     bool LoadFromFile(const std::string& path);
     bool SaveToFile(const std::string& path) const;
+    static nlohmann::json ToJson(const InputActionMapAsset& asset);
+    static bool FromJson(const nlohmann::json& root, InputActionMapAsset& outAsset);
 
     // Cache
     static InputActionMapAsset* Get(const std::string& path);

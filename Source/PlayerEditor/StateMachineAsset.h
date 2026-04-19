@@ -76,7 +76,7 @@ struct StateNode
     StateNodeType type = StateNodeType::Locomotion;
 
     int           animationIndex = -1;
-    std::string   timelineAssetPath;
+    uint32_t      timelineId      = 0;
     bool          loopAnimation  = false;
     float         animSpeed      = 1.0f;
     bool          canInterrupt   = true;

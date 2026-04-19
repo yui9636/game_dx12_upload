@@ -10,11 +10,14 @@
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/PlayerTagComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StaminaComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
+#include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Input/InputContextComponent.h"
 #include "Input/InputUserComponent.h"
@@ -59,6 +62,9 @@ namespace PlayerRuntimeSetup
         EnsureComponent<HealthComponent>(registry, entity);
         EnsureComponent<StaminaComponent>(registry, entity);
         EnsureComponent<ActionDatabaseComponent>(registry, entity);
+        EnsureComponent<StateMachineAssetComponent>(registry, entity);
+        EnsureComponent<TimelineLibraryComponent>(registry, entity);
+        EnsureComponent<InputActionMapComponent>(registry, entity);
         EnsureComponent<InputBindingComponent>(registry, entity);
         EnsureComponent<NodeSocketComponent>(registry, entity);
         EnsureComponent<StateMachineParamsComponent>(registry, entity);
@@ -170,6 +176,9 @@ namespace PlayerRuntimeSetup
         }
 
         return registry.GetComponent<PlayerTagComponent>(entity) != nullptr
+            || registry.GetComponent<StateMachineAssetComponent>(entity) != nullptr
+            || registry.GetComponent<TimelineLibraryComponent>(entity) != nullptr
+            || registry.GetComponent<InputActionMapComponent>(entity) != nullptr
             || registry.GetComponent<StateMachineParamsComponent>(entity) != nullptr
             || registry.GetComponent<InputBindingComponent>(entity) != nullptr
             || registry.GetComponent<InputUserComponent>(entity) != nullptr;

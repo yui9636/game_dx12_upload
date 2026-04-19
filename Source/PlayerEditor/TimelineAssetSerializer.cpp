@@ -84,9 +84,10 @@ static TimelineKeyframe KeyframeFromJson(const nlohmann::json& j)
 // Save / Load
 // ============================================================================
 
-bool TimelineAssetSerializer::Save(const std::string& path, const TimelineAsset& asset)
+nlohmann::json TimelineAssetSerializer::ToJson(const TimelineAsset& asset)
 {
     nlohmann::json root;
+    root["id"]             = asset.id;
     root["name"]           = asset.name;
     root["fps"]            = asset.fps;
     root["duration"]       = asset.duration;
@@ -117,22 +118,13 @@ bool TimelineAssetSerializer::Save(const std::string& path, const TimelineAsset&
         jTracks.push_back(std::move(jt));
     }
 
-    std::ofstream ofs(path);
-    if (!ofs.is_open()) return false;
-    ofs << root.dump(2);
-    return true;
+    return root;
 }
 
-bool TimelineAssetSerializer::Load(const std::string& path, TimelineAsset& outAsset)
+bool TimelineAssetSerializer::FromJson(const nlohmann::json& root, TimelineAsset& outAsset)
 {
-    std::ifstream ifs(path);
-    if (!ifs.is_open()) return false;
-
-    nlohmann::json root;
-    try { ifs >> root; }
-    catch (...) { return false; }
-
     outAsset = {};
+    outAsset.id             = root.value("id", 0u);
     outAsset.name           = root.value("name", "");
     outAsset.fps            = root.value("fps", 60.0f);
     outAsset.duration       = root.value("duration", 0.0f);
@@ -163,4 +155,25 @@ bool TimelineAssetSerializer::Load(const std::string& path, TimelineAsset& outAs
     }
 
     return true;
+}
+
+bool TimelineAssetSerializer::Save(const std::string& path, const TimelineAsset& asset)
+{
+    nlohmann::json root = ToJson(asset);
+    std::ofstream ofs(path);
+    if (!ofs.is_open()) return false;
+    ofs << root.dump(2);
+    return true;
+}
+
+bool TimelineAssetSerializer::Load(const std::string& path, TimelineAsset& outAsset)
+{
+    std::ifstream ifs(path);
+    if (!ifs.is_open()) return false;
+
+    nlohmann::json root;
+    try { ifs >> root; }
+    catch (...) { return false; }
+
+    return FromJson(root, outAsset);
 }

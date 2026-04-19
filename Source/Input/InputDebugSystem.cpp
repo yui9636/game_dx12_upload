@@ -1,10 +1,9 @@
 #include "InputDebugSystem.h"
+#include "InputActionMapComponent.h"
 #include "InputDebugStateComponent.h"
 #include "InputContextComponent.h"
 #include "InputUserComponent.h"
-#include "InputBindingComponent.h"
 #include "ResolvedInputStateComponent.h"
-#include "InputActionMapAsset.h"
 #include "InputBindingProfileAsset.h"
 #include "InputEventQueue.h"
 #include "IInputBackend.h"
@@ -14,14 +13,8 @@
 #include "Archetype/Archetype.h"
 #include <imgui.h>
 #include <cstring>
-#include <string>
 
 // ---- Rebind state (file-local) ----
-static bool s_rebindActive = false;
-static std::string s_rebindMapPath;
-static int s_rebindActionIndex = -1;
-static std::string s_rebindActionName;
-
 void InputDebugSystem::Update(Registry& registry, const InputEventQueue& queue) {
     Signature sig = CreateSignature<InputDebugStateComponent>();
     auto archetypes = registry.GetAllArchetypes();
@@ -116,193 +109,83 @@ static const char* GetMouseButtonLabel(uint8_t btn) {
     }
 }
 
-static void DrawRebindPopup(const InputEventQueue& queue) {
-    if (!s_rebindActive) return;
-
-    ImGui::OpenPopup("Rebind Input");
-    if (ImGui::BeginPopupModal("Rebind Input", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("Rebind: \"%s\"", s_rebindActionName.c_str());
-        ImGui::Separator();
-        ImGui::Text("Press any key, mouse button, or gamepad button...");
-        ImGui::Spacing();
-
-        bool captured = false;
-        for (auto& ev : queue.GetEvents()) {
-            InputActionMapAsset* map = InputActionMapAsset::Get(s_rebindMapPath);
-            if (!map || s_rebindActionIndex < 0 || s_rebindActionIndex >= (int)map->actions.size()) break;
-            auto& binding = map->actions[s_rebindActionIndex];
-
-            if (ev.type == InputEventType::KeyDown) {
-                if (ev.key.scancode == 41) { // Escape = cancel
-                    captured = true;
-                    break;
-                }
-                binding.scancode = ev.key.scancode;
-                captured = true;
-            } else if (ev.type == InputEventType::GamepadButtonDown) {
-                binding.gamepadButton = ev.gamepadButton.button;
-                captured = true;
-            } else if (ev.type == InputEventType::MouseButtonDown) {
-                binding.mouseButton = ev.mouseButton.button;
-                captured = true;
-            }
-        }
-
-        if (captured) {
-            // Save to profile
-            InputActionMapAsset* map = InputActionMapAsset::Get(s_rebindMapPath);
-            if (map) {
-                map->SaveToFile(s_rebindMapPath);
-            }
-            s_rebindActive = false;
-            ImGui::CloseCurrentPopup();
-        }
-
-        if (ImGui::Button("Cancel")) {
-            s_rebindActive = false;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Clear")) {
-            InputActionMapAsset* map = InputActionMapAsset::Get(s_rebindMapPath);
-            if (map && s_rebindActionIndex >= 0 && s_rebindActionIndex < (int)map->actions.size()) {
-                auto& binding = map->actions[s_rebindActionIndex];
-                binding.scancode = 0;
-                binding.mouseButton = 0;
-                binding.gamepadButton = 0xFF;
-                map->SaveToFile(s_rebindMapPath);
-            }
-            s_rebindActive = false;
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-}
-
 static void DrawBindingsTab(Registry& registry) {
-    // Collect all binding components to find which action maps are in use
-    Signature sig = CreateSignature<InputBindingComponent>();
+    Signature sig = CreateSignature<InputActionMapComponent>();
     auto archetypes = registry.GetAllArchetypes();
 
-    // Gather unique map paths
-    std::vector<std::string> mapPaths;
     for (auto* arch : archetypes) {
         if (!SignatureMatches(arch->GetSignature(), sig)) continue;
-        auto* col = arch->GetColumn(TypeManager::GetComponentTypeID<InputBindingComponent>());
+        auto* col = arch->GetColumn(TypeManager::GetComponentTypeID<InputActionMapComponent>());
         if (!col) continue;
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-            auto& bind = *static_cast<InputBindingComponent*>(col->Get(i));
-            if (bind.actionMapAssetPath[0] != '\0') {
-                std::string path(bind.actionMapAssetPath);
-                bool found = false;
-                for (auto& p : mapPaths) { if (p == path) { found = true; break; } }
-                if (!found) mapPaths.push_back(path);
+            const auto& actionMap = static_cast<InputActionMapComponent*>(col->Get(i))->asset;
+            if (actionMap.name.empty() && actionMap.actions.empty() && actionMap.axes.empty()) {
+                continue;
             }
-        }
-    }
 
-    // Also try common paths
-    const char* commonMaps[] = {
-        "Data/Input/EditorGlobal.inputmap",
-        "Data/Input/SceneView.inputmap",
-        "Data/Input/Gameplay.inputmap"
-    };
-    for (auto* path : commonMaps) {
-        std::string p(path);
-        bool found = false;
-        for (auto& mp : mapPaths) { if (mp == p) { found = true; break; } }
-        if (!found) mapPaths.push_back(p);
-    }
+            const char* treeLabel = actionMap.name.empty() ? "(embedded input map)" : actionMap.name.c_str();
+            if (ImGui::TreeNodeEx(treeLabel, ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Actions table
+                if (!actionMap.actions.empty()) {
+                    ImGui::Text("Actions:");
+                    ImGui::Columns(4, "BindCols");
+                    ImGui::SetColumnWidth(0, 140);
+                    ImGui::SetColumnWidth(1, 100);
+                    ImGui::SetColumnWidth(2, 80);
+                    ImGui::SetColumnWidth(3, 100);
+                    ImGui::Text("Action"); ImGui::NextColumn();
+                    ImGui::Text("Keyboard"); ImGui::NextColumn();
+                    ImGui::Text("Mouse"); ImGui::NextColumn();
+                    ImGui::Text("Gamepad"); ImGui::NextColumn();
+                    ImGui::Separator();
 
-    for (auto& mapPath : mapPaths) {
-        InputActionMapAsset* map = InputActionMapAsset::Get(mapPath);
-        if (!map) continue;
+                    for (int ai = 0; ai < (int)actionMap.actions.size(); ++ai) {
+                        const auto& act = actionMap.actions[ai];
+                        ImGui::Text("%s", act.actionName.c_str()); ImGui::NextColumn();
 
-        if (ImGui::TreeNodeEx(map->name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-            // Actions table
-            if (!map->actions.empty()) {
-                ImGui::Text("Actions:");
-                ImGui::Columns(4, "BindCols");
-                ImGui::SetColumnWidth(0, 140);
-                ImGui::SetColumnWidth(1, 100);
-                ImGui::SetColumnWidth(2, 80);
-                ImGui::SetColumnWidth(3, 100);
-                ImGui::Text("Action"); ImGui::NextColumn();
-                ImGui::Text("Keyboard"); ImGui::NextColumn();
-                ImGui::Text("Mouse"); ImGui::NextColumn();
-                ImGui::Text("Gamepad"); ImGui::NextColumn();
-                ImGui::Separator();
+                        ImGui::Text("%s", act.scancode ? GetScancodeLabel(act.scancode) : "-");
+                        ImGui::NextColumn();
 
-                for (int ai = 0; ai < (int)map->actions.size(); ++ai) {
-                    auto& act = map->actions[ai];
-                    ImGui::Text("%s", act.actionName.c_str()); ImGui::NextColumn();
+                        ImGui::Text("%s", GetMouseButtonLabel(act.mouseButton));
+                        ImGui::NextColumn();
 
-                    // Keyboard binding - clickable
-                    ImGui::PushID(ai * 3 + 0);
-                    if (ImGui::SmallButton(act.scancode ? GetScancodeLabel(act.scancode) : "-")) {
-                        s_rebindActive = true;
-                        s_rebindMapPath = mapPath;
-                        s_rebindActionIndex = ai;
-                        s_rebindActionName = act.actionName;
+                        ImGui::Text("%s", GetGamepadButtonLabel(act.gamepadButton));
+                        ImGui::NextColumn();
                     }
-                    ImGui::PopID();
-                    ImGui::NextColumn();
-
-                    // Mouse binding
-                    ImGui::PushID(ai * 3 + 1);
-                    if (ImGui::SmallButton(GetMouseButtonLabel(act.mouseButton))) {
-                        s_rebindActive = true;
-                        s_rebindMapPath = mapPath;
-                        s_rebindActionIndex = ai;
-                        s_rebindActionName = act.actionName;
-                    }
-                    ImGui::PopID();
-                    ImGui::NextColumn();
-
-                    // Gamepad binding
-                    ImGui::PushID(ai * 3 + 2);
-                    if (ImGui::SmallButton(GetGamepadButtonLabel(act.gamepadButton))) {
-                        s_rebindActive = true;
-                        s_rebindMapPath = mapPath;
-                        s_rebindActionIndex = ai;
-                        s_rebindActionName = act.actionName;
-                    }
-                    ImGui::PopID();
-                    ImGui::NextColumn();
+                    ImGui::Columns(1);
                 }
-                ImGui::Columns(1);
-            }
 
-            // Axes table
-            if (!map->axes.empty()) {
-                ImGui::Spacing();
-                ImGui::Text("Axes:");
-                ImGui::Columns(4, "AxisCols");
-                ImGui::SetColumnWidth(0, 140);
-                ImGui::SetColumnWidth(1, 100);
-                ImGui::SetColumnWidth(2, 80);
-                ImGui::SetColumnWidth(3, 100);
-                ImGui::Text("Axis"); ImGui::NextColumn();
-                ImGui::Text("+/-Key"); ImGui::NextColumn();
-                ImGui::Text("Deadzone"); ImGui::NextColumn();
-                ImGui::Text("Gamepad"); ImGui::NextColumn();
-                ImGui::Separator();
+                // Axes table
+                if (!actionMap.axes.empty()) {
+                    ImGui::Spacing();
+                    ImGui::Text("Axes:");
+                    ImGui::Columns(4, "AxisCols");
+                    ImGui::SetColumnWidth(0, 140);
+                    ImGui::SetColumnWidth(1, 100);
+                    ImGui::SetColumnWidth(2, 80);
+                    ImGui::SetColumnWidth(3, 100);
+                    ImGui::Text("Axis"); ImGui::NextColumn();
+                    ImGui::Text("+/-Key"); ImGui::NextColumn();
+                    ImGui::Text("Deadzone"); ImGui::NextColumn();
+                    ImGui::Text("Gamepad"); ImGui::NextColumn();
+                    ImGui::Separator();
 
-                for (auto& ax : map->axes) {
-                    ImGui::Text("%s", ax.axisName.c_str()); ImGui::NextColumn();
-                    if (ax.positiveKey || ax.negativeKey) {
-                        ImGui::Text("%s/%s", GetScancodeLabel(ax.positiveKey), GetScancodeLabel(ax.negativeKey));
-                    } else {
-                        ImGui::Text("-");
+                    for (const auto& ax : actionMap.axes) {
+                        ImGui::Text("%s", ax.axisName.c_str()); ImGui::NextColumn();
+                        if (ax.positiveKey || ax.negativeKey) {
+                            ImGui::Text("%s/%s", GetScancodeLabel(ax.positiveKey), GetScancodeLabel(ax.negativeKey));
+                        } else {
+                            ImGui::Text("-");
+                        }
+                        ImGui::NextColumn();
+                        ImGui::Text("%.2f", ax.deadzone); ImGui::NextColumn();
+                        ImGui::Text("%s", GetGamepadAxisLabel(ax.gamepadAxis)); ImGui::NextColumn();
                     }
-                    ImGui::NextColumn();
-                    ImGui::Text("%.2f", ax.deadzone); ImGui::NextColumn();
-                    ImGui::Text("%s", GetGamepadAxisLabel(ax.gamepadAxis)); ImGui::NextColumn();
+                    ImGui::Columns(1);
                 }
-                ImGui::Columns(1);
-            }
 
-            ImGui::TreePop();
+                ImGui::TreePop();
+            }
         }
     }
 }
@@ -424,9 +307,6 @@ void InputDebugSystem::DrawDebugWindow(Registry& registry, IInputBackend& backen
 
         ImGui::EndTabBar();
     }
-
-    // Rebind popup (drawn outside tab bar)
-    DrawRebindPopup(queue);
 
     ImGui::End();
 }

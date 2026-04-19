@@ -61,6 +61,7 @@ struct ComponentMeta;
 #include "Component/TextComponent.h"
 #include "Component/TrailComponent.h"
 #include "Component/TransformComponent.h"
+#include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Input/InputContextComponent.h"
 #include "Input/InputDebugStateComponent.h"
@@ -83,8 +84,10 @@ struct ComponentMeta;
 #include "Gameplay/SpeedCurveComponent.h"
 #include "Gameplay/StageBoundsComponent.h"
 #include "Gameplay/StaminaComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
 
 template <>
 struct ComponentMeta<AudioBusSendComponent> {
@@ -595,6 +598,14 @@ struct ComponentMeta<TransformComponent> {
 };
 
 template <>
+struct ComponentMeta<InputActionMapComponent> {
+    static constexpr std::string_view Name = "InputActionMapComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("asset", &InputActionMapComponent::asset)
+    );
+};
+
+template <>
 struct ComponentMeta<InputBindingComponent> {
     static constexpr std::string_view Name = "InputBindingComponent";
     static constexpr auto Fields = std::make_tuple();
@@ -863,6 +874,14 @@ struct ComponentMeta<StaminaComponent> {
 };
 
 template <>
+struct ComponentMeta<StateMachineAssetComponent> {
+    static constexpr std::string_view Name = "StateMachineAssetComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("asset", &StateMachineAssetComponent::asset)
+    );
+};
+
+template <>
 struct ComponentMeta<StateMachineParamsComponent> {
     static constexpr std::string_view Name = "StateMachineParamsComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -885,6 +904,15 @@ struct ComponentMeta<TimelineComponent> {
         MakeField("animationIndex", &TimelineComponent::animationIndex),
         MakeField("clipLengthSec", &TimelineComponent::clipLengthSec),
         MakeField("playing", &TimelineComponent::playing)
+    );
+};
+
+template <>
+struct ComponentMeta<TimelineLibraryComponent> {
+    static constexpr std::string_view Name = "TimelineLibraryComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("assets", &TimelineLibraryComponent::assets),
+        MakeField("nextTimelineId", &TimelineLibraryComponent::nextTimelineId)
     );
 };
 
@@ -933,6 +961,7 @@ using AllComponentTypes = std::tuple<
     TextComponent,
     TrailComponent,
     TransformComponent,
+    InputActionMapComponent,
     InputBindingComponent,
     InputContextComponent,
     InputDebugStateComponent,
@@ -955,6 +984,8 @@ using AllComponentTypes = std::tuple<
     SpeedCurveComponent,
     StageBoundsComponent,
     StaminaComponent,
+    StateMachineAssetComponent,
     StateMachineParamsComponent,
-    TimelineComponent
+    TimelineComponent,
+    TimelineLibraryComponent
 >;
