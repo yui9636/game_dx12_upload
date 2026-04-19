@@ -140,6 +140,10 @@ struct EffectMeshPacket {
 
     // Phase A: Mesh Variant System
     EffectMeshVariantParams meshVariantParams;
+    // Base (albedo) texture authored on the MeshRenderer node. When non-null
+    // EffectMeshPass binds this to slot 0 instead of the FBX material's own
+    // albedoMap, so templates can override the source model's texture.
+    std::shared_ptr<ITexture> baseTexture;
     std::shared_ptr<ITexture> maskTexture;
     std::shared_ptr<ITexture> normalMapTexture;
     std::shared_ptr<ITexture> flowMapTexture;

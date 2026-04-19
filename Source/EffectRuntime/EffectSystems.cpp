@@ -16,6 +16,7 @@
 #include "Component/MeshComponent.h"
 #include "Component/NodeSocketComponent.h"
 #include "Component/TransformComponent.h"
+#include "Console/Logger.h"
 #include "EffectParameterBindings.h"
 #include "EffectRuntimeRegistry.h"
 #include "Registry/Registry.h"
@@ -464,11 +465,17 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
             if (effectiveMesh.enabled) {
                 std::shared_ptr<ModelResource> modelResource;
                 if (!effectiveMesh.meshAssetPath.empty()) {
-                    if (auto model = ResourceManager::Instance().GetModel(effectiveMesh.meshAssetPath)) {
+                    auto model = ResourceManager::Instance().GetModel(effectiveMesh.meshAssetPath);
+                    if (model) {
                         modelResource = model->GetModelResource();
                     }
+                    LOG_INFO("[EffectMesh] meshAssetPath='%s' model=%p modelResource=%p",
+                        effectiveMesh.meshAssetPath.c_str(), (void*)model.get(), (void*)modelResource.get());
                 } else if (meshes && meshes[row].model) {
                     modelResource = meshes[row].model->GetModelResource();
+                    LOG_INFO("[EffectMesh] fallback meshComponent model=%p", (void*)modelResource.get());
+                } else {
+                    LOG_WARN("[EffectMesh] No meshAssetPath and no MeshComponent fallback");
                 }
 
                 std::shared_ptr<MaterialAsset> materialAsset;
@@ -480,6 +487,10 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         : ResourceManager::Instance().GetMaterial(materials[row].materialAssetPath);
                 }
 
+                if (!modelResource) {
+                    LOG_ERROR("[EffectMesh] modelResource null — packet skipped. meshAssetPath='%s'",
+                        effectiveMesh.meshAssetPath.c_str());
+                }
                 if (modelResource) {
                     EffectMeshPacket packet;
                     packet.modelResource = modelResource;
@@ -501,6 +512,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     packet.meshVariantParams.constants.effectTime = playback.currentTime;
                     // Variant textures
                     auto& vp = effectiveMesh.variantParams;
+                    if (!vp.baseTexturePath.empty())
+                        packet.baseTexture = ResourceManager::Instance().GetTexture(vp.baseTexturePath);
                     if (!vp.maskTexturePath.empty())
                         packet.maskTexture = ResourceManager::Instance().GetTexture(vp.maskTexturePath);
                     if (!vp.normalMapPath.empty())
@@ -516,6 +529,14 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     const float dz = transform.worldPosition.z - rc.cameraPosition.z;
                     packet.distanceToCamera = std::sqrt(dx * dx + dy * dy + dz * dz);
                     packet.sortKey = static_cast<uint64_t>(packet.distanceToCamera * 1000.0f);
+                    LOG_INFO("[EffectMesh] packet pushed: mesh='%s' material='%s' shaderId=%d blend=%d variantKey=0x%08X materialAsset=%p tint=(%.2f,%.2f,%.2f,%.2f)",
+                        effectiveMesh.meshAssetPath.c_str(),
+                        effectiveMesh.materialAssetPath.c_str(),
+                        packet.shaderId,
+                        (int)packet.blendState,
+                        packet.shaderVariantKey,
+                        (void*)packet.materialAsset.get(),
+                        packet.baseColor.x, packet.baseColor.y, packet.baseColor.z, packet.baseColor.w);
                     queue.effectMeshPackets.push_back(std::move(packet));
                 }
             }

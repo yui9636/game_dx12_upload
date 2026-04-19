@@ -80,6 +80,11 @@ struct EffectMeshVariantParams
     uint32_t shaderFlags = MeshFlag_Texture | MeshFlag_AlphaFade;
     EffectMeshEffectConstants constants;
 
+    // Base (albedo) texture authored on the MeshRenderer node (AssetPickerKind::Texture).
+    // When non-empty this overrides the FBX material's albedoMap for slot 0 in
+    // EffectMeshPass, so effect templates can specify their own base texture
+    // (e.g. Aura01_T.png) without editing the source model material.
+    std::string baseTexturePath;
     std::string maskTexturePath;
     std::string normalMapPath;
     std::string flowMapPath;

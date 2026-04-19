@@ -9,12 +9,14 @@
 #include <cmath>
 #include <filesystem>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_node_editor.h>
 
 #include "Asset/ThumbnailGenerator.h"
+#include "Console/Logger.h"
 #include "Component/EffectAssetComponent.h"
 #include "Component/EffectParameterOverrideComponent.h"
 #include "Component/EffectPlaybackComponent.h"
@@ -242,6 +244,76 @@ namespace
                     return asset.FindPin(link.startPinId) == nullptr || asset.FindPin(link.endPinId) == nullptr;
                 }),
             asset.links.end());
+
+        // Defensive: side-effect nodes (Spawn/Lifetime/MeshRenderer/ParticleEmitter/SpriteRenderer)
+        // may drive at most ONE Flow output. Left-over links from prior template switches can
+        // otherwise surface as "Side-effect nodes may drive only one flow output." at compile.
+        // Keep the first Flow output per node and drop the rest, logging what we removed.
+        std::unordered_map<uint32_t, uint32_t> flowOutCount; // nodeId -> seen so far
+        std::vector<uint32_t> removedLinkIds;
+        for (auto it = asset.links.begin(); it != asset.links.end();) {
+            const EffectGraphPin* startPin = asset.FindPin(it->startPinId);
+            if (!startPin || startPin->valueType != EffectValueType::Flow) {
+                ++it;
+                continue;
+            }
+            const EffectGraphNode* startNode = asset.FindNode(startPin->nodeId);
+            if (!startNode || !IsEffectSideEffectNode(startNode->type)) {
+                ++it;
+                continue;
+            }
+            uint32_t& seen = flowOutCount[startNode->id];
+            if (seen >= 1) {
+                removedLinkIds.push_back(it->id);
+                it = asset.links.erase(it);
+                continue;
+            }
+            ++seen;
+            ++it;
+        }
+        if (!removedLinkIds.empty()) {
+            LOG_WARN("[EffectSanitize] Pruned %zu stray flow links from side-effect nodes (fan-out>1).",
+                removedLinkIds.size());
+        }
+    }
+
+    void LogGraphStructure(const EffectGraphAsset& asset, const char* tag)
+    {
+        LOG_INFO("[%s] nodes=%zu pins=%zu links=%zu", tag, asset.nodes.size(), asset.pins.size(), asset.links.size());
+        for (const auto& node : asset.nodes) {
+            const char* typeName = EffectGraphNodeTypeToString(node.type);
+            LOG_INFO("[%s]   node id=%u type=%s", tag, node.id, typeName ? typeName : "?");
+        }
+        std::unordered_map<uint32_t, uint32_t> flowFan;
+        for (const auto& link : asset.links) {
+            const EffectGraphPin* startPin = asset.FindPin(link.startPinId);
+            const EffectGraphPin* endPin = asset.FindPin(link.endPinId);
+            if (!startPin || !endPin) continue;
+            const EffectGraphNode* startNode = asset.FindNode(startPin->nodeId);
+            const EffectGraphNode* endNode = asset.FindNode(endPin->nodeId);
+            if (!startNode || !endNode) continue;
+            if (startPin->valueType == EffectValueType::Flow) {
+                ++flowFan[startNode->id];
+            }
+            LOG_INFO("[%s]   link %u: %s(%u)->%s(%u) type=%d",
+                tag,
+                link.id,
+                EffectGraphNodeTypeToString(startNode->type),
+                startNode->id,
+                EffectGraphNodeTypeToString(endNode->type),
+                endNode->id,
+                static_cast<int>(startPin->valueType));
+        }
+        for (const auto& [nodeId, fan] : flowFan) {
+            if (fan > 1) {
+                const EffectGraphNode* n = asset.FindNode(nodeId);
+                LOG_ERROR("[%s] side-effect flow fan-out>1: node id=%u type=%s fan=%u",
+                    tag,
+                    nodeId,
+                    n ? EffectGraphNodeTypeToString(n->type) : "?",
+                    fan);
+            }
+        }
     }
 
     EffectGraphNode* FindNodeOfType(EffectGraphAsset& asset, EffectGraphNodeType type)
@@ -299,13 +371,14 @@ namespace
 
     void EnsureGuiAuthoringLinks(EffectGraphAsset& asset)
     {
-        auto* spawnNode = FindNodeOfType(asset, EffectGraphNodeType::Spawn);
-        auto* lifetimeNode = FindNodeOfType(asset, EffectGraphNodeType::Lifetime);
-        auto* emitterNode = FindNodeOfType(asset, EffectGraphNodeType::ParticleEmitter);
-        auto* spriteNode = FindNodeOfType(asset, EffectGraphNodeType::SpriteRenderer);
-        auto* colorNode = FindNodeOfType(asset, EffectGraphNodeType::Color);
-        auto* meshSourceNode = FindNodeOfType(asset, EffectGraphNodeType::MeshSource);
+        auto* spawnNode        = FindNodeOfType(asset, EffectGraphNodeType::Spawn);
+        auto* lifetimeNode     = FindNodeOfType(asset, EffectGraphNodeType::Lifetime);
+        auto* emitterNode      = FindNodeOfType(asset, EffectGraphNodeType::ParticleEmitter);
+        auto* spriteNode       = FindNodeOfType(asset, EffectGraphNodeType::SpriteRenderer);
+        auto* colorNode        = FindNodeOfType(asset, EffectGraphNodeType::Color);
+        auto* meshSourceNode   = FindNodeOfType(asset, EffectGraphNodeType::MeshSource);
         auto* meshRendererNode = FindNodeOfType(asset, EffectGraphNodeType::MeshRenderer);
+        auto* outputNode       = FindNodeOfType(asset, EffectGraphNodeType::Output);
 
         if (spawnNode && lifetimeNode) {
             if (auto* startPin = FindNodePin(asset, spawnNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
@@ -318,6 +391,15 @@ namespace
         if (lifetimeNode && emitterNode) {
             if (auto* startPin = FindNodePin(asset, lifetimeNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
                 if (auto* endPin = FindNodePin(asset, emitterNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
+                    EnsureLink(asset, startPin->id, endPin->id);
+                }
+            }
+        }
+
+        // Mesh-only: Lifetime drives MeshRenderer directly (no particle emitter)
+        if (lifetimeNode && meshRendererNode && !emitterNode) {
+            if (auto* startPin = FindNodePin(asset, lifetimeNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
+                if (auto* endPin = FindNodePin(asset, meshRendererNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
                     EnsureLink(asset, startPin->id, endPin->id);
                 }
             }
@@ -342,6 +424,22 @@ namespace
         if (meshSourceNode && meshRendererNode) {
             if (auto* startPin = FindNodePin(asset, meshSourceNode->id, EffectPinKind::Output, EffectValueType::Mesh)) {
                 if (auto* endPin = FindNodePin(asset, meshRendererNode->id, EffectPinKind::Input, EffectValueType::Mesh)) {
+                    EnsureLink(asset, startPin->id, endPin->id);
+                }
+            }
+        }
+
+        if (spriteNode && outputNode) {
+            if (auto* startPin = FindNodePin(asset, spriteNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
+                if (auto* endPin = FindNodePin(asset, outputNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
+                    EnsureLink(asset, startPin->id, endPin->id);
+                }
+            }
+        }
+
+        if (meshRendererNode && outputNode) {
+            if (auto* startPin = FindNodePin(asset, meshRendererNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
+                if (auto* endPin = FindNodePin(asset, outputNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
                     EnsureLink(asset, startPin->id, endPin->id);
                 }
             }
@@ -552,10 +650,44 @@ void EffectEditorPanel::DrawToolbar()
                 m_asset.name = effectName;
                 m_asset.previewDefaults.duration = duration;
 
-                EffectGraphNode* lifetimeNode = EnsureNodeByType(EffectGraphNodeType::Lifetime);
-                EffectGraphNode* emitterNode = EnsureNodeByType(EffectGraphNodeType::ParticleEmitter);
-                EffectGraphNode* colorNode = EnsureNodeByType(EffectGraphNodeType::Color);
-                EffectGraphNode* spriteNode = EnsureNodeByType(EffectGraphNodeType::SpriteRenderer);
+                // Remove mesh-only nodes so particle graph has no side-effect fan-out on Lifetime.
+                // Loops while any node of the type exists to defensively clear duplicates.
+                const auto removeNodeIfExists = [&](EffectGraphNodeType type) {
+                    while (EffectGraphNode* n = FindNodeByType(type)) {
+                        const uint32_t nid = n->id;
+                        std::vector<uint32_t> pinIds;
+                        for (const auto& p : m_asset.pins)
+                            if (p.nodeId == nid) pinIds.push_back(p.id);
+                        m_asset.links.erase(std::remove_if(m_asset.links.begin(), m_asset.links.end(),
+                            [&](const EffectGraphLink& l) {
+                                return std::find(pinIds.begin(), pinIds.end(), l.startPinId) != pinIds.end() ||
+                                       std::find(pinIds.begin(), pinIds.end(), l.endPinId) != pinIds.end();
+                            }), m_asset.links.end());
+                        m_asset.pins.erase(std::remove_if(m_asset.pins.begin(), m_asset.pins.end(),
+                            [nid](const EffectGraphPin& p) { return p.nodeId == nid; }), m_asset.pins.end());
+                        m_asset.nodes.erase(std::remove_if(m_asset.nodes.begin(), m_asset.nodes.end(),
+                            [nid](const EffectGraphNode& nd) { return nd.id == nid; }), m_asset.nodes.end());
+                    }
+                };
+                removeNodeIfExists(EffectGraphNodeType::MeshRenderer);
+                removeNodeIfExists(EffectGraphNodeType::MeshSource);
+                // Ensure all nodes exist first. Pointers returned by EnsureNodeByType
+                // can be invalidated by subsequent push_back into m_asset.nodes, so we
+                // re-query via FindNodeByType after every node has been created.
+                EnsureNodeByType(EffectGraphNodeType::Spawn);
+                EnsureNodeByType(EffectGraphNodeType::Output);
+                EnsureNodeByType(EffectGraphNodeType::Lifetime);
+                EnsureNodeByType(EffectGraphNodeType::ParticleEmitter);
+                EnsureNodeByType(EffectGraphNodeType::Color);
+                EnsureNodeByType(EffectGraphNodeType::SpriteRenderer);
+
+                EffectGraphNode* lifetimeNode = FindNodeByType(EffectGraphNodeType::Lifetime);
+                EffectGraphNode* emitterNode  = FindNodeByType(EffectGraphNodeType::ParticleEmitter);
+                EffectGraphNode* colorNode    = FindNodeByType(EffectGraphNodeType::Color);
+                EffectGraphNode* spriteNode   = FindNodeByType(EffectGraphNodeType::SpriteRenderer);
+                if (!lifetimeNode || !emitterNode || !colorNode || !spriteNode) {
+                    return;
+                }
 
                 lifetimeNode->scalar = duration;
                 emitterNode->scalar = spawnRate;
@@ -581,8 +713,14 @@ void EffectEditorPanel::DrawToolbar()
                     : "Data/Effect/particle/particle.png";
 
                 EnsureGuiAuthoringLinks(m_asset);
+                SanitizeGraphAsset(m_asset);
+                LogGraphStructure(m_asset, "applyTemplate");
                 m_compileDirty = true;
                 m_syncNodePositions = true;
+                // Stop any running preview so the previous template's runtime
+                // is torn down before the user starts the new one. Keeps
+                // stale particles/meshes from bleeding between templates.
+                StopPreview();
                 ImGui::CloseCurrentPopup();
             };
 
@@ -650,9 +788,43 @@ void EffectEditorPanel::DrawToolbar()
                 m_asset.previewDefaults.duration = duration;
                 m_asset.previewDefaults.previewMeshPath = meshPath ? meshPath : "";
 
-                EffectGraphNode* lifetimeNode  = EnsureNodeByType(EffectGraphNodeType::Lifetime);
-                EffectGraphNode* meshSrcNode   = EnsureNodeByType(EffectGraphNodeType::MeshSource);
-                EffectGraphNode* meshRendNode  = EnsureNodeByType(EffectGraphNodeType::MeshRenderer);
+                // Remove particle-only nodes so mesh graph has no side-effect fan-out on Lifetime.
+                // Loops while any node of the type exists to defensively clear duplicates.
+                const auto removeNodeIfExists = [&](EffectGraphNodeType type) {
+                    while (EffectGraphNode* n = FindNodeByType(type)) {
+                        const uint32_t nid = n->id;
+                        std::vector<uint32_t> pinIds;
+                        for (const auto& p : m_asset.pins)
+                            if (p.nodeId == nid) pinIds.push_back(p.id);
+                        m_asset.links.erase(std::remove_if(m_asset.links.begin(), m_asset.links.end(),
+                            [&](const EffectGraphLink& l) {
+                                return std::find(pinIds.begin(), pinIds.end(), l.startPinId) != pinIds.end() ||
+                                       std::find(pinIds.begin(), pinIds.end(), l.endPinId) != pinIds.end();
+                            }), m_asset.links.end());
+                        m_asset.pins.erase(std::remove_if(m_asset.pins.begin(), m_asset.pins.end(),
+                            [nid](const EffectGraphPin& p) { return p.nodeId == nid; }), m_asset.pins.end());
+                        m_asset.nodes.erase(std::remove_if(m_asset.nodes.begin(), m_asset.nodes.end(),
+                            [nid](const EffectGraphNode& nd) { return nd.id == nid; }), m_asset.nodes.end());
+                    }
+                };
+                removeNodeIfExists(EffectGraphNodeType::ParticleEmitter);
+                removeNodeIfExists(EffectGraphNodeType::SpriteRenderer);
+                removeNodeIfExists(EffectGraphNodeType::Color);
+                // Ensure all nodes exist first. Pointers returned by EnsureNodeByType
+                // can be invalidated by subsequent push_back into m_asset.nodes, so we
+                // re-query via FindNodeByType after every node has been created.
+                EnsureNodeByType(EffectGraphNodeType::Spawn);
+                EnsureNodeByType(EffectGraphNodeType::Output);
+                EnsureNodeByType(EffectGraphNodeType::Lifetime);
+                EnsureNodeByType(EffectGraphNodeType::MeshSource);
+                EnsureNodeByType(EffectGraphNodeType::MeshRenderer);
+
+                EffectGraphNode* lifetimeNode = FindNodeByType(EffectGraphNodeType::Lifetime);
+                EffectGraphNode* meshSrcNode  = FindNodeByType(EffectGraphNodeType::MeshSource);
+                EffectGraphNode* meshRendNode = FindNodeByType(EffectGraphNodeType::MeshRenderer);
+                if (!lifetimeNode || !meshSrcNode || !meshRendNode) {
+                    return;
+                }
 
                 lifetimeNode->scalar = duration;
 
@@ -663,15 +835,29 @@ void EffectEditorPanel::DrawToolbar()
                 meshRendNode->vectorValue  = tint;
                 meshRendNode->vectorValue2 = { dissolveAmount, dissolveEdge, fresnelPower, flowStrength };
                 meshRendNode->vectorValue3 = { flowSpeedX, flowSpeedY, scrollSpeedX, scrollSpeedY };
+                meshRendNode->vectorValue4 = { 0.0f, 0.0f, 0.0f, 0.0f };
                 meshRendNode->vectorValue5 = dissolveGlowColor;
                 meshRendNode->vectorValue6 = fresnelColor;
+                meshRendNode->vectorValue7 = { 0.0f, 0.0f, 0.0f, 0.0f };
+                meshRendNode->vectorValue8 = { 0.0f, 0.0f, 0.0f, 0.0f };
                 meshRendNode->stringValue  = baseTexPath  ? baseTexPath  : "";
                 meshRendNode->stringValue2 = maskTexPath  ? maskTexPath  : "";
+                meshRendNode->stringValue3.clear();
                 meshRendNode->stringValue4 = flowMapPath  ? flowMapPath  : "";
+                meshRendNode->stringValue5.clear();
+                meshRendNode->stringValue6.clear();
 
                 EnsureGuiAuthoringLinks(m_asset);
+                SanitizeGraphAsset(m_asset);
+                LogGraphStructure(m_asset, "applyMeshTemplate");
                 m_compileDirty = true;
                 m_syncNodePositions = true;
+                // Stop any running preview so the previous template's runtime
+                // (and its GPU particles) are torn down. Otherwise old particles
+                // from an earlier particle template keep emitting until the user
+                // presses Play, which looks like mystery particles appearing on
+                // template switch.
+                StopPreview();
                 ImGui::CloseCurrentPopup();
             };
 
@@ -3521,9 +3707,10 @@ std::string EffectEditorPanel::BuildTransientAssetKey() const
 
 std::string EffectEditorPanel::GetActiveAssetKey() const
 {
-    if (!m_documentPath.empty() && std::filesystem::exists(m_documentPath) && !m_compileDirty) {
-        return m_documentPath;
-    }
+    // Always use the transient key: CompileDocument() registers the freshly
+    // compiled asset only under the transient key. Returning the document
+    // path here would cause the registry's disk-backed cache to be used,
+    // which ignores live template/graph edits.
     return BuildTransientAssetKey();
 }
 
@@ -3537,6 +3724,8 @@ bool EffectEditorPanel::CompileDocument()
     if (graphToCompile.previewDefaults.previewMeshPath.empty() && !m_selectedMeshPath.empty()) {
         graphToCompile.previewDefaults.previewMeshPath = m_selectedMeshPath;
     }
+
+    LogGraphStructure(graphToCompile, "EffectCompile:graphToCompile");
 
     m_compiled = EffectCompiler::Compile(graphToCompile, m_documentPath);
     EffectRuntimeRegistry::Instance().RegisterTransientAsset(BuildTransientAssetKey(), m_compiled);
@@ -3590,6 +3779,17 @@ void EffectEditorPanel::StopPreview()
     if (!m_registry || Entity::IsNull(m_previewEntity) || !m_registry->IsAlive(m_previewEntity)) {
         m_previewEntity = Entity::NULL_ID;
         return;
+    }
+    // Destroy the runtime instance BEFORE destroying the entity, otherwise the
+    // runtime is leaked in EffectRuntimeRegistry::m_instances (DestroyEntity
+    // does not run FinalizeStoppedPlayback on POD components). The runtime's
+    // GPU particle allocation stays in runtimeAllocations for up to 240 frames
+    // regardless, but at least we drop the CPU-side state immediately.
+    if (auto* playback = m_registry->GetComponent<EffectPlaybackComponent>(m_previewEntity)) {
+        if (playback->runtimeInstanceId != 0) {
+            EffectRuntimeRegistry::Instance().Destroy(playback->runtimeInstanceId);
+            playback->runtimeInstanceId = 0;
+        }
     }
     m_registry->DestroyEntity(m_previewEntity);
     m_previewEntity = Entity::NULL_ID;

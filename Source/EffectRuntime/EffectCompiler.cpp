@@ -1,4 +1,5 @@
 #include "EffectCompiler.h"
+#include "Console/Logger.h"
 #include "EffectParameterBindings.h"
 
 #include <queue>
@@ -14,6 +15,10 @@ namespace
 
     uint32_t BuildShaderVariantKey(const EffectMeshRendererDescriptor& descriptor, bool hasColorInput)
     {
+        // When shaderFlags are set by the variant system, they ARE the key.
+        if (descriptor.variantParams.shaderFlags != 0) {
+            return descriptor.variantParams.shaderFlags;
+        }
         uint32_t key = 0;
         if (descriptor.blendState == BlendState::Additive) {
             key |= 1u << 0;
@@ -196,9 +201,13 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             compiled->duration = node->scalar > 0.0f ? node->scalar : asset.previewDefaults.duration;
         } else if (node->type == EffectGraphNodeType::MeshRenderer) {
             compiled->meshRenderer.enabled = true;
-            compiled->meshRenderer.materialAssetPath = node->stringValue.empty()
-                ? asset.previewDefaults.previewMaterialPath
-                : node->stringValue;
+            // The MeshRenderer node's stringValue is authored as a *texture*
+            // path via DrawAssetSlotControl("Base Texture", ..., AssetPickerKind::Texture).
+            // It must not be plugged into materialAssetPath (a .mat file path) — doing
+            // so caused GetMaterial() to silently fail and the base texture to never
+            // reach the shader, making the mesh render as a flat tinted color.
+            // materialAssetPath only comes from the asset's preview defaults for now.
+            compiled->meshRenderer.materialAssetPath = asset.previewDefaults.previewMaterialPath;
             compiled->meshRenderer.blendState = static_cast<BlendState>(node->intValue);
             compiled->meshRenderer.depthState = DepthState::TestOnly;
             compiled->meshRenderer.rasterizerState = RasterizerState::SolidCullBack;
@@ -208,6 +217,8 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             {
                 auto& vp = compiled->meshRenderer.variantParams;
                 vp.shaderFlags = static_cast<uint32_t>(node->intValue2);
+                // Base texture from stringValue (authored as Texture in the editor).
+                vp.baseTexturePath = node->stringValue;
                 // vectorValue2: {dissolveAmount, dissolveEdge, fresnelPower, flowStrength}
                 vp.constants.dissolveAmount  = node->vectorValue2.x;
                 vp.constants.dissolveEdge    = node->vectorValue2.y > 0.0f ? node->vectorValue2.y : 0.05f;
@@ -453,5 +464,17 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
     }
 
     compiled->valid = compiled->errors.empty();
+    LOG_INFO("[EffectCompile] valid=%d errors=%zu mesh.enabled=%d mesh='%s' mat='%s' variantKey=0x%08X particle.enabled=%d duration=%.2f",
+        compiled->valid ? 1 : 0,
+        compiled->errors.size(),
+        compiled->meshRenderer.enabled ? 1 : 0,
+        compiled->meshRenderer.meshAssetPath.c_str(),
+        compiled->meshRenderer.materialAssetPath.c_str(),
+        compiled->meshRenderer.shaderVariantKey,
+        compiled->particleRenderer.enabled ? 1 : 0,
+        compiled->duration);
+    for (const auto& err : compiled->errors) {
+        LOG_ERROR("[EffectCompile] error: %s", err.c_str());
+    }
     return compiled;
 }
