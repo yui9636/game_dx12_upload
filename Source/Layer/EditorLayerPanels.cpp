@@ -219,6 +219,11 @@ void EditorLayer::DrawPlayerEditorWorkspace()
     m_playerEditorPanel.DrawWorkspace(
         m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr,
         &playerEditorFocused);
+    DirectX::XMFLOAT3 fitTarget{};
+    float fitRadius = 1.0f;
+    if (m_playerEditorPanel.ConsumePendingCameraFit(fitTarget, fitRadius)) {
+        FocusEditorCameraOnTarget(fitTarget, fitRadius);
+    }
     m_sceneViewRect = m_playerEditorPanel.GetViewportRect();
     m_sceneViewSize = { m_sceneViewRect.z, m_sceneViewRect.w };
     m_sceneViewHovered = m_playerEditorPanel.IsViewportHovered();

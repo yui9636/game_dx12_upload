@@ -55,7 +55,7 @@ static constexpr float kDetachedTopTabHeight = 34.0f;
 static constexpr float kNodeWidth  = 150.0f;
 static constexpr float kNodeHeight = 38.0f;
 static constexpr const char* kModelFileFilter =
-    "Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
+    "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
 static constexpr const char* kTimelineFileFilter =
     "Timeline (*.timeline.json)\0*.timeline.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
 static constexpr const char* kStateMachineFileFilter =
@@ -367,6 +367,18 @@ void PlayerEditorPanel::SetSharedSceneCamera(const DirectX::XMFLOAT3& position, 
     m_sharedSceneCameraFovY = fovY;
 }
 
+bool PlayerEditorPanel::ConsumePendingCameraFit(DirectX::XMFLOAT3& outTarget, float& outRadius)
+{
+    if (!m_hasPendingCameraFit) {
+        return false;
+    }
+
+    outTarget = m_pendingCameraFitTarget;
+    outRadius = m_pendingCameraFitRadius;
+    m_hasPendingCameraFit = false;
+    return true;
+}
+
 void PlayerEditorPanel::EnsureOwnedPreviewEntity()
 {
     PlayerEditorSession::EnsureOwnedPreviewEntity(*this);
@@ -550,7 +562,7 @@ void PlayerEditorPanel::DrawEmptyState()
 {
     ImGui::Spacing();
     ImGui::TextDisabled("No model opened.");
-    ImGui::TextWrapped("Open a model first. The current editor only becomes meaningful after a model is resolved.");
+    ImGui::TextWrapped("Open a model or prefab first. The current editor only becomes meaningful after a player source is resolved.");
     ImGui::Spacing();
 
     if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open Model...", ImVec2(180.0f, 0.0f))) {

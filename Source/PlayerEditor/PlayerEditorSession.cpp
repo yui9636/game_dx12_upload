@@ -14,6 +14,7 @@
 #include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
 #include "Component/EffectPreviewTagComponent.h"
+#include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
 #include "Component/NodeSocketComponent.h"
@@ -36,35 +37,36 @@
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
 #include "System/ResourceManager.h"
+#include "Undo/EntitySnapshot.h"
 
 namespace
 {
-    // Timeline繝輔ぃ繧､繝ｫ繧帝幕縺・菫晏ｭ倥☆繧九→縺阪・繝繧､繧｢繝ｭ繧ｰ逕ｨ繝輔ぅ繝ｫ繧ｿ縲・
+    // Timeline郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ蟶晏ｹ慕ｸｺ繝ｻ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵昶・邵ｺ髦ｪ繝ｻ郢敖郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ騾包ｽｨ郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｿ邵ｲ繝ｻ
     static constexpr const char* kTimelineFileFilter =
         "Timeline (*.timeline.json)\0*.timeline.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
 
-    // StateMachine繝輔ぃ繧､繝ｫ繧帝幕縺・菫晏ｭ倥☆繧九→縺阪・繝繧､繧｢繝ｭ繧ｰ逕ｨ繝輔ぅ繝ｫ繧ｿ縲・
+    // StateMachine郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ蟶晏ｹ慕ｸｺ繝ｻ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵昶・邵ｺ髦ｪ繝ｻ郢敖郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ騾包ｽｨ郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｿ邵ｲ繝ｻ
     static constexpr const char* kStateMachineFileFilter =
         "StateMachine (*.statemachine.json)\0*.statemachine.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
 
-    // InputMap繝輔ぃ繧､繝ｫ繧帝幕縺・菫晏ｭ倥☆繧九→縺阪・繝繧､繧｢繝ｭ繧ｰ逕ｨ繝輔ぅ繝ｫ繧ｿ縲・
+    // InputMap郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ蟶晏ｹ慕ｸｺ繝ｻ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵昶・邵ｺ髦ｪ繝ｻ郢敖郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ騾包ｽｨ郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｿ邵ｲ繝ｻ
     static constexpr const char* kInputMapFileFilter =
         "Input Map (*.inputmap.json)\0*.inputmap.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
 
-    // Prefab繝輔ぃ繧､繝ｫ繧剃ｿ晏ｭ倥☆繧九→縺阪・繝繧､繧｢繝ｭ繧ｰ逕ｨ繝輔ぅ繝ｫ繧ｿ縲・
+    // Prefab郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵昶・邵ｺ髦ｪ繝ｻ郢敖郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ騾包ｽｨ郢晁ｼ斐≦郢晢ｽｫ郢ｧ・ｿ邵ｲ繝ｻ
     static constexpr const char* kPrefabFileFilter =
         "Prefab (*.prefab)\0*.prefab\0All Files (*.*)\0*.*\0";
 
-    // 謖・ｮ壹＆繧後◆繝代せ縺ｮ諡｡蠑ｵ蟄舌′縲∬ｨｱ蜿ｯ縺輔ｌ縺滓僑蠑ｵ蟄舌Μ繧ｹ繝医↓蜷ｫ縺ｾ繧後※縺・ｋ縺狗｢ｺ隱阪☆繧九・
+    // 隰悶・・ｮ螢ｹ・・ｹｧ蠕娯螺郢昜ｻ｣縺帷ｸｺ・ｮ隲｡・｡陟托ｽｵ陝・・窶ｲ邵ｲ竏ｬ・ｨ・ｱ陷ｿ・ｯ邵ｺ霈費ｽ檎ｸｺ貊灘ヱ陟托ｽｵ陝・・ﾎ懃ｹｧ・ｹ郢晏現竊楢惺・ｫ邵ｺ・ｾ郢ｧ蠕娯ｻ邵ｺ繝ｻ・狗ｸｺ迢暦ｽ｢・ｺ髫ｱ髦ｪ笘・ｹｧ荵敖繝ｻ
     static bool HasExtension(const std::string& path, std::initializer_list<const char*> extensions)
     {
-        // 繝代せ縺九ｉ諡｡蠑ｵ蟄舌□縺代ｒ蜿悶ｊ蜃ｺ縺吶・
+        // 郢昜ｻ｣縺帷ｸｺ荵晢ｽ芽ｫ｡・｡陟托ｽｵ陝・・笆｡邵ｺ莉｣・定愾謔ｶ・願怎・ｺ邵ｺ蜷ｶﾂ繝ｻ
         std::string ext = std::filesystem::path(path).extension().string();
 
-        // 諡｡蠑ｵ蟄舌ｒ蟆乗枚蟄励↓螟画鋤縺励※縲∝､ｧ譁・ｭ怜ｰ乗枚蟄励・驕輔＞縺ｧ螟ｱ謨励＠縺ｪ縺・ｈ縺・↓縺吶ｋ縲・
+        // 隲｡・｡陟托ｽｵ陝・・・定氣荵玲椢陝・干竊楢棔逕ｻ驪､邵ｺ蜉ｱ窶ｻ邵ｲ竏晢ｽ､・ｧ隴√・・ｭ諤懶ｽｰ荵玲椢陝・干繝ｻ鬩戊ｼ費ｼ樒ｸｺ・ｧ陞滂ｽｱ隰ｨ蜉ｱ・邵ｺ・ｪ邵ｺ繝ｻ・育ｸｺ繝ｻ竊鍋ｸｺ蜷ｶ・狗ｸｲ繝ｻ
         std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-        // 險ｱ蜿ｯ縺輔ｌ縺滓僑蠑ｵ蟄舌→荳閾ｴ縺吶ｋ縺玖ｪｿ縺ｹ繧九・
+        // 髫ｪ・ｱ陷ｿ・ｯ邵ｺ霈費ｽ檎ｸｺ貊灘ヱ陟托ｽｵ陝・・竊定叉ﾂ髢ｾ・ｴ邵ｺ蜷ｶ・狗ｸｺ邇厄ｽｪ・ｿ邵ｺ・ｹ郢ｧ荵敖繝ｻ
         for (const char* candidate : extensions) {
             if (ext == candidate) {
                 return true;
@@ -142,87 +144,125 @@ namespace
 
         library.assets.push_back(editingAsset);
     }
+
+    static EntityID FindFirstMeshEntityRecursive(EntityID entity, Registry& registry)
+    {
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            return Entity::NULL_ID;
+        }
+
+        if (registry.GetComponent<MeshComponent>(entity)) {
+            return entity;
+        }
+
+        const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        if (!hierarchy) {
+            return Entity::NULL_ID;
+        }
+
+        EntityID child = hierarchy->firstChild;
+        while (!Entity::IsNull(child)) {
+            EntityID found = FindFirstMeshEntityRecursive(child, registry);
+            if (!Entity::IsNull(found)) {
+                return found;
+            }
+
+            const HierarchyComponent* childHierarchy = registry.GetComponent<HierarchyComponent>(child);
+            child = childHierarchy ? childHierarchy->nextSibling : Entity::NULL_ID;
+        }
+
+        return Entity::NULL_ID;
+    }
+
+    static float ComputePreviewFitRadius(const Model& model)
+    {
+        const auto bounds = model.GetWorldBounds();
+        const DirectX::XMFLOAT3 ex = bounds.Extents;
+        const float radius = std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z);
+        return radius > 0.01f ? radius : 1.0f;
+    }
+
 }
 
-// PlayerEditor縺ｮ繝励Ξ繝薙Η繝ｼ迥ｶ諷九ｒ荳譎ょ●豁｢縺吶ｋ縲・
-// Timeline蜀咲函縲￣reviewState縲∵園譛臼review Entity繧呈ｭ｢繧√ｋ縲・
+// PlayerEditor邵ｺ・ｮ郢晏干ﾎ樒ｹ晁侭ﾎ礼ｹ晢ｽｼ霑･・ｶ隲ｷ荵晢ｽ定叉ﾂ隴弱ｇ笳剰ｱ・ｽ｢邵ｺ蜷ｶ・狗ｸｲ繝ｻ
+// Timeline陷蜥ｲ蜃ｽ邵ｲ・｣reviewState邵ｲ竏ｵ蝨定ｭ幄・review Entity郢ｧ蜻茨ｽｭ・｢郢ｧ竏夲ｽ狗ｸｲ繝ｻ
 void PlayerEditorSession::Suspend(PlayerEditorPanel& panel)
 {
-    // 蜀咲函繝倥ャ繝峨ｒ蜈磯ｭ縺ｫ謌ｻ縺吶・
+    // 陷蜥ｲ蜃ｽ郢晏･繝｣郢晏ｳｨ・定怦逎ｯ・ｰ・ｭ邵ｺ・ｫ隰鯉ｽｻ邵ｺ蜷ｶﾂ繝ｻ
     panel.m_playheadFrame = 0;
 
-    // Timeline蜀咲函迥ｶ諷九ｒ蛛懈ｭ｢縺ｫ縺吶ｋ縲・
+    // Timeline陷蜥ｲ蜃ｽ霑･・ｶ隲ｷ荵晢ｽ定屁諛茨ｽｭ・｢邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_isPlaying = false;
 
-    // PreviewState縺ｫ迴ｾ蝨ｨ縺ｮTimeline蜀咲函菴咲ｽｮ繧貞渚譏縺吶ｋ縲・
+    // PreviewState邵ｺ・ｫ霑ｴ・ｾ陜ｨ・ｨ邵ｺ・ｮTimeline陷蜥ｲ蜃ｽ闖ｴ蜥ｲ・ｽ・ｮ郢ｧ雋樊ｸ夊ｭ擾｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     SyncPreviewTimelinePlayback(panel);
 
-    // Animation preview縺悟虚縺・※縺・ｋ縺ｪ繧臥ｵゆｺ・＠縺ｦ蜈・・Animator迥ｶ諷九∈謌ｻ縺吶・
+    // Animation preview邵ｺ謔溯劒邵ｺ繝ｻ窶ｻ邵ｺ繝ｻ・狗ｸｺ・ｪ郢ｧ閾･・ｵ繧・ｽｺ繝ｻ・邵ｺ・ｦ陷医・繝ｻAnimator霑･・ｶ隲ｷ荵昶・隰鯉ｽｻ邵ｺ蜷ｶﾂ繝ｻ
     if (panel.m_previewState.IsActive()) {
         panel.m_previewState.ExitPreview();
     }
 
-    // PlayerEditor縺瑚・蛻・〒菴懊▲縺蘖review Entity繧堤ｴ譽・☆繧九・
+    // PlayerEditor邵ｺ迹壹・陋ｻ繝ｻ縲定抄諛岩夢邵ｺ陂睦eview Entity郢ｧ蝣､・ｰ・ｴ隴ｽ繝ｻ笘・ｹｧ荵敖繝ｻ
     DestroyOwnedPreviewEntity(panel);
 }
 
-// PlayerEditor縺梧園譛峨＠縺ｦ縺・ｋPreview Entity繧堤ｴ譽・☆繧九・
-// 螟夜Κ縺九ｉ驕ｸ謚槭＆繧後◆Entity縺ｯ遐ｴ譽・○縺壹∬・蛻・〒菴懊▲縺溘ｂ縺ｮ縺縺代ｒ豸医☆縲・
+// PlayerEditor邵ｺ譴ｧ蝨定ｭ帛ｳｨ・邵ｺ・ｦ邵ｺ繝ｻ・輝review Entity郢ｧ蝣､・ｰ・ｴ隴ｽ繝ｻ笘・ｹｧ荵敖繝ｻ
+// 陞溷､慚夂ｸｺ荵晢ｽ蛾ｩ包ｽｸ隰壽ｧｭ・・ｹｧ蠕娯螺Entity邵ｺ・ｯ驕撰ｽｴ隴ｽ繝ｻ笳狗ｸｺ螢ｹﾂ竏ｬ繝ｻ陋ｻ繝ｻ縲定抄諛岩夢邵ｺ貅假ｽらｸｺ・ｮ邵ｺ・ｰ邵ｺ莉｣・定ｱｸ蛹ｻ笘・ｸｲ繝ｻ
 void PlayerEditorSession::DestroyOwnedPreviewEntity(PlayerEditorPanel& panel)
 {
-    // PlayerEditor謇譛峨・Entity縺ｧ縺ｪ縺代ｌ縺ｰ遐ｴ譽・＠縺ｪ縺・・
+    // PlayerEditor隰・隴帛ｳｨ繝ｻEntity邵ｺ・ｧ邵ｺ・ｪ邵ｺ莉｣・檎ｸｺ・ｰ驕撰ｽｴ隴ｽ繝ｻ・邵ｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     if (!panel.m_previewEntityOwned) {
         return;
     }
 
-    // PreviewState縺悟虚縺・※縺・ｋ縺ｪ繧牙・縺ｫ豁｢繧√ｋ縲・
+    // PreviewState邵ｺ謔溯劒邵ｺ繝ｻ窶ｻ邵ｺ繝ｻ・狗ｸｺ・ｪ郢ｧ迚吶・邵ｺ・ｫ雎・ｽ｢郢ｧ竏夲ｽ狗ｸｲ繝ｻ
     if (panel.m_previewState.IsActive()) {
         panel.m_previewState.ExitPreview();
     }
 
-    // Registry縺後≠繧翫￣review Entity縺檎函蟄倥＠縺ｦ縺・ｋ縺ｪ繧臥ｴ譽・☆繧九・
+    // Registry邵ｺ蠕娯旺郢ｧ鄙ｫﾂ・｣review Entity邵ｺ讙主・陝・･・邵ｺ・ｦ邵ｺ繝ｻ・狗ｸｺ・ｪ郢ｧ閾･・ｰ・ｴ隴ｽ繝ｻ笘・ｹｧ荵敖繝ｻ
     if (panel.m_registry && !Entity::IsNull(panel.m_previewEntity) && panel.m_registry->IsAlive(panel.m_previewEntity)) {
-        panel.m_registry->DestroyEntity(panel.m_previewEntity);
+        EntitySnapshot::DestroySubtree(panel.m_previewEntity, *panel.m_registry);
     }
 
-    // Preview Entity諠・ｱ繧堤ｩｺ縺ｫ謌ｻ縺吶・
+    // Preview Entity隲繝ｻ・ｰ・ｱ郢ｧ蝣､・ｩ・ｺ邵ｺ・ｫ隰鯉ｽｻ邵ｺ蜷ｶﾂ繝ｻ
     panel.m_previewEntity = Entity::NULL_ID;
     panel.m_previewEntityOwned = false;
 }
 
-// PlayerEditor蟆ら畑縺ｮPreview Entity繧剃ｽ懈・縺吶ｋ縲・
-// 繝｢繝・Ν繧帝幕縺・◆縺ｨ縺阪ヾcene荳翫↓繝励Ξ繝薙Η繝ｼ逕ｨEntity繧剃ｽ懊▲縺ｦMeshComponent繧剃ｻ倥￠繧九・
+// PlayerEditor陝・ｉ逡醍ｸｺ・ｮPreview Entity郢ｧ蜑・ｽｽ諛医・邵ｺ蜷ｶ・狗ｸｲ繝ｻ
+// 郢晢ｽ｢郢昴・ﾎ晉ｹｧ蟶晏ｹ慕ｸｺ繝ｻ笳・ｸｺ・ｨ邵ｺ髦ｪﾂ繝ｾcene闕ｳ鄙ｫ竊鍋ｹ晏干ﾎ樒ｹ晁侭ﾎ礼ｹ晢ｽｼ騾包ｽｨEntity郢ｧ蜑・ｽｽ諛岩夢邵ｺ・ｦMeshComponent郢ｧ蜑・ｽｻ蛟･・郢ｧ荵敖繝ｻ
 void PlayerEditorSession::EnsureOwnedPreviewEntity(PlayerEditorPanel& panel)
 {
-    // Registry縺檎┌縺・√∪縺溘・繝｢繝・Ν縺碁幕縺九ｌ縺ｦ縺・↑縺・↑繧我ｽ懊ｌ縺ｪ縺・・
+    // Registry邵ｺ讙寂伯邵ｺ繝ｻﾂ竏壺穐邵ｺ貅倥・郢晢ｽ｢郢昴・ﾎ晉ｸｺ遒∝ｹ慕ｸｺ荵晢ｽ檎ｸｺ・ｦ邵ｺ繝ｻ竊醍ｸｺ繝ｻ竊醍ｹｧ謌托ｽｽ諛奇ｽ檎ｸｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     if (!panel.m_registry || !panel.HasOpenModel()) {
         return;
     }
 
-    // 譌｢縺ｫ菴ｿ逕ｨ蜿ｯ閭ｽ縺ｪPreview Entity縺後≠繧九↑繧画眠縺励￥菴懊ｉ縺ｪ縺・・
+    // 隴鯉ｽ｢邵ｺ・ｫ闖ｴ・ｿ騾包ｽｨ陷ｿ・ｯ髢ｭ・ｽ邵ｺ・ｪPreview Entity邵ｺ蠕娯旺郢ｧ荵昶・郢ｧ逕ｻ逵邵ｺ蜉ｱ・･闖ｴ諛奇ｽ臥ｸｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     if (panel.CanUsePreviewEntity()) {
         return;
     }
 
-    // 蜿､縺・園譛臼review Entity縺梧ｮ九▲縺ｦ縺・ｋ蝣ｴ蜷医・蜈医↓遐ｴ譽・☆繧九・
+    // 陷ｿ・､邵ｺ繝ｻ蝨定ｭ幄・review Entity邵ｺ譴ｧ・ｮ荵昶夢邵ｺ・ｦ邵ｺ繝ｻ・玖撻・ｴ陷ｷ蛹ｻ繝ｻ陷亥現竊馴＄・ｴ隴ｽ繝ｻ笘・ｹｧ荵敖繝ｻ
     DestroyOwnedPreviewEntity(panel);
 
-    // 譁ｰ縺励＞Entity繧坦egistry縺ｫ菴懊ｋ縲・
+    // 隴・ｽｰ邵ｺ蜉ｱ・昿ntity郢ｧ蝮ｦegistry邵ｺ・ｫ闖ｴ諛奇ｽ狗ｸｲ繝ｻ
     panel.m_previewEntity = panel.m_registry->CreateEntity();
 
-    // 縺薙・Entity縺ｯPlayerEditor縺御ｽ懊▲縺溘ｂ縺ｮ縺ｨ縺励※邂｡逅・☆繧九・
+    // 邵ｺ阮吶・Entity邵ｺ・ｯPlayerEditor邵ｺ蠕｡・ｽ諛岩夢邵ｺ貅假ｽらｸｺ・ｮ邵ｺ・ｨ邵ｺ蜉ｱ窶ｻ驍ゑｽ｡騾・・笘・ｹｧ荵敖繝ｻ
     panel.m_previewEntityOwned = true;
 
-    // 繝・ヰ繝・げ繧Зierarchy陦ｨ遉ｺ逕ｨ縺ｮ蜷榊燕繧剃ｻ倥￠繧九・
+    // 郢昴・繝ｰ郢昴・縺堤ｹｧﾐ擁erarchy髯ｦ・ｨ驕会ｽｺ騾包ｽｨ邵ｺ・ｮ陷ｷ讎顔√郢ｧ蜑・ｽｻ蛟･・郢ｧ荵敖繝ｻ
     panel.m_registry->AddComponent(panel.m_previewEntity, NameComponent{ "Player Preview" });
 
-    // 蜴溽せ縺ｫ鄂ｮ縺上◆繧√・TransformComponent繧剃ｽ懊ｋ縲・
+    // 陷ｴ貅ｽ縺帷ｸｺ・ｫ驗ゑｽｮ邵ｺ荳岩螺郢ｧ竏壹・TransformComponent郢ｧ蜑・ｽｽ諛奇ｽ狗ｸｲ繝ｻ
     TransformComponent transform{};
 
-    // Preview Entity縺ｮ菴咲ｽｮ縺ｯ蜴溽せ縲・
+    // Preview Entity邵ｺ・ｮ闖ｴ蜥ｲ・ｽ・ｮ邵ｺ・ｯ陷ｴ貅ｽ縺帷ｸｲ繝ｻ
     transform.localPosition = { 0.0f, 0.0f, 0.0f };
 
-    // Preview Entity縺ｮ繧ｹ繧ｱ繝ｼ繝ｫ縺ｯ遲牙阪・
+    // Preview Entity邵ｺ・ｮ郢ｧ・ｹ郢ｧ・ｱ郢晢ｽｼ郢晢ｽｫ邵ｺ・ｯ驕ｲ迚卍髦ｪﾂ繝ｻ
     transform.localScale = { 1.0f, 1.0f, 1.0f };
 
     DirectX::XMStoreFloat4x4(
@@ -239,148 +279,235 @@ void PlayerEditorSession::EnsureOwnedPreviewEntity(PlayerEditorPanel& panel)
 
 
 
-    // Transform譖ｴ譁ｰ縺悟ｿ・ｦ√□縺ｨ遏･繧峨○繧九・
+    // Transform隴厄ｽｴ隴・ｽｰ邵ｺ謔滂ｽｿ繝ｻ・ｦ竏壺味邵ｺ・ｨ驕擾ｽ･郢ｧ蟲ｨ笳狗ｹｧ荵敖繝ｻ
     transform.isDirty = true;
 
-    // Entity縺ｫTransformComponent繧定ｿｽ蜉縺吶ｋ縲・
+    // Entity邵ｺ・ｫTransformComponent郢ｧ螳夲ｽｿ・ｽ陷会｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_registry->AddComponent(panel.m_previewEntity, transform);
 
-    // 謠冗判逕ｨ縺ｮMeshComponent繧剃ｽ懊ｋ縲・
+    // 隰蜀怜愛騾包ｽｨ邵ｺ・ｮMeshComponent郢ｧ蜑・ｽｽ諛奇ｽ狗ｸｲ繝ｻ
     MeshComponent mesh{};
 
-    // 繝｢繝・Ν繝輔ぃ繧､繝ｫ繝代せ繧貞・繧後ｋ縲・
+    // 郢晢ｽ｢郢昴・ﾎ晉ｹ晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢昜ｻ｣縺帷ｹｧ雋槭・郢ｧ蠕鯉ｽ狗ｸｲ繝ｻ
     mesh.modelFilePath = panel.m_currentModelPath;
 
-    // ResourceManager縺九ｉ蜿門ｾ励＠縺溘Δ繝・Ν譛ｬ菴薙ｒ蜈･繧後ｋ縲・
+    // ResourceManager邵ｺ荵晢ｽ芽愾髢・ｾ蜉ｱ・邵ｺ貅佩皮ｹ昴・ﾎ晁ｭ幢ｽｬ闖ｴ阮呻ｽ定怦・･郢ｧ蠕鯉ｽ狗ｸｲ繝ｻ
     mesh.model = panel.m_ownedModel;
 
-    // 陦ｨ遉ｺ迥ｶ諷九ｒ譛牙柑縺ｫ縺吶ｋ縲・
+    // 髯ｦ・ｨ驕会ｽｺ霑･・ｶ隲ｷ荵晢ｽ定ｭ帷甥譟醍ｸｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     mesh.isVisible = true;
 
-    // 蠖ｱ繧定誠縺ｨ縺呵ｨｭ螳壹↓縺吶ｋ縲・
+    // 陟厄ｽｱ郢ｧ螳夊ｪ邵ｺ・ｨ邵ｺ蜻ｵ・ｨ・ｭ陞ｳ螢ｹ竊鍋ｸｺ蜷ｶ・狗ｸｲ繝ｻ
     mesh.castShadow = true;
 
-    // Entity縺ｫMeshComponent繧定ｿｽ蜉縺吶ｋ縲・
-    // 縺薙％縺ｾ縺ｧ譚･繧後・縲後Δ繝・Ν繧呈戟縺｣縺檸ntity縲阪・菴懊ｉ繧後※縺・ｋ縲・
+    // Entity邵ｺ・ｫMeshComponent郢ｧ螳夲ｽｿ・ｽ陷会｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
+    // 邵ｺ阮呻ｼ・ｸｺ・ｾ邵ｺ・ｧ隴夲ｽ･郢ｧ蠕後・邵ｲ蠕湖皮ｹ昴・ﾎ晉ｹｧ蜻域亜邵ｺ・｣邵ｺ讙ｸntity邵ｲ髦ｪ繝ｻ闖ｴ諛奇ｽ臥ｹｧ蠕娯ｻ邵ｺ繝ｻ・狗ｸｲ繝ｻ
     panel.m_registry->AddComponent(panel.m_previewEntity, mesh);
 
-    // EffectPreview逕ｨ縺ｮ逶ｮ蜊ｰComponent繧剃ｻ倥￠繧九・
+    // EffectPreview騾包ｽｨ邵ｺ・ｮ騾ｶ・ｮ陷奇ｽｰComponent郢ｧ蜑・ｽｻ蛟･・郢ｧ荵敖繝ｻ
     panel.m_registry->AddComponent(panel.m_previewEntity, EffectPreviewTagComponent{});
 
-    // Timeline縲ヾtateMachine縲！nputMap縲ヾocket縺ｪ縺ｩ縺ｮEditor蛛ｴ繝・・繧ｿ繧単review Entity縺ｸ蜿肴丐縺吶ｋ縲・
+    // Timeline邵ｲ繝ｾtateMachine邵ｲ・］putMap邵ｲ繝ｾocket邵ｺ・ｪ邵ｺ・ｩ邵ｺ・ｮEditor陋幢ｽｴ郢昴・繝ｻ郢ｧ・ｿ郢ｧ蜊腕eview Entity邵ｺ・ｸ陷ｿ閧ｴ荳千ｸｺ蜷ｶ・狗ｸｲ繝ｻ
     ApplyEditorBindingsToPreviewEntity(panel);
 }
 
-// PlayerEditor縺ｮPreview蟇ｾ雎｡繧偵∝､夜ΚEntity縺ｫ蟾ｮ縺玲崛縺医ｋ縲・
-// 縺､縺ｾ繧翫訓layerEditor蟆ら畑Entity縲阪〒縺ｯ縺ｪ縺上∵里蟄牢cene荳翫・Entity繧堤ｷｨ髮・ｯｾ雎｡縺ｫ縺吶ｋ縲・
+// PlayerEditor邵ｺ・ｮPreview陝・ｽｾ髮趣ｽ｡郢ｧ蛛ｵﾂ竏晢ｽ､螟慚哘ntity邵ｺ・ｫ陝ｾ・ｮ邵ｺ邇ｲ蟠帷ｸｺ蛹ｻ・狗ｸｲ繝ｻ
+// 邵ｺ・､邵ｺ・ｾ郢ｧ鄙ｫﾂ險斗ayerEditor陝・ｉ逡薦ntity邵ｲ髦ｪ縲堤ｸｺ・ｯ邵ｺ・ｪ邵ｺ荳環竏ｵ驥瑚氛迚｢cene闕ｳ鄙ｫ繝ｻEntity郢ｧ蝣､・ｷ・ｨ鬮ｮ繝ｻ・ｯ・ｾ髮趣ｽ｡邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
 void PlayerEditorSession::SetPreviewEntity(PlayerEditorPanel& panel, EntityID entity)
 {
-    // 譌｢縺ｫ蜷後§螟夜ΚEntity繧単review蟇ｾ雎｡縺ｫ縺励※縺・ｋ縺ｪ繧我ｽ輔ｂ縺励↑縺・・
+    // 隴鯉ｽ｢邵ｺ・ｫ陷ｷ蠕個ｧ陞溷､慚哘ntity郢ｧ蜊腕eview陝・ｽｾ髮趣ｽ｡邵ｺ・ｫ邵ｺ蜉ｱ窶ｻ邵ｺ繝ｻ・狗ｸｺ・ｪ郢ｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (panel.m_previewEntity == entity && !panel.m_previewEntityOwned) {
         return;
     }
 
-    // 蜀咲函荳ｭ縺ｪ繧画ｭ｢繧√ｋ縲・
+    // 陷蜥ｲ蜃ｽ闕ｳ・ｭ邵ｺ・ｪ郢ｧ逕ｻ・ｭ・｢郢ｧ竏夲ｽ狗ｸｲ繝ｻ
     panel.m_isPlaying = false;
 
-    // PreviewState縺悟虚縺・※縺・ｋ縺ｪ繧臥ｵゆｺ・☆繧九・
+    // PreviewState邵ｺ謔溯劒邵ｺ繝ｻ窶ｻ邵ｺ繝ｻ・狗ｸｺ・ｪ郢ｧ閾･・ｵ繧・ｽｺ繝ｻ笘・ｹｧ荵敖繝ｻ
     if (panel.m_previewState.IsActive()) {
         panel.m_previewState.ExitPreview();
     }
 
-    // 謇譛臼review Entity縺後≠繧九↑繧臥ｴ譽・☆繧九・
+    // 隰・隴幄・review Entity邵ｺ蠕娯旺郢ｧ荵昶・郢ｧ閾･・ｰ・ｴ隴ｽ繝ｻ笘・ｹｧ荵敖繝ｻ
     DestroyOwnedPreviewEntity(panel);
 
-    // 螟夜ΚEntity繧単review蟇ｾ雎｡縺ｫ縺吶ｋ縲・
+    // 陞溷､慚哘ntity郢ｧ蜊腕eview陝・ｽｾ髮趣ｽ｡邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_previewEntity = entity;
 
-    // 螟夜ΚEntity縺ｪ縺ｮ縺ｧPlayerEditor謇譛峨〒縺ｯ縺ｪ縺・・
+    // 陞溷､慚哘ntity邵ｺ・ｪ邵ｺ・ｮ邵ｺ・ｧPlayerEditor隰・隴帛ｳｨ縲堤ｸｺ・ｯ邵ｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     panel.m_previewEntityOwned = false;
 
-    // 螟夜ΚEntity縺九ｉSocket諠・ｱ繧定ｪｭ縺ｿ霎ｼ繧縲・
+    // 陞溷､慚哘ntity邵ｺ荵晢ｽ唄ocket隲繝ｻ・ｰ・ｱ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
     ImportSocketsFromPreviewEntity(panel);
 }
 
-// EditorLayer縺ｪ縺ｩ螟夜Κ驕ｸ謚槭°繧峨￣layerEditor縺ｸ迴ｾ蝨ｨ驕ｸ謚昿ntity諠・ｱ繧貞酔譛溘☆繧九・
+// EditorLayer邵ｺ・ｪ邵ｺ・ｩ陞溷､慚夐ｩ包ｽｸ隰壽ｧｭﾂｰ郢ｧ蟲ｨﾂ・｣layerEditor邵ｺ・ｸ霑ｴ・ｾ陜ｨ・ｨ鬩包ｽｸ隰壽仭ntity隲繝ｻ・ｰ・ｱ郢ｧ雋樣・隴帶ｺ倪・郢ｧ荵敖繝ｻ
 void PlayerEditorSession::SyncExternalSelection(PlayerEditorPanel& panel, EntityID entity, const std::string& modelPath)
 {
-    // 迴ｾ蝨ｨ驕ｸ謚槭＆繧後※縺・ｋEntity繧剃ｿ晏ｭ倥☆繧九・
+    // 霑ｴ・ｾ陜ｨ・ｨ鬩包ｽｸ隰壽ｧｭ・・ｹｧ蠕娯ｻ邵ｺ繝ｻ・畿ntity郢ｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     panel.m_selectedEntity = entity;
 
-    // 縺昴・Entity縺ｮ繝｢繝・Ν繝代せ繧剃ｿ晏ｭ倥☆繧九・
+    // 邵ｺ譏ｴ繝ｻEntity邵ｺ・ｮ郢晢ｽ｢郢昴・ﾎ晉ｹ昜ｻ｣縺帷ｹｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     panel.m_selectedEntityModelPath = modelPath;
 
-    // Preview Entity縺梧里縺ｫ豁ｻ繧薙〒縺・ｋ縺ｪ繧牙盾辣ｧ繧堤ｩｺ縺ｫ縺吶ｋ縲・
+    // Preview Entity邵ｺ譴ｧ驥檎ｸｺ・ｫ雎・ｽｻ郢ｧ阮吶堤ｸｺ繝ｻ・狗ｸｺ・ｪ郢ｧ迚咏崟霎｣・ｧ郢ｧ蝣､・ｩ・ｺ邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!Entity::IsNull(panel.m_previewEntity) && panel.m_registry && !panel.m_registry->IsAlive(panel.m_previewEntity)) {
         panel.m_previewEntity = Entity::NULL_ID;
         panel.m_previewEntityOwned = false;
     }
 }
 
-// 繝｢繝・Ν繝輔ぃ繧､繝ｫ繧帝幕縺阪￣layerEditor縺ｮPreview逕ｨ繝｢繝・Ν縺ｨ縺励※險ｭ螳壹☆繧九・
+// 郢晢ｽ｢郢昴・ﾎ晉ｹ晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ蟶晏ｹ慕ｸｺ髦ｪﾂ・｣layerEditor邵ｺ・ｮPreview騾包ｽｨ郢晢ｽ｢郢昴・ﾎ晉ｸｺ・ｨ邵ｺ蜉ｱ窶ｻ髫ｪ・ｭ陞ｳ螢ｹ笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std::string& path)
 {
-    // 遨ｺ繝代せ縺ｪ繧牙､ｱ謨励・
     if (path.empty()) {
         return false;
     }
 
- 
-    // PlayerEditor縺ｮPreview Entity縺ｯ騾壼ｸｸScene謠冗判縺ｫ荵励○繧九◆繧√・
+    const bool isPrefab = HasExtension(path, { ".prefab" });
+
+    if (isPrefab) {
+        if (!panel.m_registry) {
+            return false;
+        }
+
+        EntitySnapshot::Snapshot snapshot;
+        if (!PrefabSystem::LoadPrefabSnapshot(path, snapshot)) {
+            return false;
+        }
+
+        Suspend(panel);
+
+        EntitySnapshot::RestoreResult restore = EntitySnapshot::RestoreSubtree(snapshot, *panel.m_registry);
+        if (Entity::IsNull(restore.root) || !panel.m_registry->IsAlive(restore.root)) {
+            return false;
+        }
+
+        if (!panel.m_registry->GetComponent<EffectPreviewTagComponent>(restore.root)) {
+            panel.m_registry->AddComponent(restore.root, EffectPreviewTagComponent{});
+        }
+
+        if (auto* prefabInstance = panel.m_registry->GetComponent<PrefabInstanceComponent>(restore.root)) {
+            prefabInstance->prefabAssetPath = path;
+            prefabInstance->hasOverrides = false;
+        }
+        else {
+            PrefabInstanceComponent newPrefabInstance{};
+            newPrefabInstance.prefabAssetPath = path;
+            newPrefabInstance.hasOverrides = false;
+            panel.m_registry->AddComponent(restore.root, newPrefabInstance);
+        }
+
+        EntityID meshEntity = FindFirstMeshEntityRecursive(restore.root, *panel.m_registry);
+        if (Entity::IsNull(meshEntity)) {
+            EntitySnapshot::DestroySubtree(restore.root, *panel.m_registry);
+            return false;
+        }
+
+        MeshComponent* mesh = panel.m_registry->GetComponent<MeshComponent>(meshEntity);
+        if (!mesh || mesh->modelFilePath.empty()) {
+            EntitySnapshot::DestroySubtree(restore.root, *panel.m_registry);
+            return false;
+        }
+
+        std::shared_ptr<Model> model = mesh->model;
+        if (!model) {
+            model = ResourceManager::Instance().CreateModelInstance(mesh->modelFilePath);
+            if (!model) {
+                EntitySnapshot::DestroySubtree(restore.root, *panel.m_registry);
+                return false;
+            }
+            mesh->model = model;
+        }
+
+        panel.m_previewEntity = restore.root;
+        panel.m_previewEntityOwned = true;
+        panel.m_ownedModel = std::move(model);
+        panel.m_model = panel.m_ownedModel.get();
+        panel.m_currentModelPath = mesh->modelFilePath;
+        panel.ResetSelectionState();
+        panel.m_selectedAnimIndex = 0;
+        panel.m_previewRenderSize = { 0.0f, 0.0f };
+        panel.m_previewModelScale = 1.0f;
+        panel.m_sockets.clear();
+
+        if (const auto* embeddedStateMachine = panel.m_registry->GetComponent<StateMachineAssetComponent>(restore.root)) {
+            panel.m_stateMachineAsset = embeddedStateMachine->asset;
+        }
+        else {
+            panel.m_stateMachineAsset = StateMachineAsset{};
+        }
+        panel.m_stateMachineAssetPath.clear();
+        panel.m_stateMachineDirty = false;
+
+        if (const auto* timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(restore.root)) {
+            if (!timelineLibrary->assets.empty()) {
+                panel.m_timelineAsset = timelineLibrary->assets.front();
+            }
+            else {
+                panel.m_timelineAsset = TimelineAsset{};
+            }
+        }
+        else {
+            panel.m_timelineAsset = TimelineAsset{};
+        }
+        panel.m_timelineAssetPath.clear();
+        panel.m_timelineDirty = false;
+
+        if (const auto* embeddedInputMap = panel.m_registry->GetComponent<InputActionMapComponent>(restore.root)) {
+            panel.m_inputMappingTab.SetEditingMap(embeddedInputMap->asset);
+        }
+        else {
+            panel.m_inputMappingTab.ClearEditingMap();
+        }
+
+        PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*panel.m_registry, restore.root);
+        PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, restore.root);
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(*panel.m_registry, restore.root);
+
+        ImportSocketsFromPreviewEntity(panel);
+        RebuildPreviewTimelineRuntimeData(panel);
+        const auto bounds = panel.m_model->GetWorldBounds();
+        panel.m_pendingCameraFitTarget = bounds.Center;
+        panel.m_pendingCameraFitRadius = ComputePreviewFitRadius(*panel.m_model);
+        panel.m_hasPendingCameraFit = true;
+        return true;
+    }
+
     std::shared_ptr<Model> model = ResourceManager::Instance().CreateModelInstance(path);
     if (!model) {
         return false;
     }
 
-
-    // 譌｢蟄榔review繧・・逕溽憾諷九ｒ蛛懈ｭ｢繝ｻ遐ｴ譽・☆繧九・
     Suspend(panel);
-
-    // PlayerEditor縺梧園譛峨☆繧九Δ繝・Ν縺ｨ縺励※菫晏ｭ倥☆繧九・
     panel.m_ownedModel = std::move(model);
-
-    // 逕溘・繧､繝ｳ繧ｿ蜿ら・繧ゆｿ晄戟縺吶ｋ縲・
     panel.m_model = panel.m_ownedModel.get();
-
-    // 迴ｾ蝨ｨ髢九＞縺ｦ縺・ｋ繝｢繝・Ν繝代せ繧剃ｿ晏ｭ倥☆繧九・
     panel.m_currentModelPath = path;
-
-    // Bone/Socket/Timeline驕ｸ謚槭↑縺ｩ繧偵Μ繧ｻ繝・ヨ縺吶ｋ縲・
     panel.ResetSelectionState();
-
-    // 譛蛻昴・Animation繧帝∈謚樒憾諷九↓縺吶ｋ縲・
     panel.m_selectedAnimIndex = 0;
-
-    // 繝｢繝・Ν陦ｨ遉ｺ繧ｹ繧ｱ繝ｼ繝ｫ繧貞・譛溷､縺ｫ謌ｻ縺吶・
     panel.m_previewModelScale = 1.0f;
-
-    // Preview謠冗判繧ｵ繧､繧ｺ繧偵Μ繧ｻ繝・ヨ縺吶ｋ縲・
     panel.m_previewRenderSize = { 0.0f, 0.0f };
-
-    // Socket繝ｪ繧ｹ繝医ｒ遨ｺ縺ｫ縺吶ｋ縲・
     panel.m_sockets.clear();
-
-    // Dirty繝輔Λ繧ｰ繧貞・譛溷喧縺吶ｋ縲・
     panel.m_socketDirty = false;
     panel.m_timelineDirty = false;
     panel.m_stateMachineDirty = false;
-
-    // Preview Entity繧剃ｽ懈・縺吶ｋ縲・
     EnsureOwnedPreviewEntity(panel);
-
-    // 繝｢繝・Ν繧帝幕縺代◆縺ｮ縺ｧ謌仙粥縲・
+    const auto bounds = panel.m_model->GetWorldBounds();
+    panel.m_pendingCameraFitTarget = bounds.Center;
+    panel.m_pendingCameraFitRadius = ComputePreviewFitRadius(*panel.m_model);
+    panel.m_hasPendingCameraFit = true;
     return true;
 }
 
-// Timeline繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｿ霎ｼ繧縲・
+// Timeline郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
 bool PlayerEditorSession::OpenTimelineFromPath(PlayerEditorPanel& panel, const std::string& path)
 {
-    // 遨ｺ繝代せ縲√∪縺溘・荳肴ｭ｣縺ｪ諡｡蠑ｵ蟄舌↑繧牙､ｱ謨励・
+    // 驕ｨ・ｺ郢昜ｻ｣縺帷ｸｲ竏壺穐邵ｺ貅倥・闕ｳ閧ｴ・ｭ・｣邵ｺ・ｪ隲｡・｡陟托ｽｵ陝・・竊醍ｹｧ迚呻ｽ､・ｱ隰ｨ蜉ｱﾂ繝ｻ
     if (path.empty() || !HasExtension(path, { ".timeline.json", ".json" })) {
         return false;
     }
 
-    // TimelineAsset繧谷SON縺九ｉ隱ｭ縺ｿ霎ｼ繧縲・
+    // TimelineAsset郢ｧ隹ｷSON邵ｺ荵晢ｽ蛾坡・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
     if (!TimelineAssetSerializer::Load(path, panel.m_timelineAsset)) {
         return false;
     }
@@ -389,160 +516,160 @@ bool PlayerEditorSession::OpenTimelineFromPath(PlayerEditorPanel& panel, const s
         panel.m_timelineAsset.id = 1;
     }
 
-    // 隱ｭ縺ｿ霎ｼ繧薙□Timeline繝代せ繧剃ｿ晏ｭ倥☆繧九・
+    // 髫ｱ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧ阮吮味Timeline郢昜ｻ｣縺帷ｹｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     panel.m_timelineAssetPath = path;
 
-    // 隱ｭ縺ｿ霎ｼ縺ｿ逶ｴ蠕後↑縺ｮ縺ｧDirty縺ｧ縺ｯ縺ｪ縺・・
+    // 髫ｱ・ｭ邵ｺ・ｿ髴趣ｽｼ邵ｺ・ｿ騾ｶ・ｴ陟募ｾ娯・邵ｺ・ｮ邵ｺ・ｧDirty邵ｺ・ｧ邵ｺ・ｯ邵ｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     panel.m_timelineDirty = false;
 
-    // Preview Entity逕ｨ縺ｮTimeline runtime data繧貞・讒狗ｯ峨☆繧九・
+    // Preview Entity騾包ｽｨ邵ｺ・ｮTimeline runtime data郢ｧ雋槭・隶堤距・ｯ蟲ｨ笘・ｹｧ荵敖繝ｻ
     RebuildPreviewTimelineRuntimeData(panel);
 
     return true;
 }
 
-// StateMachine繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｿ霎ｼ繧縲・
+// StateMachine郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
 bool PlayerEditorSession::OpenStateMachineFromPath(PlayerEditorPanel& panel, const std::string& path)
 {
-    // 遨ｺ繝代せ縲√∪縺溘・荳肴ｭ｣縺ｪ諡｡蠑ｵ蟄舌↑繧牙､ｱ謨励・
+    // 驕ｨ・ｺ郢昜ｻ｣縺帷ｸｲ竏壺穐邵ｺ貅倥・闕ｳ閧ｴ・ｭ・｣邵ｺ・ｪ隲｡・｡陟托ｽｵ陝・・竊醍ｹｧ迚呻ｽ､・ｱ隰ｨ蜉ｱﾂ繝ｻ
     if (path.empty() || !HasExtension(path, { ".statemachine.json", ".json" })) {
         return false;
     }
 
-    // StateMachineAsset繧谷SON縺九ｉ隱ｭ縺ｿ霎ｼ繧縲・
+    // StateMachineAsset郢ｧ隹ｷSON邵ｺ荵晢ｽ蛾坡・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
     if (!StateMachineAssetSerializer::Load(path, panel.m_stateMachineAsset)) {
         return false;
     }
 
-    // 隱ｭ縺ｿ霎ｼ繧薙□StateMachine繝代せ繧剃ｿ晏ｭ倥☆繧九・
+    // 髫ｱ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧ阮吮味StateMachine郢昜ｻ｣縺帷ｹｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     panel.m_stateMachineAssetPath = path;
 
-    // 隱ｭ縺ｿ霎ｼ縺ｿ逶ｴ蠕後↑縺ｮ縺ｧDirty縺ｧ縺ｯ縺ｪ縺・・
+    // 髫ｱ・ｭ邵ｺ・ｿ髴趣ｽｼ邵ｺ・ｿ騾ｶ・ｴ陟募ｾ娯・邵ｺ・ｮ邵ｺ・ｧDirty邵ｺ・ｧ邵ｺ・ｯ邵ｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     panel.m_stateMachineDirty = false;
 
     return true;
 }
 
-// InputMap繝輔ぃ繧､繝ｫ繧定ｪｭ縺ｿ霎ｼ繧縲・
+// InputMap郢晁ｼ斐＜郢ｧ・､郢晢ｽｫ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
 bool PlayerEditorSession::OpenInputMapFromPath(PlayerEditorPanel& panel, const std::string& path)
 {
-    // InputMappingTab蛛ｴ縺ｮOpen蜃ｦ逅・∈蟋碑ｭｲ縺吶ｋ縲・
+    // InputMappingTab陋幢ｽｴ邵ｺ・ｮOpen陷・ｽｦ騾・・竏郁沂遒托ｽｭ・ｲ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     return panel.m_inputMappingTab.OpenActionMap(path);
 }
 
-// Timeline繝峨く繝･繝｡繝ｳ繝医ｒ菫晏ｭ倥☆繧九・
+// Timeline郢晏ｳｨ縺冗ｹ晢ｽ･郢晢ｽ｡郢晢ｽｳ郢晏現・定将譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::SaveTimelineDocument(PlayerEditorPanel& panel, bool saveAs)
 {
-    // 迴ｾ蝨ｨ縺ｮTimeline菫晏ｭ伜・繧貞叙蠕励☆繧九・
+    // 霑ｴ・ｾ陜ｨ・ｨ邵ｺ・ｮTimeline闖ｫ譎擾ｽｭ莨懊・郢ｧ雋槫徐陟募干笘・ｹｧ荵敖繝ｻ
     std::string path = panel.m_timelineAssetPath;
 
-    // SaveAs謖・ｮ壹√∪縺溘・菫晏ｭ伜・譛ｪ險ｭ螳壹↑繧我ｿ晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧貞・縺吶・
+    // SaveAs隰悶・・ｮ螢ｹﾂ竏壺穐邵ｺ貅倥・闖ｫ譎擾ｽｭ莨懊・隴幢ｽｪ髫ｪ・ｭ陞ｳ螢ｹ竊醍ｹｧ謌托ｽｿ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ雋槭・邵ｺ蜷ｶﾂ繝ｻ
     if (saveAs || path.empty()) {
         char pathBuffer[MAX_PATH] = {};
 
-        // 譌｢蟄倥ヱ繧ｹ縺後≠繧後・蛻晄悄蛟､縺ｫ菴ｿ縺・・
+        // 隴鯉ｽ｢陝・･繝ｱ郢ｧ・ｹ邵ｺ蠕娯旺郢ｧ蠕後・陋ｻ譎・ｄ陋滂ｽ､邵ｺ・ｫ闖ｴ・ｿ邵ｺ繝ｻﾂ繝ｻ
         if (!path.empty()) {
             strcpy_s(pathBuffer, path.c_str());
         }
-        // Timeline蜷阪′縺ゅｌ縺ｰ縲√◎繧後ｒ菴ｿ縺｣縺ｦ蛻晄悄菫晏ｭ伜・繧剃ｽ懊ｋ縲・
+        // Timeline陷ｷ髦ｪ窶ｲ邵ｺ繧・ｽ檎ｸｺ・ｰ邵ｲ竏壺落郢ｧ蠕鯉ｽ定抄・ｿ邵ｺ・｣邵ｺ・ｦ陋ｻ譎・ｄ闖ｫ譎擾ｽｭ莨懊・郢ｧ蜑・ｽｽ諛奇ｽ狗ｸｲ繝ｻ
         else if (!panel.m_timelineAsset.name.empty()) {
             strcpy_s(pathBuffer, ("Assets/Timeline/" + panel.m_timelineAsset.name + ".timeline.json").c_str());
         }
 
-        // 菫晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧帝幕縺上・
+        // 闖ｫ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ蟶晏ｹ慕ｸｺ荳環繝ｻ
         if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kTimelineFileFilter, "Save Timeline", "json") != DialogResult::OK) {
             return false;
         }
 
-        // 菫晏ｭ伜・繧堤｢ｺ螳壹☆繧九・
+        // 闖ｫ譎擾ｽｭ莨懊・郢ｧ蝣､・｢・ｺ陞ｳ螢ｹ笘・ｹｧ荵敖繝ｻ
         path = pathBuffer;
     }
 
-    // TimelineAsset繧谷SON縺ｸ菫晏ｭ倥☆繧九・
+    // TimelineAsset郢ｧ隹ｷSON邵ｺ・ｸ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     if (!TimelineAssetSerializer::Save(path, panel.m_timelineAsset)) {
         return false;
     }
 
-    // 菫晏ｭ伜・繧定ｨ倬鹸縺励．irty繧定ｧ｣髯､縺吶ｋ縲・
+    // 闖ｫ譎擾ｽｭ莨懊・郢ｧ螳夲ｽｨ蛟ｬ鮖ｸ邵ｺ蜉ｱﾂ・司rty郢ｧ螳夲ｽｧ・｣鬮ｯ・､邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_timelineAssetPath = path;
     panel.m_timelineDirty = false;
 
-    // StateMachine/Timeline runtime cache繧堤┌蜉ｹ蛹悶☆繧九・
+    // StateMachine/Timeline runtime cache郢ｧ蝣､笏瑚怏・ｹ陋ｹ謔ｶ笘・ｹｧ荵敖繝ｻ
     StateMachineSystem::InvalidateAssetCache(path.c_str());
 
     return true;
 }
 
-// StateMachine繝峨く繝･繝｡繝ｳ繝医ｒ菫晏ｭ倥☆繧九・
+// StateMachine郢晏ｳｨ縺冗ｹ晢ｽ･郢晢ｽ｡郢晢ｽｳ郢晏現・定将譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::SaveStateMachineDocument(PlayerEditorPanel& panel, bool saveAs)
 {
-    // 迴ｾ蝨ｨ縺ｮStateMachine菫晏ｭ伜・繧貞叙蠕励☆繧九・
+    // 霑ｴ・ｾ陜ｨ・ｨ邵ｺ・ｮStateMachine闖ｫ譎擾ｽｭ莨懊・郢ｧ雋槫徐陟募干笘・ｹｧ荵敖繝ｻ
     std::string path = panel.m_stateMachineAssetPath;
 
-    // SaveAs謖・ｮ壹√∪縺溘・菫晏ｭ伜・譛ｪ險ｭ螳壹↑繧我ｿ晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧貞・縺吶・
+    // SaveAs隰悶・・ｮ螢ｹﾂ竏壺穐邵ｺ貅倥・闖ｫ譎擾ｽｭ莨懊・隴幢ｽｪ髫ｪ・ｭ陞ｳ螢ｹ竊醍ｹｧ謌托ｽｿ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ雋槭・邵ｺ蜷ｶﾂ繝ｻ
     if (saveAs || path.empty()) {
         char pathBuffer[MAX_PATH] = {};
 
-        // 譌｢蟄倥ヱ繧ｹ縺後≠繧後・蛻晄悄蛟､縺ｫ菴ｿ縺・・
+        // 隴鯉ｽ｢陝・･繝ｱ郢ｧ・ｹ邵ｺ蠕娯旺郢ｧ蠕後・陋ｻ譎・ｄ陋滂ｽ､邵ｺ・ｫ闖ｴ・ｿ邵ｺ繝ｻﾂ繝ｻ
         if (!path.empty()) {
             strcpy_s(pathBuffer, path.c_str());
         }
-        // StateMachine蜷阪′縺ゅｌ縺ｰ縲√◎繧後ｒ菴ｿ縺｣縺ｦ蛻晄悄菫晏ｭ伜・繧剃ｽ懊ｋ縲・
+        // StateMachine陷ｷ髦ｪ窶ｲ邵ｺ繧・ｽ檎ｸｺ・ｰ邵ｲ竏壺落郢ｧ蠕鯉ｽ定抄・ｿ邵ｺ・｣邵ｺ・ｦ陋ｻ譎・ｄ闖ｫ譎擾ｽｭ莨懊・郢ｧ蜑・ｽｽ諛奇ｽ狗ｸｲ繝ｻ
         else if (!panel.m_stateMachineAsset.name.empty()) {
             strcpy_s(pathBuffer, ("Assets/StateMachine/" + panel.m_stateMachineAsset.name + ".statemachine.json").c_str());
         }
 
-        // 菫晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧帝幕縺上・
+        // 闖ｫ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ蟶晏ｹ慕ｸｺ荳環繝ｻ
         if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kStateMachineFileFilter, "Save State Machine", "json") != DialogResult::OK) {
             return false;
         }
 
-        // 菫晏ｭ伜・繧堤｢ｺ螳壹☆繧九・
+        // 闖ｫ譎擾ｽｭ莨懊・郢ｧ蝣､・｢・ｺ陞ｳ螢ｹ笘・ｹｧ荵敖繝ｻ
         path = pathBuffer;
     }
 
-    // StateMachineAsset繧谷SON縺ｸ菫晏ｭ倥☆繧九・
+    // StateMachineAsset郢ｧ隹ｷSON邵ｺ・ｸ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     if (!StateMachineAssetSerializer::Save(path, panel.m_stateMachineAsset)) {
         return false;
     }
 
-    // 菫晏ｭ伜・繧定ｨ倬鹸縺励．irty繧定ｧ｣髯､縺吶ｋ縲・
+    // 闖ｫ譎擾ｽｭ莨懊・郢ｧ螳夲ｽｨ蛟ｬ鮖ｸ邵ｺ蜉ｱﾂ・司rty郢ｧ螳夲ｽｧ・｣鬮ｯ・､邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_stateMachineAssetPath = path;
     panel.m_stateMachineDirty = false;
 
-    // StateMachine cache繧堤┌蜉ｹ蛹悶☆繧九・
+    // StateMachine cache郢ｧ蝣､笏瑚怏・ｹ陋ｹ謔ｶ笘・ｹｧ荵敖繝ｻ
     StateMachineSystem::InvalidateAssetCache(path.c_str());
 
     return true;
 }
 
-// InputMap繝峨く繝･繝｡繝ｳ繝医ｒ菫晏ｭ倥☆繧九・
+// InputMap郢晏ｳｨ縺冗ｹ晢ｽ･郢晢ｽ｡郢晢ｽｳ郢晏現・定将譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::SaveInputMapDocument(PlayerEditorPanel& panel, bool saveAs)
 {
-    // 騾壼ｸｸ菫晏ｭ倥↑繧迂nputMappingTab蛛ｴ縺ｸ蟋碑ｭｲ縺吶ｋ縲・
+    // 鬨ｾ螢ｼ・ｸ・ｸ闖ｫ譎擾ｽｭ蛟･竊醍ｹｧ霑ＯputMappingTab陋幢ｽｴ邵ｺ・ｸ陝狗｢托ｽｭ・ｲ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!saveAs) {
         return panel.m_inputMappingTab.SaveActionMap();
     }
 
-    // SaveAs逕ｨ縺ｮ菫晏ｭ伜・繝舌ャ繝輔ぃ縲・
+    // SaveAs騾包ｽｨ邵ｺ・ｮ闖ｫ譎擾ｽｭ莨懊・郢晁・繝｣郢晁ｼ斐＜邵ｲ繝ｻ
     char pathBuffer[MAX_PATH] = {};
 
-    // 迴ｾ蝨ｨ縺ｮInputMap繝代せ繧貞・譛溷､縺ｫ縺吶ｋ縲・
+    // 霑ｴ・ｾ陜ｨ・ｨ邵ｺ・ｮInputMap郢昜ｻ｣縺帷ｹｧ雋槭・隴帶ｺｷﾂ・､邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     const std::string& currentPath = panel.m_inputMappingTab.GetActionMapPath();
     if (!currentPath.empty()) {
         strcpy_s(pathBuffer, currentPath.c_str());
     }
 
-    // 菫晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧帝幕縺上・
+    // 闖ｫ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ蟶晏ｹ慕ｸｺ荳環繝ｻ
     if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kInputMapFileFilter, "Save Input Map", "json") != DialogResult::OK) {
         return false;
     }
 
-    // 謖・ｮ壹ヱ繧ｹ縺ｸInputMap繧剃ｿ晏ｭ倥☆繧九・
+    // 隰悶・・ｮ螢ｹ繝ｱ郢ｧ・ｹ邵ｺ・ｸInputMap郢ｧ蜑・ｽｿ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
     return panel.m_inputMappingTab.SaveActionMapAs(pathBuffer);
 }
 
-// Timeline / StateMachine / InputMap / Socket 繧偵∪縺ｨ繧√※菫晏ｭ倥☆繧九・
+// Timeline / StateMachine / InputMap / Socket 郢ｧ蛛ｵ竏ｪ邵ｺ・ｨ郢ｧ竏壺ｻ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::SaveAllDocuments(PlayerEditorPanel& panel, bool saveAs)
 {
     (void)saveAs;
@@ -556,48 +683,48 @@ bool PlayerEditorSession::SaveAllDocuments(PlayerEditorPanel& panel, bool saveAs
     return true;
 }
 
-// Preview Entity繧単refab縺ｨ縺励※菫晏ｭ倥☆繧九・
+// Preview Entity郢ｧ蜊腕efab邵ｺ・ｨ邵ｺ蜉ｱ窶ｻ闖ｫ譎擾ｽｭ蛟･笘・ｹｧ荵敖繝ｻ
 bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool saveAs)
 {
-    // Registry縺檎┌縺・√∪縺溘・Preview Entity縺檎┌縺・↑繧我ｿ晏ｭ倥〒縺阪↑縺・・
+    // Registry邵ｺ讙寂伯邵ｺ繝ｻﾂ竏壺穐邵ｺ貅倥・Preview Entity邵ｺ讙寂伯邵ｺ繝ｻ竊醍ｹｧ謌托ｽｿ譎擾ｽｭ蛟･縲堤ｸｺ髦ｪ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (!panel.m_registry || Entity::IsNull(panel.m_previewEntity)) {
         return false;
     }
 
-    // Editor縺ｧ險ｭ螳壹＠縺鬱imeline/StateMachine/Input/Socket繧単review Entity縺ｸ蜿肴丐縺吶ｋ縲・    ApplyEditorBindingsToPreviewEntity(panel);
+    // Editor邵ｺ・ｧ髫ｪ・ｭ陞ｳ螢ｹ・邵ｺ鬯ｱimeline/StateMachine/Input/Socket郢ｧ蜊腕eview Entity邵ｺ・ｸ陷ｿ閧ｴ荳千ｸｺ蜷ｶ・狗ｸｲ繝ｻ    ApplyEditorBindingsToPreviewEntity(panel);
 
-    // Socket諠・ｱ繧１review Entity縺ｸ譖ｸ縺肴綾縺吶・
+    // Socket隲繝ｻ・ｰ・ｱ郢ｧ・喪eview Entity邵ｺ・ｸ隴厄ｽｸ邵ｺ閧ｴ邯ｾ邵ｺ蜷ｶﾂ繝ｻ
     ExportSocketsToPreviewEntity(panel);
 
-    // Player縺ｨ縺励※Prefab縺ｫ蠢・ｦ√↑豌ｸ邯咾omponent繧剃ｿ晁ｨｼ縺吶ｋ縲・
+    // Player邵ｺ・ｨ邵ｺ蜉ｱ窶ｻPrefab邵ｺ・ｫ陟｢繝ｻ・ｦ竏壺・雎鯉ｽｸ驍ｯ蜥ｾomponent郢ｧ蜑・ｽｿ譎・ｽｨ・ｼ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*panel.m_registry, panel.m_previewEntity);
 
-    // Runtime逕ｨComponent繧ゆｿ晁ｨｼ縺吶ｋ縲・
+    // Runtime騾包ｽｨComponent郢ｧ繧・ｽｿ譎・ｽｨ・ｼ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, panel.m_previewEntity);
 
-    // Runtime迥ｶ諷九ｒ蛻晄悄蛹悶☆繧九・
+    // Runtime霑･・ｶ隲ｷ荵晢ｽ定崕譎・ｄ陋ｹ謔ｶ笘・ｹｧ荵敖繝ｻ
     PlayerRuntimeSetup::ResetPlayerRuntimeState(*panel.m_registry, panel.m_previewEntity);
 
-    // 菫晏ｭ伜・Prefab繝代せ縲・
+    // 闖ｫ譎擾ｽｭ莨懊・Prefab郢昜ｻ｣縺帷ｸｲ繝ｻ
     std::string prefabPath;
 
-    // SaveAs縺ｧ縺ｪ縺代ｌ縺ｰ縲￣refabInstanceComponent縺ｮ譌｢蟄倥ヱ繧ｹ繧剃ｽｿ縺・・
+    // SaveAs邵ｺ・ｧ邵ｺ・ｪ邵ｺ莉｣・檎ｸｺ・ｰ邵ｲ・｣refabInstanceComponent邵ｺ・ｮ隴鯉ｽ｢陝・･繝ｱ郢ｧ・ｹ郢ｧ蜑・ｽｽ・ｿ邵ｺ繝ｻﾂ繝ｻ
     if (!saveAs) {
         if (const PrefabInstanceComponent* prefab = panel.m_registry->GetComponent<PrefabInstanceComponent>(panel.m_previewEntity)) {
             prefabPath = prefab->prefabAssetPath;
         }
     }
 
-    // 菫晏ｭ伜・縺後∪縺辟｡縺代ｌ縺ｰ菫晏ｭ倥ム繧､繧｢繝ｭ繧ｰ縺ｧ豎ｺ繧√ｋ縲・
+    // 闖ｫ譎擾ｽｭ莨懊・邵ｺ蠕娯穐邵ｺ・ｰ霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰ闖ｫ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ邵ｺ・ｧ雎趣ｽｺ郢ｧ竏夲ｽ狗ｸｲ繝ｻ
     if (prefabPath.empty()) {
         char pathBuffer[MAX_PATH] = {};
 
-        // 譌｢蟄榔refab繝代せ縺後≠繧九↑繧牙・譛溷､縺ｫ縺吶ｋ縲・
+        // 隴鯉ｽ｢陝・ｦ排efab郢昜ｻ｣縺帷ｸｺ蠕娯旺郢ｧ荵昶・郢ｧ迚吶・隴帶ｺｷﾂ・､邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
         if (const PrefabInstanceComponent* prefab = panel.m_registry->GetComponent<PrefabInstanceComponent>(panel.m_previewEntity);
             prefab && !prefab->prefabAssetPath.empty()) {
             strcpy_s(pathBuffer, prefab->prefabAssetPath.c_str());
         }
-        // 辟｡縺代ｌ縺ｰ繝｢繝・Ν蜷阪°繧臼refab菫晏ｭ伜・繧剃ｽ懊ｋ縲・
+        // 霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰ郢晢ｽ｢郢昴・ﾎ晁惺髦ｪﾂｰ郢ｧ閾ｼrefab闖ｫ譎擾ｽｭ莨懊・郢ｧ蜑・ｽｽ諛奇ｽ狗ｸｲ繝ｻ
         else {
             const std::string defaultName = panel.m_currentModelPath.empty()
                 ? "Assets/Prefab/Player.prefab"
@@ -605,12 +732,12 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
             strcpy_s(pathBuffer, defaultName.c_str());
         }
 
-        // 菫晏ｭ倥ム繧､繧｢繝ｭ繧ｰ繧帝幕縺上・
+        // 闖ｫ譎擾ｽｭ蛟･繝郢ｧ・､郢ｧ・｢郢晢ｽｭ郢ｧ・ｰ郢ｧ蟶晏ｹ慕ｸｺ荳環繝ｻ
         if (Dialog::SaveFileName(pathBuffer, MAX_PATH, kPrefabFileFilter, "Save Player Prefab", "prefab") != DialogResult::OK) {
             return false;
         }
 
-        // 菫晏ｭ伜・繧堤｢ｺ螳壹☆繧九・
+        // 闖ｫ譎擾ｽｭ莨懊・郢ｧ蝣､・｢・ｺ陞ｳ螢ｹ笘・ｹｧ荵敖繝ｻ
         prefabPath = pathBuffer;
     }
 
@@ -625,16 +752,16 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
     return true;
 }
 
-// 縺吶∋縺ｦ縺ｮ繝峨く繝･繝｡繝ｳ繝医ｒ菫晏ｭ伜燕迥ｶ諷九↓謌ｻ縺吶・
+// 邵ｺ蜷ｶ竏狗ｸｺ・ｦ邵ｺ・ｮ郢晏ｳｨ縺冗ｹ晢ｽ･郢晢ｽ｡郢晢ｽｳ郢晏現・定将譎擾ｽｭ莨懃√霑･・ｶ隲ｷ荵昶・隰鯉ｽｻ邵ｺ蜷ｶﾂ繝ｻ
 void PlayerEditorSession::RevertAllDocuments(PlayerEditorPanel& panel)
 {
-    // Timeline縺ｫ菫晏ｭ俶ｸ医∩繝代せ縺後≠繧九↑繧峨ヵ繧｡繧､繝ｫ縺九ｉ蜀崎ｪｭ縺ｿ霎ｼ縺ｿ縺吶ｋ縲・
+    // Timeline邵ｺ・ｫ闖ｫ譎擾ｽｭ菫ｶ・ｸ蛹ｻ竏ｩ郢昜ｻ｣縺帷ｸｺ蠕娯旺郢ｧ荵昶・郢ｧ蟲ｨ繝ｵ郢ｧ・｡郢ｧ・､郢晢ｽｫ邵ｺ荵晢ｽ芽怙蟠趣ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ邵ｺ・ｿ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!panel.m_timelineAssetPath.empty()) {
         TimelineAssetSerializer::Load(panel.m_timelineAssetPath, panel.m_timelineAsset);
         panel.m_timelineDirty = false;
     }
 
-    // StateMachine縺ｫ菫晏ｭ俶ｸ医∩繝代せ縺後≠繧九↑繧峨ヵ繧｡繧､繝ｫ縺九ｉ蜀崎ｪｭ縺ｿ霎ｼ縺ｿ縺吶ｋ縲・
+    // StateMachine邵ｺ・ｫ闖ｫ譎擾ｽｭ菫ｶ・ｸ蛹ｻ竏ｩ郢昜ｻ｣縺帷ｸｺ蠕娯旺郢ｧ荵昶・郢ｧ蟲ｨ繝ｵ郢ｧ・｡郢ｧ・､郢晢ｽｫ邵ｺ荵晢ｽ芽怙蟠趣ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ邵ｺ・ｿ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!panel.m_stateMachineAssetPath.empty()) {
         StateMachineAssetSerializer::Load(panel.m_stateMachineAssetPath, panel.m_stateMachineAsset);
         panel.m_stateMachineDirty = false;
@@ -644,22 +771,22 @@ void PlayerEditorSession::RevertAllDocuments(PlayerEditorPanel& panel)
         panel.m_inputMappingTab.ReloadActionMap();
     }
 
-    // Preview Entity縺九ｉSocket繧貞・蜿門ｾ励☆繧九・
+    // Preview Entity邵ｺ荵晢ｽ唄ocket郢ｧ雋槭・陷ｿ髢・ｾ蜉ｱ笘・ｹｧ荵敖繝ｻ
     ImportSocketsFromPreviewEntity(panel);
 
-    // Socket Dirty繧定ｧ｣髯､縺吶ｋ縲・
+    // Socket Dirty郢ｧ螳夲ｽｧ・｣鬮ｯ・､邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_socketDirty = false;
 }
 
-// PlayerEditor縺ｮ蜷・ｨｮ險ｭ螳壹ｒPreview Entity縺ｸ蜿肴丐縺吶ｋ縲・
+// PlayerEditor邵ｺ・ｮ陷ｷ繝ｻ・ｨ・ｮ髫ｪ・ｭ陞ｳ螢ｹ・単review Entity邵ｺ・ｸ陷ｿ閧ｴ荳千ｸｺ蜷ｶ・狗ｸｲ繝ｻ
 void PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel)
 {
-    // Preview Entity縺御ｽｿ縺医↑縺・↑繧我ｽ輔ｂ縺励↑縺・・
+    // Preview Entity邵ｺ蠕｡・ｽ・ｿ邵ｺ蛹ｻ竊醍ｸｺ繝ｻ竊醍ｹｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (!panel.CanUsePreviewEntity()) {
         return;
     }
 
-    // MeshComponent縺ｸ迴ｾ蝨ｨ縺ｮ繝｢繝・Ν諠・ｱ繧貞渚譏縺吶ｋ縲・
+    // MeshComponent邵ｺ・ｸ霑ｴ・ｾ陜ｨ・ｨ邵ｺ・ｮ郢晢ｽ｢郢昴・ﾎ晁ｫ繝ｻ・ｰ・ｱ郢ｧ雋樊ｸ夊ｭ擾｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (auto* mesh = panel.m_registry->GetComponent<MeshComponent>(panel.m_previewEntity)) {
         mesh->model = panel.m_ownedModel;
         mesh->modelFilePath = panel.m_currentModelPath;
@@ -680,34 +807,34 @@ void PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& 
         embeddedInputMap->asset = panel.m_inputMappingTab.GetEditingMap();
     }
 
-    // Preview繝｢繝・Ν縺ｮ繧ｹ繧ｱ繝ｼ繝ｫ繧探ransformComponent縺ｸ蜿肴丐縺吶ｋ縲・
+    // Preview郢晢ｽ｢郢昴・ﾎ晉ｸｺ・ｮ郢ｧ・ｹ郢ｧ・ｱ郢晢ｽｼ郢晢ｽｫ郢ｧ謗｢ransformComponent邵ｺ・ｸ陷ｿ閧ｴ荳千ｸｺ蜷ｶ・狗ｸｲ繝ｻ
     if (auto* transform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity)) {
         transform->localScale = { panel.m_previewModelScale, panel.m_previewModelScale, panel.m_previewModelScale };
         transform->isDirty = true;
     }
 
-    // Socket邱ｨ髮・ｵ先棡繧単review Entity縺ｸ譖ｸ縺肴綾縺吶・
+    // Socket驍ｱ・ｨ鬮ｮ繝ｻ・ｵ蜈域｣｡郢ｧ蜊腕eview Entity邵ｺ・ｸ隴厄ｽｸ邵ｺ閧ｴ邯ｾ邵ｺ蜷ｶﾂ繝ｻ
     ExportSocketsToPreviewEntity(panel);
 
-    // TimelineAsset繧坦untime逕ｨComponent縺ｸ螟画鋤縺励※Preview Entity縺ｸ蜿肴丐縺吶ｋ縲・
+    // TimelineAsset郢ｧ蝮ｦuntime騾包ｽｨComponent邵ｺ・ｸ陞溽判驪､邵ｺ蜉ｱ窶ｻPreview Entity邵ｺ・ｸ陷ｿ閧ｴ荳千ｸｺ蜷ｶ・狗ｸｲ繝ｻ
     RebuildPreviewTimelineRuntimeData(panel);
 }
 
-// TimelineAsset縺九ｉTimelineComponent縺ｨTimelineItemBuffer繧剃ｽ懊ｊ逶ｴ縺吶・
+// TimelineAsset邵ｺ荵晢ｽ欝imelineComponent邵ｺ・ｨTimelineItemBuffer郢ｧ蜑・ｽｽ諛奇ｽ企ｶ・ｴ邵ｺ蜷ｶﾂ繝ｻ
 void PlayerEditorSession::RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& panel)
 {
-    // Preview Entity縺檎┌縺・↑繧我ｽ輔ｂ縺励↑縺・・
+    // Preview Entity邵ｺ讙寂伯邵ｺ繝ｻ竊醍ｹｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (Entity::IsNull(panel.m_previewEntity)) {
         return;
     }
 
-    // Player Runtime縺ｫ蠢・ｦ√↑Component繧剃ｿ晁ｨｼ縺吶ｋ縲・
+    // Player Runtime邵ｺ・ｫ陟｢繝ｻ・ｦ竏壺・Component郢ｧ蜑・ｽｿ譎・ｽｨ・ｼ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, panel.m_previewEntity);
 
-    // Timeline runtime逕ｨComponent繧剃ｸ譎ゆｽ懈・縺吶ｋ縲・
+    // Timeline runtime騾包ｽｨComponent郢ｧ蜑・ｽｸﾂ隴弱ｆ・ｽ諛医・邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     TimelineComponent timeline{};
 
-    // Timeline item runtime buffer繧剃ｸ譎ゆｽ懈・縺吶ｋ縲・
+    // Timeline item runtime buffer郢ｧ蜑・ｽｸﾂ隴弱ｆ・ｽ諛医・邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     TimelineItemBuffer buffer{};
 
     const TimelineAsset* sourceTimeline = nullptr;
@@ -737,51 +864,51 @@ void PlayerEditorSession::RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& p
         return;
     }
 
-    // 譌｢縺ｫTimelineComponent縺後≠繧九↑繧我ｸ頑嶌縺阪☆繧九・
+    // 隴鯉ｽ｢邵ｺ・ｫTimelineComponent邵ｺ蠕娯旺郢ｧ荵昶・郢ｧ謌托ｽｸ鬆大ｶ檎ｸｺ髦ｪ笘・ｹｧ荵敖繝ｻ
     if (auto* existing = panel.m_registry->GetComponent<TimelineComponent>(panel.m_previewEntity)) {
         *existing = timeline;
     }
-    // 辟｡縺代ｌ縺ｰ霑ｽ蜉縺吶ｋ縲・
+    // 霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰ髴托ｽｽ陷会｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     else {
         panel.m_registry->AddComponent(panel.m_previewEntity, timeline);
     }
 
-    // 譌｢縺ｫTimelineItemBuffer縺後≠繧九↑繧我ｸ頑嶌縺阪☆繧九・
+    // 隴鯉ｽ｢邵ｺ・ｫTimelineItemBuffer邵ｺ蠕娯旺郢ｧ荵昶・郢ｧ謌托ｽｸ鬆大ｶ檎ｸｺ髦ｪ笘・ｹｧ荵敖繝ｻ
     if (auto* existingBuffer = panel.m_registry->GetComponent<TimelineItemBuffer>(panel.m_previewEntity)) {
         *existingBuffer = buffer;
     }
-    // 辟｡縺代ｌ縺ｰ霑ｽ蜉縺吶ｋ縲・
+    // 霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰ髴托ｽｽ陷会｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     else {
         panel.m_registry->AddComponent(panel.m_previewEntity, buffer);
     }
 }
 
-// Timeline縺ｮ蜀咲函菴咲ｽｮ繧単reviewState縺ｸ蜷梧悄縺吶ｋ縲・
+// Timeline邵ｺ・ｮ陷蜥ｲ蜃ｽ闖ｴ蜥ｲ・ｽ・ｮ郢ｧ蜊腕eviewState邵ｺ・ｸ陷ｷ譴ｧ謔・ｸｺ蜷ｶ・狗ｸｲ繝ｻ
 void PlayerEditorSession::SyncPreviewTimelinePlayback(PlayerEditorPanel& panel)
 {
-    // PreviewState縺悟虚縺・※縺・↑縺・↑繧我ｽ輔ｂ縺励↑縺・・
+    // PreviewState邵ｺ謔溯劒邵ｺ繝ｻ窶ｻ邵ｺ繝ｻ竊醍ｸｺ繝ｻ竊醍ｹｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (!panel.m_previewState.IsActive()) {
         return;
     }
 
-    // frame繧痴econds縺ｸ螟画鋤縺励※PreviewState縺ｸ貂｡縺吶・
+    // frame郢ｧ逞ｴeconds邵ｺ・ｸ陞溽判驪､邵ｺ蜉ｱ窶ｻPreviewState邵ｺ・ｸ雋ゑｽ｡邵ｺ蜷ｶﾂ繝ｻ
     panel.m_previewState.SetTime(panel.m_playheadFrame / (panel.m_timelineAsset.fps > 0.0f ? panel.m_timelineAsset.fps : 60.0f));
 }
 
-// 迴ｾ蝨ｨ驕ｸ謚樔ｸｭ縺ｮScene Entity縺九ｉPlayerEditor縺ｸ險ｭ螳壹ｒ蜿悶ｊ霎ｼ繧縲・
+// 霑ｴ・ｾ陜ｨ・ｨ鬩包ｽｸ隰壽ｨ費ｽｸ・ｭ邵ｺ・ｮScene Entity邵ｺ荵晢ｽ臼layerEditor邵ｺ・ｸ髫ｪ・ｭ陞ｳ螢ｹ・定愾謔ｶ・企恷・ｼ郢ｧﾂ邵ｲ繝ｻ
 void PlayerEditorSession::ImportFromSelectedEntity(PlayerEditorPanel& panel)
 {
-    // Registry縺檎┌縺・√∪縺溘・驕ｸ謚昿ntity縺檎┌縺・↑繧我ｽ輔ｂ縺励↑縺・・
+    // Registry邵ｺ讙寂伯邵ｺ繝ｻﾂ竏壺穐邵ｺ貅倥・鬩包ｽｸ隰壽仭ntity邵ｺ讙寂伯邵ｺ繝ｻ竊醍ｹｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (!panel.m_registry || Entity::IsNull(panel.m_selectedEntity)) {
         return;
     }
 
-    // 驕ｸ謚昿ntity縺ｮ繝｢繝・Ν繝代せ縺後≠繧九↑繧峨√◎繧後ｒPlayerEditor縺ｧ髢九￥縲・
+    // 鬩包ｽｸ隰壽仭ntity邵ｺ・ｮ郢晢ｽ｢郢昴・ﾎ晉ｹ昜ｻ｣縺帷ｸｺ蠕娯旺郢ｧ荵昶・郢ｧ蟲ｨﾂ竏壺落郢ｧ蠕鯉ｽ単layerEditor邵ｺ・ｧ鬮｢荵晢ｿ･邵ｲ繝ｻ
     if (!panel.m_selectedEntityModelPath.empty()) {
         OpenModelFromPath(panel, panel.m_selectedEntityModelPath);
     }
 
-    // 驕ｸ謚昿ntity繧単review蟇ｾ雎｡縺ｫ縺吶ｋ縲・
+    // 鬩包ｽｸ隰壽仭ntity郢ｧ蜊腕eview陝・ｽｾ髮趣ｽ｡邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     SetPreviewEntity(panel, panel.m_selectedEntity);
 
     if (const auto* embeddedStateMachine = panel.m_registry->GetComponent<StateMachineAssetComponent>(panel.m_selectedEntity)) {
@@ -802,53 +929,53 @@ void PlayerEditorSession::ImportFromSelectedEntity(PlayerEditorPanel& panel)
         panel.m_inputMappingTab.SetEditingMap(embeddedInputMap->asset);
     }
 
-    // 驕ｸ謚昿ntity縺九ｉSocket諠・ｱ繧定ｪｭ縺ｿ霎ｼ繧縲・
+    // 鬩包ｽｸ隰壽仭ntity邵ｺ荵晢ｽ唄ocket隲繝ｻ・ｰ・ｱ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
     ImportSocketsFromPreviewEntity(panel);
 }
 
-// Preview Entity縺九ｉSocket諠・ｱ繧定ｪｭ縺ｿ霎ｼ繧縲・
+// Preview Entity邵ｺ荵晢ｽ唄ocket隲繝ｻ・ｰ・ｱ郢ｧ螳夲ｽｪ・ｭ邵ｺ・ｿ髴趣ｽｼ郢ｧﾂ邵ｲ繝ｻ
 void PlayerEditorSession::ImportSocketsFromPreviewEntity(PlayerEditorPanel& panel)
 {
-    // Registry縺檎┌縺・√∪縺溘・Preview Entity縺御ｽｿ縺医↑縺・↑繧唄ocket繧堤ｩｺ縺ｫ縺吶ｋ縲・
+    // Registry邵ｺ讙寂伯邵ｺ繝ｻﾂ竏壺穐邵ｺ貅倥・Preview Entity邵ｺ蠕｡・ｽ・ｿ邵ｺ蛹ｻ竊醍ｸｺ繝ｻ竊醍ｹｧ蜚・cket郢ｧ蝣､・ｩ・ｺ邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!panel.m_registry || !panel.CanUsePreviewEntity()) {
         panel.m_sockets.clear();
         panel.m_socketDirty = false;
         return;
     }
 
-    // NodeSocketComponent縺後≠繧後・縲√◎縺ｮSocket驟榊・繧脱ditor蛛ｴ縺ｸ繧ｳ繝斐・縺吶ｋ縲・
+    // NodeSocketComponent邵ｺ蠕娯旺郢ｧ蠕後・邵ｲ竏壺落邵ｺ・ｮSocket鬩滓ｦ翫・郢ｧ閼ｱditor陋幢ｽｴ邵ｺ・ｸ郢ｧ・ｳ郢晄鱒繝ｻ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (const auto* sockets = panel.m_registry->GetComponent<NodeSocketComponent>(panel.m_previewEntity)) {
         panel.m_sockets = sockets->sockets;
     }
-    // 辟｡縺代ｌ縺ｰSocket繝ｪ繧ｹ繝医ｒ遨ｺ縺ｫ縺吶ｋ縲・
+    // 霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰSocket郢晢ｽｪ郢ｧ・ｹ郢晏現・帝→・ｺ邵ｺ・ｫ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     else {
         panel.m_sockets.clear();
     }
 
-    // 隱ｭ縺ｿ霎ｼ縺ｿ逶ｴ蠕後↑縺ｮ縺ｧDirty縺ｧ縺ｯ縺ｪ縺・・
+    // 髫ｱ・ｭ邵ｺ・ｿ髴趣ｽｼ邵ｺ・ｿ騾ｶ・ｴ陟募ｾ娯・邵ｺ・ｮ邵ｺ・ｧDirty邵ｺ・ｧ邵ｺ・ｯ邵ｺ・ｪ邵ｺ繝ｻﾂ繝ｻ
     panel.m_socketDirty = false;
 }
 
-// Editor蛛ｴ縺ｧ邱ｨ髮・＠縺欖ocket諠・ｱ繧単review Entity縺ｸ譖ｸ縺肴綾縺吶・
+// Editor陋幢ｽｴ邵ｺ・ｧ驍ｱ・ｨ鬮ｮ繝ｻ・邵ｺ谺撲cket隲繝ｻ・ｰ・ｱ郢ｧ蜊腕eview Entity邵ｺ・ｸ隴厄ｽｸ邵ｺ閧ｴ邯ｾ邵ｺ蜷ｶﾂ繝ｻ
 void PlayerEditorSession::ExportSocketsToPreviewEntity(PlayerEditorPanel& panel)
 {
-    // Registry縺檎┌縺・√∪縺溘・Preview Entity縺御ｽｿ縺医↑縺・↑繧我ｽ輔ｂ縺励↑縺・・
+    // Registry邵ｺ讙寂伯邵ｺ繝ｻﾂ竏壺穐邵ｺ貅倥・Preview Entity邵ｺ蠕｡・ｽ・ｿ邵ｺ蛹ｻ竊醍ｸｺ繝ｻ竊醍ｹｧ謌托ｽｽ霈費ｽらｸｺ蜉ｱ竊醍ｸｺ繝ｻﾂ繝ｻ
     if (!panel.m_registry || !panel.CanUsePreviewEntity()) {
         return;
     }
 
-    // 譌｢蟄倥・NodeSocketComponent繧貞叙蠕励☆繧九・
+    // 隴鯉ｽ｢陝・･繝ｻNodeSocketComponent郢ｧ雋槫徐陟募干笘・ｹｧ荵敖繝ｻ
     auto* sockets = panel.m_registry->GetComponent<NodeSocketComponent>(panel.m_previewEntity);
 
-    // 辟｡縺代ｌ縺ｰ譁ｰ縺励￥霑ｽ蜉縺吶ｋ縲・
+    // 霎滂ｽ｡邵ｺ莉｣・檎ｸｺ・ｰ隴・ｽｰ邵ｺ蜉ｱ・･髴托ｽｽ陷会｣ｰ邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     if (!sockets) {
         panel.m_registry->AddComponent(panel.m_previewEntity, NodeSocketComponent{ panel.m_sockets });
         return;
     }
 
-    // 縺ゅｌ縺ｰSocket驟榊・繧剃ｸ頑嶌縺阪☆繧九・
+    // 邵ｺ繧・ｽ檎ｸｺ・ｰSocket鬩滓ｦ翫・郢ｧ蜑・ｽｸ鬆大ｶ檎ｸｺ髦ｪ笘・ｹｧ荵敖繝ｻ
     sockets->sockets = panel.m_sockets;
 
-    // 譖ｸ縺肴綾縺励◆縺ｮ縺ｧDirty繧定ｧ｣髯､縺吶ｋ縲・
+    // 隴厄ｽｸ邵ｺ閧ｴ邯ｾ邵ｺ蜉ｱ笳・ｸｺ・ｮ邵ｺ・ｧDirty郢ｧ螳夲ｽｧ・｣鬮ｯ・､邵ｺ蜷ｶ・狗ｸｲ繝ｻ
     panel.m_socketDirty = false;
 }

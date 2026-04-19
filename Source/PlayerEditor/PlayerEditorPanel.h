@@ -40,6 +40,7 @@ public:
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
     DirectX::XMFLOAT4 GetViewportRect() const { return m_viewportRect; }
     bool IsViewportHovered() const { return m_viewportHovered; }
+    bool ConsumePendingCameraFit(DirectX::XMFLOAT3& outTarget, float& outRadius);
     DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const;
     DirectX::XMFLOAT3 GetPreviewCameraDirection() const;
@@ -215,6 +216,9 @@ private:
     float m_vpCameraPitch = 0.05f;
     float m_vpCameraDist  = 5.0f;
     float m_previewModelScale = 1.0f;
+    bool m_hasPendingCameraFit = false;
+    DirectX::XMFLOAT3 m_pendingCameraFitTarget = { 0.0f, 0.0f, 0.0f };
+    float m_pendingCameraFitRadius = 1.0f;
 
     // 笏笏 Per-frame 笏笏
     Registry* m_registry = nullptr;
