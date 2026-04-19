@@ -861,8 +861,10 @@ void EffectEditorPanel::DrawToolbar()
                 ImGui::CloseCurrentPopup();
             };
 
-            // Texture | Dissolve | DissolveGlow | AlphaFade
-            static constexpr int kMeshFlag_SlashGlow  = 0x001 | 0x002 | 0x200 | 0x4000; // 0x4203
+            // Texture | Dissolve | DissolveGlow | AlphaFade | Scroll | FlowMap
+            // Scroll drives UV by time for the "streaking" motion of the slash.
+            // FlowMap adds subtle UV wobble via Flow.png on top of the scroll.
+            static constexpr int kMeshFlag_SlashGlow  = 0x001 | 0x002 | 0x200 | 0x4000 | 0x100000 | 0x1000; // 0x105203
             // Texture | FlowMap | Scroll | AlphaFade
             static constexpr int kMeshFlag_MagicCircle = 0x001 | 0x1000 | 0x100000 | 0x4000; // 0x105001
             // Texture | Dissolve | AlphaFade
@@ -876,12 +878,21 @@ void EffectEditorPanel::DrawToolbar()
                     "Data/Model/Slash/fbx_slash_001_1.fbx",
                     2, kMeshFlag_SlashGlow,
                     { 1.0f, 0.9f, 0.35f, 1.0f },
-                    0.0f, 0.06f, 1.0f, 0.0f,
-                    0.0f, 0.0f, 0.0f, 0.0f,
+                    // dissolveAmount is lifetime-driven in EffectSystems, so
+                    // the static value here only sets the initial frame state
+                    // (0 = fully visible at t=0). dissolveEdge 0.10 gives the
+                    // dissolve boundary a visible glow band. flowStrength 0.20
+                    // adds a moderate FlowMap-driven UV wobble on top of scroll.
+                    0.0f, 0.10f, 1.0f, 0.20f,
+                    // gFlowSpeed is not referenced by the current PS, so leave
+                    // at 0. scrollSpeedX = 2.5 streaks the UV along the slash
+                    // arc at a believable speed; scrollSpeedY stays 0 so the
+                    // streak only runs along the blade direction.
+                    0.0f, 0.0f, 2.5f, 0.0f,
                     { 1.0f, 0.5f, 0.1f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f },
                     "Data/Effect/Effect/Aura01_T.png",
                     "Data/Effect/Mask/dissolve_animation.png",
-                    nullptr);
+                    "Data/Effect/Flow/Flow.png");
             }
             if (ImGui::MenuItem("Magic Circle")) {
                 applyMeshTemplate(

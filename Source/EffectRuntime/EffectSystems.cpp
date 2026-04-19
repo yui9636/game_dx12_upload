@@ -510,6 +510,18 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     packet.meshVariantParams = effectiveMesh.variantParams;
                     packet.meshVariantParams.constants.alphaFade = playback.lifetimeFade;
                     packet.meshVariantParams.constants.effectTime = playback.currentTime;
+                    // Phase C (P0): When MeshFlag_Dissolve is enabled, drive
+                    // dissolveAmount linearly from 0 to 1 over the effect's
+                    // lifetime. lifetimeFade goes 1.0 -> 0.0 (see EffectSystems
+                    // line ~63: lifetimeFade = 1 - normalized), so the progress
+                    // 0.0 -> 1.0 is (1 - lifetimeFade). This gives slash-style
+                    // templates an automatic "appear then dissolve" curve
+                    // without keyframing. A future P1 can add an opt-out flag
+                    // for templates that want a static dissolveAmount.
+                    if (effectiveMesh.variantParams.shaderFlags & MeshFlag_Dissolve) {
+                        packet.meshVariantParams.constants.dissolveAmount =
+                            1.0f - playback.lifetimeFade;
+                    }
                     // Variant textures
                     auto& vp = effectiveMesh.variantParams;
                     if (!vp.baseTexturePath.empty())
