@@ -3131,6 +3131,8 @@ void EffectEditorPanel::DrawDetailsPanel()
             }
             break;
         case EffectGraphNodeType::MeshRenderer: {
+            // Core: tint, blend mode. Variant flags (intValue2) are picked via the
+            // "Effect Presets" section further down; the current value is shown there.
             if (ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
                 m_compileDirty |= ImGui::ColorEdit4("Tint", &node->vectorValue.x);
                 int blendState = node->intValue;
@@ -3139,7 +3141,59 @@ void EffectEditorPanel::DrawDetailsPanel()
                     node->intValue = blendState;
                     m_compileDirty = true;
                 }
-                DrawAssetSlotControl("Base Texture", node->stringValue, AssetPickerKind::Texture, node->id, false);
+            }
+
+            // Textures. Slot->stringValueN mapping matches EffectCompiler.cpp:
+            //   stringValue  : base albedo (t0, MeshFlag_Texture)
+            //   stringValue2 : mask / dissolve noise (t1, MeshFlag_Mask / Dissolve)
+            //   stringValue3 : tangent-space normal map (t2, MeshFlag_NormalMap)
+            //   stringValue4 : flow map / gradient LUT (t3, MeshFlag_FlowMap / GradientMap)
+            //   stringValue5 : sub texture / distort noise (t4, MeshFlag_SubTexture / Distort)
+            //   stringValue6 : emission mask (t5, MeshFlag_Emission)
+            if (ImGui::CollapsingHeader("Textures", ImGuiTreeNodeFlags_DefaultOpen)) {
+                m_compileDirty |= DrawAssetSlotControl("Base Texture",  node->stringValue,  AssetPickerKind::Texture, node->id, false);
+                m_compileDirty |= DrawAssetSlotControl("Mask / Dissolve Noise", node->stringValue2, AssetPickerKind::Texture, node->id, false);
+                m_compileDirty |= DrawAssetSlotControl("Normal Map",    node->stringValue3, AssetPickerKind::Texture, node->id, false);
+                m_compileDirty |= DrawAssetSlotControl("Flow Map / Gradient", node->stringValue4, AssetPickerKind::Texture, node->id, false);
+                m_compileDirty |= DrawAssetSlotControl("Sub / Distort Texture", node->stringValue5, AssetPickerKind::Texture, node->id, false);
+                m_compileDirty |= DrawAssetSlotControl("Emission Tex",  node->stringValue6, AssetPickerKind::Texture, node->id, false);
+            }
+
+            // UV Animation. Controls map to variantParams.constants in the compiler:
+            //   vectorValue3.zw -> scrollSpeed (MeshFlag_Scroll)
+            //   vectorValue2.w  -> flowStrength (MeshFlag_FlowMap)
+            //   vectorValue4.z  -> distortStrength (MeshFlag_Distort / ChromaticAberration)
+            if (ImGui::CollapsingHeader("UV Animation", ImGuiTreeNodeFlags_None)) {
+                m_compileDirty |= ImGui::DragFloat2("Scroll Speed (XY)", &node->vectorValue3.z, 0.05f, -10.0f, 10.0f);
+                m_compileDirty |= ImGui::DragFloat("Flow Strength",    &node->vectorValue2.w, 0.01f, 0.0f, 5.0f);
+                m_compileDirty |= ImGui::DragFloat("Distort Strength", &node->vectorValue4.z, 0.01f, 0.0f, 5.0f);
+                ImGui::TextDisabled("Requires MeshFlag_Scroll / FlowMap / Distort");
+            }
+
+            // Dissolve. When MeshFlag_Dissolve is on, EffectSystems overrides
+            // dissolveAmount with (1 - lifetimeFade), so the static value below
+            // becomes the t=0 starting point only.
+            if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_None)) {
+                m_compileDirty |= ImGui::DragFloat("Dissolve Amount", &node->vectorValue2.x, 0.005f, 0.0f, 1.0f);
+                ImGui::TextDisabled("(runtime drives 0->1 over lifetime when MeshFlag_Dissolve is set)");
+                m_compileDirty |= ImGui::DragFloat("Dissolve Edge",  &node->vectorValue2.y, 0.005f, 0.001f, 1.0f);
+                m_compileDirty |= ImGui::ColorEdit4("Dissolve Glow Color", &node->vectorValue5.x);
+            }
+
+            // Fresnel (view-angle rim, blown-out silhouette) and RimLight
+            // (stylized back-light rim). Both use the same pow(1 - NdotV, k)
+            // but with separate power/color so they can coexist.
+            if (ImGui::CollapsingHeader("Fresnel & Rim", ImGuiTreeNodeFlags_None)) {
+                m_compileDirty |= ImGui::DragFloat("Fresnel Power", &node->vectorValue2.z, 0.05f, 0.0f, 16.0f);
+                m_compileDirty |= ImGui::ColorEdit4("Fresnel Color", &node->vectorValue6.x);
+                m_compileDirty |= ImGui::DragFloat("Rim Power",     &node->vectorValue4.x, 0.05f, 0.0f, 16.0f);
+                m_compileDirty |= ImGui::ColorEdit4("Rim Color",    &node->vectorValue7.x);
+            }
+
+            // Emission: additive glow multiplied by the emission texture alpha.
+            if (ImGui::CollapsingHeader("Emission", ImGuiTreeNodeFlags_None)) {
+                m_compileDirty |= ImGui::DragFloat("Emission Intensity", &node->vectorValue4.y, 0.05f, 0.0f, 16.0f);
+                m_compileDirty |= ImGui::ColorEdit4("Emission Color",    &node->vectorValue8.x);
             }
 
             // B3: Preset Templates
