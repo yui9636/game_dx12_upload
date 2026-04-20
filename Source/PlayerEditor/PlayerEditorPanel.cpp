@@ -357,7 +357,11 @@ void PlayerEditorPanel::SetSharedSceneCamera(const DirectX::XMFLOAT3& position, 
     m_sharedSceneCameraFovY = fovY;
 }
 
-bool PlayerEditorPanel::ConsumePendingCameraFit(DirectX::XMFLOAT3& outTarget, float& outRadius)
+bool PlayerEditorPanel::ConsumePendingCameraFit(
+    DirectX::XMFLOAT3& outTarget,
+    float& outRadius,
+    DirectX::XMFLOAT3* outForward,
+    float* outDistance)
 {
     if (!m_hasPendingCameraFit) {
         return false;
@@ -365,6 +369,12 @@ bool PlayerEditorPanel::ConsumePendingCameraFit(DirectX::XMFLOAT3& outTarget, fl
 
     outTarget = m_pendingCameraFitTarget;
     outRadius = m_pendingCameraFitRadius;
+    if (outForward) {
+        *outForward = m_pendingCameraFitForward;
+    }
+    if (outDistance) {
+        *outDistance = m_pendingCameraFitDistance;
+    }
     m_hasPendingCameraFit = false;
     return true;
 }
@@ -998,7 +1008,9 @@ void PlayerEditorPanel::DrawSkeletonPanel()
                 if (ImGui::Selectable(("[" + std::to_string(i) + "] " + nodes[i].name).c_str(), selected)) {
                     m_selectedBoneIndex = i;
                     m_selectedBoneName = nodes[i].name;
-                    m_selectionCtx = SelectionContext::Bone;
+                    if (!TryAssignSelectedBoneToTimelineItem(i)) {
+                        m_selectionCtx = SelectionContext::Bone;
+                    }
                 }
             }
         }
@@ -1039,7 +1051,9 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     if (ImGui::IsItemClicked(0)) {
         m_selectedBoneIndex = nodeIndex;
         m_selectedBoneName = node.name;
-        m_selectionCtx = SelectionContext::Bone;
+        if (!TryAssignSelectedBoneToTimelineItem(nodeIndex)) {
+            m_selectionCtx = SelectionContext::Bone;
+        }
     }
 
     // Right-click: quick actions
@@ -1052,24 +1066,6 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     if (ImGui::BeginPopup("BoneCtx")) {
         ImGui::Text(ICON_FA_BONE " %s [%d]", m_selectedBoneName.c_str(), m_selectedBoneIndex);
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_CROSSHAIRS " Set as Hitbox Node")) {
-            for (auto& track : m_timelineAsset.tracks) {
-                if ((int)track.id != m_selectedTrackId) continue;
-                if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
-                if (track.type == TimelineTrackType::Hitbox)
-                    track.items[m_selectedItemIdx].hitbox.nodeIndex = m_selectedBoneIndex;
-                m_timelineDirty = true;
-            }
-        }
-        if (ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES " Set as VFX Node")) {
-            for (auto& track : m_timelineAsset.tracks) {
-                if ((int)track.id != m_selectedTrackId) continue;
-                if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
-                if (track.type == TimelineTrackType::VFX)
-                    track.items[m_selectedItemIdx].vfx.nodeIndex = m_selectedBoneIndex;
-                m_timelineDirty = true;
-            }
-        }
         if (ImGui::MenuItem(ICON_FA_PLUG " Create Socket Here")) {
             NodeSocket sock;
             sock.name = "Socket_" + node.name;
@@ -1130,6 +1126,64 @@ void PlayerEditorPanel::DrawSocketList(float height)
 
     ImGui::PopStyleVar(2);
     ImGui::EndChild();
+}
+
+bool PlayerEditorPanel::TryAssignSelectedBoneToTimelineItem(int boneIndex)
+{
+    if (boneIndex < 0) {
+        return false;
+    }
+
+    for (auto& track : m_timelineAsset.tracks) {
+        if (static_cast<int>(track.id) != m_selectedTrackId) {
+            continue;
+        }
+        if (m_selectedItemIdx < 0 || m_selectedItemIdx >= static_cast<int>(track.items.size())) {
+            return false;
+        }
+
+        TimelineItem& item = track.items[m_selectedItemIdx];
+        switch (track.type) {
+        case TimelineTrackType::Hitbox:
+            item.hitbox.nodeIndex = boneIndex;
+            item.hitbox.offsetLocal = { 0.0f, 0.0f, 0.0f };
+            m_timelineDirty = true;
+            RebuildPreviewTimelineRuntimeData();
+            if (m_previewState.IsActive()) {
+                SyncPreviewTimelinePlayback();
+            }
+            return true;
+
+        case TimelineTrackType::VFX:
+            item.vfx.nodeIndex = boneIndex;
+            item.vfx.offsetLocal = { 0.0f, 0.0f, 0.0f };
+            m_timelineDirty = true;
+            RebuildPreviewTimelineRuntimeData();
+            if (m_previewState.IsActive()) {
+                SyncPreviewTimelinePlayback();
+            }
+            return true;
+
+        default:
+            return false;
+        }
+    }
+
+    return false;
+}
+
+const char* PlayerEditorPanel::GetBoneNameByIndex(int boneIndex) const
+{
+    if (!m_model) {
+        return "(none)";
+    }
+
+    const auto& nodes = m_model->GetNodes();
+    if (boneIndex < 0 || boneIndex >= static_cast<int>(nodes.size())) {
+        return "(none)";
+    }
+
+    return nodes[boneIndex].name.c_str();
 }
 
 StateNode* PlayerEditorPanel::FindStateByName(const char* name)
@@ -2770,15 +2824,8 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         switch (track.type) {
         case TimelineTrackType::Hitbox:
             ImGui::Text(ICON_FA_CROSSHAIRS " Hitbox Payload");
-            if (ImGui::DragInt("Node Index", &item.hitbox.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
-            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
-                if (ImGui::Button("Use Selected Bone")) {
-                    item.hitbox.nodeIndex = m_selectedBoneIndex;
-                    m_timelineDirty = true;
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
-            }
+            ImGui::TextDisabled("Target Bone: %s", GetBoneNameByIndex(item.hitbox.nodeIndex));
+            ImGui::TextDisabled("Click a skeleton node to assign.");
             if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
                 const NodeSocket& socket = m_sockets[m_selectedSocketIdx];
                 if (ImGui::Button("Use Selected Socket")) {
@@ -2811,15 +2858,8 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         case TimelineTrackType::VFX:
             ImGui::Text(ICON_FA_WAND_MAGIC_SPARKLES " VFX Payload");
             if (ImGui::InputText("Asset ID", item.vfx.assetId, sizeof(item.vfx.assetId))) m_timelineDirty = true;
-            if (ImGui::DragInt("Node Index", &item.vfx.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
-            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
-                if (ImGui::Button("Use Selected Bone##VFX")) {
-                    item.vfx.nodeIndex = m_selectedBoneIndex;
-                    m_timelineDirty = true;
-                }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
-            }
+            ImGui::TextDisabled("Target Bone: %s", GetBoneNameByIndex(item.vfx.nodeIndex));
+            ImGui::TextDisabled("Click a skeleton node to assign.");
             if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
                 const NodeSocket& socket = m_sockets[m_selectedSocketIdx];
                 if (ImGui::Button("Use Selected Socket##VFX")) {

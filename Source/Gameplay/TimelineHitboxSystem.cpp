@@ -11,6 +11,7 @@
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
 #include "Transform/NodeAttachmentUtils.h"
+#include <cmath>
 
 namespace
 {
@@ -64,6 +65,23 @@ namespace
             transform->worldPosition.z + offsetLocal.z
         };
     }
+
+    float ResolveTimelineHitboxScale(const TransformComponent* transform)
+    {
+        if (!transform) {
+            return 1.0f;
+        }
+
+        float sx = std::fabs(transform->worldScale.x);
+        float sy = std::fabs(transform->worldScale.y);
+        float sz = std::fabs(transform->worldScale.z);
+
+        float value = sx;
+        if (sy > value) value = sy;
+        if (sz > value) value = sz;
+        if (value <= 0.0001f) value = 1.0f;
+        return value;
+    }
 }
 
 void TimelineHitboxSystem::Update(Registry& registry) {
@@ -108,13 +126,15 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         tx,
                         item.hb.nodeIndex,
                         item.hb.offsetLocal);
+                    const float scaledRadius = item.hb.radius * ResolveTimelineHitboxScale(tx);
                     if (found) {
                         // Update existing
                         found->radius = item.hb.radius;
                         found->offsetLocal = item.hb.offsetLocal;
+                        found->nodeIndex = item.hb.nodeIndex;
                         found->enabled = true;
                         if (found->registeredId) {
-                            cm.UpdateSphere(found->registeredId, { center, item.hb.radius });
+                            cm.UpdateSphere(found->registeredId, { center, scaledRadius });
                             cm.SetEnabled(found->registeredId, true);
                         }
                     } else {
@@ -127,7 +147,7 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         elem.nodeIndex = item.hb.nodeIndex;
                         elem.runtimeTag = tag;
                         elem.enabled = true;
-                        elem.registeredId = cm.AddSphere({ center, item.hb.radius }, nullptr, ColliderAttribute::Attack);
+                        elem.registeredId = cm.AddSphere({ center, scaledRadius }, nullptr, ColliderAttribute::Attack);
                         col.elements.push_back(elem);
                     }
                 } else if (found) {

@@ -35,6 +35,7 @@
 #include "Gameplay/TimelineAudioSystem.h"
 #include "Gameplay/TimelineShakeSystem.h"
 #include "Gameplay/HitboxTrackingSystem.h"
+#include "DebugRender/DebugRenderSystem.h"
 #include "EffectRuntime/EffectService.h"
 #include "EffectRuntime/EffectSystems.h"
 #include "Animator/AnimatorService.h"
@@ -134,10 +135,6 @@ void GameLayer::Update(const EngineTime& time)
     PlaybackSystem::Update(m_registry, time.dt);
     StateMachineSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
-    TimelineHitboxSystem::Update(m_registry);
-    TimelineVFXSystem::Update(m_registry);
-    TimelineAudioSystem::Update(m_registry);
-    TimelineShakeSystem::Update(m_registry, time.dt);
     CinematicService::Instance().Update(time);
     EffectSpawnSystem::Update(m_registry, time.dt);
     EffectPlaybackSystem::Update(m_registry, time.dt);
@@ -145,18 +142,23 @@ void GameLayer::Update(const EngineTime& time)
     EffectLifetimeSystem::Update(m_registry, time.dt);
     const float previewDt = time.dt > 0.0f ? 0.0f : time.unscaledDt;
     EffectPreviewSystem::Update(m_registry, previewDt);
-    HitboxTrackingSystem::Update(m_registry);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
 
     TransformSystem transformSys;
     transformSys.Update(m_registry);
-    NodeAttachmentSystem::Update(m_registry);
-    EffectAttachmentSystem::Update(m_registry);
-    TrailSystem::Update(m_registry, time.dt);
 
     AnimatorSystem::Update(m_registry, time.dt);
     ModelUpdateSystem::Update(m_registry);
+
+    NodeAttachmentSystem::Update(m_registry);
+    TimelineHitboxSystem::Update(m_registry);
+    TimelineVFXSystem::Update(m_registry);
+    TimelineAudioSystem::Update(m_registry);
+    TimelineShakeSystem::Update(m_registry, time.dt);
+    EffectAttachmentSystem::Update(m_registry);
+    TrailSystem::Update(m_registry, time.dt);
+    HitboxTrackingSystem::Update(m_registry);
 
     CameraFinalizeSystem::Update(m_registry);
 }
@@ -211,6 +213,9 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     extractSys.Extract(m_registry, queue);
     EffectExtractSystem::Extract(m_registry, rc, queue);
     TrailExtractSystem::Extract(m_registry, queue, rc);
+
+    DebugRenderSystem debugRenderSystem;
+    debugRenderSystem.Render(m_registry);
 }
 
 

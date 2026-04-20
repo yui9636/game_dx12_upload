@@ -1,6 +1,8 @@
 #include "PlayerRuntimeSetup.h"
 
+#include "Component/ColliderComponent.h"
 #include "Component/NodeSocketComponent.h"
+#include "Collision/CollisionManager.h"
 #include "Gameplay/ActionDatabaseComponent.h"
 #include "Gameplay/ActionStateComponent.h"
 #include "Gameplay/AnimatorComponent.h"
@@ -93,6 +95,7 @@ namespace PlayerRuntimeSetup
         EnsureComponent<PlaybackComponent>(registry, entity);
         EnsureComponent<TimelineComponent>(registry, entity);
         EnsureComponent<TimelineItemBuffer>(registry, entity);
+        EnsureComponent<ColliderComponent>(registry, entity);
         EnsureComponent<HitboxTrackingComponent>(registry, entity);
         EnsureComponent<LocomotionStateComponent>(registry, entity);
         EnsureComponent<ActionStateComponent>(registry, entity);
@@ -131,6 +134,19 @@ namespace PlayerRuntimeSetup
 
         if (auto* timelineItems = registry.GetComponent<TimelineItemBuffer>(entity)) {
             timelineItems->items.clear();
+        }
+
+        if (auto* collider = registry.GetComponent<ColliderComponent>(entity)) {
+            auto& collisionManager = CollisionManager::Instance();
+            for (auto& element : collider->elements) {
+                if (element.registeredId != 0) {
+                    collisionManager.Remove(element.registeredId);
+                    element.registeredId = 0;
+                }
+            }
+            collider->elements.clear();
+            collider->enabled = true;
+            collider->drawGizmo = true;
         }
 
         if (auto* hitboxTracking = registry.GetComponent<HitboxTrackingComponent>(entity)) {
