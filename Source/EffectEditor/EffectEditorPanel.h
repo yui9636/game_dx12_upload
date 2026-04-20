@@ -76,6 +76,7 @@ private:
     std::string BuildTransientAssetKey() const;
     std::string GetActiveAssetKey() const;
     void QueuePreviewSpawn();
+    void QueuePreviewSpawnAt(float startTime, bool pausedOnSpawn);
     void StopPreview();
     void RemoveNode(uint32_t nodeId);
     bool CanCreateLink(uint32_t startPinId, uint32_t endPinId, std::string& reason) const;
@@ -106,6 +107,8 @@ private:
     bool m_compileDirty = true;
     bool m_needsLayoutRebuild = true;
     bool m_syncNodePositions = true;
+    bool m_scrubResumesPlay = true;
+    bool m_scrubWasPlaying = false;
     uint32_t m_selectedNodeId = 0;
     uint32_t m_selectedLinkId = 0;
     DirectX::XMFLOAT2 m_pendingNodePopupPos = { 0.0f, 0.0f };

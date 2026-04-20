@@ -2868,7 +2868,9 @@ void EffectEditorPanel::DrawTimelinePanel()
             currentTime = std::clamp(currentTime, 0.0f, duration);
 
             if (ImGui::Button(ICON_FA_BACKWARD_STEP " Restart")) {
-                CompileDocument();
+                if (m_compileDirty || !m_compiled || !m_compiled->valid) {
+                    CompileDocument();
+                }
                 QueuePreviewSpawn();
             }
             ImGui::SameLine();
@@ -2895,6 +2897,22 @@ void EffectEditorPanel::DrawTimelinePanel()
                 currentTime = 0.0f;
             }
             ImGui::SameLine();
+            const char* stateLabel = "[Stopped]";
+            ImU32 stateColor = IM_COL32(160, 160, 160, 255);
+            if (playback) {
+                if (playback->isPaused) {
+                    stateLabel = "[Paused]";
+                    stateColor = IM_COL32(255, 196, 60, 255);
+                } else if (playback->isPlaying) {
+                    stateLabel = "[Playing]";
+                    stateColor = IM_COL32(110, 220, 140, 255);
+                } else {
+                    stateLabel = "[Idle]";
+                    stateColor = IM_COL32(160, 160, 160, 255);
+                }
+            }
+            ImGui::TextColored(ImColor(stateColor).Value, "%s", stateLabel);
+            ImGui::SameLine();
             ImGui::SetNextItemWidth(160.0f);
             if (ImGui::DragFloat("Duration", &m_asset.previewDefaults.duration, 0.01f, 0.10f, 120.0f, "%.2f s")) {
                 m_compileDirty = true;
@@ -2902,19 +2920,38 @@ void EffectEditorPanel::DrawTimelinePanel()
                     playback->duration = m_asset.previewDefaults.duration;
                 }
             }
+            ImGui::SameLine();
+            ImGui::Checkbox("Scrub resumes play", &m_scrubResumesPlay);
 
             float scrubTime = currentTime;
             ImGui::SetNextItemWidth(-1.0f);
-            if (ImGui::SliderFloat("##EffectTimelineScrub", &scrubTime, 0.0f, duration, "%.2f s")) {
-                if (playback) {
+            const bool scrubChanged = ImGui::SliderFloat("##EffectTimelineScrub", &scrubTime, 0.0f, duration, "%.2f s");
+            if (ImGui::IsItemActivated()) {
+                m_scrubWasPlaying = (playback != nullptr) && playback->isPlaying && !playback->isPaused;
+            }
+            if (scrubChanged) {
+                if (!playback) {
+                    if (m_compileDirty || !m_compiled || !m_compiled->valid) {
+                        CompileDocument();
+                    }
+                    QueuePreviewSpawnAt(scrubTime, true);
+                    m_scrubWasPlaying = false;
+                } else {
                     playback->currentTime = scrubTime;
-                    playback->isPlaying = false;
+                    playback->isPaused = true;
+                    playback->stopRequested = false;
                     if (playback->runtimeInstanceId != 0) {
                         if (auto* runtime = EffectRuntimeRegistry::Instance().GetRuntimeInstance(playback->runtimeInstanceId)) {
                             runtime->time = scrubTime;
                         }
                     }
                 }
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit()) {
+                if (m_scrubResumesPlay && m_scrubWasPlaying && playback) {
+                    playback->isPaused = false;
+                }
+                m_scrubWasPlaying = false;
             }
 
             const float leftPaneWidth = 220.0f;
@@ -2996,7 +3033,39 @@ void EffectEditorPanel::DrawTimelinePanel()
             }
 
             const float canvasHeight = (usableHeight > rowHeight * 3.0f) ? usableHeight : (rowHeight * 3.0f);
-            ImGui::Dummy(ImVec2(canvasAvail.x, canvasHeight));
+            ImGui::InvisibleButton("##EffectTimelineCanvasArea", ImVec2(canvasAvail.x, canvasHeight));
+            if (ImGui::IsItemActivated()) {
+                m_scrubWasPlaying = (playback != nullptr) && playback->isPlaying && !playback->isPaused;
+            }
+            if (ImGui::IsItemActive() && canvasAvail.x > 0.0f) {
+                const ImVec2 mousePos = ImGui::GetIO().MousePos;
+                const float mouseRatio = std::clamp((mousePos.x - canvasMin.x) / canvasAvail.x, 0.0f, 1.0f);
+                const float newTime = mouseRatio * duration;
+                if (!playback) {
+                    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                        if (m_compileDirty || !m_compiled || !m_compiled->valid) {
+                            CompileDocument();
+                        }
+                        QueuePreviewSpawnAt(newTime, true);
+                        m_scrubWasPlaying = false;
+                    }
+                } else {
+                    playback->currentTime = newTime;
+                    playback->isPaused = true;
+                    playback->stopRequested = false;
+                    if (playback->runtimeInstanceId != 0) {
+                        if (auto* runtime = EffectRuntimeRegistry::Instance().GetRuntimeInstance(playback->runtimeInstanceId)) {
+                            runtime->time = newTime;
+                        }
+                    }
+                }
+            }
+            if (ImGui::IsItemDeactivated()) {
+                if (m_scrubResumesPlay && m_scrubWasPlaying && playback) {
+                    playback->isPaused = false;
+                }
+                m_scrubWasPlaying = false;
+            }
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
@@ -3772,6 +3841,11 @@ bool EffectEditorPanel::CompileDocument()
 
 void EffectEditorPanel::QueuePreviewSpawn()
 {
+    QueuePreviewSpawnAt(0.0f, false);
+}
+
+void EffectEditorPanel::QueuePreviewSpawnAt(float startTime, bool pausedOnSpawn)
+{
     if (!m_registry || !m_compiled || !m_compiled->valid) {
         return;
     }
@@ -3800,10 +3874,13 @@ void EffectEditorPanel::QueuePreviewSpawn()
     EffectPlaybackComponent playbackComponent;
     playbackComponent.seed = m_asset.previewDefaults.seed;
     playbackComponent.loop = true;
+    playbackComponent.currentTime = startTime;
+    playbackComponent.isPaused = pausedOnSpawn;
 
     EffectSpawnRequestComponent requestComponent;
     requestComponent.pending = true;
     requestComponent.restartIfActive = true;
+    requestComponent.startTime = startTime;
 
     m_registry->AddComponent(m_previewEntity, assetComponent);
     m_registry->AddComponent(m_previewEntity, playbackComponent);
