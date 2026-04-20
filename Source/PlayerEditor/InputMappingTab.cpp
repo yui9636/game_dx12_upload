@@ -6,118 +6,30 @@
 #include "Archetype/Archetype.h"
 #include "Component/ComponentSignature.h"
 #include "Registry/Registry.h"
-#include "System/Dialog.h"
 #include "Type/TypeInfo.h"
-
-namespace
-{
-    constexpr const char* kInputMapFilter =
-        "Input Map (*.inputmap.json)\0*.inputmap.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
-}
-
-bool InputMappingTab::OpenActionMap(const std::string& path)
-{
-    if (path.empty()) {
-        return false;
-    }
-
-    InputActionMapAsset loaded;
-    if (!loaded.LoadFromFile(path)) {
-        return false;
-    }
-
-    m_actionMapPath = path;
-    m_editingMap = std::move(loaded);
-    m_dirty = false;
-    return true;
-}
-
-bool InputMappingTab::SaveActionMap()
-{
-    if (m_actionMapPath.empty()) {
-        return false;
-    }
-
-    if (!m_editingMap.SaveToFile(m_actionMapPath)) {
-        return false;
-    }
-
-    InputActionMapAsset::ClearCache();
-    m_dirty = false;
-    return true;
-}
-
-bool InputMappingTab::SaveActionMapAs(const std::string& path)
-{
-    if (path.empty()) {
-        return false;
-    }
-
-    m_actionMapPath = path;
-    return SaveActionMap();
-}
-
-bool InputMappingTab::ReloadActionMap()
-{
-    if (m_actionMapPath.empty()) {
-        return false;
-    }
-
-    return OpenActionMap(m_actionMapPath);
-}
-
-void InputMappingTab::SetActionMapPath(const std::string& path)
-{
-    if (path == m_actionMapPath) {
-        return;
-    }
-
-    if (path.empty()) {
-        m_actionMapPath.clear();
-        m_editingMap = InputActionMapAsset{};
-        m_dirty = false;
-        return;
-    }
-
-    OpenActionMap(path);
-}
 
 void InputMappingTab::SetEditingMap(const InputActionMapAsset& map)
 {
-    m_actionMapPath.clear();
     m_editingMap = map;
     m_dirty = false;
 }
 
 void InputMappingTab::ClearEditingMap()
 {
-    m_actionMapPath.clear();
     m_editingMap = InputActionMapAsset{};
     m_dirty = false;
 }
 
 void InputMappingTab::Draw(Registry* registry)
 {
-    // Action map selector
-    if (!m_actionMapPath.empty()) {
-        ImGui::Text("Action Map: %s", m_actionMapPath.c_str());
-        ImGui::SameLine();
-    }
-    if (ImGui::Button("Load...")) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!m_actionMapPath.empty()) {
-            strcpy_s(pathBuffer, m_actionMapPath.c_str());
+    if (!m_editingMap.name.empty()) {
+        ImGui::TextDisabled("%s", m_editingMap.name.c_str());
+        if (m_dirty) {
+            ImGui::SameLine(0.0f, 6.0f);
+            ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.15f, 1.0f), "*");
         }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kInputMapFilter, "Open Input Map") == DialogResult::OK) {
-            OpenActionMap(pathBuffer);
-        }
+        ImGui::Separator();
     }
-    if (m_dirty) {
-        ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "(unsaved)");
-    }
-
-    ImGui::Separator();
 
     if (ImGui::BeginTabBar("InputSubTabs")) {
         if (ImGui::BeginTabItem("Actions")) {

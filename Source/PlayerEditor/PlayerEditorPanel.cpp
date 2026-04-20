@@ -11,8 +11,6 @@
 #include <filesystem>
 #include <initializer_list>
 #include "Icon/IconsFontAwesome7.h"
-#include "TimelineAssetSerializer.h"
-#include "StateMachineAssetSerializer.h"
 #include "PlayerEditorSession.h"
 #include "ImGuiRenderer.h"
 #include "Model/Model.h"
@@ -56,14 +54,6 @@ static constexpr float kNodeWidth  = 150.0f;
 static constexpr float kNodeHeight = 38.0f;
 static constexpr const char* kModelFileFilter =
     "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
-static constexpr const char* kTimelineFileFilter =
-    "Timeline (*.timeline.json)\0*.timeline.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
-static constexpr const char* kStateMachineFileFilter =
-    "StateMachine (*.statemachine.json)\0*.statemachine.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
-static constexpr const char* kInputMapFileFilter =
-    "Input Map (*.inputmap.json)\0*.inputmap.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
-static constexpr const char* kPrefabFileFilter =
-    "Prefab (*.prefab)\0*.prefab\0All Files (*.*)\0*.*\0";
 
 // ── Window titles (used by DockBuilder) ──
 static constexpr const char* kPEViewportTitle     = ICON_FA_CUBE " Viewport##PE";
@@ -406,21 +396,6 @@ bool PlayerEditorPanel::DrawToolbarButton(const char* label, bool enabled)
     return enabled && pressed;
 }
 
-bool PlayerEditorPanel::DrawDocumentPathLabel(const char* label, const std::string& path, bool dirty)
-{
-    if (path.empty() && !dirty) {
-        return false;
-    }
-    ImGui::TextDisabled("%s", label);
-    ImGui::SameLine();
-    if (dirty) {
-        ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.15f, 1.0f), "*");
-        ImGui::SameLine(0.0f, 2.0f);
-    }
-    ImGui::TextUnformatted(path.empty() ? "(unsaved)" : path.c_str());
-    return !path.empty();
-}
-
 void PlayerEditorPanel::ResetSelectionState()
 {
     m_selectionCtx = SelectionContext::None;
@@ -498,12 +473,12 @@ void PlayerEditorPanel::ImportFromSelectedEntity()
 
 void PlayerEditorPanel::DrawToolbar()
 {
-    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open Model")) {
+    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open")) {
         char pathBuffer[MAX_PATH] = {};
         if (!m_currentModelPath.empty()) {
             strcpy_s(pathBuffer, m_currentModelPath.c_str());
         }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Model") == DialogResult::OK) {
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
             OpenModelFromPath(pathBuffer);
         }
     }
@@ -521,9 +496,9 @@ void PlayerEditorPanel::DrawEmptyState()
     ImGui::TextWrapped("Open a model or prefab first. The current editor only becomes meaningful after a player source is resolved.");
     ImGui::Spacing();
 
-    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open Model...", ImVec2(180.0f, 0.0f))) {
+    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open...", ImVec2(180.0f, 0.0f))) {
         char pathBuffer[MAX_PATH] = {};
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Model") == DialogResult::OK) {
+        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
             OpenModelFromPath(pathBuffer);
         }
     }
@@ -738,23 +713,8 @@ void PlayerEditorPanel::DrawViewportPanel()
         m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
     const bool usingSharedSceneView = sharedDirLengthSq > 0.0001f;
 
-    const float toolbarTop = 4.0f;
-    const float toolbarLeft = 6.0f;
-    const float toolbarHeight = ImGui::GetFrameHeightWithSpacing() + 8.0f;
-
-    float contentTop = 0.0f;
-    if (!usingSharedSceneView) {
-        ImGui::SetCursorPos(ImVec2(toolbarLeft, toolbarTop));
-        ImGui::SetNextItemWidth(180.0f);
-        ImGui::SliderFloat("Preview Scale", &m_previewModelScale, 0.01f, 5.00f, "%.2f");
-        ImGui::SameLine();
-        if (ImGui::Button("Reset Scale")) {
-            m_previewModelScale = 1.0f;
-        }
-        contentTop = toolbarHeight;
-    }
-
-    ImGui::SetCursorPos(ImVec2(0.0f, contentTop));
+    (void)usingSharedSceneView;
+    ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_previewRenderSize = {
         (std::max)(avail.x, 0.0f),
@@ -764,12 +724,12 @@ void PlayerEditorPanel::DrawViewportPanel()
     m_viewportRect = { 0.0f, 0.0f, avail.x, avail.y };
 
     if (!HasOpenModel() && !m_viewportTexture) {
-        ImGui::SetCursorPos(ImVec2(12.0f, toolbarHeight + 12.0f));
+        ImGui::SetCursorPos(ImVec2(12.0f, 12.0f));
         DrawEmptyState();
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
                 const std::string droppedPath(static_cast<const char*>(payload->Data));
-                if (HasExtension(droppedPath, { ".fbx", ".gltf", ".glb", ".obj" })) {
+                if (HasExtension(droppedPath, { ".prefab", ".fbx", ".gltf", ".glb", ".obj" })) {
                     OpenModelFromPath(droppedPath);
                 }
             }
@@ -2578,13 +2538,6 @@ void PlayerEditorPanel::DrawStateNodeInspector()
         ImGui::EndCombo();
     }
 
-    if (HasTimelineAssetContent(m_timelineAsset)) {
-        ImGui::TextDisabled("Current Editing Timeline: %s", m_timelineAsset.name.empty() ? "(unnamed)" : m_timelineAsset.name.c_str());
-    } else {
-        ImGui::TextDisabled("Current Editing Timeline: (none)");
-    }
-
-    ImGui::Separator();
     ImGui::Text("Input Map");
     const auto& editingMap = m_inputMappingTab.GetEditingMap();
     ImGui::TextDisabled("Action Map: %s", editingMap.name.empty() ? "(none)" : editingMap.name.c_str());

@@ -1,6 +1,5 @@
 #pragma once
 #include "Input/InputActionMapAsset.h"
-#include <string>
 
 class Registry;
 
@@ -13,15 +12,9 @@ class InputMappingTab
 public:
     void Draw(Registry* registry);
 
-    bool OpenActionMap(const std::string& path);
-    bool SaveActionMap();
-    bool SaveActionMapAs(const std::string& path);
-    bool ReloadActionMap();
-    void SetActionMapPath(const std::string& path);
     void SetEditingMap(const InputActionMapAsset& map);
     InputActionMapAsset& GetEditingMapMutable() { return m_editingMap; }
     void ClearEditingMap();
-    const std::string& GetActionMapPath() const { return m_actionMapPath; }
     const InputActionMapAsset& GetEditingMap() const { return m_editingMap; }
     bool IsDirty() const { return m_dirty; }
 
@@ -32,7 +25,6 @@ private:
     void DrawLiveTest(Registry* registry);
     void DrawKeyBindPopup();
 
-    std::string m_actionMapPath;
     InputActionMapAsset m_editingMap;
     bool m_dirty = false;
 

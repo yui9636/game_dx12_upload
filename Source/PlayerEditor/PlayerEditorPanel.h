@@ -78,7 +78,6 @@ private:
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
     void DrawToolbar();
     bool DrawToolbarButton(const char* label, bool enabled = true);
-    bool DrawDocumentPathLabel(const char* label, const std::string& path, bool dirty);
     void DrawEmptyState();
     void ResetSelectionState();
     bool HasOpenModel() const;
