@@ -65,7 +65,7 @@ namespace
 
     void AdvancePlayback(EffectPlaybackComponent& playback, float dt)
     {
-        if (!playback.isPlaying || playback.runtimeInstanceId == 0 || dt <= 0.0f) {
+        if (!playback.isPlaying || playback.isPaused || playback.runtimeInstanceId == 0 || dt <= 0.0f) {
             return;
         }
 
@@ -89,6 +89,7 @@ namespace
         }
 
         playback.isPlaying = false;
+        playback.isPaused = false;
         playback.currentTime = playback.duration;
         playback.lifetimeFade = 0.0f;
         SyncRuntimeTime(playback);

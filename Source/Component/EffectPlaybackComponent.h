@@ -5,6 +5,7 @@
 struct EffectPlaybackComponent
 {
     bool isPlaying = false;
+    bool isPaused = false;
     float currentTime = 0.0f;
     float duration = 2.0f;
     uint32_t seed = 1;

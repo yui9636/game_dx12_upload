@@ -2873,10 +2873,11 @@ void EffectEditorPanel::DrawTimelinePanel()
             }
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_PLAY " Play")) {
-                if (!hasPreviewPlayback || m_compileDirty) {
+                if (!hasPreviewPlayback || m_compileDirty || playback->runtimeInstanceId == 0) {
                     CompileDocument();
                     QueuePreviewSpawn();
                 } else {
+                    playback->isPaused = false;
                     playback->isPlaying = true;
                     playback->stopRequested = false;
                 }
@@ -2884,7 +2885,7 @@ void EffectEditorPanel::DrawTimelinePanel()
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_PAUSE " Pause")) {
                 if (hasPreviewPlayback) {
-                    playback->isPlaying = false;
+                    playback->isPaused = true;
                 }
             }
             ImGui::SameLine();
