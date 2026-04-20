@@ -77,7 +77,6 @@ private:
     std::string GetActiveAssetKey() const;
     void QueuePreviewSpawn();
     void StopPreview();
-    void ApplyToSelectedEntity();
     void RemoveNode(uint32_t nodeId);
     bool CanCreateLink(uint32_t startPinId, uint32_t endPinId, std::string& reason) const;
     void DrawAssetPickerPopup();

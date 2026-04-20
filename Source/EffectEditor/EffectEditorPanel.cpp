@@ -936,35 +936,6 @@ void EffectEditorPanel::DrawToolbar()
 
             ImGui::EndPopup();
         }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_HAMMER " Compile")) {
-            CompileDocument();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_PLAY " Simulate")) {
-            CompileDocument();
-            QueuePreviewSpawn();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button(ICON_FA_STOP " Stop")) {
-            StopPreview();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Reset Camera")) {
-            ResetPreviewCamera();
-        }
-        ImGui::SameLine();
-        const bool canApplyToSelected = !Entity::IsNull(m_selectedEntity) && m_registry && m_registry->IsAlive(m_selectedEntity);
-        if (!canApplyToSelected) {
-            ImGui::BeginDisabled();
-        }
-        if (ImGui::Button(ICON_FA_WAND_MAGIC_SPARKLES " Apply To Selected")) {
-            CompileDocument();
-            ApplyToSelectedEntity();
-        }
-        if (!canApplyToSelected) {
-            ImGui::EndDisabled();
-        }
 
         ImGui::SameLine();
         ImGui::SetNextItemWidth(360.0f);
@@ -3860,27 +3831,3 @@ void EffectEditorPanel::StopPreview()
     m_previewEntity = Entity::NULL_ID;
 }
 
-void EffectEditorPanel::ApplyToSelectedEntity()
-{
-    if (!m_registry || Entity::IsNull(m_selectedEntity) || !m_registry->IsAlive(m_selectedEntity) || !m_compiled || !m_compiled->valid) {
-        return;
-    }
-
-    EffectAssetComponent assetComponent;
-    assetComponent.assetPath = GetActiveAssetKey();
-    assetComponent.autoPlay = true;
-    assetComponent.loop = true;
-    assetComponent.useSelectedMeshFallback = true;
-
-    EffectPlaybackComponent playbackComponent;
-    playbackComponent.seed = m_asset.previewDefaults.seed;
-    playbackComponent.loop = true;
-
-    EffectSpawnRequestComponent requestComponent;
-    requestComponent.pending = true;
-    requestComponent.restartIfActive = true;
-
-    m_registry->AddComponent(m_selectedEntity, assetComponent);
-    m_registry->AddComponent(m_selectedEntity, playbackComponent);
-    m_registry->AddComponent(m_selectedEntity, requestComponent);
-}
