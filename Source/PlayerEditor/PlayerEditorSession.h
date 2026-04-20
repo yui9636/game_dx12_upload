@@ -16,16 +16,7 @@ public:
     static void SyncExternalSelection(PlayerEditorPanel& panel, EntityID entity, const std::string& modelPath);
 
     static bool OpenModelFromPath(PlayerEditorPanel& panel, const std::string& path);
-    static bool OpenTimelineFromPath(PlayerEditorPanel& panel, const std::string& path);
-    static bool OpenStateMachineFromPath(PlayerEditorPanel& panel, const std::string& path);
-    static bool OpenInputMapFromPath(PlayerEditorPanel& panel, const std::string& path);
-
-    static bool SaveTimelineDocument(PlayerEditorPanel& panel, bool saveAs);
-    static bool SaveStateMachineDocument(PlayerEditorPanel& panel, bool saveAs);
-    static bool SaveInputMapDocument(PlayerEditorPanel& panel, bool saveAs);
-    static bool SaveAllDocuments(PlayerEditorPanel& panel, bool saveAs);
     static bool SavePrefabDocument(PlayerEditorPanel& panel, bool saveAs);
-    static void RevertAllDocuments(PlayerEditorPanel& panel);
 
     static void ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel);
     static void RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& panel);

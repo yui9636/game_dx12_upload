@@ -3,15 +3,11 @@
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
 #include "PlayerEditor/TimelineAsset.h"
-#include "PlayerEditor/TimelineAssetSerializer.h"
 
 #include <algorithm>
-#include <unordered_map>
 
 namespace
 {
-    std::unordered_map<std::string, TimelineAsset> s_timelineAssetCache;
-
     void ResetTimelineOutputs(TimelineComponent& outTimeline, TimelineItemBuffer& outBuffer)
     {
         outBuffer.items.clear();
@@ -40,26 +36,6 @@ namespace
     uint32_t TrackTypeMask(TimelineTrackType type)
     {
         return 1u << static_cast<uint32_t>(type);
-    }
-
-    const TimelineAsset* GetCachedTimelineAsset(const std::string& path)
-    {
-        if (path.empty()) {
-            return nullptr;
-        }
-
-        auto it = s_timelineAssetCache.find(path);
-        if (it != s_timelineAssetCache.end()) {
-            return &it->second;
-        }
-
-        TimelineAsset asset;
-        if (!TimelineAssetSerializer::Load(path, asset)) {
-            return nullptr;
-        }
-
-        s_timelineAssetCache[path] = std::move(asset);
-        return &s_timelineAssetCache[path];
     }
 }
 
@@ -156,41 +132,8 @@ namespace TimelineAssetRuntimeBuilder
         return true;
     }
 
-    bool BuildFromPath(
-        const std::string& path,
-        int animationIndex,
-        TimelineComponent& outTimeline,
-        TimelineItemBuffer& outBuffer,
-        bool* outPartialBuild,
-        uint32_t* outWarningCount,
-        uint32_t* outUnsupportedTrackMask)
-    {
-        ResetTimelineOutputs(outTimeline, outBuffer);
-
-        const TimelineAsset* asset = GetCachedTimelineAsset(path);
-        if (!asset) {
-            if (outPartialBuild) {
-                *outPartialBuild = false;
-            }
-            if (outWarningCount) {
-                *outWarningCount = 0;
-            }
-            if (outUnsupportedTrackMask) {
-                *outUnsupportedTrackMask = 0;
-            }
-            return false;
-        }
-
-        return Build(*asset, animationIndex, outTimeline, outBuffer, outPartialBuild, outWarningCount, outUnsupportedTrackMask);
-    }
-
     void InvalidateAssetCache(const char* path)
     {
-        if (!path || path[0] == '\0') {
-            s_timelineAssetCache.clear();
-            return;
-        }
-
-        s_timelineAssetCache.erase(path);
+        (void)path;
     }
 }

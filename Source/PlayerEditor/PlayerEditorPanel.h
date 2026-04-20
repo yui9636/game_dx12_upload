@@ -86,15 +86,7 @@ private:
     bool HasSelectedEntityContext() const;
     bool CanUsePreviewEntity() const;
     bool OpenModelFromPath(const std::string& path);
-    bool OpenTimelineFromPath(const std::string& path);
-    bool OpenStateMachineFromPath(const std::string& path);
-    bool OpenInputMapFromPath(const std::string& path);
-    bool SaveTimelineDocument(bool saveAs);
-    bool SaveStateMachineDocument(bool saveAs);
-    bool SaveInputMapDocument(bool saveAs);
-    bool SaveAllDocuments(bool saveAs);
     bool SavePrefabDocument(bool saveAs);
-    void RevertAllDocuments();
     void ApplyEditorBindingsToPreviewEntity();
     void EnsureOwnedPreviewEntity();
     void DestroyOwnedPreviewEntity();
@@ -157,8 +149,6 @@ private:
     // 笏笏 Assets 笏笏
     TimelineAsset       m_timelineAsset;
     StateMachineAsset   m_stateMachineAsset;
-    std::string         m_timelineAssetPath;
-    std::string         m_stateMachineAssetPath;
     bool                m_timelineDirty = false;
     bool                m_stateMachineDirty = false;
     bool                m_socketDirty = false;

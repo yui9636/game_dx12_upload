@@ -461,41 +461,6 @@ bool PlayerEditorPanel::OpenModelFromPath(const std::string& path)
     return PlayerEditorSession::OpenModelFromPath(*this, path);
 }
 
-bool PlayerEditorPanel::OpenTimelineFromPath(const std::string& path)
-{
-    return PlayerEditorSession::OpenTimelineFromPath(*this, path);
-}
-
-bool PlayerEditorPanel::OpenStateMachineFromPath(const std::string& path)
-{
-    return PlayerEditorSession::OpenStateMachineFromPath(*this, path);
-}
-
-bool PlayerEditorPanel::OpenInputMapFromPath(const std::string& path)
-{
-    return PlayerEditorSession::OpenInputMapFromPath(*this, path);
-}
-
-bool PlayerEditorPanel::SaveTimelineDocument(bool saveAs)
-{
-    return PlayerEditorSession::SaveTimelineDocument(*this, saveAs);
-}
-
-bool PlayerEditorPanel::SaveStateMachineDocument(bool saveAs)
-{
-    return PlayerEditorSession::SaveStateMachineDocument(*this, saveAs);
-}
-
-bool PlayerEditorPanel::SaveInputMapDocument(bool saveAs)
-{
-    return PlayerEditorSession::SaveInputMapDocument(*this, saveAs);
-}
-
-bool PlayerEditorPanel::SaveAllDocuments(bool saveAs)
-{
-    return PlayerEditorSession::SaveAllDocuments(*this, saveAs);
-}
-
 void PlayerEditorPanel::ApplyEditorBindingsToPreviewEntity()
 {
     PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(*this);
@@ -514,11 +479,6 @@ void PlayerEditorPanel::SyncPreviewTimelinePlayback()
 bool PlayerEditorPanel::SavePrefabDocument(bool saveAs)
 {
     return PlayerEditorSession::SavePrefabDocument(*this, saveAs);
-}
-
-void PlayerEditorPanel::RevertAllDocuments()
-{
-    PlayerEditorSession::RevertAllDocuments(*this);
 }
 
 void PlayerEditorPanel::ImportSocketsFromPreviewEntity()
@@ -548,13 +508,9 @@ void PlayerEditorPanel::DrawToolbar()
         }
     }
     ImGui::SameLine();
-    const bool canSaveWorkspace = HasAnyDirtyDocument() || CanUsePreviewEntity();
+    const bool canSaveWorkspace = CanUsePreviewEntity();
     if (DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save", canSaveWorkspace)) {
-        if (CanUsePreviewEntity()) {
-            SavePrefabDocument(false);
-        } else {
-            SaveAllDocuments(false);
-        }
+        SavePrefabDocument(false);
     }
 }
 
