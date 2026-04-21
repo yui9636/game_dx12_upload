@@ -40,7 +40,11 @@ public:
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
     DirectX::XMFLOAT4 GetViewportRect() const { return m_viewportRect; }
     bool IsViewportHovered() const { return m_viewportHovered; }
-    bool ConsumePendingCameraFit(DirectX::XMFLOAT3& outTarget, float& outRadius);
+    bool ConsumePendingCameraFit(
+        DirectX::XMFLOAT3& outTarget,
+        float& outRadius,
+        DirectX::XMFLOAT3* outForward = nullptr,
+        float* outDistance = nullptr);
     DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const;
     DirectX::XMFLOAT3 GetPreviewCameraDirection() const;
@@ -119,6 +123,8 @@ private:
     void DrawTimelinePlaybackToolbar();
     void DrawTimelineItemInspector();
     bool DrawAnimationSelector(const char* label, int* animIndex);
+    bool TryAssignSelectedBoneToTimelineItem(int boneIndex);
+    const char* GetBoneNameByIndex(int boneIndex) const;
     float GetSelectedAnimationDurationSeconds() const;
     void StartSelectedAnimationPreview();
     void PreviewStateNode(uint32_t stateId, bool restartTimeline);
@@ -208,6 +214,8 @@ private:
     bool m_hasPendingCameraFit = false;
     DirectX::XMFLOAT3 m_pendingCameraFitTarget = { 0.0f, 0.0f, 0.0f };
     float m_pendingCameraFitRadius = 1.0f;
+    DirectX::XMFLOAT3 m_pendingCameraFitForward = { 0.0f, 0.0f, 1.0f };
+    float m_pendingCameraFitDistance = 0.0f;
 
     // 笏笏 Per-frame 笏笏
     Registry* m_registry = nullptr;

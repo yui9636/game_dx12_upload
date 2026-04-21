@@ -13,6 +13,7 @@
 
 #include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
+#include "Component/ColliderComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
@@ -178,6 +179,51 @@ namespace
         const DirectX::XMFLOAT3 ex = bounds.Extents;
         const float radius = std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z);
         return radius > 0.01f ? radius : 1.0f;
+    }
+
+    static DirectX::XMFLOAT3 ComputePreviewFitForward(const Model& model)
+    {
+        const auto bounds = model.GetWorldBounds();
+        const DirectX::XMFLOAT3 ex = bounds.Extents;
+
+        float maxTmp = ex.x > ex.y ? ex.x : ex.y;
+        float maxDim = maxTmp > ex.z ? maxTmp : ex.z;
+        float minTmp = ex.x < ex.y ? ex.x : ex.y;
+        float minDim = minTmp < ex.z ? minTmp : ex.z;
+
+        bool isEffect = minDim < maxDim * 0.05f;
+        float pitch = DirectX::XMConvertToRadians(25.0f);
+        float yaw = DirectX::XMConvertToRadians(45.0f);
+        if (isEffect) {
+            if (ex.y == minDim) pitch = DirectX::XMConvertToRadians(60.0f);
+            else if (ex.z == minDim) yaw = DirectX::XMConvertToRadians(10.0f);
+            else if (ex.x == minDim) yaw = DirectX::XMConvertToRadians(80.0f);
+        }
+
+        DirectX::XMFLOAT3 forward = {
+            -std::cos(pitch) * std::sin(yaw),
+            -std::sin(pitch),
+            std::cos(pitch) * std::cos(yaw)
+        };
+
+        using namespace DirectX;
+        XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&forward));
+        XMStoreFloat3(&forward, dir);
+        return forward;
+    }
+
+    static float ComputePreviewFitDistance(const Model& model, float fovY)
+    {
+        const float radius = ComputePreviewFitRadius(model);
+        const float safeFovY = fovY > 0.01f ? fovY : DirectX::XMConvertToRadians(45.0f);
+        const float halfFov = safeFovY * 0.5f;
+        const float safeSin = std::sin(halfFov);
+        if (safeSin <= 0.0001f) {
+            return radius * 3.0f;
+        }
+
+        const float distance = (radius / safeSin) * 1.3f;
+        return distance > 1.0f ? distance : 1.0f;
     }
 
 }
@@ -466,6 +512,8 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
         const auto bounds = panel.m_model->GetWorldBounds();
         panel.m_pendingCameraFitTarget = bounds.Center;
         panel.m_pendingCameraFitRadius = ComputePreviewFitRadius(*panel.m_model);
+        panel.m_pendingCameraFitForward = ComputePreviewFitForward(*panel.m_model);
+        panel.m_pendingCameraFitDistance = ComputePreviewFitDistance(*panel.m_model, panel.m_sharedSceneCameraFovY);
         panel.m_hasPendingCameraFit = true;
         return true;
     }
@@ -491,6 +539,8 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
     const auto bounds = panel.m_model->GetWorldBounds();
     panel.m_pendingCameraFitTarget = bounds.Center;
     panel.m_pendingCameraFitRadius = ComputePreviewFitRadius(*panel.m_model);
+    panel.m_pendingCameraFitForward = ComputePreviewFitForward(*panel.m_model);
+    panel.m_pendingCameraFitDistance = ComputePreviewFitDistance(*panel.m_model, panel.m_sharedSceneCameraFovY);
     panel.m_hasPendingCameraFit = true;
     return true;
 }
