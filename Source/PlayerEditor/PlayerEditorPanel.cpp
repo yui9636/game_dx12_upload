@@ -14,6 +14,7 @@
 #include "PlayerEditorSession.h"
 #include "ImGuiRenderer.h"
 #include "Model/Model.h"
+#include "Component/ColliderComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NodeSocketComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
@@ -114,7 +115,7 @@ static TimelineItem CreateDefaultTimelineItem(TimelineTrackType type, int startF
     switch (type) {
     case TimelineTrackType::Hitbox:
         item.endFrame = item.startFrame + 8;
-        item.hitbox.radius = 0.5f;
+        item.hitbox.radius = 30.0f;
         break;
     case TimelineTrackType::VFX:
         item.endFrame = item.startFrame + 12;
@@ -458,6 +459,64 @@ void PlayerEditorPanel::RebuildPreviewTimelineRuntimeData()
 
 void PlayerEditorPanel::SyncPreviewTimelinePlayback()
 {
+    if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+        float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+        float clipLength = 0.0f;
+        int frameMin = 0;
+        int frameMax = 0;
+
+        if (TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity)) {
+            if (timeline->fps > 0.0f) {
+                fps = timeline->fps;
+            }
+            clipLength = timeline->clipLengthSec;
+            frameMin = timeline->frameMin;
+            frameMax = timeline->frameMax;
+        }
+
+        if (frameMax > frameMin) {
+            if (m_playheadFrame < frameMin) {
+                m_playheadFrame = frameMin;
+            }
+            if (m_playheadFrame > frameMax) {
+                m_playheadFrame = frameMax;
+            }
+        }
+
+        const float timeSeconds = fps > 0.0f
+            ? static_cast<float>(m_playheadFrame) / fps
+            : 0.0f;
+
+        if (PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity)) {
+            playback->currentSeconds = timeSeconds;
+            if (clipLength <= 0.0f && fps > 0.0f && frameMax > frameMin) {
+                clipLength = static_cast<float>(frameMax) / fps;
+            }
+            if (clipLength > 0.0f) {
+                playback->clipLength = clipLength;
+            }
+            playback->playing = m_isPlaying;
+            if (m_previewState.IsActive()) {
+                playback->looping = m_previewState.GetDriver()->IsLoop();
+            }
+            playback->stopAtEnd = !playback->looping;
+            playback->finished = false;
+        }
+
+        if (TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity)) {
+            timeline->currentFrame = m_playheadFrame;
+            timeline->playing = m_isPlaying;
+            if (clipLength > 0.0f) {
+                timeline->clipLengthSec = clipLength;
+            }
+        }
+
+        if (ColliderComponent* collider = m_registry->GetComponent<ColliderComponent>(m_previewEntity)) {
+            collider->enabled = true;
+            collider->drawGizmo = true;
+        }
+    }
+
     PlayerEditorSession::SyncPreviewTimelinePlayback(*this);
 }
 
@@ -1916,8 +1975,10 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     }
     if (maxFrame <= 0) maxFrame = 600;
     ImGui::SetNextItemWidth(100);
-    if (ImGui::DragInt("##Frame", &m_playheadFrame, 1.0f, 0, maxFrame) && m_previewState.IsActive()) {
-        m_previewState.SetTime(m_playheadFrame / fps);
+    if (ImGui::DragInt("##Frame", &m_playheadFrame, 1.0f, 0, maxFrame)) {
+        if (m_previewState.IsActive()) {
+            m_previewState.SetTime(m_playheadFrame / fps);
+        }
         SyncPreviewTimelinePlayback();
     }
     ImGui::SameLine();
@@ -1927,6 +1988,8 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     ImGui::SetNextItemWidth(50);
     if (ImGui::DragFloat("FPS", &m_timelineAsset.fps, 1.0f, 1.0f, 120.0f, "%.0f")) {
         m_timelineDirty = true;
+        RebuildPreviewTimelineRuntimeData();
+        SyncPreviewTimelinePlayback();
     }
     ImGui::SameLine();
 
@@ -1936,10 +1999,14 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     ImGui::SetNextItemWidth(80);
     if (ImGui::DragFloat("Dur(s)", &m_timelineAsset.duration, 0.1f, 0.1f, 300.0f, "%.1f")) {
         m_timelineDirty = true;
+        RebuildPreviewTimelineRuntimeData();
+        SyncPreviewTimelinePlayback();
     }
 }
 void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
 {
+    bool timelineRuntimeChanged = false;
+
     if (ImGui::Button(ICON_FA_PLUS " Track")) {
         ImGui::OpenPopup("AddTrackPopup");
     }
@@ -1949,28 +2016,38 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
             TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Hitbox, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Hitbox));
             if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Hitbox, m_playheadFrame));
             m_timelineDirty = true;
+            timelineRuntimeChanged = true;
         }
         if (ImGui::MenuItem("VFX")) {
             TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::VFX, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::VFX));
             if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::VFX, m_playheadFrame));
             m_timelineDirty = true;
+            timelineRuntimeChanged = true;
         }
         if (ImGui::MenuItem("Audio")) {
             TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Audio, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Audio));
             if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Audio, m_playheadFrame));
             m_timelineDirty = true;
+            timelineRuntimeChanged = true;
         }
         if (ImGui::MenuItem("CameraShake")) {
             TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::CameraShake, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::CameraShake));
             if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::CameraShake, m_playheadFrame));
             m_timelineDirty = true;
+            timelineRuntimeChanged = true;
         }
         if (ImGui::MenuItem("Event")) {
             TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Event, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Event));
             if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Event, m_playheadFrame));
             m_timelineDirty = true;
+            timelineRuntimeChanged = true;
         }
         ImGui::EndPopup();
+    }
+
+    if (timelineRuntimeChanged) {
+        RebuildPreviewTimelineRuntimeData();
+        SyncPreviewTimelinePlayback();
     }
 
     ImGui::Separator();
@@ -2096,6 +2173,8 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     if (frameDelta != 0) {
                         item.startFrame = (std::max)(0, (std::min)(item.endFrame - 1, item.startFrame + frameDelta));
                         m_timelineDirty = true;
+                        RebuildPreviewTimelineRuntimeData();
+                        SyncPreviewTimelinePlayback();
                         ImGui::ResetMouseDragDelta();
                     }
                     resizingItem = true;
@@ -2109,6 +2188,8 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     if (frameDelta != 0) {
                         item.endFrame = (std::max)(item.startFrame + 1, item.endFrame + frameDelta);
                         m_timelineDirty = true;
+                        RebuildPreviewTimelineRuntimeData();
+                        SyncPreviewTimelinePlayback();
                         ImGui::ResetMouseDragDelta();
                     }
                     resizingItem = true;
@@ -2143,6 +2224,8 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     }
                     if (item.startFrame < 0) { item.endFrame -= item.startFrame; item.startFrame = 0; }
                     m_timelineDirty = true;
+                    RebuildPreviewTimelineRuntimeData();
+                    SyncPreviewTimelinePlayback();
                     ImGui::ResetMouseDragDelta();
                 }
             }
@@ -2175,6 +2258,8 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                     m_selectedItemIdx = -1;
                     m_selectionCtx = SelectionContext::None;
                     m_timelineDirty = true;
+                    RebuildPreviewTimelineRuntimeData();
+                    SyncPreviewTimelinePlayback();
                     break;
                 }
             }
@@ -2202,6 +2287,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
             m_previewState.SetTime(m_playheadFrame / fps);
         }
+        SyncPreviewTimelinePlayback();
     }
 
     // Zoom with scroll wheel
@@ -2809,6 +2895,8 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
     //ImGui::Text(ICON_FA_CLOCK " Timeline Item");
     //ImGui::Separator();
 
+    bool timelineRuntimeChanged = false;
+
     for (auto& track : m_timelineAsset.tracks) {
         if ((int)track.id != m_selectedTrackId) continue;
         if (m_selectedItemIdx < 0 || m_selectedItemIdx >= (int)track.items.size()) break;
@@ -2832,12 +2920,13 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                     item.hitbox.nodeIndex = socket.cachedBoneIndex;
                     item.hitbox.offsetLocal = socket.offsetPos;
                     m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
                 }
                 ImGui::SameLine();
                 ImGui::TextDisabled("%s", socket.name.c_str());
             }
-            if (ImGui::DragFloat3("Offset", &item.hitbox.offsetLocal.x, 0.01f)) m_timelineDirty = true;
-            if (ImGui::DragFloat("Radius", &item.hitbox.radius, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat3("Offset", &item.hitbox.offsetLocal.x, 0.01f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Radius", &item.hitbox.radius, 0.1f, 0.0f, 100.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             {
                 float rgba[4] = {
                     ((item.hitbox.rgba >> 24) & 0xFF) / 255.0f,
@@ -2851,13 +2940,14 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                         ((uint32_t)(rgba[2] * 255) << 8) |
                         (uint32_t)(rgba[3] * 255);
                     m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
                 }
             }
             break;
 
         case TimelineTrackType::VFX:
             ImGui::Text(ICON_FA_WAND_MAGIC_SPARKLES " VFX Payload");
-            if (ImGui::InputText("Asset ID", item.vfx.assetId, sizeof(item.vfx.assetId))) m_timelineDirty = true;
+            if (ImGui::InputText("Asset ID", item.vfx.assetId, sizeof(item.vfx.assetId))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             ImGui::TextDisabled("Target Bone: %s", GetBoneNameByIndex(item.vfx.nodeIndex));
             ImGui::TextDisabled("Click a skeleton node to assign.");
             if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
@@ -2868,39 +2958,41 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                     item.vfx.offsetRotDeg = socket.offsetRotDeg;
                     item.vfx.offsetScale = socket.offsetScale;
                     m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
                 }
                 ImGui::SameLine();
                 ImGui::TextDisabled("%s", socket.name.c_str());
             }
-            if (ImGui::DragFloat3("Offset", &item.vfx.offsetLocal.x, 0.01f)) m_timelineDirty = true;
-            if (ImGui::DragFloat3("Rotation", &item.vfx.offsetRotDeg.x, 0.1f)) m_timelineDirty = true;
-            if (ImGui::DragFloat3("Scale", &item.vfx.offsetScale.x, 0.01f, 0.01f, 10.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat3("Offset", &item.vfx.offsetLocal.x, 0.01f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat3("Rotation", &item.vfx.offsetRotDeg.x, 0.1f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat3("Scale", &item.vfx.offsetScale.x, 0.01f, 0.01f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
         case TimelineTrackType::Audio:
             ImGui::Text(ICON_FA_VOLUME_HIGH " Audio Payload");
-            if (ImGui::InputText("Asset ID", item.audio.assetId, sizeof(item.audio.assetId))) m_timelineDirty = true;
-            if (ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f)) m_timelineDirty = true;
-            if (ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f)) m_timelineDirty = true;
-            if (ImGui::Checkbox("3D Audio", &item.audio.is3D)) m_timelineDirty = true;
-            if (ImGui::DragInt("Node Index", &item.audio.nodeIndex, 1, 0, 200)) m_timelineDirty = true;
+            if (ImGui::InputText("Asset ID", item.audio.assetId, sizeof(item.audio.assetId))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::Checkbox("3D Audio", &item.audio.is3D)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragInt("Node Index", &item.audio.nodeIndex, 1, 0, 200)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
                 if (ImGui::Button("Use Selected Bone##Audio")) {
                     item.audio.nodeIndex = m_selectedBoneIndex;
                     m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
                 }
                 ImGui::SameLine();
                 ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
             }
-            if (ImGui::Checkbox("Loop", &item.audio.loop)) m_timelineDirty = true;
+            if (ImGui::Checkbox("Loop", &item.audio.loop)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
         case TimelineTrackType::CameraShake:
             ImGui::Text(ICON_FA_CAMERA " Camera Shake Payload");
-            if (ImGui::DragFloat("Duration", &item.shake.duration, 0.01f, 0.0f, 5.0f)) m_timelineDirty = true;
-            if (ImGui::DragFloat("Amplitude", &item.shake.amplitude, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
-            if (ImGui::DragFloat("Frequency", &item.shake.frequency, 0.1f, 0.0f, 100.0f)) m_timelineDirty = true;
-            if (ImGui::DragFloat("Decay", &item.shake.decay, 0.01f, 0.0f, 10.0f)) m_timelineDirty = true;
+            if (ImGui::DragFloat("Duration", &item.shake.duration, 0.01f, 0.0f, 5.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Amplitude", &item.shake.amplitude, 0.01f, 0.0f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Frequency", &item.shake.frequency, 0.1f, 0.0f, 100.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Decay", &item.shake.decay, 0.01f, 0.0f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
         case TimelineTrackType::Event:
@@ -2915,6 +3007,11 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         }
 
         break;
+    }
+
+    if (timelineRuntimeChanged) {
+        RebuildPreviewTimelineRuntimeData();
+        SyncPreviewTimelinePlayback();
     }
 }
 

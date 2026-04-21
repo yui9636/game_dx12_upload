@@ -1,5 +1,151 @@
 #include "EditorLayerInternal.h"
 
+#include "Collision/CollisionManager.h"
+#include "Component/MeshComponent.h"
+#include "Transform/NodeAttachmentUtils.h"
+
+namespace
+{
+    float ResolveColliderMaxWorldScale(const TransformComponent& transform)
+    {
+        float value = std::fabs(transform.worldScale.x);
+        if (std::fabs(transform.worldScale.y) > value) {
+            value = std::fabs(transform.worldScale.y);
+        }
+        if (std::fabs(transform.worldScale.z) > value) {
+            value = std::fabs(transform.worldScale.z);
+        }
+        if (value <= 0.0001f) {
+            value = 1.0f;
+        }
+        return value;
+    }
+
+    DirectX::XMFLOAT3 ResolveColliderFallbackWorldCenter(Registry& registry,
+                                                         EntityID entity,
+                                                         const ColliderComponent::Element& element,
+                                                         const TransformComponent& transform)
+    {
+        using namespace DirectX;
+
+        const XMMATRIX world = XMLoadFloat4x4(&transform.worldMatrix);
+        XMFLOAT3 worldCenter = {
+            transform.worldPosition.x,
+            transform.worldPosition.y,
+            transform.worldPosition.z
+        };
+
+        if (element.nodeIndex >= 0) {
+            MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
+            if (mesh && mesh->model) {
+                const XMFLOAT3 offset = {
+                    element.offsetLocal.x,
+                    element.offsetLocal.y,
+                    element.offsetLocal.z
+                };
+                const XMFLOAT3 modelSpace = NodeAttachmentUtils::GetWorldPositionNodeLocal(
+                    mesh->model.get(),
+                    element.nodeIndex,
+                    offset);
+                const XMVECTOR transformed = XMVector3TransformCoord(XMLoadFloat3(&modelSpace), world);
+                XMStoreFloat3(&worldCenter, transformed);
+                return worldCenter;
+            }
+        }
+
+        const XMFLOAT3 localCenter = {
+            element.offsetLocal.x,
+            element.offsetLocal.y,
+            element.offsetLocal.z
+        };
+        const XMVECTOR transformed = XMVector3TransformCoord(XMLoadFloat3(&localCenter), world);
+        XMStoreFloat3(&worldCenter, transformed);
+        return worldCenter;
+    }
+
+    bool BuildColliderWorldBounds(Registry& registry,
+                                  EntityID entity,
+                                  const ColliderComponent::Element& element,
+                                  const TransformComponent& transform,
+                                  DirectX::BoundingBox& outBounds)
+    {
+        using namespace DirectX;
+
+        if (element.registeredId != 0) {
+            const Collider* runtimeCollider = CollisionManager::Instance().Get(element.registeredId);
+            if (runtimeCollider && runtimeCollider->enabled) {
+                switch (runtimeCollider->shape) {
+                case ColliderShape::Sphere:
+                    outBounds.Center = runtimeCollider->sphere.center;
+                    outBounds.Extents = {
+                        runtimeCollider->sphere.radius,
+                        runtimeCollider->sphere.radius,
+                        runtimeCollider->sphere.radius
+                    };
+                    return true;
+                case ColliderShape::Capsule:
+                    outBounds.Center = {
+                        runtimeCollider->capsule.base.x,
+                        runtimeCollider->capsule.base.y + runtimeCollider->capsule.height * 0.5f,
+                        runtimeCollider->capsule.base.z
+                    };
+                    outBounds.Extents = {
+                        runtimeCollider->capsule.radius,
+                        runtimeCollider->capsule.height * 0.5f + runtimeCollider->capsule.radius,
+                        runtimeCollider->capsule.radius
+                    };
+                    return true;
+                case ColliderShape::Box:
+                    outBounds.Center = runtimeCollider->box.center;
+                    outBounds.Extents = {
+                        runtimeCollider->box.size.x * 0.5f,
+                        runtimeCollider->box.size.y * 0.5f,
+                        runtimeCollider->box.size.z * 0.5f
+                    };
+                    return true;
+                default:
+                    break;
+                }
+            }
+        }
+
+        const XMFLOAT3 worldCenter = ResolveColliderFallbackWorldCenter(registry, entity, element, transform);
+        const float maxWorldScale = ResolveColliderMaxWorldScale(transform);
+
+        switch (element.type) {
+        case ColliderShape::Sphere:
+            outBounds.Center = worldCenter;
+            outBounds.Extents = {
+                element.radius * maxWorldScale,
+                element.radius * maxWorldScale,
+                element.radius * maxWorldScale
+            };
+            return true;
+        case ColliderShape::Capsule:
+            outBounds.Center = {
+                worldCenter.x,
+                worldCenter.y + element.height * std::fabs(transform.worldScale.y) * 0.5f,
+                worldCenter.z
+            };
+            outBounds.Extents = {
+                element.radius * maxWorldScale,
+                element.height * std::fabs(transform.worldScale.y) * 0.5f + element.radius * maxWorldScale,
+                element.radius * maxWorldScale
+            };
+            return true;
+        case ColliderShape::Box:
+        default:
+            outBounds.Center = worldCenter;
+            outBounds.Extents = {
+                element.size.x * std::fabs(transform.worldScale.x) * 0.5f,
+                element.size.y * std::fabs(transform.worldScale.y) * 0.5f,
+                element.size.z * std::fabs(transform.worldScale.z) * 0.5f
+            };
+            return true;
+        }
+    }
+}
+
 void EditorLayer::DrawSceneGridOverlay(const DirectX::XMFLOAT4& viewRect,
                                        const DirectX::XMFLOAT4X4& view,
                                        const DirectX::XMFLOAT4X4& projection) const
@@ -476,59 +622,41 @@ void EditorLayer::DrawSceneCollisionOverlay(const DirectX::XMFLOAT4& viewRect,
         auto* colliderColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<ColliderComponent>());
         auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
         for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+            const EntityID entity = archetype->GetEntities()[i];
             const auto& collider = *static_cast<ColliderComponent*>(colliderColumn->Get(i));
             const auto& transform = *static_cast<TransformComponent*>(transformColumn->Get(i));
-            if (!collider.enabled) {
+            if (!collider.enabled || !collider.drawGizmo) {
                 continue;
             }
 
-            const XMMATRIX world = XMLoadFloat4x4(&transform.worldMatrix);
             for (const auto& element : collider.elements) {
                 if (!element.enabled) {
                     continue;
                 }
 
-                BoundingBox localBounds{};
-                switch (element.type) {
-                case ColliderShape::Sphere:
-                    localBounds.Center = { element.offsetLocal.x, element.offsetLocal.y, element.offsetLocal.z };
-                    localBounds.Extents = { element.radius, element.radius, element.radius };
-                    break;
-                case ColliderShape::Capsule:
-                    localBounds.Center = {
-                        element.offsetLocal.x,
-                        element.offsetLocal.y + element.height * 0.5f,
-                        element.offsetLocal.z
-                    };
-                    localBounds.Extents = {
-                        element.radius,
-                        element.height * 0.5f + element.radius,
-                        element.radius
-                    };
-                    break;
-                case ColliderShape::Box:
-                default:
-                    localBounds.Center = { element.offsetLocal.x, element.offsetLocal.y, element.offsetLocal.z };
-                    localBounds.Extents = { element.size.x * 0.5f, element.size.y * 0.5f, element.size.z * 0.5f };
-                    break;
-                }
-
                 BoundingBox worldBounds{};
-                localBounds.Transform(worldBounds, world);
+                if (!BuildColliderWorldBounds(registry, entity, element, transform, worldBounds)) {
+                    continue;
+                }
                 XMFLOAT3 corners[8]{};
                 BuildBoundingBoxCorners(worldBounds, corners);
                 const ImU32 color = IM_COL32(
                     static_cast<int>(std::clamp(element.color.x, 0.0f, 1.0f) * 255.0f),
                     static_cast<int>(std::clamp(element.color.y, 0.0f, 1.0f) * 255.0f),
                     static_cast<int>(std::clamp(element.color.z, 0.0f, 1.0f) * 255.0f),
-                    190);
+                    220);
+
+                ImVec2 centerScreen{};
+                if (ProjectWorldToSceneScreen(viewRect, view, projection, worldBounds.Center, centerScreen)) {
+                    drawList->AddCircle(centerScreen, 4.0f, color, 16, 2.0f);
+                }
 
                 for (const auto& edge : edges) {
                     ImVec2 a{};
                     ImVec2 b{};
                     if (ProjectWorldToSceneScreen(viewRect, view, projection, corners[edge[0]], a) &&
                         ProjectWorldToSceneScreen(viewRect, view, projection, corners[edge[1]], b)) {
-                        drawList->AddLine(a, b, color, 1.0f);
+                        drawList->AddLine(a, b, color, 2.0f);
                     }
                 }
             }

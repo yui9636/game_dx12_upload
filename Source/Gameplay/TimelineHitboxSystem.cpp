@@ -15,6 +15,27 @@
 
 namespace
 {
+    float ResolveMatrixMaxScale(const DirectX::XMFLOAT4X4& matrix)
+    {
+        using namespace DirectX;
+
+        XMVECTOR scale;
+        XMVECTOR rotation;
+        XMVECTOR translation;
+        if (!XMMatrixDecompose(&scale, &rotation, &translation, XMLoadFloat4x4(&matrix))) {
+            return 1.0f;
+        }
+
+        XMFLOAT3 scaleValue{};
+        XMStoreFloat3(&scaleValue, scale);
+
+        float value = std::fabs(scaleValue.x);
+        if (std::fabs(scaleValue.y) > value) value = std::fabs(scaleValue.y);
+        if (std::fabs(scaleValue.z) > value) value = std::fabs(scaleValue.z);
+        if (value <= 0.0001f) value = 1.0f;
+        return value;
+    }
+
     DirectX::XMFLOAT3 ResolveTimelineNodeWorldPosition(
         Registry& registry,
         EntityID entity,
@@ -66,21 +87,39 @@ namespace
         };
     }
 
-    float ResolveTimelineHitboxScale(const TransformComponent* transform)
+    float ResolveTimelineHitboxScale(
+        Registry& registry,
+        EntityID entity,
+        const TransformComponent* transform,
+        int nodeIndex)
     {
         if (!transform) {
             return 1.0f;
         }
 
-        float sx = std::fabs(transform->worldScale.x);
-        float sy = std::fabs(transform->worldScale.y);
-        float sz = std::fabs(transform->worldScale.z);
+        auto* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (mesh && mesh->model && nodeIndex >= 0) {
+            const auto& nodes = mesh->model->GetNodes();
+            if (nodeIndex < static_cast<int>(nodes.size())) {
+                DirectX::XMFLOAT4X4 world{};
+                int cacheIndex = nodeIndex;
+                if (NodeAttachmentUtils::TryGetBoneWorldMatrix(
+                    mesh->model.get(),
+                    transform->worldMatrix,
+                    nodes[nodeIndex].name,
+                    cacheIndex,
+                    { 0.0f, 0.0f, 0.0f },
+                    { 0.0f, 0.0f, 0.0f },
+                    { 1.0f, 1.0f, 1.0f },
+                    NodeAttachmentSpace::NodeLocal,
+                    world)) {
+                    return ResolveMatrixMaxScale(world);
+                }
+            }
+        }
 
-        float value = sx;
-        if (sy > value) value = sy;
-        if (sz > value) value = sz;
-        if (value <= 0.0001f) value = 1.0f;
-        return value;
+        DirectX::XMFLOAT4X4 world = transform->worldMatrix;
+        return ResolveMatrixMaxScale(world);
     }
 }
 
@@ -126,7 +165,11 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         tx,
                         item.hb.nodeIndex,
                         item.hb.offsetLocal);
-                    const float scaledRadius = item.hb.radius * ResolveTimelineHitboxScale(tx);
+                    const float scaledRadius = item.hb.radius * ResolveTimelineHitboxScale(
+                        registry,
+                        ownerEntity,
+                        tx,
+                        item.hb.nodeIndex);
                     if (found) {
                         // Update existing
                         found->radius = item.hb.radius;
