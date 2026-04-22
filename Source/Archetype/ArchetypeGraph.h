@@ -8,7 +8,12 @@ namespace std {
     template <>
     struct hash<Signature> {
         size_t operator()(const Signature& sig) const {
-            return hash<unsigned long long>()(sig.to_ullong());
+            size_t seed = 1469598103934665603ull;
+            for (size_t i = 0; i < MAX_COMPONENTS; ++i) {
+                const size_t bitValue = sig[i] ? 0x9e3779b97f4a7c15ull : 0x4f1bbcdc6762c3d1ull;
+                seed ^= bitValue + (seed << 6) + (seed >> 2);
+            }
+            return seed;
         }
     };
 }

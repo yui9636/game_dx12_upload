@@ -1,7 +1,33 @@
 #include "TimelineAssetSerializer.h"
 #include "TimelineAsset.h"
 #include "JSONManager.h"
+#include <algorithm>
 #include <fstream>
+
+static std::string MakePortableDataPath(const std::string& path)
+{
+    if (path.empty()) {
+        return {};
+    }
+
+    std::string normalized = path;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    const size_t dataPos = normalized.find("Data/");
+    if (dataPos != std::string::npos) {
+        return normalized.substr(dataPos);
+    }
+    return normalized;
+}
+
+static GEAudioPayload MakePortableAudioPayload(const GEAudioPayload& payload)
+{
+    GEAudioPayload portable = payload;
+    const std::string portablePath = MakePortableDataPath(portable.assetId);
+    if (!portablePath.empty()) {
+        strcpy_s(portable.assetId, portablePath.c_str());
+    }
+    return portable;
+}
 
 // ============================================================================
 // JSON helpers for TimelineAsset types
@@ -16,7 +42,7 @@ static nlohmann::json ItemToJson(const TimelineItem& item, TimelineTrackType tra
     switch (trackType) {
     case TimelineTrackType::Hitbox:      j["hitbox"] = item.hitbox; break;
     case TimelineTrackType::VFX:         j["vfx"]    = item.vfx;   break;
-    case TimelineTrackType::Audio:       j["audio"]  = item.audio;  break;
+    case TimelineTrackType::Audio:       j["audio"]  = MakePortableAudioPayload(item.audio);  break;
     case TimelineTrackType::CameraShake: j["shake"]  = item.shake;  break;
     case TimelineTrackType::Event:
         j["eventName"] = std::string(item.eventName);
@@ -41,7 +67,13 @@ static TimelineItem ItemFromJson(const nlohmann::json& j, TimelineTrackType trac
         if (j.contains("vfx")) j.at("vfx").get_to(item.vfx);
         break;
     case TimelineTrackType::Audio:
-        if (j.contains("audio")) j.at("audio").get_to(item.audio);
+        if (j.contains("audio")) {
+            j.at("audio").get_to(item.audio);
+            const std::string portablePath = MakePortableDataPath(item.audio.assetId);
+            if (!portablePath.empty()) {
+                strcpy_s(item.audio.assetId, portablePath.c_str());
+            }
+        }
         break;
     case TimelineTrackType::CameraShake:
         if (j.contains("shake")) j.at("shake").get_to(item.shake);

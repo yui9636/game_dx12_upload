@@ -5,10 +5,31 @@
 #include <system_error>
 
 #include "../../External/miniaudio-master/miniaudio.h"
+#include "System/PathResolver.h"
 
 namespace
 {
     constexpr uint64_t kStreamingThresholdBytes = 2ull * 1024ull * 1024ull;
+
+    std::filesystem::path ResolveAudioFilesystemPath(const std::string& clipPath)
+    {
+        if (clipPath.empty()) {
+            return {};
+        }
+
+        std::filesystem::path path = std::filesystem::path(clipPath).lexically_normal();
+        if (path.is_absolute()) {
+            return path;
+        }
+
+        const std::string resolved = PathResolver::Resolve(clipPath);
+        if (!resolved.empty()) {
+            return std::filesystem::path(resolved).lexically_normal();
+        }
+
+        std::error_code ec;
+        return (std::filesystem::current_path(ec) / path).lexically_normal();
+    }
 
     std::string NormalizeAudioClipPath(const std::string& clipPath)
     {
@@ -17,12 +38,9 @@ namespace
         }
 
         std::error_code ec;
-        std::filesystem::path path = std::filesystem::path(clipPath).lexically_normal();
-        if (!path.is_absolute()) {
-            path = std::filesystem::current_path(ec) / path;
-            if (ec) {
-                path = std::filesystem::path(clipPath).lexically_normal();
-            }
+        std::filesystem::path path = ResolveAudioFilesystemPath(clipPath);
+        if (path.empty()) {
+            return {};
         }
 
         const std::filesystem::path canonical = std::filesystem::weakly_canonical(path, ec);

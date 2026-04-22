@@ -13,5 +13,4 @@ public:
 
 private:
     static DirectX::XMFLOAT3 s_shakeOffset;
-    static float s_shakeTime;
 };

@@ -5,25 +5,15 @@
   "nodes": [
     {
       "components": {
-        "EnvironmentComponent": {
-          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
-          "enableSkybox": true,
-          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
-          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
         },
-        "NameComponent": {
-          "name": "Environment"
-        }
-      },
-      "id": 0
-    },
-    {
-      "components": {
         "CameraFreeControlComponent": {
           "moveSpeed": 20.0,
-          "pitch": 0.35000014305114746,
+          "pitch": 0.5349997282028198,
           "rotateSpeed": 0.004999999888241291,
-          "yaw": -0.43500006198883057
+          "yaw": -1.1999987363815308
         },
         "CameraLensComponent": {
           "aspect": 1.7777777910232544,
@@ -40,15 +30,15 @@
         },
         "TransformComponent": {
           "localPosition": {
-            "x": 129.8496856689453,
-            "y": 227.07566833496094,
-            "z": -389.63641357421875
+            "x": 108.35387420654297,
+            "y": 156.7224578857422,
+            "z": -57.64845275878906
           },
           "localRotation": {
-            "w": 0.9615263342857361,
-            "x": 0.17000621557235718,
-            "y": -0.21249337494373322,
-            "z": 0.03757067397236824
+            "w": 0.7959827184677124,
+            "x": 0.2181536853313446,
+            "y": -0.5445603132247925,
+            "z": 0.14924675226211548
           },
           "localScale": {
             "x": 1.0,
@@ -57,7 +47,7 @@
           }
         }
       },
-      "id": 1
+      "id": 0
     },
     {
       "components": {
@@ -97,6 +87,46 @@
           }
         }
       },
+      "id": 1
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 7.699999809265137,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "intensity": 17.3799991607666,
+          "range": 21.1200008392334,
+          "type": 1
+        },
+        "NameComponent": {
+          "name": "Point Light"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 43.09092330932617,
+            "z": -17.202808380126953
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": -0.0,
+            "y": 0.0,
+            "z": -0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
       "id": 2
     },
     {
@@ -114,13 +144,403 @@
         }
       },
       "id": 3
+    },
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 4
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 5
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MaterialComponent": {
+          "materialAssetPath": "Data\\Material\\NewMaterial.mat"
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data\\Model\\Camera\\Camera.fbx"
+        },
+        "NameComponent": {
+          "name": "Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 11.554832458496094,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": -0.0,
+            "y": 0.0,
+            "z": -0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 6
+    },
+    {
+      "components": {
+        "ActionDatabaseComponent": {
+          "nodeCount": 0,
+          "nodes": []
+        },
+        "CharacterPhysicsComponent": {
+          "acceleration": 50.0,
+          "friction": 5.0,
+          "gravity": -30.0,
+          "height": 1.7999999523162842,
+          "maxMoveSpeed": 10.0,
+          "stepOffset": 0.30000001192092896
+        },
+        "ColliderComponent": {
+          "drawGizmo": true,
+          "elements": [
+            {
+              "attribute": 0,
+              "color": {
+                "w": 0.3499999940395355,
+                "x": 1.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "enabled": true,
+              "height": 112.0,
+              "nodeIndex": 6,
+              "offsetLocal": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              },
+              "radius": 54.20000076293945,
+              "size": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "type": 1
+            }
+          ],
+          "enabled": true
+        },
+        "HealthComponent": {
+          "health": 100,
+          "maxHealth": 100
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "InputActionMapComponent": {
+          "actions": [],
+          "axes": [],
+          "contextCategory": "",
+          "doubleTapGapFrames": 15,
+          "holdThresholdFrames": 30,
+          "name": ""
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 2,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        },
+        "InputUserComponent": {
+          "deviceMask": 4294967295,
+          "isEditorUser": false,
+          "isPrimary": true,
+          "profileName": "",
+          "userId": 1
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "C:\\Users\\yuito\\Documents\\MyEngine_Workspace\\game_dx12_upload\\Data\\Model\\Actor\\A5.gltf"
+        },
+        "NameComponent": {
+          "name": "Player Preview"
+        },
+        "NodeSocketComponent": {
+          "sockets": []
+        },
+        "PlayerTagComponent": {
+          "playerId": 1
+        },
+        "StaminaComponent": {
+          "costPerUse": 250.0,
+          "current": 1000.0,
+          "max": 1000.0,
+          "recoveryDelay": 0.800000011920929,
+          "recoveryRate": 200.0
+        },
+        "StateMachineAssetComponent": {
+          "defaultStateId": 1,
+          "name": "",
+          "nextId": 5,
+          "parameters": [
+            {
+              "defaultValue": 0.0,
+              "name": "MoveX",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "MoveY",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "MoveMagnitude",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "IsMoving",
+              "type": 2
+            }
+          ],
+          "states": [
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 1,
+              "canInterrupt": true,
+              "id": 1,
+              "loopAnimation": true,
+              "name": "Idle",
+              "posX": -399.66815185546875,
+              "posY": -3.3870179653167725,
+              "timelineId": 0,
+              "type": 0
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 2,
+              "canInterrupt": true,
+              "id": 2,
+              "loopAnimation": true,
+              "name": "Move",
+              "posX": 280.0,
+              "posY": 0.0,
+              "timelineId": 0,
+              "type": 0
+            }
+          ],
+          "transitions": [
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 4,
+                  "param": "IsMoving",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 1,
+              "hasExitTime": false,
+              "id": 3,
+              "priority": 100,
+              "toState": 2
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 5,
+                  "param": "IsMoving",
+                  "type": 5,
+                  "value": 0.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 4,
+              "priority": 100,
+              "toState": 1
+            }
+          ]
+        },
+        "StateMachineParamsComponent": {
+          "params": [
+            {
+              "name": "MoveX",
+              "value": 0.0
+            },
+            {
+              "name": "MoveY",
+              "value": 0.0
+            },
+            {
+              "name": "MoveMagnitude",
+              "value": 0.0
+            },
+            {
+              "name": "IsMoving",
+              "value": 0.0
+            }
+          ]
+        },
+        "TimelineLibraryComponent": {
+          "assets": [
+            {
+              "animationIndex": 0,
+              "duration": 0.0,
+              "fps": 60.0,
+              "id": 1,
+              "name": "",
+              "nextTrackId": 4,
+              "ownerModelPath": "C:\\Users\\yuito\\Documents\\MyEngine_Workspace\\game_dx12_upload\\Data\\Model\\Actor\\A5.gltf",
+              "tracks": [
+                {
+                  "color": 4294918208,
+                  "id": 1,
+                  "items": [
+                    {
+                      "endFrame": 178,
+                      "hitbox": {
+                        "nodeIndex": 0,
+                        "offsetLocal": {
+                          "x": 0.0,
+                          "y": 0.0,
+                          "z": 0.0
+                        },
+                        "radius": 30.0,
+                        "rgba": 1090453504
+                      },
+                      "startFrame": 170
+                    }
+                  ],
+                  "keyframes": [],
+                  "locked": false,
+                  "muted": false,
+                  "name": "Hitbox 01",
+                  "type": 1
+                },
+                {
+                  "color": 4282417407,
+                  "id": 2,
+                  "items": [
+                    {
+                      "audio": {
+                        "assetId": "Data/Audio/SE.wav",
+                        "is3D": false,
+                        "loop": false,
+                        "pitch": 1.0,
+                        "volume": 1.0
+                      },
+                      "endFrame": 31,
+                      "startFrame": 13
+                    }
+                  ],
+                  "keyframes": [],
+                  "locked": false,
+                  "muted": false,
+                  "name": "Audio 01",
+                  "type": 3
+                },
+                {
+                  "color": 4294934592,
+                  "id": 3,
+                  "items": [
+                    {
+                      "endFrame": 13,
+                      "shake": {
+                        "amplitude": 10.0,
+                        "decay": 10.0,
+                        "duration": 5.0,
+                        "frequency": 20.0,
+                        "hitStopDuration": 1.0,
+                        "timeScale": 0.2199999988079071
+                      },
+                      "startFrame": 7
+                    }
+                  ],
+                  "keyframes": [],
+                  "locked": false,
+                  "muted": false,
+                  "name": "Shake 01",
+                  "type": 4
+                }
+              ]
+            }
+          ],
+          "nextTimelineId": 2
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 19.137311935424805,
+            "z": -3.4314045906066895
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": -0.0,
+            "y": 0.0,
+            "z": -0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 7
     }
   ],
   "rootLocalIds": [
     0,
     1,
     2,
-    3
+    3,
+    4,
+    5,
+    6,
+    7
   ],
   "type": "scene",
   "version": 1

@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include "Gameplay/TimelineShakeSystem.h"
 
 namespace {
     constexpr bool kEnableDx12RuntimeDiagnostics = false;
@@ -1064,6 +1065,22 @@ void EngineKernel::Update(float rawDt)
         m_audioWorld->Update(m_gameLayer->GetRegistry(), mode);
     }
 
+
+    if (m_editorLayer) {
+        const bool usePlayerEditorShake =
+            m_gameLayer &&
+            m_editorLayer->IsPlayerWorkspaceActive();
+
+        if (usePlayerEditorShake) {
+            m_editorLayer->SetPlayerEditorCameraShakeOffset(
+                TimelineShakeSystem::GetShakeOffset());
+        }
+        else {
+            m_editorLayer->ClearPlayerEditorCameraShakeOffset();
+        }
+    }
+
+
     time.totalTime += time.dt;
     if (stepThisFrame) {
         m_stepFrameRequested = false;
@@ -1290,6 +1307,61 @@ void EngineKernel::Render()
         views.push_back(m_renderPipeline->BuildPrimaryViewContext(rc));
     }
     m_renderPipeline->ExecuteViews(m_renderQueue, rc, views);
+
+    auto renderPrimaryViewGizmos = [&](ITexture* colorTarget, ITexture* depthTarget) -> bool {
+        if (views.empty()) {
+            return false;
+        }
+
+        auto& primaryView = views.front();
+        Gizmos* gizmos = Graphics::Instance().GetGizmos();
+        if (!gizmos || !colorTarget || !depthTarget) {
+            return false;
+        }
+
+        RenderContext gizmoRc = rc;
+        gizmoRc.mainRenderTarget = colorTarget;
+        gizmoRc.sceneColorTexture = colorTarget;
+        gizmoRc.mainDepthStencil = depthTarget;
+        gizmoRc.sceneDepthTexture = depthTarget;
+        gizmoRc.mainViewport = primaryView.state.viewport;
+        gizmoRc.renderWidth = primaryView.state.renderWidth;
+        gizmoRc.renderHeight = primaryView.state.renderHeight;
+        gizmoRc.displayWidth = primaryView.state.displayWidth;
+        gizmoRc.displayHeight = primaryView.state.displayHeight;
+        gizmoRc.panelWidth = primaryView.state.panelWidth;
+        gizmoRc.panelHeight = primaryView.state.panelHeight;
+        gizmoRc.viewMatrix = primaryView.state.viewMatrix;
+        gizmoRc.projectionMatrix = primaryView.state.projectionMatrix;
+        gizmoRc.viewProjectionUnjittered = primaryView.state.viewProjectionUnjittered;
+        gizmoRc.prevViewProjectionMatrix = primaryView.state.prevViewProjectionMatrix;
+        gizmoRc.cameraPosition = primaryView.state.cameraPosition;
+        gizmoRc.cameraDirection = primaryView.state.cameraDirection;
+        gizmoRc.fovY = primaryView.state.fovY;
+        gizmoRc.aspect = primaryView.state.aspect;
+        gizmoRc.nearZ = primaryView.state.nearZ;
+        gizmoRc.farZ = primaryView.state.farZ;
+        gizmoRc.jitterOffset = primaryView.state.jitterOffset;
+        gizmoRc.prevJitterOffset = primaryView.state.prevJitterOffset;
+
+        rc.commandList->TransitionBarrier(colorTarget, ResourceState::RenderTarget);
+        rc.commandList->TransitionBarrier(depthTarget, ResourceState::DepthRead);
+        rc.commandList->SetRenderTarget(colorTarget, depthTarget);
+        rc.commandList->SetViewport(gizmoRc.mainViewport);
+        gizmos->Render(gizmoRc);
+        rc.commandList->TransitionBarrier(colorTarget, ResourceState::ShaderResource);
+        rc.commandList->TransitionBarrier(depthTarget, ResourceState::ShaderResource);
+        return true;
+    };
+
+    const bool deferPrimaryViewGizmos = m_editorLayer && m_editorLayer->ShouldRenderSceneGrid3D();
+    if (!deferPrimaryViewGizmos && !views.empty()) {
+        auto& primaryView = views.front();
+        ITexture* gizmoColorTarget = primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture;
+        ITexture* gizmoDepthTarget = primaryView.sceneDepthTexture ? primaryView.sceneDepthTexture : rc.sceneDepthTexture;
+        renderPrimaryViewGizmos(gizmoColorTarget, gizmoDepthTarget);
+    }
+
     ITexture* editorScenePreviewTexture = nullptr;
     if (m_editorLayer) {
         auto& primaryView = views.front();
@@ -1297,6 +1369,7 @@ void EngineKernel::Render()
         ITexture* sceneDepthTexture = primaryView.sceneDepthTexture ? primaryView.sceneDepthTexture : rc.sceneDepthTexture;
         ITexture* gameViewTexture = primaryView.sceneViewTexture ? primaryView.sceneViewTexture :
             (primaryView.displayTexture ? primaryView.displayTexture : rc.sceneColorTexture);
+        bool renderedPrimaryViewGizmos = false;
 
         if (m_editorLayer->ShouldRenderSceneGrid3D() && sceneViewTexture && sceneDepthTexture) {
             FrameBuffer* editorSceneFrameBuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::EditorScene);
@@ -1338,12 +1411,18 @@ void EngineKernel::Render()
                 gridSettings.cellSize = m_editorLayer->GetSceneGridCellSize();
                 gridSettings.halfLineCount = m_editorLayer->GetSceneGridHalfLineCount();
                 m_editorGridRenderSystem.RenderEditorGrid(gridRc, gridSettings);
+                // Composite debug shapes after the grid so both overlays stay stable.
+                renderedPrimaryViewGizmos = renderPrimaryViewGizmos(editorSceneColor, sceneDepthTexture);
                 rc.commandList->TransitionBarrier(editorSceneColor, ResourceState::ShaderResource);
                 rc.commandList->TransitionBarrier(sceneViewTexture, ResourceState::ShaderResource);
                 rc.commandList->TransitionBarrier(sceneDepthTexture, ResourceState::ShaderResource);
                 editorScenePreviewTexture = editorSceneColor;
                 sceneViewTexture = editorSceneColor;
             }
+        }
+
+        if (deferPrimaryViewGizmos && !renderedPrimaryViewGizmos) {
+            renderPrimaryViewGizmos(sceneViewTexture, sceneDepthTexture);
         }
 
         m_editorLayer->SetSceneViewTexture(sceneViewTexture);

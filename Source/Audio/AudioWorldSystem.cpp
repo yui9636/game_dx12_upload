@@ -22,6 +22,7 @@
 #include "Console/Logger.h"
 #include "Registry/Registry.h"
 #include "System/Query.h"
+#include "System/PathResolver.h"
 
 namespace
 {
@@ -55,6 +56,26 @@ namespace
         bool paused = false;
     };
 
+    std::filesystem::path ResolveAudioFilesystemPath(const std::string& clipPath)
+    {
+        if (clipPath.empty()) {
+            return {};
+        }
+
+        std::filesystem::path path = std::filesystem::path(clipPath).lexically_normal();
+        if (path.is_absolute()) {
+            return path;
+        }
+
+        const std::string resolved = PathResolver::Resolve(clipPath);
+        if (!resolved.empty()) {
+            return std::filesystem::path(resolved).lexically_normal();
+        }
+
+        std::error_code ec;
+        return (std::filesystem::current_path(ec) / path).lexically_normal();
+    }
+
     std::string NormalizeAudioPath(const std::string& clipPath)
     {
         if (clipPath.empty()) {
@@ -62,12 +83,9 @@ namespace
         }
 
         std::error_code ec;
-        std::filesystem::path path = std::filesystem::path(clipPath).lexically_normal();
-        if (!path.is_absolute()) {
-            path = std::filesystem::current_path(ec) / path;
-            if (ec) {
-                path = std::filesystem::path(clipPath).lexically_normal();
-            }
+        std::filesystem::path path = ResolveAudioFilesystemPath(clipPath);
+        if (path.empty()) {
+            return {};
         }
 
         const std::filesystem::path weak = std::filesystem::weakly_canonical(path, ec);
@@ -406,6 +424,35 @@ AudioVoiceHandle AudioWorldSystem::PlayTransient3D(const std::string& clipPath,
         return 0;
     }
     return CreateVoiceInternal(*m_impl, clipPath, bus, true, loop, volume, 1.0f, pitch, minDistance, maxDistance, streaming, true, true, false, true, Entity::NULL_ID, &position);
+}
+
+AudioVoiceHandle AudioWorldSystem::PlayEditorTransient2D(const std::string& clipPath,
+                                                         float volume,
+                                                         float pitch,
+                                                         bool loop,
+                                                         AudioBusType bus,
+                                                         bool streaming)
+{
+    if (!m_impl) {
+        return 0;
+    }
+    return CreateVoiceInternal(*m_impl, clipPath, bus, false, loop, volume, 1.0f, pitch, 1.0f, 50.0f, streaming, true, true, false, false, Entity::NULL_ID, nullptr);
+}
+
+AudioVoiceHandle AudioWorldSystem::PlayEditorTransient3D(const std::string& clipPath,
+                                                         const DirectX::XMFLOAT3& position,
+                                                         float volume,
+                                                         float pitch,
+                                                         bool loop,
+                                                         AudioBusType bus,
+                                                         float minDistance,
+                                                         float maxDistance,
+                                                         bool streaming)
+{
+    if (!m_impl) {
+        return 0;
+    }
+    return CreateVoiceInternal(*m_impl, clipPath, bus, true, loop, volume, 1.0f, pitch, minDistance, maxDistance, streaming, true, true, false, false, Entity::NULL_ID, &position);
 }
 
 void AudioWorldSystem::StopVoice(AudioVoiceHandle handle)
@@ -847,8 +894,11 @@ void AudioWorldSystem::Update(Registry& registry, EngineMode mode)
 
         if (voice.runtimeControlled) {
             if (!runtimeEnabled) {
-                voicesToRemove.push_back(entry.first);
-                continue;
+                const bool allowEditorTransient = voice.transient && Entity::IsNull(voice.entity);
+                if (!allowEditorTransient) {
+                    voicesToRemove.push_back(entry.first);
+                    continue;
+                }
             }
             if (voice.transient) {
                 PauseOrResumeVoice(voice, runtimePaused);

@@ -10,14 +10,13 @@
 #include <algorithm>
 
 DirectX::XMFLOAT3 TimelineShakeSystem::s_shakeOffset = { 0, 0, 0 };
-float TimelineShakeSystem::s_shakeTime = 0.0f;
 
 DirectX::XMFLOAT3 TimelineShakeSystem::GetShakeOffset() { return s_shakeOffset; }
 void TimelineShakeSystem::ResetShakeOffset() { s_shakeOffset = { 0, 0, 0 }; }
 
 void TimelineShakeSystem::Update(Registry& registry, float dt) {
+    (void)dt;
     s_shakeOffset = { 0, 0, 0 };
-    s_shakeTime += dt;
 
     Signature sig = CreateSignature<TimelineComponent, TimelineItemBuffer>();
     for (auto* arch : registry.GetAllArchetypes()) {
@@ -57,11 +56,13 @@ void TimelineShakeSystem::Update(Registry& registry, float dt) {
                     if (duration <= 0.0f) duration = 0.2f;
 
                     float progress = std::clamp(elapsed / duration, 0.0f, 1.0f);
-                    float decay = 1.0f - progress;
+                    const float decayExponent = item.shake.decay > 0.0f ? item.shake.decay : 1.0f;
+                    float decay = powf(1.0f - progress, decayExponent);
                     float amp = item.shake.amplitude * decay;
 
                     if (amp > 0.001f) {
-                        float t = s_shakeTime * item.shake.frequency;
+                        const float seed = static_cast<float>(item.start) * 0.173f + static_cast<float>(item.end) * 0.071f;
+                        float t = elapsed * item.shake.frequency + seed;
                         // Procedural noise — layered sin/cos for organic feel
                         float nx = sinf(t) + sinf(t * 0.5f + 1.5f) * 0.5f;
                         float ny = cosf(t * 1.1f) + sinf(t * 0.8f + 2.0f) * 0.5f;

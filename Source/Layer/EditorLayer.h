@@ -124,6 +124,12 @@ public:
     void RenderUI() override;
     void RenderDetachedWindows();
 
+    // PlayerEditor 中だけ editor camera に適用する shake オフセットを設定する。
+    void SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset);
+
+    // PlayerEditor 用 camera shake オフセットをクリアする。
+    void ClearPlayerEditorCameraShakeOffset();
+
     AssetBrowser* GetAssetBrowser() const { return m_assetBrowser.get(); }
     EditorInputBridge& GetInputBridge() { return m_inputBridge; }
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
@@ -140,9 +146,26 @@ public:
     }
 
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
-        return (m_sceneViewMode == SceneViewMode::Mode2D)
-            ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
-            : m_editorCameraPosition;
+
+        //return (m_sceneViewMode == SceneViewMode::Mode2D)
+        //    ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
+        //    : m_editorCameraPosition;
+
+        if (m_sceneViewMode == SceneViewMode::Mode2D) {
+            return DirectX::XMFLOAT3{
+                m_editor2DCenter.x + m_editorCameraShakeOffset.x,
+                m_editor2DCenter.y + m_editorCameraShakeOffset.y,
+                -100.0f + m_editorCameraShakeOffset.z
+            };
+        }
+
+        return DirectX::XMFLOAT3{
+            m_editorCameraPosition.x + m_editorCameraShakeOffset.x,
+            m_editorCameraPosition.y + m_editorCameraShakeOffset.y,
+            m_editorCameraPosition.z + m_editorCameraShakeOffset.z
+        };
+
+
     }
     DirectX::XMFLOAT3 GetEditorCameraDirection() const;
     DirectX::XMFLOAT4X4 GetEditorViewMatrix() const;
@@ -279,6 +302,10 @@ private:
     std::filesystem::path m_pendingRecoveryScenePath;
     bool m_hasCheckedRecovery = false;
     double m_autosaveAccumulator = 0.0;
+
+    // PlayerEditor 中だけ editor camera に加算する一時 shake オフセット。
+    DirectX::XMFLOAT3 m_editorCameraShakeOffset = { 0.0f, 0.0f, 0.0f };
+
     // ==========================================
     // ==========================================
     void DrawDockSpace();

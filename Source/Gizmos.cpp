@@ -615,8 +615,10 @@ void Gizmos::Render(const RenderContext& rc)
 	rc.commandList->SetInputLayout(inputLayout.get());
 
     const float blendFactor[4] = { 1.0f,1.0f,1.0f,1.0f };
-	rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Opaque), blendFactor, 0xFFFFFFFF);
-	rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestAndWrite), 0);
+    // Gizmos are rendered after the main scene with a read-only depth target.
+    // Do not write depth here or we get unstable overlay results when debug shapes appear.
+	rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Alpha), blendFactor, 0xFFFFFFFF);
+	rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestOnly), 0);
 	rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));
 
 	DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&rc.viewMatrix);

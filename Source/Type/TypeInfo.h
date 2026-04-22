@@ -4,7 +4,9 @@
 
 using ComponentTypeID = uint32_t;
 
-constexpr uint32_t MAX_COMPONENTS = 64;
+// The generated component set already exceeds 64 entries.
+// Keep enough headroom so ECS signature tests do not throw while editing/saving prefabs.
+constexpr uint32_t MAX_COMPONENTS = 128;
 
 struct ComponentMetadata {
     size_t size;

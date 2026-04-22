@@ -319,6 +319,7 @@ struct ComponentMeta<EffectPlaybackComponent> {
     static constexpr std::string_view Name = "EffectPlaybackComponent";
     static constexpr auto Fields = std::make_tuple(
         MakeField("isPlaying", &EffectPlaybackComponent::isPlaying),
+        MakeField("isPaused", &EffectPlaybackComponent::isPaused),
         MakeField("currentTime", &EffectPlaybackComponent::currentTime),
         MakeField("duration", &EffectPlaybackComponent::duration),
         MakeField("seed", &EffectPlaybackComponent::seed),

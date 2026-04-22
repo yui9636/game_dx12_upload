@@ -43,6 +43,20 @@ struct BillboardHeader
     uint   packed;          //  4B  alive(1) | depthBin(5) | pageHandle(16) | rendererBin(10)
 };
 
+// ── Mesh Attribute Hot Stream (64 bytes, used only by Mesh renderer bin) ──
+// quaternion orientation + per-axis scale + fixed-axis angular velocity
+// Reserved fields leave room for skinning handle / variant index / material flags.
+struct MeshAttribHot
+{
+    float4 rotation;        // 16B  current orientation (updated each frame)
+    float3 scale;           // 12B  per-axis scale (set at emit)
+    float  angularSpeed;    //  4B  rad/sec around angularAxis (0 = no spin)
+    float3 angularAxis;     // 12B  normalized rotation axis (set at emit)
+    float  rotReserved;     //  4B  reserved (future: rotation damping)
+    uint4  reserved;        // 16B  reserved (future: skinning / variant / material flags)
+};
+static const uint MESH_ATTRIB_STRIDE = 64;
+
 // ── Header bit packing helpers ──
 static const uint HEADER_ALIVE_BIT       = 0x80000000u;
 static const uint HEADER_DEPTHBIN_SHIFT  = 25u;
@@ -131,6 +145,41 @@ static const uint PAGE_STATE_RESERVED        = 1;
 static const uint PAGE_STATE_ACTIVE          = 2;
 static const uint PAGE_STATE_SPARSE          = 3;
 static const uint PAGE_STATE_RECLAIM_PENDING = 4;
+
+// ── Quaternion helpers (used by Mesh particle path) ──
+float4 QuatFromAxisAngle(float3 axis, float angle)
+{
+    float h = angle * 0.5f;
+    float s = sin(h);
+    return float4(normalize(axis) * s, cos(h));
+}
+
+float4 QuatMultiply(float4 a, float4 b)
+{
+    return float4(
+        a.w * b.xyz + b.w * a.xyz + cross(a.xyz, b.xyz),
+        a.w * b.w - dot(a.xyz, b.xyz));
+}
+
+float4 QuatNormalize(float4 q)
+{
+    float lenSq = dot(q, q);
+    return lenSq > 1e-8f ? q * rsqrt(lenSq) : float4(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+float4 QuatFromYawPitchRoll(float yaw, float pitch, float roll)
+{
+    float4 qy = QuatFromAxisAngle(float3(0.0f, 1.0f, 0.0f), yaw);
+    float4 qp = QuatFromAxisAngle(float3(1.0f, 0.0f, 0.0f), pitch);
+    float4 qr = QuatFromAxisAngle(float3(0.0f, 0.0f, 1.0f), roll);
+    return QuatMultiply(qy, QuatMultiply(qp, qr));
+}
+
+float3 QuatRotate(float3 v, float4 q)
+{
+    float3 t = 2.0f * cross(q.xyz, v);
+    return v + q.w * t + cross(q.xyz, t);
+}
 
 // ── CoarseDepthBin ──
 static const uint DEPTH_BIN_COUNT = 32u;

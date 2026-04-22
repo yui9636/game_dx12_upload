@@ -116,14 +116,15 @@ DirectX::XMFLOAT3 EditorLayer::GetEditorCameraDirection() const
 DirectX::XMFLOAT4X4 EditorLayer::GetEditorViewMatrix() const
 {
     using namespace DirectX;
+    const DirectX::XMFLOAT3 eyePosition = GetEditorCameraPosition();
     if (m_sceneViewMode == SceneViewMode::Mode2D) {
-        const XMVECTOR eye = XMVectorSet(m_editor2DCenter.x, m_editor2DCenter.y, -100.0f, 1.0f);
+        const XMVECTOR eye = XMLoadFloat3(&eyePosition);
         const XMMATRIX view = XMMatrixLookToLH(eye, XMVectorSet(0, 0, 1, 0), XMVectorSet(0, 1, 0, 0));
         DirectX::XMFLOAT4X4 out{};
         XMStoreFloat4x4(&out, view);
         return out;
     }
-    const XMVECTOR eye = XMLoadFloat3(&m_editorCameraPosition);
+    const XMVECTOR eye = XMLoadFloat3(&eyePosition);
     const XMFLOAT3 dirFloat = GetEditorCameraDirection();
     const XMVECTOR dir = XMLoadFloat3(&dirFloat);
     const XMMATRIX view = XMMatrixLookToLH(eye, dir, XMVectorSet(0, 1, 0, 0));

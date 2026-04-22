@@ -24,10 +24,23 @@ public:
     template<typename T>
     void AddComponent(EntityID entity, const T& component) {
         const uint32_t entityIndex = Entity::GetIndex(entity);
+        if (Entity::IsNull(entity) ||
+            entityIndex >= m_entityRecords.size() ||
+            !m_entityManager.IsAlive(entity)) {
+            return;
+        }
+
         EntityRecord& record = m_entityRecords[entityIndex];
+        if (!record.archetype) {
+            return;
+        }
+
         Archetype* oldArchetype = record.archetype;
 
         ComponentTypeID typeId = TypeManager::GetComponentTypeID<T>();
+        if (typeId >= MAX_COMPONENTS) {
+            return;
+        }
 
         if (oldArchetype->GetSignature().test(typeId)) {
             ComponentColumn* col = oldArchetype->GetColumn(typeId);
@@ -58,9 +71,21 @@ public:
     template<typename T>
     T* GetComponent(EntityID entity) {
         const uint32_t entityIndex = Entity::GetIndex(entity);
+        if (Entity::IsNull(entity) ||
+            entityIndex >= m_entityRecords.size() ||
+            !m_entityManager.IsAlive(entity)) {
+            return nullptr;
+        }
+
         EntityRecord& record = m_entityRecords[entityIndex];
+        if (!record.archetype) {
+            return nullptr;
+        }
 
         ComponentTypeID typeId = TypeManager::GetComponentTypeID<T>();
+        if (typeId >= MAX_COMPONENTS) {
+            return nullptr;
+        }
 
         if (!record.archetype->GetSignature().test(typeId)) {
             return nullptr;
@@ -73,10 +98,23 @@ public:
     template<typename T>
     void RemoveComponent(EntityID entity) {
         const uint32_t entityIndex = Entity::GetIndex(entity);
+        if (Entity::IsNull(entity) ||
+            entityIndex >= m_entityRecords.size() ||
+            !m_entityManager.IsAlive(entity)) {
+            return;
+        }
+
         EntityRecord& record = m_entityRecords[entityIndex];
+        if (!record.archetype) {
+            return;
+        }
+
         Archetype* oldArchetype = record.archetype;
 
         ComponentTypeID typeId = TypeManager::GetComponentTypeID<T>();
+        if (typeId >= MAX_COMPONENTS) {
+            return;
+        }
 
         if (!oldArchetype->GetSignature().test(typeId)) {
             return;

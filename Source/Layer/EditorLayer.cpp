@@ -328,3 +328,15 @@ void EditorLayer::SyncEffectEditorPanelState()
     }
     m_effectEditorPanel.SetSelectedContext(selectedEntity, meshPath);
 }
+
+// PlayerEditor 中だけ editor camera に適用する shake オフセットを設定する。
+void EditorLayer::SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset)
+{
+    m_editorCameraShakeOffset = offset;
+}
+
+// PlayerEditor 用 camera shake オフセットをクリアする。
+void EditorLayer::ClearPlayerEditorCameraShakeOffset()
+{
+    m_editorCameraShakeOffset = { 0.0f, 0.0f, 0.0f };
+}

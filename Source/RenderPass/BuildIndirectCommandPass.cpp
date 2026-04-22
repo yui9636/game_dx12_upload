@@ -47,11 +47,8 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     rc.prepMetrics.gpuDrivenDispatchGroupCount = 0;
     rc.prepMetrics.gpuDrivenDispatchReduction = 0.0f;
 
-    if (m_batchResults.capacity() < rc.preparedOpaqueInstanceBatches.size()) {
-        ++rc.prepMetrics.indirectScratchVectorGrowths;
-    }
-    m_batchResults.clear();
-    m_batchResults.resize(rc.preparedOpaqueInstanceBatches.size());
+    std::vector<BatchCommandBuildResult> batchResults;
+    batchResults.resize(rc.preparedOpaqueInstanceBatches.size());
 
     TaskSystem::Instance().ParallelFor(
         rc.preparedOpaqueInstanceBatches.size(),
@@ -62,7 +59,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
                 return;
             }
 
-            auto& result = m_batchResults[batchIndex];
+            auto& result = batchResults[batchIndex];
             result.drawCommands.clear();
             result.skinnedCommands.clear();
             result.drawArgs.clear();
@@ -141,17 +138,15 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
             }
         });
 
-    auto& drawArgs = m_drawArgsScratch;
-    auto& metadata = m_metadataScratch;
-    drawArgs.clear();
-    metadata.clear();
+    std::vector<DrawArgs> drawArgs;
+    std::vector<RenderContext::GpuDrivenCommandMetadata> metadata;
     size_t totalDrawCommands = 0;
     size_t totalSkinnedCommands = 0;
     size_t totalPreparedDrawCommands = 0;
     size_t totalPreparedSkinnedCommands = 0;
     size_t totalDrawArgs = 0;
     size_t totalMetadata = 0;
-    for (const auto& result : m_batchResults) {
+    for (const auto& result : batchResults) {
         totalDrawCommands += result.drawCommands.size();
         totalSkinnedCommands += result.skinnedCommands.size();
         totalPreparedDrawCommands += result.preparedDrawCommands.size();
@@ -160,12 +155,6 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
         totalMetadata += result.metadata.size();
     }
 
-    if (drawArgs.capacity() < totalDrawArgs) {
-        ++rc.prepMetrics.drawArgsVectorGrowths;
-    }
-    if (metadata.capacity() < totalMetadata) {
-        ++rc.prepMetrics.metadataVectorGrowths;
-    }
     rc.activeDrawCommands.reserve(totalDrawCommands);
     rc.activeSkinnedCommands.reserve(totalSkinnedCommands);
     rc.preparedIndirectCommands.reserve(totalPreparedDrawCommands);
@@ -174,7 +163,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     metadata.reserve(totalMetadata);
 
     uint32_t outputInstanceStart = 0;
-    for (auto& result : m_batchResults) {
+    for (auto& result : batchResults) {
         const uint32_t drawArgsBaseIndex = static_cast<uint32_t>(drawArgs.size());
         const uint32_t metadataBaseIndex = static_cast<uint32_t>(metadata.size());
 
@@ -271,9 +260,10 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
         ++rc.prepMetrics.indirectBufferReallocs;
     }
 
-    if (!rc.preparedIndirectCommandMetadataBuffer || rc.preparedIndirectCommandMetadataCapacity < requiredMetadataBytes) {
-        constexpr uint32_t kAlignment = 256;
-        const uint32_t capacity = (requiredMetadataBytes + (kAlignment - 1)) & ~(kAlignment - 1);
+    if (!rc.preparedIndirectCommandMetadataBuffer ||
+        rc.preparedIndirectCommandMetadataCapacity < requiredMetadataBytes ||
+        rc.preparedIndirectCommandMetadataBuffer->GetSize() < requiredMetadataBytes) {
+        const uint32_t capacity = requiredMetadataBytes;
         rc.preparedIndirectCommandMetadataBuffer = std::shared_ptr<IBuffer>(
             factory->CreateStructuredBuffer(sizeof(RenderContext::GpuDrivenCommandMetadata), static_cast<uint32_t>(metadata.size()), nullptr).release());
         rc.preparedIndirectCommandMetadataCapacity = rc.preparedIndirectCommandMetadataBuffer ? capacity : 0;

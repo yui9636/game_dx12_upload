@@ -21,6 +21,7 @@ public:
     static void ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel);
     static void RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& panel);
     static void SyncPreviewTimelinePlayback(PlayerEditorPanel& panel);
+    static void SyncTimelineAssetSelection(PlayerEditorPanel& panel);
     static void ImportFromSelectedEntity(PlayerEditorPanel& panel);
     static void ImportSocketsFromPreviewEntity(PlayerEditorPanel& panel);
     static void ExportSocketsToPreviewEntity(PlayerEditorPanel& panel);

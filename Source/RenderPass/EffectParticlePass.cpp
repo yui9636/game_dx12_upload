@@ -130,6 +130,11 @@ namespace
         DirectX::XMFLOAT4 collisionSphere2 = {};
         DirectX::XMFLOAT4 collisionSphere3 = {};
         DirectX::XMFLOAT4 collisionParams = {}; // x=restitution, y=friction, z=sphereCount, w=attractorCount
+        // Mesh particle params (used only when meshFlags.x != 0; zero-default keeps billboard/ribbon emits unchanged)
+        DirectX::XMFLOAT4 meshInitialScale = { 1.0f, 1.0f, 1.0f, 0.0f };        // xyz=scale, w=scaleRandomRange
+        DirectX::XMFLOAT4 meshAngularAxisSpeed = { 0.0f, 1.0f, 0.0f, 0.0f };    // xyz=axis, w=rad/s
+        DirectX::XMFLOAT4 meshAngularRandomOrient = { 0.0f, 0.0f, 0.0f, 0.0f }; // xyz=yaw/pitch/roll range, w=speed random
+        DirectX::XMFLOAT4 meshFlags = { 0.0f, 0.0f, 0.0f, 0.0f };               // x=isMeshMode (0/1)
     };
 
     struct EffectParticleSortConstants
@@ -242,6 +247,7 @@ namespace
     constexpr uint32_t kBillboardWarmStride = 16u;
     constexpr uint32_t kBillboardColdStride = 32u;
     constexpr uint32_t kBillboardHeaderStride = 8u;
+    constexpr uint32_t kMeshAttribHotStride = 64u;
 
     struct ParticleSharedArenaBuffers
     {
@@ -250,6 +256,7 @@ namespace
         std::unique_ptr<IBuffer> billboardWarmBuffer;
         std::unique_ptr<IBuffer> billboardColdBuffer;
         std::unique_ptr<IBuffer> billboardHeaderBuffer;
+        std::unique_ptr<IBuffer> meshAttribHotBuffer; // Mesh renderer bin only; billboards/ribbons ignore
         std::unique_ptr<IBuffer> ribbonHistoryBuffer;
         std::unique_ptr<IBuffer> deadListBuffer;
         // Per-frame scratch
@@ -275,6 +282,7 @@ namespace
         D3D12_RESOURCE_STATES billboardWarmState = D3D12_RESOURCE_STATE_COMMON;
         D3D12_RESOURCE_STATES billboardColdState = D3D12_RESOURCE_STATE_COMMON;
         D3D12_RESOURCE_STATES billboardHeaderState = D3D12_RESOURCE_STATE_COMMON;
+        D3D12_RESOURCE_STATES meshAttribHotState = D3D12_RESOURCE_STATE_COMMON;
         D3D12_RESOURCE_STATES ribbonHistoryState = D3D12_RESOURCE_STATE_COMMON;
         D3D12_RESOURCE_STATES deadListState = D3D12_RESOURCE_STATE_COMMON;
         D3D12_RESOURCE_STATES aliveListState = D3D12_RESOURCE_STATE_COMMON;
@@ -537,6 +545,7 @@ namespace
             sharedArena.billboardWarmBuffer &&
             sharedArena.billboardColdBuffer &&
             sharedArena.billboardHeaderBuffer &&
+            sharedArena.meshAttribHotBuffer &&
             sharedArena.ribbonHistoryBuffer &&
             sharedArena.deadListBuffer &&
             sharedArena.aliveListBuffer &&
@@ -561,6 +570,9 @@ namespace
         auto newWarmBuffer = factory->CreateBuffer(kBillboardWarmStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newColdBuffer = factory->CreateBuffer(kBillboardColdStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newHeaderBuffer = factory->CreateBuffer(kBillboardHeaderStride * totalCapacity, BufferType::UAVStorage, nullptr);
+        // Mesh attribute hot stream (quaternion + scale + angular velocity). Allocated for every arena so
+        // the u8 slot is always bindable — billboard/ribbon paths simply skip writing it via gMeshFlags.x.
+        auto newMeshAttribHotBuffer = factory->CreateBuffer(kMeshAttribHotStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newRibbonHistoryBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(DirectX::XMFLOAT4) * totalCapacity * kEffectParticleRibbonHistoryLength), BufferType::UAVStorage, nullptr);
         auto newDeadListBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
         // Per-frame scratch
@@ -579,6 +591,7 @@ namespace
         auto newDepthBinIndexBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
         auto newDepthBinIndirectArgsBuffer = factory->CreateBuffer(static_cast<uint32_t>(16u * kDepthBins), BufferType::UAVStorage, nullptr);
         if (!newHotBuffer || !newWarmBuffer || !newColdBuffer || !newHeaderBuffer ||
+            !newMeshAttribHotBuffer ||
             !newRibbonHistoryBuffer || !newDeadListBuffer ||
             !newAliveListBuffer || !newPageAliveCountBuffer || !newPageAliveOffsetBuffer ||
             !newBinCounterBuffer || !newBinIndexBuffer || !newBinOffsetBuffer || !newBinIndirectArgsBuffer ||

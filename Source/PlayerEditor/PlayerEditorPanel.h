@@ -7,6 +7,7 @@
 #include "StateMachineAsset.h"
 #include "PreviewState.h"
 #include "InputMappingTab.h"
+#include "Component/ColliderComponent.h"
 #include "Component/NodeSocket.h"
 #include "Entity/Entity.h"
 
@@ -94,10 +95,14 @@ private:
     void EnsureOwnedPreviewEntity();
     void DestroyOwnedPreviewEntity();
     void RebuildPreviewTimelineRuntimeData();
-    void SyncPreviewTimelinePlayback();
+    void SyncPreviewTimelinePlayback(bool syncPreviewState = true);
     void ImportFromSelectedEntity();
     void ImportSocketsFromPreviewEntity();
     void ExportSocketsToPreviewEntity();
+    ColliderComponent* GetPreviewColliderComponent(bool createIfMissing);
+    bool TryAssignSelectedBoneToPersistentCollider(int boneIndex);
+    void SelectPersistentCollider(int colliderIndex);
+    void AddPersistentCollider(ColliderAttribute attribute);
 
     // 笏笏 DockSpace Layout 笏笏
     void BuildDockLayout(unsigned int dockspaceId);
@@ -122,9 +127,13 @@ private:
     void DrawTimelineGrid(float height);
     void DrawTimelinePlaybackToolbar();
     void DrawTimelineItemInspector();
+    void DrawPersistentColliderSection();
+    void DrawPersistentColliderInspector();
     bool DrawAnimationSelector(const char* label, int* animIndex);
     bool TryAssignSelectedBoneToTimelineItem(int boneIndex);
     const char* GetBoneNameByIndex(int boneIndex) const;
+    int GetTimelineFrameLimit() const;
+    float GetTimelinePlaybackDurationSeconds() const;
     float GetSelectedAnimationDurationSeconds() const;
     void StartSelectedAnimationPreview();
     void PreviewStateNode(uint32_t stateId, bool restartTimeline);
@@ -148,7 +157,7 @@ private:
     uint32_t m_connectFromNodeId = 0;
 
     // 笏笏 Selection context for Properties panel 笏笏
-    enum class SelectionContext { None, StateNode, Transition, TimelineTrack, TimelineItem, Bone, Socket };
+    enum class SelectionContext { None, StateNode, Transition, TimelineTrack, TimelineItem, Bone, Socket, PersistentCollider };
     SelectionContext m_selectionCtx = SelectionContext::None;
 
     // 笏笏 Assets 笏笏
@@ -157,6 +166,7 @@ private:
     bool                m_timelineDirty = false;
     bool                m_stateMachineDirty = false;
     bool                m_socketDirty = false;
+    bool                m_colliderDirty = false;
 
     // 笏笏 Preview 笏笏
     PreviewState m_previewState;
@@ -187,6 +197,7 @@ private:
     char         m_boneSearchFilter[128] = {};
     std::vector<NodeSocket> m_sockets;         // Editable socket list
     int          m_selectedSocketIdx  = -1;
+    int          m_selectedColliderIdx = -1;
 
     // 笏笏 Animator state 笏笏
     int m_selectedAnimIndex = -1;

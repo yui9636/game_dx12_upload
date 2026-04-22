@@ -24,7 +24,9 @@
 #include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
 #include "Animator/AnimatorComponent.h"
+#include "Collision/CollisionManager.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/HitStopComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineSystem.h"
@@ -55,6 +57,8 @@ static constexpr float kNodeWidth  = 150.0f;
 static constexpr float kNodeHeight = 38.0f;
 static constexpr const char* kModelFileFilter =
     "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
+static constexpr const char* kAudioFileFilter =
+    "Audio Files (*.wav;*.ogg;*.mp3;*.flac)\0*.wav;*.ogg;*.mp3;*.flac\0WAV (*.wav)\0*.wav\0OGG (*.ogg)\0*.ogg\0MP3 (*.mp3)\0*.mp3\0FLAC (*.flac)\0*.flac\0All Files (*.*)\0*.*\0";
 
 // ── Window titles (used by DockBuilder) ──
 static constexpr const char* kPEViewportTitle     = ICON_FA_CUBE " Viewport##PE";
@@ -68,6 +72,45 @@ static constexpr const char* kPEInputTitle        = ICON_FA_GAMEPAD " Input##PE"
 static const char* kTrackTypeNames[] = {
     "Animation", "Hitbox", "VFX", "Audio", "CameraShake", "Camera", "Event", "Custom"
 };
+
+static const char* GetColliderAttributeLabel(ColliderAttribute attribute)
+{
+    switch (attribute) {
+    case ColliderAttribute::Attack:
+        return "Attack";
+    case ColliderAttribute::Body:
+    default:
+        return "Body";
+    }
+}
+
+static const char* GetColliderShapeLabel(ColliderShape shape)
+{
+    switch (shape) {
+    case ColliderShape::Capsule:
+        return "Capsule";
+    case ColliderShape::Box:
+        return "Box";
+    case ColliderShape::Sphere:
+    default:
+        return "Sphere";
+    }
+}
+
+static std::string MakeDataRelativePath(const std::string& path)
+{
+    if (path.empty()) {
+        return {};
+    }
+
+    std::string normalized = path;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    const size_t dataPos = normalized.find("Data/");
+    if (dataPos != std::string::npos) {
+        return normalized.substr(dataPos);
+    }
+    return normalized;
+}
 
 static const char* GetStateTypeLabel(StateNodeType type)
 {
@@ -184,9 +227,7 @@ static bool HasTimelineAssetContent(const TimelineAsset& asset)
 {
     return asset.id != 0
         || !asset.name.empty()
-        || !asset.tracks.empty()
-        || asset.animationIndex >= 0
-        || asset.duration > 0.0f;
+        || !asset.tracks.empty();
 }
 
 static std::string ToLowerAscii(std::string value)
@@ -418,6 +459,7 @@ void PlayerEditorPanel::ResetSelectionState()
     m_hoveredBoneIndex = -1;
     m_selectedBoneName.clear();
     m_selectedSocketIdx = -1;
+    m_selectedColliderIdx = -1;
     m_playheadFrame = 0;
     m_isPlaying = false;
 }
@@ -429,7 +471,7 @@ bool PlayerEditorPanel::HasOpenModel() const
 
 bool PlayerEditorPanel::HasAnyDirtyDocument() const
 {
-    return m_timelineDirty || m_stateMachineDirty || m_socketDirty || m_inputMappingTab.IsDirty();
+    return m_timelineDirty || m_stateMachineDirty || m_socketDirty || m_colliderDirty || m_inputMappingTab.IsDirty();
 }
 
 bool PlayerEditorPanel::HasSelectedEntityContext() const
@@ -457,21 +499,19 @@ void PlayerEditorPanel::RebuildPreviewTimelineRuntimeData()
     PlayerEditorSession::RebuildPreviewTimelineRuntimeData(*this);
 }
 
-void PlayerEditorPanel::SyncPreviewTimelinePlayback()
+void PlayerEditorPanel::SyncPreviewTimelinePlayback(bool syncPreviewState)
 {
     if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
         float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
-        float clipLength = 0.0f;
+        const float clipLength = GetTimelinePlaybackDurationSeconds();
         int frameMin = 0;
-        int frameMax = 0;
+        int frameMax = GetTimelineFrameLimit();
 
         if (TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity)) {
             if (timeline->fps > 0.0f) {
                 fps = timeline->fps;
             }
-            clipLength = timeline->clipLengthSec;
             frameMin = timeline->frameMin;
-            frameMax = timeline->frameMax;
         }
 
         if (frameMax > frameMin) {
@@ -489,9 +529,6 @@ void PlayerEditorPanel::SyncPreviewTimelinePlayback()
 
         if (PlaybackComponent* playback = m_registry->GetComponent<PlaybackComponent>(m_previewEntity)) {
             playback->currentSeconds = timeSeconds;
-            if (clipLength <= 0.0f && fps > 0.0f && frameMax > frameMin) {
-                clipLength = static_cast<float>(frameMax) / fps;
-            }
             if (clipLength > 0.0f) {
                 playback->clipLength = clipLength;
             }
@@ -504,6 +541,8 @@ void PlayerEditorPanel::SyncPreviewTimelinePlayback()
         }
 
         if (TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity)) {
+            timeline->frameMin = frameMin;
+            timeline->frameMax = frameMax;
             timeline->currentFrame = m_playheadFrame;
             timeline->playing = m_isPlaying;
             if (clipLength > 0.0f) {
@@ -517,12 +556,123 @@ void PlayerEditorPanel::SyncPreviewTimelinePlayback()
         }
     }
 
-    PlayerEditorSession::SyncPreviewTimelinePlayback(*this);
+    if (syncPreviewState) {
+        PlayerEditorSession::SyncPreviewTimelinePlayback(*this);
+    }
 }
 
 bool PlayerEditorPanel::SavePrefabDocument(bool saveAs)
 {
     return PlayerEditorSession::SavePrefabDocument(*this, saveAs);
+}
+
+ColliderComponent* PlayerEditorPanel::GetPreviewColliderComponent(bool createIfMissing)
+{
+    if (!m_registry || !CanUsePreviewEntity()) {
+        return nullptr;
+    }
+
+    ColliderComponent* collider = m_registry->GetComponent<ColliderComponent>(m_previewEntity);
+    if (!collider && createIfMissing) {
+        m_registry->AddComponent(m_previewEntity, ColliderComponent{});
+        collider = m_registry->GetComponent<ColliderComponent>(m_previewEntity);
+    }
+
+    if (collider) {
+        collider->enabled = true;
+        collider->drawGizmo = true;
+    }
+
+    return collider;
+}
+
+bool PlayerEditorPanel::TryAssignSelectedBoneToPersistentCollider(int boneIndex)
+{
+    if (boneIndex < 0) {
+        return false;
+    }
+
+    ColliderComponent* collider = GetPreviewColliderComponent(false);
+    if (!collider) {
+        return false;
+    }
+
+    if (m_selectedColliderIdx < 0 || m_selectedColliderIdx >= static_cast<int>(collider->elements.size())) {
+        return false;
+    }
+
+    ColliderComponent::Element& element = collider->elements[m_selectedColliderIdx];
+    if (element.runtimeTag != 0) {
+        return false;
+    }
+
+    element.nodeIndex = boneIndex;
+    element.offsetLocal = { 0.0f, 0.0f, 0.0f };
+    collider->enabled = true;
+    collider->drawGizmo = true;
+    m_colliderDirty = true;
+    m_selectionCtx = SelectionContext::PersistentCollider;
+    return true;
+}
+
+void PlayerEditorPanel::SelectPersistentCollider(int colliderIndex)
+{
+    ColliderComponent* collider = GetPreviewColliderComponent(false);
+    if (!collider) {
+        m_selectedColliderIdx = -1;
+        return;
+    }
+
+    if (colliderIndex < 0 || colliderIndex >= static_cast<int>(collider->elements.size())) {
+        m_selectedColliderIdx = -1;
+        return;
+    }
+
+    m_selectedColliderIdx = colliderIndex;
+    m_selectionCtx = SelectionContext::PersistentCollider;
+}
+
+void PlayerEditorPanel::AddPersistentCollider(ColliderAttribute attribute)
+{
+    ColliderComponent* collider = GetPreviewColliderComponent(true);
+    if (!collider) {
+        return;
+    }
+
+    ColliderComponent::Element element;
+    element.enabled = true;
+    element.attribute = attribute;
+    element.runtimeTag = 0;
+    element.registeredId = 0;
+    element.nodeIndex = m_selectedBoneIndex;
+    element.offsetLocal = { 0.0f, 0.0f, 0.0f };
+
+    if (attribute == ColliderAttribute::Body) {
+        element.type = ColliderShape::Capsule;
+        element.radius = 18.0f;
+        element.height = 60.0f;
+        element.color = { 0.20f, 0.90f, 0.35f, 0.35f };
+    }
+    else {
+        element.type = ColliderShape::Sphere;
+        element.radius = 20.0f;
+        element.height = 20.0f;
+        element.color = { 1.0f, 0.25f, 0.25f, 0.35f };
+    }
+
+    int insertIndex = static_cast<int>(collider->elements.size());
+    for (int i = 0; i < static_cast<int>(collider->elements.size()); ++i) {
+        if (collider->elements[i].runtimeTag != 0) {
+            insertIndex = i;
+            break;
+        }
+    }
+
+    collider->elements.insert(collider->elements.begin() + insertIndex, element);
+    collider->enabled = true;
+    collider->drawGizmo = true;
+    m_colliderDirty = true;
+    SelectPersistentCollider(insertIndex);
 }
 
 void PlayerEditorPanel::ImportSocketsFromPreviewEntity()
@@ -1067,7 +1217,7 @@ void PlayerEditorPanel::DrawSkeletonPanel()
                 if (ImGui::Selectable(("[" + std::to_string(i) + "] " + nodes[i].name).c_str(), selected)) {
                     m_selectedBoneIndex = i;
                     m_selectedBoneName = nodes[i].name;
-                    if (!TryAssignSelectedBoneToTimelineItem(i)) {
+                    if (!TryAssignSelectedBoneToTimelineItem(i) && !TryAssignSelectedBoneToPersistentCollider(i)) {
                         m_selectionCtx = SelectionContext::Bone;
                     }
                 }
@@ -1110,7 +1260,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     if (ImGui::IsItemClicked(0)) {
         m_selectedBoneIndex = nodeIndex;
         m_selectedBoneName = node.name;
-        if (!TryAssignSelectedBoneToTimelineItem(nodeIndex)) {
+        if (!TryAssignSelectedBoneToTimelineItem(nodeIndex) && !TryAssignSelectedBoneToPersistentCollider(nodeIndex)) {
             m_selectionCtx = SelectionContext::Bone;
         }
     }
@@ -1132,6 +1282,12 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
             sock.cachedBoneIndex = nodeIndex;
             m_sockets.push_back(sock);
             m_socketDirty = true;
+        }
+        if (ImGui::MenuItem(ICON_FA_PLUS " Add Body Collider")) {
+            AddPersistentCollider(ColliderAttribute::Body);
+        }
+        if (ImGui::MenuItem(ICON_FA_PLUS " Add Attack Collider")) {
+            AddPersistentCollider(ColliderAttribute::Attack);
         }
         ImGui::EndPopup();
     }
@@ -1903,31 +2059,34 @@ void PlayerEditorPanel::DrawTimelinePanel()
 void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
 {
     const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
-    const float durationSeconds = GetSelectedAnimationDurationSeconds();
+    const int maxFrame = GetTimelineFrameLimit();
 
     if (m_isPlaying && m_previewState.IsActive()) {
-        m_previewState.AdvanceTime(ImGui::GetIO().DeltaTime, m_timelineAsset);
-        if (durationSeconds > 0.0f) {
-            float previewTime = m_previewState.GetDriver()->GetTime();
-            if (m_previewState.GetDriver()->IsLoop()) {
-                if (previewTime > durationSeconds) {
-                    previewTime = std::fmod(previewTime, durationSeconds);
-                    m_previewState.SetTime(previewTime);
+        const float rawPreviewDt = ImGui::GetIO().DeltaTime;
+        float previewDt = rawPreviewDt;
+        if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+            if (HitStopComponent* hitStop = m_registry->GetComponent<HitStopComponent>(m_previewEntity)) {
+                if (hitStop->timer > 0.0f) {
+                    previewDt *= hitStop->speedScale;
+                    hitStop->timer -= rawPreviewDt;
+                    if (hitStop->timer < 0.0f) {
+                        hitStop->timer = 0.0f;
+                    }
                 }
-            } else if (previewTime > durationSeconds) {
-                previewTime = durationSeconds;
-                m_previewState.SetTime(previewTime);
             }
         }
+        m_previewState.AdvanceTime(previewDt, m_timelineAsset);
         m_playheadFrame = m_previewState.GetCurrentFrame(fps);
-        if (durationSeconds > 0.0f) {
-            const int maxPreviewFrame = static_cast<int>(durationSeconds * fps);
-            m_playheadFrame = (std::max)(0, (std::min)(m_playheadFrame, maxPreviewFrame));
-            if (!m_previewState.GetDriver()->IsLoop() && m_playheadFrame >= maxPreviewFrame) {
-                m_isPlaying = false;
-            }
+        if (m_playheadFrame < 0) {
+            m_playheadFrame = 0;
         }
-        SyncPreviewTimelinePlayback();
+        if (m_playheadFrame > maxFrame) {
+            m_playheadFrame = maxFrame;
+        }
+        if (!m_previewState.GetDriver()->IsLoop() && m_playheadFrame >= maxFrame) {
+            m_isPlaying = false;
+        }
+        SyncPreviewTimelinePlayback(false);
     }
 
     if (ImGui::Button(ICON_FA_BACKWARD_STEP)) {
@@ -1935,6 +2094,12 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
         m_isPlaying = false;
         if (m_previewState.IsActive()) {
             m_previewState.SetTime(0.0f);
+        }
+        if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+            if (HitStopComponent* hitStop = m_registry->GetComponent<HitStopComponent>(m_previewEntity)) {
+                hitStop->timer = 0.0f;
+                hitStop->speedScale = 0.0f;
+            }
         }
         SyncPreviewTimelinePlayback();
     }
@@ -1957,6 +2122,12 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
         if (m_previewState.IsActive()) {
             m_previewState.SetTime(0.0f);
         }
+        if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+            if (HitStopComponent* hitStop = m_registry->GetComponent<HitStopComponent>(m_previewEntity)) {
+                hitStop->timer = 0.0f;
+                hitStop->speedScale = 0.0f;
+            }
+        }
         SyncPreviewTimelinePlayback();
     }
     ImGui::SameLine();
@@ -1969,11 +2140,6 @@ void PlayerEditorPanel::DrawTimelinePlaybackToolbar()
     }
     ImGui::SameLine();
 
-    int maxFrame = m_timelineAsset.GetFrameCount();
-    if (maxFrame <= 0 && durationSeconds > 0.0f) {
-        maxFrame = static_cast<int>(durationSeconds * fps);
-    }
-    if (maxFrame <= 0) maxFrame = 600;
     ImGui::SetNextItemWidth(100);
     if (ImGui::DragInt("##Frame", &m_playheadFrame, 1.0f, 0, maxFrame)) {
         if (m_previewState.IsActive()) {
@@ -2079,7 +2245,14 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_TRASH " Delete Track")) {
                 m_timelineAsset.RemoveTrack(track.id);
+                if (m_selectedTrackId == static_cast<int>(track.id)) {
+                    m_selectedTrackId = -1;
+                    m_selectedItemIdx = -1;
+                    m_selectionCtx = SelectionContext::None;
+                }
                 m_timelineDirty = true;
+                RebuildPreviewTimelineRuntimeData();
+                SyncPreviewTimelinePlayback();
                 ImGui::EndPopup();
                 ImGui::PopID();
                 break;
@@ -2100,8 +2273,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
     float ppf = kDefaultPPF * m_timelineZoom;
     ppf = (std::max)(kMinPixelsPerFrame, ppf);
 
-    int totalFrames = m_timelineAsset.GetFrameCount();
-    if (totalFrames <= 0) totalFrames = 600;
+    int totalFrames = GetTimelineFrameLimit();
 
     float totalWidth = totalFrames * ppf;
     float drawWidth = (std::max)(canvasSize.x, totalWidth);
@@ -2268,7 +2440,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
     }
 
     // Playhead
-    float phX = canvasPos.x + m_playheadFrame * ppf;
+    float phX = std::floor(canvasPos.x + m_playheadFrame * ppf) + 0.5f;
     dl->AddLine(ImVec2(phX, canvasPos.y), ImVec2(phX, canvasPos.y + canvasSize.y),
         IM_COL32(255, 70, 70, 255), 2.0f);
     dl->AddTriangleFilled(
@@ -2376,6 +2548,8 @@ void PlayerEditorPanel::DrawPropertiesPanel()
             ImGui::Text("  Pos: (%.3f, %.3f, %.3f)", node.position.x, node.position.y, node.position.z);
             ImGui::Text("  Rot: (%.3f, %.3f, %.3f, %.3f)", node.rotation.x, node.rotation.y, node.rotation.z, node.rotation.w);
             ImGui::Text("  Scale: (%.3f, %.3f, %.3f)", node.scale.x, node.scale.y, node.scale.z);
+            ImGui::Separator();
+            DrawPersistentColliderSection();
         }
         break;
     }
@@ -2415,6 +2589,9 @@ void PlayerEditorPanel::DrawPropertiesPanel()
         }
         break;
     }
+    case SelectionContext::PersistentCollider:
+        DrawPersistentColliderInspector();
+        break;
     default:
         if (!m_stateMachineAsset.states.empty() || !m_stateMachineAsset.parameters.empty()) {
             DrawStateMachineParameterList();
@@ -2422,6 +2599,10 @@ void PlayerEditorPanel::DrawPropertiesPanel()
             ImGui::TextDisabled("Select a state, transition, track,");
             ImGui::TextDisabled("item, bone, or socket to view");
             ImGui::TextDisabled("its properties here.");
+        }
+        if (HasOpenModel()) {
+            ImGui::Separator();
+            DrawPersistentColliderSection();
         }
         break;
     }
@@ -2486,17 +2667,55 @@ bool PlayerEditorPanel::DrawAnimationSelector(const char* label, int* animIndex)
 
 float PlayerEditorPanel::GetSelectedAnimationDurationSeconds() const
 {
-    if (m_timelineAsset.duration > 0.0f) {
-        return m_timelineAsset.duration;
-    }
-
     if (m_model &&
         m_selectedAnimIndex >= 0 &&
         m_selectedAnimIndex < static_cast<int>(m_model->GetAnimations().size())) {
         return (std::max)(0.0f, m_model->GetAnimations()[m_selectedAnimIndex].secondsLength);
     }
 
-    return 10.0f;
+    return 0.0f;
+}
+
+int PlayerEditorPanel::GetTimelineFrameLimit() const
+{
+    const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+    int maxFrame = m_timelineAsset.GetFrameCount();
+
+    for (const auto& track : m_timelineAsset.tracks) {
+        for (const auto& item : track.items) {
+            if (item.endFrame > maxFrame) {
+                maxFrame = item.endFrame;
+            }
+        }
+        for (const auto& keyframe : track.keyframes) {
+            if (keyframe.frame > maxFrame) {
+                maxFrame = keyframe.frame;
+            }
+        }
+    }
+
+    const float animationDurationSeconds = GetSelectedAnimationDurationSeconds();
+    if (animationDurationSeconds > 0.0f && fps > 0.0f) {
+        const int animationFrameCount = static_cast<int>(animationDurationSeconds * fps);
+        if (animationFrameCount > maxFrame) {
+            maxFrame = animationFrameCount;
+        }
+    }
+
+    if (maxFrame <= 0) {
+        maxFrame = 600;
+    }
+    return maxFrame;
+}
+
+float PlayerEditorPanel::GetTimelinePlaybackDurationSeconds() const
+{
+    const float fps = m_timelineAsset.fps > 0.0f ? m_timelineAsset.fps : 60.0f;
+    const int frameLimit = GetTimelineFrameLimit();
+    if (fps <= 0.0f || frameLimit <= 0) {
+        return 0.0f;
+    }
+    return static_cast<float>(frameLimit) / fps;
 }
 
 void PlayerEditorPanel::AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition)
@@ -2536,12 +2755,17 @@ void PlayerEditorPanel::StartSelectedAnimationPreview()
         m_selectedAnimIndex = 0;
     }
 
+    PlayerEditorSession::SyncTimelineAssetSelection(*this);
     AnimatorService::Instance().EnsureAnimator(m_previewEntity);
     if (!m_previewState.IsActive()) {
         m_previewState.EnterPreview(m_previewEntity);
     }
 
     RebuildPreviewTimelineRuntimeData();
+    if (HitStopComponent* hitStop = m_registry->GetComponent<HitStopComponent>(m_previewEntity)) {
+        hitStop->timer = 0.0f;
+        hitStop->speedScale = 0.0f;
+    }
     m_playheadFrame = 0;
     m_previewState.SetAnimationIndex(m_selectedAnimIndex);
     m_previewState.SetTime(0.0f);
@@ -2970,20 +3194,23 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
 
         case TimelineTrackType::Audio:
             ImGui::Text(ICON_FA_VOLUME_HIGH " Audio Payload");
-            if (ImGui::InputText("Asset ID", item.audio.assetId, sizeof(item.audio.assetId))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
-            if (ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
-            if (ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
-            if (ImGui::Checkbox("3D Audio", &item.audio.is3D)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
-            if (ImGui::DragInt("Node Index", &item.audio.nodeIndex, 1, 0, 200)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
-            if (m_selectedBoneIndex >= 0 && !m_selectedBoneName.empty()) {
-                if (ImGui::Button("Use Selected Bone##Audio")) {
-                    item.audio.nodeIndex = m_selectedBoneIndex;
+            if (ImGui::InputText("Audio Path", item.audio.assetId, sizeof(item.audio.assetId))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER_OPEN " Browse##Audio")) {
+                char pathBuffer[MAX_PATH] = {};
+                if (item.audio.assetId[0] != '\0') {
+                    strcpy_s(pathBuffer, item.audio.assetId);
+                }
+                if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kAudioFileFilter, "Select Audio Clip") == DialogResult::OK) {
+                    const std::string relativePath = MakeDataRelativePath(pathBuffer);
+                    strcpy_s(item.audio.assetId, relativePath.c_str());
                     m_timelineDirty = true;
                     timelineRuntimeChanged = true;
                 }
-                ImGui::SameLine();
-                ImGui::TextDisabled("%s", m_selectedBoneName.c_str());
             }
+            if (ImGui::DragFloat("Volume", &item.audio.volume, 0.01f, 0.0f, 1.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Pitch", &item.audio.pitch, 0.01f, 0.1f, 3.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::Checkbox("3D Audio", &item.audio.is3D)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             if (ImGui::Checkbox("Loop", &item.audio.loop)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
@@ -2993,6 +3220,8 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
             if (ImGui::DragFloat("Amplitude", &item.shake.amplitude, 0.01f, 0.0f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             if (ImGui::DragFloat("Frequency", &item.shake.frequency, 0.1f, 0.0f, 100.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             if (ImGui::DragFloat("Decay", &item.shake.decay, 0.01f, 0.0f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Hit Stop", &item.shake.hitStopDuration, 0.001f, 0.0f, 1.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Time Scale", &item.shake.timeScale, 0.01f, 0.0f, 1.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
         case TimelineTrackType::Event:
@@ -3013,6 +3242,171 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
         RebuildPreviewTimelineRuntimeData();
         SyncPreviewTimelinePlayback();
     }
+}
+
+void PlayerEditorPanel::DrawPersistentColliderSection()
+{
+    ColliderComponent* collider = GetPreviewColliderComponent(false);
+
+    int persistentCount = 0;
+    if (collider) {
+        for (const auto& element : collider->elements) {
+            if (element.runtimeTag == 0) {
+                ++persistentCount;
+            }
+        }
+    }
+
+    ImGui::Text("Persistent Colliders (%d)", persistentCount);
+
+    const bool canAdd = HasOpenModel() && CanUsePreviewEntity();
+    if (!canAdd) {
+        ImGui::BeginDisabled();
+    }
+    if (ImGui::Button("+ Body")) {
+        AddPersistentCollider(ColliderAttribute::Body);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("+ Attack")) {
+        AddPersistentCollider(ColliderAttribute::Attack);
+    }
+    if (!canAdd) {
+        ImGui::EndDisabled();
+    }
+
+    if (!collider || persistentCount == 0) {
+        return;
+    }
+
+    for (int i = 0; i < static_cast<int>(collider->elements.size()); ++i) {
+        const auto& element = collider->elements[i];
+        if (element.runtimeTag != 0) {
+            continue;
+        }
+
+        std::string label =
+            std::string(GetColliderAttributeLabel(element.attribute)) +
+            " " +
+            GetColliderShapeLabel(element.type) +
+            " -> " +
+            GetBoneNameByIndex(element.nodeIndex);
+
+        if (ImGui::Selectable(label.c_str(), m_selectedColliderIdx == i)) {
+            SelectPersistentCollider(i);
+        }
+    }
+}
+
+void PlayerEditorPanel::DrawPersistentColliderInspector()
+{
+    ColliderComponent* collider = GetPreviewColliderComponent(false);
+    if (!collider ||
+        m_selectedColliderIdx < 0 ||
+        m_selectedColliderIdx >= static_cast<int>(collider->elements.size()) ||
+        collider->elements[m_selectedColliderIdx].runtimeTag != 0) {
+        ImGui::TextDisabled("Persistent collider not selected.");
+        return;
+    }
+
+    ColliderComponent::Element& element = collider->elements[m_selectedColliderIdx];
+    collider->enabled = true;
+    collider->drawGizmo = true;
+
+    ImGui::Text("Persistent Collider");
+    ImGui::Separator();
+
+    if (ImGui::Checkbox("Enabled", &element.enabled)) {
+        m_colliderDirty = true;
+    }
+
+    int attributeIndex = static_cast<int>(element.attribute);
+    const char* attributeLabels[] = { "Body", "Attack" };
+    if (ImGui::Combo("Kind", &attributeIndex, attributeLabels, IM_ARRAYSIZE(attributeLabels))) {
+        element.attribute = static_cast<ColliderAttribute>(attributeIndex);
+        m_colliderDirty = true;
+    }
+
+    int shapeIndex = static_cast<int>(element.type);
+    const char* shapeLabels[] = { "Sphere", "Capsule", "Box" };
+    if (ImGui::Combo("Shape", &shapeIndex, shapeLabels, IM_ARRAYSIZE(shapeLabels))) {
+        element.type = static_cast<ColliderShape>(shapeIndex);
+        if (element.type == ColliderShape::Box && element.size.LengthSquared() <= 0.0001f) {
+            element.size = { 20.0f, 20.0f, 20.0f };
+        }
+        m_colliderDirty = true;
+    }
+
+    ImGui::Text("Bone: %s", GetBoneNameByIndex(element.nodeIndex));
+    if (m_selectedBoneIndex >= 0) {
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Use Selected Bone")) {
+            element.nodeIndex = m_selectedBoneIndex;
+            element.offsetLocal = { 0.0f, 0.0f, 0.0f };
+            m_colliderDirty = true;
+        }
+    }
+
+    if (m_selectedSocketIdx >= 0 && m_selectedSocketIdx < static_cast<int>(m_sockets.size())) {
+        if (ImGui::SmallButton("Use Selected Socket")) {
+            const NodeSocket& socket = m_sockets[m_selectedSocketIdx];
+            element.nodeIndex = socket.cachedBoneIndex;
+            element.offsetLocal = socket.offsetPos;
+            m_colliderDirty = true;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", m_sockets[m_selectedSocketIdx].name.c_str());
+    }
+
+    if (ImGui::DragFloat3("Offset", &element.offsetLocal.x, 0.1f)) {
+        m_colliderDirty = true;
+    }
+
+    switch (element.type) {
+    case ColliderShape::Sphere:
+        if (ImGui::DragFloat("Radius", &element.radius, 0.1f, 0.0f, 100.0f)) {
+            m_colliderDirty = true;
+        }
+        break;
+
+    case ColliderShape::Capsule:
+        if (ImGui::DragFloat("Radius", &element.radius, 0.1f, 0.0f, 100.0f)) {
+            m_colliderDirty = true;
+        }
+        if (ImGui::DragFloat("Height", &element.height, 0.1f, 0.0f, 200.0f)) {
+            m_colliderDirty = true;
+        }
+        break;
+
+    case ColliderShape::Box:
+        if (ImGui::DragFloat3("Size", &element.size.x, 0.1f, 0.0f, 200.0f)) {
+            m_colliderDirty = true;
+        }
+        break;
+    }
+
+    float rgba[4] = {
+        element.color.x,
+        element.color.y,
+        element.color.z,
+        element.color.w
+    };
+    if (ImGui::ColorEdit4("Color", rgba)) {
+        element.color = { rgba[0], rgba[1], rgba[2], rgba[3] };
+        m_colliderDirty = true;
+    }
+
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
+    if (ImGui::Button(ICON_FA_TRASH " Delete Collider")) {
+        if (element.registeredId != 0) {
+            CollisionManager::Instance().Remove(element.registeredId);
+        }
+        collider->elements.erase(collider->elements.begin() + m_selectedColliderIdx);
+        m_selectedColliderIdx = -1;
+        m_selectionCtx = SelectionContext::Bone;
+        m_colliderDirty = true;
+    }
+    ImGui::PopStyleColor();
 }
 
 // ############################################################################
@@ -3039,7 +3433,10 @@ void PlayerEditorPanel::DrawAnimatorPanel()
                 const bool selected = (m_selectedAnimIndex == i);
                 std::string label = "[" + std::to_string(i) + "] " + animations[i].name;
                 if (ImGui::Selectable(label.c_str(), selected)) {
-                    m_selectedAnimIndex = i;
+                    if (m_selectedAnimIndex != i) {
+                        m_selectedAnimIndex = i;
+                        PlayerEditorSession::SyncTimelineAssetSelection(*this);
+                    }
                 }
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("Length: %.3fs", animations[i].secondsLength);

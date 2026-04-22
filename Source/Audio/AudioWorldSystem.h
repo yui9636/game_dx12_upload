@@ -73,6 +73,21 @@ public:
                                      float minDistance = 1.0f,
                                      float maxDistance = 50.0f,
                                      bool streaming = false);
+    AudioVoiceHandle PlayEditorTransient2D(const std::string& clipPath,
+                                           float volume = 1.0f,
+                                           float pitch = 1.0f,
+                                           bool loop = false,
+                                           AudioBusType bus = AudioBusType::UI,
+                                           bool streaming = false);
+    AudioVoiceHandle PlayEditorTransient3D(const std::string& clipPath,
+                                           const DirectX::XMFLOAT3& position,
+                                           float volume = 1.0f,
+                                           float pitch = 1.0f,
+                                           bool loop = false,
+                                           AudioBusType bus = AudioBusType::UI,
+                                           float minDistance = 1.0f,
+                                           float maxDistance = 50.0f,
+                                           bool streaming = false);
     void StopVoice(AudioVoiceHandle handle);
     void StopAllVoices();
     void SetVoicePosition(AudioVoiceHandle handle, const DirectX::XMFLOAT3& position);

@@ -221,8 +221,15 @@ void EditorLayer::DrawPlayerEditorWorkspace()
         &playerEditorFocused);
     DirectX::XMFLOAT3 fitTarget{};
     float fitRadius = 1.0f;
-    if (m_playerEditorPanel.ConsumePendingCameraFit(fitTarget, fitRadius)) {
-        FocusEditorCameraOnTarget(fitTarget, fitRadius);
+    DirectX::XMFLOAT3 fitForward{ 0.0f, 0.0f, 1.0f };
+    float fitDistance = 0.0f;
+    if (m_playerEditorPanel.ConsumePendingCameraFit(fitTarget, fitRadius, &fitForward, &fitDistance)) {
+        if (fitDistance > 0.0f) {
+            SetEditorCameraDirection(fitForward, fitTarget, fitDistance);
+        }
+        else {
+            FocusEditorCameraOnTarget(fitTarget, fitRadius);
+        }
     }
     m_sceneViewRect = m_playerEditorPanel.GetViewportRect();
     m_sceneViewSize = { m_sceneViewRect.z, m_sceneViewRect.w };

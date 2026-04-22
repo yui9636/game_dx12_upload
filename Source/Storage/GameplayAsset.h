@@ -54,11 +54,10 @@ inline void from_json(const nlohmann::json& j, GEVfxPayload& p) {
 
 struct GEAudioPayload
 {
-    char  assetId[128] = { 0 };
+    char  assetId[260] = { 0 };
     float volume = 1.0f;
     float pitch = 1.0f;
     bool  is3D = false;
-    int   nodeIndex = -1;
     bool  loop = false;
 };
 
@@ -68,7 +67,6 @@ inline void to_json(nlohmann::json& j, const GEAudioPayload& p) {
         {"volume", p.volume},
         {"pitch", p.pitch},
         {"is3D", p.is3D},
-        {"nodeIndex", p.nodeIndex},
         {"loop", p.loop}
     };
 }
@@ -78,7 +76,6 @@ inline void from_json(const nlohmann::json& j, GEAudioPayload& p) {
     p.volume = j.value("volume", 1.0f);
     p.pitch = j.value("pitch", 1.0f);
     p.is3D = j.value("is3D", false);
-    p.nodeIndex = j.value("nodeIndex", -1);
     p.loop = j.value("loop", false);
 }
 

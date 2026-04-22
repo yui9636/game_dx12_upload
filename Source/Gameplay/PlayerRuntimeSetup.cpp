@@ -9,6 +9,7 @@
 #include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/HealthComponent.h"
+#include "Gameplay/HitStopComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/PlaybackComponent.h"
@@ -69,6 +70,7 @@ namespace PlayerRuntimeSetup
         EnsureComponent<InputActionMapComponent>(registry, entity);
         EnsureComponent<InputBindingComponent>(registry, entity);
         EnsureComponent<NodeSocketComponent>(registry, entity);
+        EnsureComponent<ColliderComponent>(registry, entity);
         EnsureComponent<StateMachineParamsComponent>(registry, entity);
 
         InputContextComponent* inputContext = EnsureComponent<InputContextComponent>(registry, entity);
@@ -96,6 +98,7 @@ namespace PlayerRuntimeSetup
         EnsureComponent<TimelineComponent>(registry, entity);
         EnsureComponent<TimelineItemBuffer>(registry, entity);
         EnsureComponent<ColliderComponent>(registry, entity);
+        EnsureComponent<HitStopComponent>(registry, entity);
         EnsureComponent<HitboxTrackingComponent>(registry, entity);
         EnsureComponent<LocomotionStateComponent>(registry, entity);
         EnsureComponent<ActionStateComponent>(registry, entity);
@@ -138,19 +141,29 @@ namespace PlayerRuntimeSetup
 
         if (auto* collider = registry.GetComponent<ColliderComponent>(entity)) {
             auto& collisionManager = CollisionManager::Instance();
+            std::vector<ColliderComponent::Element> persistentElements;
+            persistentElements.reserve(collider->elements.size());
             for (auto& element : collider->elements) {
                 if (element.registeredId != 0) {
                     collisionManager.Remove(element.registeredId);
                     element.registeredId = 0;
                 }
+                if (element.runtimeTag == 0) {
+                    persistentElements.push_back(element);
+                }
             }
-            collider->elements.clear();
+            collider->elements.swap(persistentElements);
             collider->enabled = true;
             collider->drawGizmo = true;
         }
 
         if (auto* hitboxTracking = registry.GetComponent<HitboxTrackingComponent>(entity)) {
             hitboxTracking->ClearHitList();
+        }
+
+        if (auto* hitStop = registry.GetComponent<HitStopComponent>(entity)) {
+            hitStop->timer = 0.0f;
+            hitStop->speedScale = 0.0f;
         }
 
         if (auto* locomotion = registry.GetComponent<LocomotionStateComponent>(entity)) {

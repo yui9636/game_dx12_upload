@@ -30,6 +30,7 @@
 #include "Gameplay/TimelineLibraryComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
+#include "Engine/EngineKernel.h"
 #include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Model/Model.h"
@@ -40,6 +41,27 @@
 
 namespace
 {
+    static void StopActiveTimelineAudio(TimelineItemBuffer* buffer)
+    {
+        if (!buffer) {
+            return;
+        }
+
+        auto& audioWorld = EngineKernel::Instance().GetAudioWorld();
+        for (auto& item : buffer->items) {
+            if (item.type != 3) {
+                continue;
+            }
+
+            if (item.audioHandle != 0) {
+                audioWorld.StopVoice(item.audioHandle);
+            }
+
+            item.audioActive = false;
+            item.audioHandle = 0;
+        }
+    }
+
     // Timeline鬯ｩ蟷｢・ｽ・｢髫ｴ蠑ｱ繝ｻ繝ｻ・ｽ繝ｻ・ｼ髫ｴ竏ｵ閻ｸ繝ｻ・ｼ隲橸ｽｺ・取鱒繝ｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・､鬯ｩ蟷｢・ｽ・｢髫ｴ雜｣・ｽ・｢郢晢ｽｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｫ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬮ｯ譎｢・ｽ・ｶ髫ｴ蜿門ｾ励・・ｽ繝ｻ・ｹ髫ｲ・ｷ陋ｹ繝ｻ・ｽ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ鬯ｮ・｣陷ｴ繝ｻ・ｽ・ｽ繝ｻ・ｫ鬮ｫ・ｴ陷ｿ髢・ｾ蜉ｱ繝ｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｭ鬮ｯ蛹ｺ・ｻ繧托ｽｽ・ｽ繝ｻ・･鬮ｫ・ｨ陋滂ｽ･郢晢ｽｻ郢晢ｽｻ繝ｻ・ｹ郢晢ｽｻ繝ｻ・ｧ鬮｣蛹・ｽｽ・ｵ髫ｴ謫ｾ・ｽ・ｶ驛｢譎｢・ｽ・ｻ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬯ｯ・ｮ繝ｻ・ｦ郢晢ｽｻ繝ｻ・ｪ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ鬯ｩ蟷｢・ｽ・｢髫ｰ・ｨ鬲托ｽｴ・つ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・､鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・｢鬯ｩ蟷｢・ｽ・｢髫ｴ雜｣・ｽ・｢郢晢ｽｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｭ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｰ鬯ｯ・ｨ繝ｻ・ｾ髯具ｽｹ郢晢ｽｻ繝ｻ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｨ鬯ｩ蟷｢・ｽ・｢髫ｴ蠑ｱ繝ｻ繝ｻ・ｽ繝ｻ・ｼ髫ｴ竏ｫ・ｵ・ｶ髫伜､懶ｽｩ蟷｢・ｽ・｢髫ｴ雜｣・ｽ・｢郢晢ｽｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｫ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｿ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｲ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
     static constexpr const char* kTimelineFileFilter =
         "Timeline (*.timeline.json)\0*.timeline.json\0JSON (*.json)\0*.json\0All Files (*.*)\0*.*\0";
@@ -79,9 +101,7 @@ namespace
     {
         return asset.id != 0
             || !asset.name.empty()
-            || !asset.tracks.empty()
-            || asset.animationIndex >= 0
-            || asset.duration > 0.0f;
+            || !asset.tracks.empty();
     }
 
     static void EnsureTimelineAssetIdentity(TimelineAsset& asset, TimelineLibraryComponent& library)
@@ -122,6 +142,26 @@ namespace
 
         for (const auto& asset : library.assets) {
             if (asset.id == timelineId) {
+                return &asset;
+            }
+        }
+        return nullptr;
+    }
+
+    static TimelineAsset* FindTimelineAssetByAnimationIndex(TimelineLibraryComponent& library, int animationIndex)
+    {
+        for (auto& asset : library.assets) {
+            if (asset.animationIndex == animationIndex) {
+                return &asset;
+            }
+        }
+        return nullptr;
+    }
+
+    static const TimelineAsset* FindTimelineAssetByAnimationIndex(const TimelineLibraryComponent& library, int animationIndex)
+    {
+        for (const auto& asset : library.assets) {
+            if (asset.animationIndex == animationIndex) {
                 return &asset;
             }
         }
@@ -266,6 +306,9 @@ void PlayerEditorSession::DestroyOwnedPreviewEntity(PlayerEditorPanel& panel)
 
     // Registry鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ貅ｷ萓帙・・ｨ繝ｻ・ｯ髫ｴ魃会ｽｽ・ｺ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬯ｩ諤憺●繝ｻ・ｽ繝ｻ・ｫ郢晢ｽｻ邵ｺ・､・つ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・｣review Entity鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｫ・ｶ陷ｷ・ｩ繝ｻ・ｸ繝ｻ・ｻ驛｢譎｢・ｽ・ｻ鬯ｮ・ｯ隴擾ｽｴ郢晢ｽｻ繝ｻ縺､ﾂ郢晢ｽｻ繝ｻ・･驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｰ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｦ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ驛｢譎｢・ｽ・ｻ髴托ｽ｢隴会ｽｦ繝ｻ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｪ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬯ｮ・｢繝ｻ・ｾ郢晢ｽｻ繝ｻ・･驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｰ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｴ鬯ｮ・ｫ繝ｻ・ｴ郢晢ｽｻ繝ｻ・ｽ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ鬮ｫ・ｨ陋滂ｽ･郢晢ｽｻ郢晢ｽｻ繝ｻ・ｹ郢晢ｽｻ繝ｻ・ｧ鬮｣蛹・ｽｽ・ｵ髫ｰ・ｨ鬲托ｽｴ・つ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
     if (panel.m_registry && !Entity::IsNull(panel.m_previewEntity) && panel.m_registry->IsAlive(panel.m_previewEntity)) {
+        if (TimelineItemBuffer* existingBuffer = panel.m_registry->GetComponent<TimelineItemBuffer>(panel.m_previewEntity)) {
+            StopActiveTimelineAudio(existingBuffer);
+        }
         EntitySnapshot::DestroySubtree(panel.m_previewEntity, *panel.m_registry);
     }
 
@@ -474,6 +517,7 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
         panel.m_previewRenderSize = { 0.0f, 0.0f };
         panel.m_previewModelScale = 1.0f;
         panel.m_sockets.clear();
+        panel.m_colliderDirty = false;
 
         if (const auto* embeddedStateMachine = panel.m_registry->GetComponent<StateMachineAssetComponent>(restore.root)) {
             panel.m_stateMachineAsset = embeddedStateMachine->asset;
@@ -483,17 +527,8 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
         }
         panel.m_stateMachineDirty = false;
 
-        if (const auto* timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(restore.root)) {
-            if (!timelineLibrary->assets.empty()) {
-                panel.m_timelineAsset = timelineLibrary->assets.front();
-            }
-            else {
-                panel.m_timelineAsset = TimelineAsset{};
-            }
-        }
-        else {
-            panel.m_timelineAsset = TimelineAsset{};
-        }
+        panel.m_timelineAsset = TimelineAsset{};
+        SyncTimelineAssetSelection(panel);
         panel.m_timelineDirty = false;
 
         if (const auto* embeddedInputMap = panel.m_registry->GetComponent<InputActionMapComponent>(restore.root)) {
@@ -533,9 +568,12 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
     panel.m_previewRenderSize = { 0.0f, 0.0f };
     panel.m_sockets.clear();
     panel.m_socketDirty = false;
+    panel.m_colliderDirty = false;
     panel.m_timelineDirty = false;
+    panel.m_timelineAsset = TimelineAsset{};
     panel.m_stateMachineDirty = false;
     EnsureOwnedPreviewEntity(panel);
+    SyncTimelineAssetSelection(panel);
     const auto bounds = panel.m_model->GetWorldBounds();
     panel.m_pendingCameraFitTarget = bounds.Center;
     panel.m_pendingCameraFitRadius = ComputePreviewFitRadius(*panel.m_model);
@@ -611,6 +649,7 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
     panel.m_timelineDirty = false;
     panel.m_stateMachineDirty = false;
     panel.m_socketDirty = false;
+    panel.m_colliderDirty = false;
     panel.m_inputMappingTab.SetEditingMap(panel.m_inputMappingTab.GetEditingMap());
     return true;
 }
@@ -692,6 +731,7 @@ void PlayerEditorSession::RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& p
             *existing = TimelineComponent{};
         }
         if (auto* existingBuffer = panel.m_registry->GetComponent<TimelineItemBuffer>(panel.m_previewEntity)) {
+            StopActiveTimelineAudio(existingBuffer);
             existingBuffer->items.clear();
         }
         return;
@@ -712,6 +752,7 @@ void PlayerEditorSession::RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& p
 
     // 鬯ｮ・ｫ繝ｻ・ｴ鬯ｲ繝ｻ・ｼ螟ｲ・ｽ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・｢鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｫTimelineItemBuffer鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ貅ｷ萓帙・・ｨ繝ｻ・ｯ髫ｴ魃会ｽｽ・ｺ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬮｣蛹・ｽｽ・ｵ髫ｴ謫ｾ・ｽ・ｶ驛｢譎｢・ｽ・ｻ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬮ｫ・ｰ隴ｴ・ｧ雎主｣ｹ繝ｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｸ鬯ｯ・ｯ郢晢ｽｻ繝ｻ・､繝ｻ・ｧ郢晢ｽｻ繝ｻ・ｶ髫ｶ蜻ｵ・ｶ・｣繝ｻ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ鬯ｯ・ｮ繝ｻ・ｦ郢晢ｽｻ繝ｻ・ｪ鬮ｫ・ｨ陋滂ｽ･郢晢ｽｻ郢晢ｽｻ繝ｻ・ｹ郢晢ｽｻ繝ｻ・ｧ鬮｣蛹・ｽｽ・ｵ髫ｰ・ｨ鬲托ｽｴ・つ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
     if (auto* existingBuffer = panel.m_registry->GetComponent<TimelineItemBuffer>(panel.m_previewEntity)) {
+        StopActiveTimelineAudio(existingBuffer);
         *existingBuffer = buffer;
     }
     // 鬯ｮ・ｴ陷ｿ蜴・ｽｽ・ｻ郢ｧ謇假ｽｽ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・｡鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮｣豈費ｽｼ螟ｲ・ｽ・ｽ繝ｻ・｣驛｢譎｢・ｽ・ｻ髫ｶ蜻ｵ・ｶ・｣繝ｻ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｰ鬯ｯ・ｮ繝ｻ・ｴ髫ｰ繝ｻ竏槭・・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｽ鬯ｮ・ｯ繝ｻ・ｷ髣費ｽｨ陞滂ｽｲ繝ｻ・ｽ繝ｻ・｣郢晢ｽｻ繝ｻ・ｰ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ・ｷ繝ｻ・ｷ郢晢ｽｻ繝ｻ・ｶ驛｢譎｢・ｽ・ｻ髴托ｽ｢隴会ｽｦ繝ｻ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｲ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
@@ -729,10 +770,73 @@ void PlayerEditorSession::SyncPreviewTimelinePlayback(PlayerEditorPanel& panel)
     }
 
     // frame鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ鬯ｨ・ｾ隶厄ｽｸ繝ｻ・ｽ繝ｻ・ｴeconds鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｸ鬯ｮ・ｯ隶灘･・ｽｽ・ｺ繝ｻ・ｽ髯具ｽｻ繝ｻ・､鬯ｯ・ｩ繝ｻ・ｪ郢晢ｽｻ繝ｻ・､鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ・ｷ闔ｨ螟ｲ・ｽ・ｽ繝ｻ・ｱ鬩包ｽｯ繝ｻ・ｶ郢晢ｽｻ繝ｻ・ｻPreviewState鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｸ鬯ｮ・ｮ闕ｵ譎｢・ｽ莉｣繝ｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・｡鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ・ｷ繝ｻ・ｷ郢晢ｽｻ繝ｻ・ｶ郢晢ｽｻ邵ｺ・､・つ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
-    panel.m_previewState.SetTime(panel.m_playheadFrame / (panel.m_timelineAsset.fps > 0.0f ? panel.m_timelineAsset.fps : 60.0f));
+    const float fps = panel.m_timelineAsset.fps > 0.0f ? panel.m_timelineAsset.fps : 60.0f;
+    float previewTime = panel.m_playheadFrame / fps;
+    const float animationDuration = panel.GetSelectedAnimationDurationSeconds();
+    if (animationDuration > 0.0f && previewTime > animationDuration) {
+        if (panel.m_previewState.GetDriver()->IsLoop()) {
+            previewTime = std::fmod(previewTime, animationDuration);
+        } else {
+            previewTime = animationDuration;
+        }
+    }
+    panel.m_previewState.SetTime(previewTime);
 }
 
 // 鬯ｮ・ｴ隰・∞・ｽ・ｽ繝ｻ・ｴ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｾ鬯ｮ・ｯ隲幢ｽｶ繝ｻ・ｽ繝ｻ・ｨ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｨ鬯ｯ・ｯ繝ｻ・ｩ髯具ｽｹ郢晢ｽｻ繝ｻ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｸ鬯ｮ・ｫ繝ｻ・ｰ髯橸ｽ｢繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｨ鬮ｮ蜈ｷ・ｽ・ｻ郢晢ｽｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｸ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｭ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｮScene Entity鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮｣蛹・ｽｽ・ｵ髫ｴ雜｣・ｽ・｢郢晢ｽｻ繝ｻ・ｽ鬮｢・ｾ繝ｻ・ｼlayerEditor鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｸ鬯ｯ・ｮ繝ｻ・ｫ郢晢ｽｻ繝ｻ・ｪ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｭ鬯ｮ・ｯ隶厄ｽｸ繝ｻ・ｽ繝ｻ・ｳ鬮ｯ讖ｸ・ｽ・｢郢晢ｽｻ繝ｻ・ｹ驛｢譎｢・ｽ・ｻ髯橸ｽｳ陞｢・ｽ隨翫ｋ蝙磯寞・ｻ繝ｻ・ｽ繝ｻ・ｶ驛｢譎｢・ｽ・ｻ髣費ｽｨ遶擾ｽｵ郢晢ｽｻ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｼ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ郢晢ｽｻ邵ｺ・､・つ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｲ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
+void PlayerEditorSession::SyncTimelineAssetSelection(PlayerEditorPanel& panel)
+{
+    TimelineLibraryComponent* timelineLibrary = nullptr;
+    if (panel.m_registry) {
+        if (!Entity::IsNull(panel.m_previewEntity) && panel.m_registry->IsAlive(panel.m_previewEntity)) {
+            timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(panel.m_previewEntity);
+        }
+
+        if (!timelineLibrary &&
+            !Entity::IsNull(panel.m_selectedEntity) &&
+            panel.m_registry->IsAlive(panel.m_selectedEntity)) {
+            timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(panel.m_selectedEntity);
+        }
+    }
+
+    if (timelineLibrary && HasTimelineAssetContent(panel.m_timelineAsset)) {
+        SyncEditingTimelineIntoLibrary(*timelineLibrary, panel.m_timelineAsset);
+    }
+
+    const TimelineAsset* matchedAsset = nullptr;
+    if (timelineLibrary) {
+        if (panel.m_selectedAnimIndex >= 0) {
+            matchedAsset = FindTimelineAssetByAnimationIndex(*timelineLibrary, panel.m_selectedAnimIndex);
+            if (!matchedAsset) {
+                matchedAsset = FindTimelineAssetByAnimationIndex(*timelineLibrary, -1);
+            }
+        }
+        else if (!timelineLibrary->assets.empty()) {
+            matchedAsset = &timelineLibrary->assets.front();
+        }
+    }
+
+    if (matchedAsset) {
+        panel.m_timelineAsset = *matchedAsset;
+    }
+    else {
+        panel.m_timelineAsset = TimelineAsset{};
+        panel.m_timelineAsset.animationIndex = panel.m_selectedAnimIndex;
+        panel.m_timelineAsset.ownerModelPath = panel.m_currentModelPath;
+        const float selectedAnimationDuration = panel.GetSelectedAnimationDurationSeconds();
+        if (selectedAnimationDuration > 0.0f) {
+            panel.m_timelineAsset.duration = selectedAnimationDuration;
+        }
+    }
+
+    if (panel.m_timelineAsset.animationIndex < 0) {
+        panel.m_timelineAsset.animationIndex = panel.m_selectedAnimIndex;
+    }
+    if (panel.m_timelineAsset.ownerModelPath.empty()) {
+        panel.m_timelineAsset.ownerModelPath = panel.m_currentModelPath;
+    }
+}
+
 void PlayerEditorSession::ImportFromSelectedEntity(PlayerEditorPanel& panel)
 {
     // Registry鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｫ・ｶ陷ｷ譎｢・ｽ・ｯ郢ｧ繝ｻ・ｽ・ｼ繝ｻ・ｯ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ郢晢ｽｻ邵ｺ・､・つ鬩包ｽｶ闕ｳ讖ｸ・ｽ・｣繝ｻ・ｺ鬩包ｽｨ陞ｳ・｣邵ｺ蜉ｱ繝ｻ繝ｻ・ｺ鬮ｮ荵昴・・つ繝ｻ・･驛｢譎｢・ｽ・ｻ鬯ｯ・ｯ繝ｻ・ｩ髯具ｽｹ郢晢ｽｻ繝ｻ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｸ鬯ｮ・ｫ繝ｻ・ｰ髯橸ｽ｢繝ｻ・ｽ髣比ｼ夲ｽｽ・ｭntity鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｫ・ｶ陷ｷ譎｢・ｽ・ｯ郢ｧ繝ｻ・ｽ・ｼ繝ｻ・ｯ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ鬩包ｽｶ闔ｨ竏壹・郢晢ｽｻ繝ｻ・ｹ郢晢ｽｻ繝ｻ・ｧ鬮ｫ・ｰ隴ｴ・ｧ雎主｣ｹ繝ｻ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｽ鬯ｮ・ｴ鬩帙・・ｽ・ｲ繝ｻ・ｻ郢晢ｽｻ繝ｻ・ｽ驛｢・ｧ闔ｨ螟ｲ・ｽ・ｽ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ鬮ｯ・ｷ闔ｨ螟ｲ・ｽ・ｽ繝ｻ・ｱ鬩包ｽｶ闔ｨ竏壹・郢晢ｽｻ繝ｻ・ｸ郢晢ｽｻ繝ｻ・ｺ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ郢晢ｽｻ邵ｺ・､・つ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
@@ -753,12 +857,10 @@ void PlayerEditorSession::ImportFromSelectedEntity(PlayerEditorPanel& panel)
         panel.m_stateMachineDirty = false;
     }
 
-    if (const auto* timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(panel.m_selectedEntity)) {
-        if (!timelineLibrary->assets.empty()) {
-            panel.m_timelineAsset = timelineLibrary->assets.front();
-            panel.m_timelineDirty = false;
-        }
-    }
+    panel.m_timelineAsset = TimelineAsset{};
+    SyncTimelineAssetSelection(panel);
+    panel.m_timelineDirty = false;
+    panel.m_colliderDirty = false;
 
     if (const auto* embeddedInputMap = panel.m_registry->GetComponent<InputActionMapComponent>(panel.m_selectedEntity)) {
         panel.m_inputMappingTab.SetEditingMap(embeddedInputMap->asset);

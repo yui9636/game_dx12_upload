@@ -25,6 +25,9 @@
 
 namespace EntitySnapshot
 {
+    static_assert(std::tuple_size_v<AllComponentTypes> <= MAX_COMPONENTS,
+                  "MAX_COMPONENTS must be large enough for all generated component types.");
+
     constexpr uint32_t kInvalidLocalID = (std::numeric_limits<uint32_t>::max)();
 
     template<typename Tuple>

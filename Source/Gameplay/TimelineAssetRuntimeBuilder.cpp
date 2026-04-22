@@ -56,6 +56,21 @@ namespace TimelineAssetRuntimeBuilder
         uint32_t unsupportedTrackMask = 0;
 
         outTimeline.animationIndex = animationIndex >= 0 ? animationIndex : asset.animationIndex;
+        if (asset.animationIndex >= 0 &&
+            animationIndex >= 0 &&
+            asset.animationIndex != animationIndex) {
+            if (outPartialBuild) {
+                *outPartialBuild = false;
+            }
+            if (outWarningCount) {
+                *outWarningCount = 0;
+            }
+            if (outUnsupportedTrackMask) {
+                *outUnsupportedTrackMask = 0;
+            }
+            return true;
+        }
+
         outTimeline.fps = asset.fps > 0.0f ? asset.fps : 60.0f;
         outTimeline.frameMin = 0;
         outTimeline.frameMax = ResolveTimelineFrameMax(asset);

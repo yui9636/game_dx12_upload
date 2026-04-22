@@ -49,6 +49,11 @@ cbuffer EffectParticleSimulationParams : register(b0)
     float4 gCollisionSphere2;
     float4 gCollisionSphere3;
     float4 gCollisionParams;   // x=restitution, y=friction, z=sphereCount, w=attractorCount
+    // Mesh particle params (used only when gMeshFlags.x != 0)
+    float4 gMeshInitialScale;        // xyz=scale, w=scaleRandomRange
+    float4 gMeshAngularAxisSpeed;    // xyz=angularAxis (normalized), w=angularSpeed rad/s
+    float4 gMeshAngularRandomOrient; // xyz=yaw/pitch/roll random range (rad), w=speed random range
+    float4 gMeshFlags;               // x=isMeshMode (0/1), yzw=reserved
 }
 
 Texture3D<float4> gCurlNoiseTexture : register(t1);

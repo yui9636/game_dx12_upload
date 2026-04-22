@@ -20,7 +20,4 @@ private:
         std::vector<RenderContext::PreparedIndirectCommand> preparedDrawCommands;
         std::vector<RenderContext::PreparedIndirectCommand> preparedSkinnedCommands;
     };
-    std::vector<BatchCommandBuildResult> m_batchResults;
-    std::vector<DrawArgs> m_drawArgsScratch;
-    std::vector<RenderContext::GpuDrivenCommandMetadata> m_metadataScratch;
 };
