@@ -107,12 +107,13 @@ void LocomotionSystem::Update(Registry& registry, float dt) {
                 XMVECTOR newQuat = XMQuaternionRotationRollPitchYaw(0, newAngle, 0);
                 XMStoreFloat4(&trans.localRotation, newQuat);
 
-                // Set velocity in facing direction
-                phys.velocity.x = sinf(newAngle) * loco.currentSpeed;
-                phys.velocity.z = cosf(newAngle) * loco.currentSpeed;
+                // Move in the requested direction while the visual facing catches up.
+                phys.velocity.x = sinf(targetAngle) * loco.currentSpeed;
+                phys.velocity.z = cosf(targetAngle) * loco.currentSpeed;
             } else {
                 // No input — decelerate to stop
                 loco.turningInPlace = false;
+                loco.worldMoveDir = { 0.0f, 0.0f };
                 if (loco.currentSpeed > 0.0f) {
                     loco.currentSpeed = std::max(loco.currentSpeed - loco.deceleration * dt, 0.0f);
                 }

@@ -17,6 +17,7 @@ public:
     void ClearEditingMap();
     const InputActionMapAsset& GetEditingMap() const { return m_editingMap; }
     bool IsDirty() const { return m_dirty; }
+    void MarkDirty() { m_dirty = true; }
 
 private:
     void DrawActionTable();

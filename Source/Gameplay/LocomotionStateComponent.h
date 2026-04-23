@@ -19,13 +19,13 @@ struct LocomotionStateComponent {
     float runThreshold = 0.90f;
 
     // Max speeds per gait
-    float walkMaxSpeed = 60.0f;
-    float jogMaxSpeed = 160.0f;
-    float runMaxSpeed = 380.0f;
+    float walkMaxSpeed = 1.6f;
+    float jogMaxSpeed = 3.2f;
+    float runMaxSpeed = 5.8f;
 
     // Physics
-    float acceleration = 60.0f;
-    float launchBoost = 5.0f;       // Multiplier below 30% max speed
-    float deceleration = 2000.0f;
-    float turnSpeed = 1080.0f;      // Degrees/sec
+    float acceleration = 12.0f;
+    float launchBoost = 1.0f;       // Multiplier below 30% max speed
+    float deceleration = 18.0f;
+    float turnSpeed = 720.0f;       // Degrees/sec
 };

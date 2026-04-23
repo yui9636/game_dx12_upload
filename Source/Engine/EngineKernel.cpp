@@ -1744,6 +1744,7 @@
 #include "Input/SDLInputBackend.h"
 #include "Model/Model.h"
 #include "PlayerEditor/PlayerModelPreviewStudio.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
 #include <wrl/client.h>
 #include <cfloat>
 #include <DirectXCollision.h>
@@ -3512,6 +3513,9 @@ void EngineKernel::Render()
 void EngineKernel::Play()
 {
     if (mode == EngineMode::Editor) {
+        if (m_gameLayer) {
+            PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(m_gameLayer->GetRegistry(), true);
+        }
         mode = EngineMode::Play;
         if (m_editorLayer && m_gameLayer) {
             m_editorLayer->GetInputBridge().OnPlayStarted(m_gameLayer->GetRegistry());

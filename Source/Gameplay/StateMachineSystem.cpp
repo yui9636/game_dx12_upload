@@ -130,6 +130,9 @@ namespace
         params.SetParam("MoveY", locomotion->moveInput.y);
         params.SetParam("MoveMagnitude", locomotion->inputStrength);
         params.SetParam("IsMoving", locomotion->gaitIndex > 0 ? 1.0f : 0.0f);
+        params.SetParam("Gait", static_cast<float>(locomotion->gaitIndex));
+        params.SetParam("IsWalking", locomotion->gaitIndex == 1 ? 1.0f : 0.0f);
+        params.SetParam("IsRunning", locomotion->gaitIndex == 3 ? 1.0f : 0.0f);
     }
 
     bool EvaluateCondition(

@@ -54,6 +54,18 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
                 phys.verticalVelocity += phys.gravity * dt;
             }
 
+            // Clamp horizontal movement so bad locomotion tuning cannot teleport the player.
+            if (phys.maxMoveSpeed > 0.0f) {
+                const float speedSq = phys.velocity.x * phys.velocity.x + phys.velocity.z * phys.velocity.z;
+                const float maxSpeedSq = phys.maxMoveSpeed * phys.maxMoveSpeed;
+                if (speedSq > maxSpeedSq && speedSq > 0.0001f) {
+                    const float speed = sqrtf(speedSq);
+                    const float scale = phys.maxMoveSpeed / speed;
+                    phys.velocity.x *= scale;
+                    phys.velocity.z *= scale;
+                }
+            }
+
             // Integrate position
             trans.localPosition.x += phys.velocity.x * dt;
             trans.localPosition.y += phys.verticalVelocity * dt;

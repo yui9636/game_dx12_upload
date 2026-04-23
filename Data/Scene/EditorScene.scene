@@ -11,9 +11,9 @@
         },
         "CameraFreeControlComponent": {
           "moveSpeed": 20.0,
-          "pitch": 0.5349997282028198,
+          "pitch": 0.2700001001358032,
           "rotateSpeed": 0.004999999888241291,
-          "yaw": -1.1999987363815308
+          "yaw": 0.03999999538064003
         },
         "CameraLensComponent": {
           "aspect": 1.7777777910232544,
@@ -30,15 +30,15 @@
         },
         "TransformComponent": {
           "localPosition": {
-            "x": 108.35387420654297,
-            "y": 156.7224578857422,
-            "z": -57.64845275878906
+            "x": 7.231834888458252,
+            "y": 70.27763366699219,
+            "z": -225.98191833496094
           },
           "localRotation": {
-            "w": 0.7959827184677124,
-            "x": 0.2181536853313446,
-            "y": -0.5445603132247925,
-            "z": 0.14924675226211548
+            "w": 0.9907032251358032,
+            "x": 0.13456344604492188,
+            "y": 0.019816704094409943,
+            "z": -0.002691627247259021
           },
           "localScale": {
             "x": 1.0,
@@ -91,46 +91,6 @@
     },
     {
       "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "LightComponent": {
-          "castShadow": false,
-          "color": {
-            "x": 7.699999809265137,
-            "y": 1.0,
-            "z": 1.0
-          },
-          "intensity": 17.3799991607666,
-          "range": 21.1200008392334,
-          "type": 1
-        },
-        "NameComponent": {
-          "name": "Point Light"
-        },
-        "TransformComponent": {
-          "localPosition": {
-            "x": 0.0,
-            "y": 43.09092330932617,
-            "z": -17.202808380126953
-          },
-          "localRotation": {
-            "w": 1.0,
-            "x": -0.0,
-            "y": 0.0,
-            "z": -0.0
-          },
-          "localScale": {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
-          }
-        }
-      },
-      "id": 2
-    },
-    {
-      "components": {
         "NameComponent": {
           "name": "Reflection Probe"
         },
@@ -143,7 +103,7 @@
           "radius": 20.0
         }
       },
-      "id": 3
+      "id": 2
     },
     {
       "components": {
@@ -157,7 +117,7 @@
           "name": "Environment"
         }
       },
-      "id": 4
+      "id": 3
     },
     {
       "components": {
@@ -173,45 +133,158 @@
           "name": "Audio Settings"
         }
       },
+      "id": 4
+    },
+    {
+      "components": {
+        "InputActionMapComponent": {
+          "actions": [
+            {
+              "actionName": "Save",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 22,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Undo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 29,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Redo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 28,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Delete",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 76,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Duplicate",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 7,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Copy",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 6,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Paste",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 25,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Play",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 62,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Rename",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 59,
+              "trigger": "Pressed"
+            }
+          ],
+          "axes": [],
+          "contextCategory": "EditorGlobal",
+          "doubleTapGapFrames": 15,
+          "holdThresholdFrames": 30,
+          "name": "EditorGlobal"
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "InputUserComponent": {
+          "deviceMask": 4294967295,
+          "isEditorUser": true,
+          "isPrimary": true,
+          "profileName": "Editor",
+          "userId": 0
+        }
+      },
       "id": 5
     },
     {
       "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "MaterialComponent": {
-          "materialAssetPath": "Data\\Material\\NewMaterial.mat"
-        },
-        "MeshComponent": {
-          "castShadow": true,
-          "isDebugModel": false,
-          "isVisible": true,
-          "modelFilePath": "Data\\Model\\Camera\\Camera.fbx"
-        },
-        "NameComponent": {
-          "name": "Camera"
-        },
-        "TransformComponent": {
-          "localPosition": {
-            "x": 0.0,
-            "y": 11.554832458496094,
-            "z": 0.0
-          },
-          "localRotation": {
-            "w": 1.0,
-            "x": -0.0,
-            "y": 0.0,
-            "z": -0.0
-          },
-          "localScale": {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
-          }
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 0,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
         }
       },
       "id": 6
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 1,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 7
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": true,
+          "enabled": false,
+          "pointerEnabled": true,
+          "priority": 5,
+          "textInputEnabled": true,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 8
     },
     {
       "components": {
@@ -513,14 +586,14 @@
         "TransformComponent": {
           "localPosition": {
             "x": 0.0,
-            "y": 19.137311935424805,
-            "z": -3.4314045906066895
+            "y": 0.0,
+            "z": 0.0
           },
           "localRotation": {
             "w": 1.0,
-            "x": -0.0,
+            "x": 0.0,
             "y": 0.0,
-            "z": -0.0
+            "z": 0.0
           },
           "localScale": {
             "x": 1.0,
@@ -529,7 +602,7 @@
           }
         }
       },
-      "id": 7
+      "id": 9
     }
   ],
   "rootLocalIds": [
@@ -540,7 +613,9 @@
     4,
     5,
     6,
-    7
+    7,
+    8,
+    9
   ],
   "type": "scene",
   "version": 1

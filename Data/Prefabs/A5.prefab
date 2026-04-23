@@ -1,0 +1,258 @@
+{
+  "nodes": [
+    {
+      "components": {
+        "ActionDatabaseComponent": {
+          "nodeCount": 0,
+          "nodes": []
+        },
+        "CharacterPhysicsComponent": {
+          "acceleration": 50.0,
+          "friction": 5.0,
+          "gravity": -30.0,
+          "height": 1.7999999523162842,
+          "maxMoveSpeed": 10.0,
+          "stepOffset": 0.30000001192092896
+        },
+        "ColliderComponent": {
+          "drawGizmo": true,
+          "elements": [],
+          "enabled": true
+        },
+        "HealthComponent": {
+          "health": 100,
+          "maxHealth": 100
+        },
+        "InputActionMapComponent": {
+          "actions": [],
+          "axes": [
+            {
+              "axisName": "MoveX",
+              "deadzone": 0.15000000596046448,
+              "gamepadAxis": 0,
+              "negativeKey": 4,
+              "positiveKey": 7,
+              "sensitivity": 1.0
+            },
+            {
+              "axisName": "MoveY",
+              "deadzone": 0.15000000596046448,
+              "gamepadAxis": 1,
+              "negativeKey": 22,
+              "positiveKey": 26,
+              "sensitivity": 1.0
+            }
+          ],
+          "contextCategory": "RuntimeGameplay",
+          "doubleTapGapFrames": 15,
+          "holdThresholdFrames": 30,
+          "name": "PlayerDefault"
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 2,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        },
+        "InputUserComponent": {
+          "deviceMask": 4294967295,
+          "isEditorUser": false,
+          "isPrimary": true,
+          "profileName": "",
+          "userId": 1
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "C:\\Users\\yuito\\Documents\\MyEngine_Workspace\\game_dx12_upload\\Data\\Model\\Actor\\A5.gltf"
+        },
+        "NameComponent": {
+          "name": "Player Preview"
+        },
+        "NodeSocketComponent": {
+          "sockets": []
+        },
+        "PlayerTagComponent": {
+          "playerId": 1
+        },
+        "StaminaComponent": {
+          "costPerUse": 250.0,
+          "current": 1000.0,
+          "max": 1000.0,
+          "recoveryDelay": 0.800000011920929,
+          "recoveryRate": 200.0
+        },
+        "StateMachineAssetComponent": {
+          "defaultStateId": 1,
+          "name": "",
+          "nextId": 5,
+          "parameters": [
+            {
+              "defaultValue": 0.0,
+              "name": "MoveX",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "MoveY",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "MoveMagnitude",
+              "type": 0
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "IsMoving",
+              "type": 2
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "Gait",
+              "type": 1
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "IsWalking",
+              "type": 2
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "IsRunning",
+              "type": 2
+            }
+          ],
+          "states": [
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 1,
+              "canInterrupt": true,
+              "id": 1,
+              "loopAnimation": true,
+              "name": "Idle",
+              "posX": 0.0,
+              "posY": 0.0,
+              "timelineId": 0,
+              "type": 0
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 2,
+              "canInterrupt": true,
+              "id": 2,
+              "loopAnimation": true,
+              "name": "Move",
+              "posX": 280.0,
+              "posY": 0.0,
+              "timelineId": 0,
+              "type": 0
+            }
+          ],
+          "transitions": [
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 4,
+                  "param": "IsMoving",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 1,
+              "hasExitTime": false,
+              "id": 3,
+              "priority": 100,
+              "toState": 2
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 5,
+                  "param": "IsMoving",
+                  "type": 5,
+                  "value": 0.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 4,
+              "priority": 100,
+              "toState": 1
+            }
+          ]
+        },
+        "StateMachineParamsComponent": {
+          "params": [
+            {
+              "name": "MoveX",
+              "value": 0.0
+            },
+            {
+              "name": "MoveY",
+              "value": 0.0
+            },
+            {
+              "name": "MoveMagnitude",
+              "value": 0.0
+            },
+            {
+              "name": "IsMoving",
+              "value": 0.0
+            },
+            {
+              "name": "Gait",
+              "value": 0.0
+            },
+            {
+              "name": "IsWalking",
+              "value": 0.0
+            },
+            {
+              "name": "IsRunning",
+              "value": 0.0
+            }
+          ]
+        },
+        "TimelineLibraryComponent": {
+          "assets": [],
+          "nextTimelineId": 1
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 0
+    }
+  ],
+  "rootLocalId": 0,
+  "version": 1
+}

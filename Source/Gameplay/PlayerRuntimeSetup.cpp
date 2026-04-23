@@ -26,9 +26,19 @@
 #include "Input/InputUserComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
 #include "Registry/Registry.h"
+#include "System/Query.h"
+
+#include <vector>
 
 namespace
 {
+    constexpr uint32_t kScancodeA = 4;
+    constexpr uint32_t kScancodeD = 7;
+    constexpr uint32_t kScancodeS = 22;
+    constexpr uint32_t kScancodeW = 26;
+    constexpr uint8_t kGamepadAxisLeftX = 0;
+    constexpr uint8_t kGamepadAxisLeftY = 1;
+
     template<typename T>
     T* EnsureComponent(Registry& registry, EntityID entity)
     {
@@ -45,6 +55,134 @@ namespace
         stateMachine.SetParam("MoveY", 0.0f);
         stateMachine.SetParam("MoveMagnitude", 0.0f);
         stateMachine.SetParam("IsMoving", 0.0f);
+        stateMachine.SetParam("Gait", 0.0f);
+        stateMachine.SetParam("IsWalking", 0.0f);
+        stateMachine.SetParam("IsRunning", 0.0f);
+    }
+
+    AxisBinding* FindAxisBinding(InputActionMapAsset& map, const char* axisName)
+    {
+        for (auto& axis : map.axes) {
+            if (axis.axisName == axisName) {
+                return &axis;
+            }
+        }
+        return nullptr;
+    }
+
+    void EnsureAxisBinding(
+        InputActionMapAsset& map,
+        const char* axisName,
+        uint32_t positiveKey,
+        uint32_t negativeKey,
+        uint8_t gamepadAxis)
+    {
+        AxisBinding* axis = FindAxisBinding(map, axisName);
+        if (!axis) {
+            AxisBinding newAxis;
+            newAxis.axisName = axisName;
+            map.axes.push_back(newAxis);
+            axis = &map.axes.back();
+        }
+
+        if (axis->positiveKey == 0) {
+            axis->positiveKey = positiveKey;
+        }
+        if (axis->negativeKey == 0) {
+            axis->negativeKey = negativeKey;
+        }
+        if (axis->gamepadAxis == 0xFF) {
+            axis->gamepadAxis = gamepadAxis;
+        }
+        if (axis->deadzone <= 0.0f) {
+            axis->deadzone = 0.15f;
+        }
+        if (axis->sensitivity == 0.0f) {
+            axis->sensitivity = 1.0f;
+        }
+    }
+
+    void MoveAxisBindingTo(InputActionMapAsset& map, const char* axisName, size_t targetIndex)
+    {
+        for (size_t i = 0; i < map.axes.size(); ++i) {
+            if (map.axes[i].axisName != axisName) {
+                continue;
+            }
+            if (i == targetIndex) {
+                return;
+            }
+
+            AxisBinding axis = map.axes[i];
+            map.axes.erase(map.axes.begin() + static_cast<std::vector<AxisBinding>::difference_type>(i));
+            if (targetIndex > map.axes.size()) {
+                targetIndex = map.axes.size();
+            }
+            map.axes.insert(map.axes.begin() + static_cast<std::vector<AxisBinding>::difference_type>(targetIndex), axis);
+            return;
+        }
+    }
+
+    void EnsureDefaultPlayerInputMap(InputActionMapAsset& map)
+    {
+        if (map.name.empty()) {
+            map.name = "PlayerDefault";
+        }
+        if (map.contextCategory.empty()) {
+            map.contextCategory = "RuntimeGameplay";
+        }
+
+        EnsureAxisBinding(map, "MoveX", kScancodeD, kScancodeA, kGamepadAxisLeftX);
+        EnsureAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
+        MoveAxisBindingTo(map, "MoveX", 0);
+        MoveAxisBindingTo(map, "MoveY", 1);
+    }
+
+    void EnsureLocomotionRuntimeTuning(LocomotionStateComponent& locomotion)
+    {
+        if (locomotion.walkMaxSpeed > 20.0f ||
+            locomotion.jogMaxSpeed > 20.0f ||
+            locomotion.runMaxSpeed > 40.0f)
+        {
+            locomotion.walkMaxSpeed = 1.6f;
+            locomotion.jogMaxSpeed = 3.2f;
+            locomotion.runMaxSpeed = 5.8f;
+        }
+
+        if (locomotion.acceleration > 50.0f) {
+            locomotion.acceleration = 12.0f;
+        }
+        if (locomotion.deceleration > 100.0f) {
+            locomotion.deceleration = 18.0f;
+        }
+        if (locomotion.launchBoost > 2.0f) {
+            locomotion.launchBoost = 1.0f;
+        }
+        if (locomotion.turnSpeed > 1080.0f || locomotion.turnSpeed <= 0.0f) {
+            locomotion.turnSpeed = 720.0f;
+        }
+    }
+
+    void AddUniqueEntity(std::vector<EntityID>& entities, EntityID entity)
+    {
+        if (Entity::IsNull(entity)) {
+            return;
+        }
+
+        for (EntityID existing : entities) {
+            if (existing == entity) {
+                return;
+            }
+        }
+        entities.push_back(entity);
+    }
+
+    template<typename T>
+    void CollectEntitiesWithComponent(Registry& registry, std::vector<EntityID>& entities)
+    {
+        Query<T> query(registry);
+        query.ForEachWithEntity([&](EntityID entity, T&) {
+            AddUniqueEntity(entities, entity);
+        });
     }
 }
 
@@ -67,7 +205,10 @@ namespace PlayerRuntimeSetup
         EnsureComponent<ActionDatabaseComponent>(registry, entity);
         EnsureComponent<StateMachineAssetComponent>(registry, entity);
         EnsureComponent<TimelineLibraryComponent>(registry, entity);
-        EnsureComponent<InputActionMapComponent>(registry, entity);
+        InputActionMapComponent* inputActionMap = EnsureComponent<InputActionMapComponent>(registry, entity);
+        if (inputActionMap) {
+            EnsureDefaultPlayerInputMap(inputActionMap->asset);
+        }
         EnsureComponent<InputBindingComponent>(registry, entity);
         EnsureComponent<NodeSocketComponent>(registry, entity);
         EnsureComponent<ColliderComponent>(registry, entity);
@@ -100,7 +241,10 @@ namespace PlayerRuntimeSetup
         EnsureComponent<ColliderComponent>(registry, entity);
         EnsureComponent<HitStopComponent>(registry, entity);
         EnsureComponent<HitboxTrackingComponent>(registry, entity);
-        EnsureComponent<LocomotionStateComponent>(registry, entity);
+        LocomotionStateComponent* locomotion = EnsureComponent<LocomotionStateComponent>(registry, entity);
+        if (locomotion) {
+            EnsureLocomotionRuntimeTuning(*locomotion);
+        }
         EnsureComponent<ActionStateComponent>(registry, entity);
         EnsureComponent<DodgeStateComponent>(registry, entity);
         EnsureComponent<AnimatorComponent>(registry, entity);
@@ -195,6 +339,30 @@ namespace PlayerRuntimeSetup
 
         if (auto* animator = registry.GetComponent<AnimatorComponent>(entity)) {
             *animator = AnimatorComponent{};
+        }
+    }
+
+    void EnsureAllPlayerRuntimeComponents(Registry& registry, bool resetRuntimeState)
+    {
+        std::vector<EntityID> entities;
+        CollectEntitiesWithComponent<PlayerTagComponent>(registry, entities);
+        CollectEntitiesWithComponent<StateMachineAssetComponent>(registry, entities);
+        CollectEntitiesWithComponent<TimelineLibraryComponent>(registry, entities);
+
+        for (EntityID entity : entities) {
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                continue;
+            }
+
+            if (!HasMinimumPlayerAuthoringComponents(registry, entity)) {
+                continue;
+            }
+
+            EnsurePlayerPersistentComponents(registry, entity);
+            EnsurePlayerRuntimeComponents(registry, entity);
+            if (resetRuntimeState) {
+                ResetPlayerRuntimeState(registry, entity);
+            }
         }
     }
 

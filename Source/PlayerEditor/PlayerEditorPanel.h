@@ -145,6 +145,7 @@ private:
     void DrawStateMachineRuntimeStatus();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
     void AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition);
+    void ApplyFullPlayerPhase1APreset();
     void ApplyLocomotionStateMachinePreset();
     void ApplyLocomotionTransitionPreset(struct StateTransition& trans, bool enteringMove);
     void EnsureStateMachineParameter(const char* name, ParameterType type, float defaultValue);

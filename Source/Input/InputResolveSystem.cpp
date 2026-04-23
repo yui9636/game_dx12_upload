@@ -17,6 +17,16 @@
 
 namespace
 {
+    constexpr uint32_t kMaxTrackedScancodes = 512;
+    constexpr uint32_t kMaxTrackedMouseButtons = 16;
+    constexpr uint32_t kMaxTrackedGamepadButtons = 32;
+    constexpr uint32_t kMaxTrackedGamepadAxes = 16;
+
+    bool g_keyHeld[kMaxTrackedScancodes] = {};
+    bool g_mouseHeld[kMaxTrackedMouseButtons] = {};
+    bool g_gamepadButtonHeld[kMaxTrackedGamepadButtons] = {};
+    float g_gamepadAxisValue[kMaxTrackedGamepadAxes] = {};
+
     float ApplyDeadzone(float value, float deadzone)
     {
         if (std::abs(value) < deadzone) {
@@ -37,10 +47,116 @@ namespace
         }
         return &component.asset;
     }
+
+    void ClearHeldInputSnapshot()
+    {
+        std::memset(g_keyHeld, 0, sizeof(g_keyHeld));
+        std::memset(g_mouseHeld, 0, sizeof(g_mouseHeld));
+        std::memset(g_gamepadButtonHeld, 0, sizeof(g_gamepadButtonHeld));
+        std::memset(g_gamepadAxisValue, 0, sizeof(g_gamepadAxisValue));
+    }
+
+    void UpdateHeldInputSnapshot(const InputEventQueue& queue)
+    {
+        for (const auto& ev : queue.GetEvents()) {
+            switch (ev.type) {
+            case InputEventType::KeyDown:
+                if (ev.key.scancode < kMaxTrackedScancodes) {
+                    g_keyHeld[ev.key.scancode] = true;
+                }
+                break;
+            case InputEventType::KeyUp:
+                if (ev.key.scancode < kMaxTrackedScancodes) {
+                    g_keyHeld[ev.key.scancode] = false;
+                }
+                break;
+            case InputEventType::MouseButtonDown:
+                if (ev.mouseButton.button < kMaxTrackedMouseButtons) {
+                    g_mouseHeld[ev.mouseButton.button] = true;
+                }
+                break;
+            case InputEventType::MouseButtonUp:
+                if (ev.mouseButton.button < kMaxTrackedMouseButtons) {
+                    g_mouseHeld[ev.mouseButton.button] = false;
+                }
+                break;
+            case InputEventType::GamepadButtonDown:
+                if (ev.gamepadButton.button < kMaxTrackedGamepadButtons) {
+                    g_gamepadButtonHeld[ev.gamepadButton.button] = true;
+                }
+                break;
+            case InputEventType::GamepadButtonUp:
+                if (ev.gamepadButton.button < kMaxTrackedGamepadButtons) {
+                    g_gamepadButtonHeld[ev.gamepadButton.button] = false;
+                }
+                break;
+            case InputEventType::GamepadAxis:
+                if (ev.gamepadAxis.axis < kMaxTrackedGamepadAxes) {
+                    g_gamepadAxisValue[ev.gamepadAxis.axis] = ev.gamepadAxis.value;
+                }
+                break;
+            case InputEventType::WindowFocusLost:
+            case InputEventType::DeviceRemoved:
+                ClearHeldInputSnapshot();
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    bool IsKeyHeld(uint32_t scancode)
+    {
+        return scancode != 0 && scancode < kMaxTrackedScancodes && g_keyHeld[scancode];
+    }
+
+    bool IsActionHeld(const ActionBinding& action)
+    {
+        if (IsKeyHeld(action.scancode)) {
+            return true;
+        }
+        if (action.mouseButton != 0 &&
+            action.mouseButton < kMaxTrackedMouseButtons &&
+            g_mouseHeld[action.mouseButton])
+        {
+            return true;
+        }
+        if (action.gamepadButton != 0xFF &&
+            action.gamepadButton < kMaxTrackedGamepadButtons &&
+            g_gamepadButtonHeld[action.gamepadButton])
+        {
+            return true;
+        }
+        if (action.gamepadAxis != 0xFF && action.gamepadAxis < kMaxTrackedGamepadAxes) {
+            const float value = g_gamepadAxisValue[action.gamepadAxis];
+            return action.axisDirection >= 0.0f ? value > 0.5f : value < -0.5f;
+        }
+        return false;
+    }
+
+    float ResolveAxisValue(const AxisBinding& axis)
+    {
+        float value = 0.0f;
+        if (IsKeyHeld(axis.positiveKey)) {
+            value += 1.0f;
+        }
+        if (IsKeyHeld(axis.negativeKey)) {
+            value -= 1.0f;
+        }
+        if (axis.gamepadAxis != 0xFF && axis.gamepadAxis < kMaxTrackedGamepadAxes) {
+            const float gamepadValue = g_gamepadAxisValue[axis.gamepadAxis];
+            if (std::abs(gamepadValue) > std::abs(value)) {
+                value = gamepadValue;
+            }
+        }
+        return value;
+    }
 }
 
 void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue, float dt)
 {
+    UpdateHeldInputSnapshot(queue);
+
     Signature sig = CreateSignature<
         InputUserComponent,
         InputBindingComponent,
@@ -118,8 +234,6 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
             state.textLength = 0;
             state.textBuffer[0] = '\0';
 
-            float axisValues[ResolvedInputStateComponent::MAX_AXES] = {};
-
             for (const auto& ev : queue.GetEvents()) {
                 switch (ev.type) {
                 case InputEventType::KeyDown:
@@ -128,14 +242,6 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                         for (int a = 0; a < state.actionCount; ++a) {
                             if (actionMap->actions[a].scancode == ev.key.scancode) {
                                 keyDownThisFrame[a] = true;
-                            }
-                        }
-                        for (int ax = 0; ax < state.axisCount; ++ax) {
-                            if (actionMap->axes[ax].positiveKey == ev.key.scancode) {
-                                axisValues[ax] += 1.0f;
-                            }
-                            if (actionMap->axes[ax].negativeKey == ev.key.scancode) {
-                                axisValues[ax] -= 1.0f;
                             }
                         }
                     }
@@ -212,13 +318,6 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
 
                 case InputEventType::GamepadAxis:
                     state.lastDeviceType = InputDeviceType::Gamepad;
-                    if (actionMap) {
-                        for (int ax = 0; ax < state.axisCount; ++ax) {
-                            if (actionMap->axes[ax].gamepadAxis == ev.gamepadAxis.axis) {
-                                axisValues[ax] = ev.gamepadAxis.value;
-                            }
-                        }
-                    }
                     break;
 
                 case InputEventType::TextInput:
@@ -241,11 +340,14 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                 auto& action = state.actions[a];
                 const bool wasHeld = prevHeld[a];
 
-                if (keyDownThisFrame[a]) {
-                    action.held = true;
-                }
-                if (keyUpThisFrame[a]) {
-                    action.held = false;
+                if (actionMap) {
+                    action.held = IsActionHeld(actionMap->actions[a]);
+                    if (keyDownThisFrame[a]) {
+                        action.held = true;
+                    }
+                    if (keyUpThisFrame[a]) {
+                        action.held = false;
+                    }
                 }
 
                 action.pressed = action.held && !wasHeld;
@@ -272,7 +374,8 @@ void InputResolveSystem::Update(Registry& registry, const InputEventQueue& queue
                     deadzone = actionMap->axes[ax].deadzone;
                     sensitivity = actionMap->axes[ax].sensitivity;
                 }
-                state.axes[ax] = ApplyDeadzone(axisValues[ax], deadzone) * sensitivity;
+                const float axisValue = actionMap ? ResolveAxisValue(actionMap->axes[ax]) : 0.0f;
+                state.axes[ax] = ApplyDeadzone(axisValue, deadzone) * sensitivity;
                 if (state.axes[ax] > 1.0f) {
                     state.axes[ax] = 1.0f;
                 }

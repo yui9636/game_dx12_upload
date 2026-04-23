@@ -1,4 +1,5 @@
 #include "EditorLayerInternal.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
 
 void EditorLayer::DrawUnsavedChangesPopup()
 {
@@ -253,6 +254,7 @@ bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
         LOG_WARN("[Editor] Failed to load scene: %s", scenePath.string().c_str());
         return false;
     }
+    PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(m_gameLayer->GetRegistry(), true);
 
     UndoSystem::Instance().ClearECSHistory();
     EditorSelection::Instance().Clear();

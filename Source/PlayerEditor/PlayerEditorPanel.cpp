@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
+#include <cstddef>
 #include <cmath>
 #include <filesystem>
 #include <initializer_list>
@@ -59,6 +60,13 @@ static constexpr const char* kModelFileFilter =
     "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
 static constexpr const char* kAudioFileFilter =
     "Audio Files (*.wav;*.ogg;*.mp3;*.flac)\0*.wav;*.ogg;*.mp3;*.flac\0WAV (*.wav)\0*.wav\0OGG (*.ogg)\0*.ogg\0MP3 (*.mp3)\0*.mp3\0FLAC (*.flac)\0*.flac\0All Files (*.*)\0*.*\0";
+
+static constexpr uint32_t kScancodeA = 4;
+static constexpr uint32_t kScancodeD = 7;
+static constexpr uint32_t kScancodeS = 22;
+static constexpr uint32_t kScancodeW = 26;
+static constexpr uint8_t kGamepadAxisLeftX = 0;
+static constexpr uint8_t kGamepadAxisLeftY = 1;
 
 // ── Window titles (used by DockBuilder) ──
 static constexpr const char* kPEViewportTitle     = ICON_FA_CUBE " Viewport##PE";
@@ -246,6 +254,97 @@ static bool EqualsIgnoreCase(const std::string& value, const char* rhs)
         return false;
     }
     return ToLowerAscii(value) == ToLowerAscii(rhs);
+}
+
+static AxisBinding* FindAxisBinding(InputActionMapAsset& map, const char* axisName)
+{
+    for (auto& axis : map.axes) {
+        if (axis.axisName == axisName) {
+            return &axis;
+        }
+    }
+    return nullptr;
+}
+
+static bool EnsurePhase1AAxisBinding(
+    InputActionMapAsset& map,
+    const char* axisName,
+    uint32_t positiveKey,
+    uint32_t negativeKey,
+    uint8_t gamepadAxis)
+{
+    bool changed = false;
+    AxisBinding* axis = FindAxisBinding(map, axisName);
+    if (!axis) {
+        AxisBinding newAxis;
+        newAxis.axisName = axisName;
+        map.axes.push_back(newAxis);
+        axis = &map.axes.back();
+        changed = true;
+    }
+
+    if (axis->positiveKey == 0) {
+        axis->positiveKey = positiveKey;
+        changed = true;
+    }
+    if (axis->negativeKey == 0) {
+        axis->negativeKey = negativeKey;
+        changed = true;
+    }
+    if (axis->gamepadAxis == 0xFF) {
+        axis->gamepadAxis = gamepadAxis;
+        changed = true;
+    }
+    if (axis->deadzone <= 0.0f) {
+        axis->deadzone = 0.15f;
+        changed = true;
+    }
+    if (axis->sensitivity == 0.0f) {
+        axis->sensitivity = 1.0f;
+        changed = true;
+    }
+
+    return changed;
+}
+
+static bool MoveAxisBindingTo(InputActionMapAsset& map, const char* axisName, size_t targetIndex)
+{
+    for (size_t i = 0; i < map.axes.size(); ++i) {
+        if (map.axes[i].axisName != axisName) {
+            continue;
+        }
+        if (i == targetIndex) {
+            return false;
+        }
+
+        AxisBinding axis = map.axes[i];
+        map.axes.erase(map.axes.begin() + static_cast<std::ptrdiff_t>(i));
+        if (targetIndex > map.axes.size()) {
+            targetIndex = map.axes.size();
+        }
+        map.axes.insert(map.axes.begin() + static_cast<std::ptrdiff_t>(targetIndex), axis);
+        return true;
+    }
+    return false;
+}
+
+static bool EnsurePhase1AInputMap(InputActionMapAsset& map)
+{
+    bool changed = false;
+    if (map.name.empty()) {
+        map.name = "PlayerDefault";
+        changed = true;
+    }
+    if (map.contextCategory.empty()) {
+        map.contextCategory = "RuntimeGameplay";
+        changed = true;
+    }
+
+    changed |= EnsurePhase1AAxisBinding(map, "MoveX", kScancodeD, kScancodeA, kGamepadAxisLeftX);
+    changed |= EnsurePhase1AAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
+    changed |= MoveAxisBindingTo(map, "MoveX", 0);
+    changed |= MoveAxisBindingTo(map, "MoveY", 1);
+    return changed;
 }
 
 static ImU32 StateNodeColor(StateNodeType type)
@@ -1493,6 +1592,9 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
     EnsureStateMachineParameter("MoveY", ParameterType::Float, 0.0f);
     EnsureStateMachineParameter("MoveMagnitude", ParameterType::Float, 0.0f);
     EnsureStateMachineParameter("IsMoving", ParameterType::Bool, 0.0f);
+    EnsureStateMachineParameter("Gait", ParameterType::Int, 0.0f);
+    EnsureStateMachineParameter("IsWalking", ParameterType::Bool, 0.0f);
+    EnsureStateMachineParameter("IsRunning", ParameterType::Bool, 0.0f);
 
     uint32_t idleId = 0;
     if (StateNode* idle = FindStateByName("Idle")) {
@@ -1563,6 +1665,21 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
     m_stateMachineDirty = true;
 }
 
+void PlayerEditorPanel::ApplyFullPlayerPhase1APreset()
+{
+    ApplyLocomotionStateMachinePreset();
+
+    InputActionMapAsset& inputMap = m_inputMappingTab.GetEditingMapMutable();
+    if (EnsurePhase1AInputMap(inputMap)) {
+        m_inputMappingTab.MarkDirty();
+    }
+
+    if (CanUsePreviewEntity()) {
+        ApplyEditorBindingsToPreviewEntity();
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
+    }
+}
+
 void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
 {
     ImGui::Text(ICON_FA_PERSON_RUNNING " Preview Runtime");
@@ -1628,11 +1745,17 @@ void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
     const float moveY = params->GetParam("MoveY");
     const float moveMagnitude = params->GetParam("MoveMagnitude");
     const float isMoving = params->GetParam("IsMoving");
+    const float gait = params->GetParam("Gait");
+    const float isWalking = params->GetParam("IsWalking");
+    const float isRunning = params->GetParam("IsRunning");
     ImGui::Separator();
     ImGui::Text("MoveX: %.3f", moveX);
     ImGui::Text("MoveY: %.3f", moveY);
     ImGui::Text("MoveMagnitude: %.3f", moveMagnitude);
     ImGui::Text("IsMoving: %.0f", isMoving);
+    ImGui::Text("Gait: %.0f", gait);
+    ImGui::Text("IsWalking: %.0f", isWalking);
+    ImGui::Text("IsRunning: %.0f", isRunning);
     if (locomotion) {
         ImGui::TextDisabled("Gait: %u  InputStrength: %.3f", static_cast<unsigned>(locomotion->gaitIndex), locomotion->inputStrength);
     }
@@ -1665,8 +1788,8 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         ImGui::OpenPopup("AddStateTemplatePopup");
     }
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move")) {
-        ApplyLocomotionStateMachinePreset();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
+        ApplyFullPlayerPhase1APreset();
     }
     ImGui::SameLine();
     if (DrawToolbarButton(ICON_FA_PLAY " Preview State", hasSelectedState)) {
@@ -1695,6 +1818,7 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     }
 
     if (ImGui::BeginPopup("AddStateTemplatePopup")) {
+        if (ImGui::MenuItem("Full Player (Phase 1A)")) ApplyFullPlayerPhase1APreset();
         if (ImGui::MenuItem("Idle / Move Preset")) ApplyLocomotionStateMachinePreset();
         ImGui::Separator();
         if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { 0.0f, 0.0f });
@@ -1992,6 +2116,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         float posY = (mousePos.y - origin.y - m_graphOffset.y) / m_graphZoom;
 
         ImGui::TextDisabled("Add State:");
+        if (ImGui::MenuItem("Full Player (Phase 1A)")) ApplyFullPlayerPhase1APreset();
         if (ImGui::MenuItem("Idle / Move Preset")) ApplyLocomotionStateMachinePreset();
         ImGui::Separator();
         if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { posX, posY });
@@ -2011,8 +2136,8 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         const float centerY = origin.y + canvasSize.y * 0.5f - buttonHeight - 8.0f;
 
         ImGui::SetCursorScreenPos(ImVec2(centerX, centerY));
-        if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move##Graph", ImVec2(buttonWidth, 0.0f))) {
-            ApplyLocomotionStateMachinePreset();
+        if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player##Graph", ImVec2(buttonWidth, 0.0f))) {
+            ApplyFullPlayerPhase1APreset();
         }
 
         ImGui::SetCursorScreenPos(ImVec2(centerX, centerY + buttonHeight + 8.0f));
@@ -2929,12 +3054,15 @@ void PlayerEditorPanel::DrawStateMachineParameterList()
         EnsureStateMachineParameter("MoveY", ParameterType::Float, 0.0f);
         EnsureStateMachineParameter("MoveMagnitude", ParameterType::Float, 0.0f);
         EnsureStateMachineParameter("IsMoving", ParameterType::Bool, 0.0f);
+        EnsureStateMachineParameter("Gait", ParameterType::Int, 0.0f);
+        EnsureStateMachineParameter("IsWalking", ParameterType::Bool, 0.0f);
+        EnsureStateMachineParameter("IsRunning", ParameterType::Bool, 0.0f);
         m_stateMachineDirty = true;
     }
 
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Idle/Move")) {
-        ApplyLocomotionStateMachinePreset();
+    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
+        ApplyFullPlayerPhase1APreset();
     }
 
     ImGui::Separator();
