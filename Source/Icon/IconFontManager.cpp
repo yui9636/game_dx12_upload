@@ -18,7 +18,6 @@ void IconFontManager::Setup(const std::vector<SizeConfig>& configs)
         ImFont* font = io.Fonts->AddFontFromFileTTF(iconFontPath.c_str(), conf.size, &config, icons_ranges);
 
         if (font == nullptr) {
-            // ★もしここで止まるなら、パスが間違っているか、ファイルが壊れています
             printf("CRITICAL ERROR: Failed to load font file at %s\n", iconFontPath.c_str());
             continue;
         }
@@ -26,9 +25,6 @@ void IconFontManager::Setup(const std::vector<SizeConfig>& configs)
      
         fontMap[conf.type] = font;
     }
-
-    // New ImGui renderer backends update font textures dynamically.
-    // We only register fonts here and let the backend upload them on frame/render.
 }
 
 bool IconFontManager::IconButton(const char* icon, IconSemantic semantic, IconFontSize size, const char* tooltip)

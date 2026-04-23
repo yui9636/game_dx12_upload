@@ -64,18 +64,26 @@
 
 namespace
 {
+    // Hierarchy 検索用の小文字文字列。
     std::string s_hierarchyFilterLower;
+
+    // 次フレームで検索ボックスへフォーカス要求を出す。
     bool s_requestHierarchySearchFocus = false;
+
+    // 2D Text の既定フォント。
     constexpr const char* kDefault2DFontAssetPath = "Data/Font/ArialUni.ttf";
 
+    // 文字列を小文字化したコピーを返す。
     std::string ToLowerCopy(std::string value)
     {
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
             return static_cast<char>(std::tolower(c));
-        });
+            });
         return value;
     }
 
+    // Entity の表示名を返す。
+    // NameComponent が無ければ index ベースの仮名を返す。
     std::string GetEntityDisplayName(Registry& registry, EntityID entity)
     {
         if (auto* name = registry.GetComponent<NameComponent>(entity)) {
@@ -84,6 +92,7 @@ namespace
         return "Entity_" + std::to_string(Entity::GetIndex(entity));
     }
 
+    // 現在の検索フィルタに entity 単体が一致するか判定する。
     bool EntityMatchesFilter(Registry& registry, EntityID entity)
     {
         if (s_hierarchyFilterLower.empty()) {
@@ -92,6 +101,8 @@ namespace
         return ToLowerCopy(GetEntityDisplayName(registry, entity)).find(s_hierarchyFilterLower) != std::string::npos;
     }
 
+    // entity 自身または子孫のどれかが検索フィルタに一致するか判定する。
+    // 一部の内部用 entity は Hierarchy 表示対象から除外する。
     bool SubtreeMatchesFilter(Registry& registry, EntityID entity)
     {
         if (registry.GetComponent<EnvironmentComponent>(entity) ||
@@ -100,9 +111,11 @@ namespace
             registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
             return false;
         }
+
         if (s_hierarchyFilterLower.empty()) {
             return true;
         }
+
         if (EntityMatchesFilter(registry, entity)) {
             return true;
         }
@@ -119,6 +132,7 @@ namespace
         return false;
     }
 
+    // entity の親方向にたどって、既に選択済み ancestor がいるか判定する。
     bool HasSelectedAncestor(EntityID entity, Registry& registry, const EditorSelection& selection)
     {
         const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
@@ -133,6 +147,7 @@ namespace
         return false;
     }
 
+    // 現在選択中 entity のうち、祖先が同時選択されていない root 群だけを返す。
     std::vector<EntityID> GetSelectedRootEntities(Registry& registry, const EditorSelection& selection)
     {
         std::vector<EntityID> roots;
@@ -147,21 +162,26 @@ namespace
         return roots;
     }
 
+    // Hierarchy 上で entity がクリックされた時の選択処理。
+    // Ctrl 押下中はトグル、それ以外は単独選択にする。
     void HandleEntitySelectionClick(EntityID entity)
     {
         auto& selection = EditorSelection::Instance();
         ImGuiIO& io = ImGui::GetIO();
         if (io.KeyCtrl) {
             selection.ToggleEntity(entity, true);
-        } else {
+        }
+        else {
             selection.SelectEntity(entity);
         }
     }
 
+    // Name / Transform / Hierarchy を持つ単体 entity 用 snapshot を作る。
+    // 任意で Mesh / Light / ReflectionProbe も追加できる。
     EntitySnapshot::Snapshot BuildSingleEntitySnapshot(const std::string& name,
-                                                       const MeshComponent* meshComponent = nullptr,
-                                                       const LightComponent* lightComponent = nullptr,
-                                                       const ReflectionProbeComponent* probeComponent = nullptr)
+        const MeshComponent* meshComponent = nullptr,
+        const LightComponent* lightComponent = nullptr,
+        const ReflectionProbeComponent* probeComponent = nullptr)
     {
         EntitySnapshot::Snapshot snapshot;
         snapshot.rootLocalID = 0;
@@ -189,6 +209,7 @@ namespace
         return snapshot;
     }
 
+    // モデルとして扱えるアセット拡張子か判定する。
     bool IsSupportedModelAsset(const std::string& path)
     {
         std::string ext = std::filesystem::path(path).extension().string();
@@ -196,6 +217,7 @@ namespace
         return ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf";
     }
 
+    // スプライト用テクスチャとして扱える拡張子か判定する。
     bool IsSupportedSpriteAsset(const std::string& path)
     {
         std::string ext = std::filesystem::path(path).extension().string();
@@ -203,6 +225,7 @@ namespace
         return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".bmp";
     }
 
+    // フォントとして扱える拡張子か判定する。
     bool IsSupportedFontAsset(const std::string& path)
     {
         std::string ext = std::filesystem::path(path).extension().string();
@@ -210,6 +233,7 @@ namespace
         return ext == ".ttf" || ext == ".otf" || ext == ".fnt";
     }
 
+    // オーディオクリップとして扱える拡張子か判定する。
     bool IsSupportedAudioAsset(const std::string& path)
     {
         std::string ext = std::filesystem::path(path).extension().string();
@@ -217,9 +241,10 @@ namespace
         return ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac";
     }
 
+    // AudioEmitter を持つ単体 entity 用 snapshot を作る。
     EntitySnapshot::Snapshot BuildAudioEmitterSnapshot(const std::string& name,
-                                                       const std::string& clipPath,
-                                                       bool playOnStart)
+        const std::string& clipPath,
+        bool playOnStart)
     {
         EntitySnapshot::Snapshot snapshot;
         snapshot.rootLocalID = 0;
@@ -239,6 +264,8 @@ namespace
         emitter.playOnStart = playOnStart;
         emitter.is3D = true;
         emitter.bus = AudioBusType::SFX;
+
+        // 既知クリップなら既定再生設定を流し込む。
         if (!clipPath.empty()) {
             const AudioClipAsset clip = EngineKernel::Instance().GetAudioWorld().DescribeClip(clipPath);
             emitter.streaming = clip.streaming;
@@ -256,8 +283,9 @@ namespace
         return snapshot;
     }
 
+    // Sprite 用 2D entity の snapshot を作る。
     EntitySnapshot::Snapshot BuildSingleSpriteSnapshot(const std::string& name,
-                                                       const std::string& texturePath)
+        const std::string& texturePath)
     {
         EntitySnapshot::Snapshot snapshot;
         snapshot.rootLocalID = 0;
@@ -290,6 +318,7 @@ namespace
         return snapshot;
     }
 
+    // Canvas 配下の空 2D entity 用 snapshot を作る。
     EntitySnapshot::Snapshot BuildSingleEmpty2DSnapshot(const std::string& name)
     {
         EntitySnapshot::Snapshot snapshot;
@@ -320,15 +349,18 @@ namespace
         return snapshot;
     }
 
+    // テクスチャ実サイズが取れれば RectTransform の sizeDelta に反映する。
     void TryApplyTextureSize(EntitySnapshot::Snapshot& snapshot, const std::string& texturePath)
     {
         if (snapshot.nodes.empty()) {
             return;
         }
+
         auto texture = ResourceManager::Instance().GetTexture(texturePath);
         if (!texture) {
             return;
         }
+
         auto& rect = std::get<std::optional<RectTransformComponent>>(snapshot.nodes[0].components);
         if (rect.has_value()) {
             rect->sizeDelta = {
@@ -338,8 +370,9 @@ namespace
         }
     }
 
+    // Text 用 2D entity の snapshot を作る。
     EntitySnapshot::Snapshot BuildSingleTextSnapshot(const std::string& name,
-                                                     const std::string& fontPath)
+        const std::string& fontPath)
     {
         EntitySnapshot::Snapshot snapshot;
         snapshot.rootLocalID = 0;
@@ -373,16 +406,19 @@ namespace
         return snapshot;
     }
 
+    // 既定 Sprite snapshot。
     EntitySnapshot::Snapshot BuildDefaultSpriteSnapshot()
     {
         return BuildSingleSpriteSnapshot("Sprite", "");
     }
 
+    // 既定 Text snapshot。
     EntitySnapshot::Snapshot BuildDefaultTextSnapshot()
     {
         return BuildSingleTextSnapshot("Text", kDefault2DFontAssetPath);
     }
 
+    // 2D Camera 用 snapshot を作る。
     EntitySnapshot::Snapshot BuildCamera2DSnapshot()
     {
         EntitySnapshot::Snapshot snapshot;
@@ -410,6 +446,8 @@ namespace
         return snapshot;
     }
 
+    // 可視/不可視切り替え対象の entity 群を返す。
+    // 複数選択中なら選択ルートの MeshComponent 持ち全体を対象にする。
     std::vector<EntityID> GetVisibilityTargets(Registry& registry, EntityID entity)
     {
         auto& selection = EditorSelection::Instance();
@@ -424,12 +462,15 @@ namespace
                 return targets;
             }
         }
+
         if (registry.GetComponent<MeshComponent>(entity)) {
             return { entity };
         }
         return {};
     }
 
+    // Active/Inactive 切り替え対象の entity 群を返す。
+    // 複数選択中なら選択ルートの HierarchyComponent 持ち全体を対象にする。
     std::vector<EntityID> GetActivationTargets(Registry& registry, EntityID entity)
     {
         auto& selection = EditorSelection::Instance();
@@ -444,15 +485,18 @@ namespace
                 return targets;
             }
         }
+
         if (registry.GetComponent<HierarchyComponent>(entity)) {
             return { entity };
         }
         return {};
     }
 
+    // 対象群の MeshComponent::isVisible を変更し、Undo を積む。
     void SetVisibilityForTargets(Registry& registry, const std::vector<EntityID>& targets, bool visible)
     {
         auto composite = std::make_unique<CompositeUndoAction>(visible ? "Show Entities" : "Hide Entities");
+
         for (EntityID target : targets) {
             auto* mesh = registry.GetComponent<MeshComponent>(target);
             if (!mesh || mesh->isVisible == visible) {
@@ -470,9 +514,11 @@ namespace
         }
     }
 
+    // 対象群の HierarchyComponent::isActive を変更し、Undo を積む。
     void SetActiveForTargets(Registry& registry, const std::vector<EntityID>& targets, bool active)
     {
         auto composite = std::make_unique<CompositeUndoAction>(active ? "Activate Entities" : "Deactivate Entities");
+
         for (EntityID target : targets) {
             auto* hierarchy = registry.GetComponent<HierarchyComponent>(target);
             if (!hierarchy || hierarchy->isActive == active) {
@@ -490,6 +536,7 @@ namespace
         }
     }
 
+    // 方向ライト用 snapshot を作る。
     EntitySnapshot::Snapshot BuildDirectionalLightSnapshot()
     {
         LightComponent directionalLight;
@@ -506,14 +553,16 @@ namespace
         return snapshot;
     }
 
+    // snapshot から entity を生成し、Undo を積み、生成物を選択する。
     bool CreateEntityFromSnapshot(Registry* registry,
-                                  EntitySnapshot::Snapshot snapshot,
-                                  EntityID parentEntity,
-                                  const char* actionName)
+        EntitySnapshot::Snapshot snapshot,
+        EntityID parentEntity,
+        const char* actionName)
     {
         if (!registry || snapshot.nodes.empty()) {
             return false;
         }
+
         auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), parentEntity, actionName);
         auto* actionPtr = action.get();
         UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
@@ -522,11 +571,13 @@ namespace
     }
 }
 
+// 次フレームで検索ボックスへフォーカスする。
 void HierarchyECSUI::RequestSearchFocus()
 {
     s_requestHierarchySearchFocus = true;
 }
 
+// Hierarchy ウィンドウ全体を描画する。
 void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) {
     if (!ImGui::Begin(ICON_FA_LIST " Hierarchy", p_open)) {
         if (outFocused) {
@@ -546,17 +597,23 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         return;
     }
 
+    // ------------------------------------------
+    // 検索ボックス
+    // ------------------------------------------
     static std::array<char, 256> searchBuffer{};
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
     ImGui::SetNextItemWidth(-1.0f);
+
     if (s_requestHierarchySearchFocus) {
         ImGui::SetKeyboardFocusHere();
         s_requestHierarchySearchFocus = false;
     }
+
     if (ImGui::InputTextWithHint("##HierarchySearch", ICON_FA_MAGNIFYING_GLASS " Search hierarchy", searchBuffer.data(), searchBuffer.size())) {
         s_hierarchyFilterLower = ToLowerCopy(searchBuffer.data());
     }
     ImGui::PopStyleVar();
+
     if (!s_hierarchyFilterLower.empty()) {
         ImGui::SameLine();
         if (ImGui::SmallButton("Clear")) {
@@ -566,8 +623,9 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
     }
     ImGui::Spacing();
 
-    // ==========================================
-    // ==========================================
+    // ------------------------------------------
+    // ルート entity を走査してツリー描画
+    // ------------------------------------------
     auto archetypes = registry->GetAllArchetypes();
     for (auto* archetype : archetypes) {
         const auto& entities = archetype->GetEntities();
@@ -588,10 +646,10 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         }
     }
 
-    // ==========================================
-    // ==========================================
+    // ------------------------------------------
+    // 何もない領域への D&D / 右クリックメニュー
+    // ------------------------------------------
     ImVec2 availSize = ImGui::GetContentRegionAvail();
-
     if (availSize.x <= 0.0f) { availSize.x = 1.0f; }
     if (availSize.y < 50.0f) { availSize.y = 50.0f; }
 
@@ -618,9 +676,9 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         pointLight.castShadow = false;
         if (ImGui::MenuItem("Create Point Light")) {
             CreateEntityFromSnapshot(registry,
-                                     BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
-                                     Entity::NULL_ID,
-                                     "Create Point Light");
+                BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
+                Entity::NULL_ID,
+                "Create Point Light");
         }
 
         if (ImGui::MenuItem("Create Directional Light")) {
@@ -631,11 +689,12 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         probe.needsBake = true;
         if (ImGui::MenuItem("Create Reflection Probe")) {
             CreateEntityFromSnapshot(registry,
-                                     BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
-                                     Entity::NULL_ID,
-                                     "Create Reflection Probe");
+                BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
+                Entity::NULL_ID,
+                "Create Reflection Probe");
         }
 
+        // 選択アセットに応じた生成メニュー。
         const auto& selection = EditorSelection::Instance();
         if (selection.GetType() == SelectionType::Asset && IsSupportedModelAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create From Selected Model")) {
@@ -644,11 +703,12 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 meshComp.model = ResourceManager::Instance().CreateModelInstance(selection.GetAssetPath());
                 const std::string name = std::filesystem::path(meshComp.modelFilePath).stem().string();
                 CreateEntityFromSnapshot(registry,
-                                         BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
-                                         Entity::NULL_ID,
-                                         "Create Entity From Model");
+                    BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
+                    Entity::NULL_ID,
+                    "Create Entity From Model");
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedSpriteAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Sprite From Selected Texture")) {
                 const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
@@ -657,31 +717,37 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 CreateEntityFromSnapshot(registry, std::move(snapshot), Entity::NULL_ID, "Create Sprite");
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedFontAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Text From Selected Font")) {
                 const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
                 CreateEntityFromSnapshot(registry,
-                                         BuildSingleTextSnapshot(name, selection.GetAssetPath()),
-                                         Entity::NULL_ID,
-                                         "Create Text");
+                    BuildSingleTextSnapshot(name, selection.GetAssetPath()),
+                    Entity::NULL_ID,
+                    "Create Text");
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedAudioAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Audio Source From Selected Clip")) {
                 const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
                 CreateEntityFromSnapshot(registry,
-                                         BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
-                                         Entity::NULL_ID,
-                                         "Create Audio Source");
+                    BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
+                    Entity::NULL_ID,
+                    "Create Audio Source");
             }
         }
+
         if (ImGui::MenuItem("Create 2D Camera")) {
             CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), Entity::NULL_ID, "Create 2D Camera");
         }
         if (ImGui::MenuItem("Create Audio Source")) {
             CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), Entity::NULL_ID, "Create Audio Source");
         }
+
         ImGui::Separator();
+
+        // Input 系テンプレート作成。
         if (ImGui::BeginMenu("Input")) {
             if (ImGui::MenuItem("Input User")) {
                 EntityID e = registry->CreateEntity();
@@ -696,6 +762,7 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, InputContextComponent{});
                 registry->AddComponent(e, ResolvedInputStateComponent{});
             }
+
             if (ImGui::MenuItem("Input Listener")) {
                 EntityID e = registry->CreateEntity();
                 registry->AddComponent(e, NameComponent{ "Input Listener" });
@@ -704,6 +771,7 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, InputContextComponent{});
                 registry->AddComponent(e, ResolvedInputStateComponent{});
             }
+
             if (ImGui::MenuItem("Text Input Target")) {
                 EntityID e = registry->CreateEntity();
                 registry->AddComponent(e, NameComponent{ "Text Input Target" });
@@ -716,6 +784,7 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, ctx);
                 registry->AddComponent(e, InputTextFieldComponent{});
             }
+
             if (ImGui::MenuItem("Vibration Source")) {
                 EntityID e = registry->CreateEntity();
                 registry->AddComponent(e, NameComponent{ "Vibration Source" });
@@ -723,8 +792,11 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, HierarchyComponent{});
                 registry->AddComponent(e, VibrationRequestComponent{});
             }
+
             ImGui::EndMenu();
         }
+
+        // Gameplay 系テンプレート作成。
         if (ImGui::BeginMenu("Gameplay")) {
             if (ImGui::MenuItem("Player")) {
                 EntityID e = registry->CreateEntity();
@@ -735,6 +807,7 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*registry, e);
                 PlayerRuntimeSetup::ResetPlayerRuntimeState(*registry, e);
             }
+
             if (ImGui::MenuItem("Character")) {
                 EntityID e = registry->CreateEntity();
                 registry->AddComponent(e, NameComponent{ "Character" });
@@ -744,6 +817,7 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, HealthComponent{});
                 registry->AddComponent(e, LocomotionStateComponent{});
             }
+
             if (ImGui::MenuItem("Timeline Entity")) {
                 EntityID e = registry->CreateEntity();
                 registry->AddComponent(e, NameComponent{ "Timeline Entity" });
@@ -753,14 +827,17 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 registry->AddComponent(e, TimelineComponent{});
                 registry->AddComponent(e, TimelineItemBuffer{});
             }
+
             ImGui::EndMenu();
         }
+
         ImGui::EndPopup();
     }
 
     ImGui::End();
 }
 
+// 1 entity 分のノードを再帰描画する。
 void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     if (!registry ||
         registry->GetComponent<EnvironmentComponent>(entity) ||
@@ -793,20 +870,28 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
     }
 
     ImGui::PushID(static_cast<int>(Entity::GetIndex(entity)));
+
+    // 非アクティブ entity は文字色を落として描く。
     if (hierComp && !hierComp->isActive) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
     }
+
     bool isOpen = ImGui::TreeNodeEx((entityName + idStr).c_str(), flags, "%s %s", ICON_FA_CUBE, entityName.c_str());
+
     if (hierComp && !hierComp->isActive) {
         ImGui::PopStyleColor();
     }
+
     const ImVec2 itemRectMin = ImGui::GetItemRectMin();
 
+    // 左クリックで選択。
     if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         HandleEntitySelectionClick(entity);
     }
 
+    // 右端の active / visible ボタン群を描く。
     float buttonX = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight() - 4.0f;
+
     if (hierComp) {
         const char* activeIcon = hierComp->isActive ? ICON_FA_POWER_OFF : ICON_FA_BOLT;
         ImGui::SetCursorScreenPos(ImVec2(buttonX, itemRectMin.y));
@@ -821,6 +906,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
 
     if (auto* mesh = registry->GetComponent<MeshComponent>(entity)) {
         const float buttonSize = ImGui::GetFrameHeight();
+        (void)buttonSize;
         ImGui::SetCursorScreenPos(ImVec2(buttonX, itemRectMin.y));
         const char* icon = mesh->isVisible ? ICON_FA_EYE : ICON_FA_EYE_SLASH;
         if (ImGui::SmallButton(icon)) {
@@ -831,6 +917,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         }
     }
 
+    // entity D&D source。
     if (ImGui::BeginDragDropSource()) {
         EntityID payloadEntity = entity;
         ImGui::SetDragDropPayload("ENGINE_ENTITY", &payloadEntity, sizeof(payloadEntity));
@@ -838,6 +925,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         ImGui::EndDragDropSource();
     }
 
+    // ノード右クリックメニュー。
     const std::string popupId = "HierarchyEntityContext##" + std::to_string(static_cast<unsigned long long>(entity));
     if (ImGui::BeginPopupContextItem(popupId.c_str())) {
         const std::vector<EntityID> activationTargets = GetActivationTargets(*registry, entity);
@@ -850,6 +938,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                     anyInactive |= !targetHierarchy->isActive;
                 }
             }
+
             if (anyActive && ImGui::MenuItem(ICON_FA_POWER_OFF " Deactivate")) {
                 SetActiveForTargets(*registry, activationTargets, false);
             }
@@ -869,6 +958,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                     anyHidden |= !mesh->isVisible;
                 }
             }
+
             if (anyVisible && ImGui::MenuItem(ICON_FA_EYE_SLASH " Hide")) {
                 SetVisibilityForTargets(*registry, visibilityTargets, false);
             }
@@ -878,30 +968,36 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             ImGui::Separator();
         }
 
+        // 複製。
         if (ImGui::MenuItem("Duplicate")) {
             auto& selection = EditorSelection::Instance();
             if (!selection.IsEntitySelected(entity)) {
                 selection.SelectEntity(entity);
             }
+
             const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(*registry, selection);
             auto composite = std::make_unique<CompositeUndoAction>("Duplicate Entities");
             std::vector<DuplicateEntityAction*> duplicateActions;
+
             for (EntityID selectedRoot : selectedRoots) {
                 if (!PrefabSystem::CanDuplicate(selectedRoot, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance children cannot be duplicated. Duplicate the root instance or unpack it first.");
                     continue;
                 }
+
                 EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, *registry);
                 EntityID parentEntity = Entity::NULL_ID;
                 if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(selectedRoot)) {
                     parentEntity = hierarchy->parent;
                 }
+
                 EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
                 auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parentEntity);
                 auto* actionPtr = action.get();
                 composite->Add(std::move(action));
                 duplicateActions.push_back(actionPtr);
             }
+
             if (!composite->Empty()) {
                 UndoSystem::Instance().ExecuteAction(std::move(composite), *registry);
                 std::vector<EntityID> liveRoots;
@@ -916,54 +1012,67 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             }
         }
 
+        // 削除。
         if (ImGui::MenuItem("Delete")) {
             auto& selection = EditorSelection::Instance();
             if (!selection.IsEntitySelected(entity)) {
                 selection.SelectEntity(entity);
             }
+
             const std::vector<EntityID> selectedRoots = GetSelectedRootEntities(*registry, selection);
             auto composite = std::make_unique<CompositeUndoAction>("Delete Entities");
             bool canDeleteAny = false;
+
             for (EntityID selectedRoot : selectedRoots) {
                 if (!PrefabSystem::CanDelete(selectedRoot, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance children cannot be deleted directly. Use Unpack first.");
                     continue;
                 }
+
                 EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(selectedRoot, *registry);
                 composite->Add(std::make_unique<DeleteEntityAction>(std::move(snapshot), selectedRoot));
                 canDeleteAny = true;
             }
+
             if (canDeleteAny) {
                 UndoSystem::Instance().ExecuteAction(std::move(composite), *registry);
                 EditorSelection::Instance().Clear();
             }
         }
 
+        // 子作成系メニュー。
         if (ImGui::MenuItem("Create Empty Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildSingleEntitySnapshot("Empty Entity"), entity, "Create Child Entity");
             }
         }
+
         if (ImGui::MenuItem("Create Empty Child (2D)")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildSingleEmpty2DSnapshot("Empty 2D"), entity, "Create 2D Child");
             }
         }
+
         if (ImGui::MenuItem("Create Sprite Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildDefaultSpriteSnapshot(), entity, "Create Sprite Child");
             }
         }
+
         if (ImGui::MenuItem("Create Text Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), entity, "Create Text Child");
             }
         }
@@ -975,18 +1084,20 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         if (ImGui::MenuItem("Create Point Light Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry,
-                                         BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
-                                         entity,
-                                         "Create Point Light Child");
+                    BuildSingleEntitySnapshot("Point Light", nullptr, &pointLight, nullptr),
+                    entity,
+                    "Create Point Light Child");
             }
         }
 
         if (ImGui::MenuItem("Create Directional Light Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildDirectionalLightSnapshot(), entity, "Create Directional Light Child");
             }
         }
@@ -996,11 +1107,12 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         if (ImGui::MenuItem("Create Reflection Probe Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry,
-                                         BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
-                                         entity,
-                                         "Create Reflection Probe Child");
+                    BuildSingleEntitySnapshot("Reflection Probe", nullptr, nullptr, &probe),
+                    entity,
+                    "Create Reflection Probe Child");
             }
         }
 
@@ -1009,23 +1121,26 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             if (ImGui::MenuItem("Create Model Child")) {
                 if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-                } else {
+                }
+                else {
                     MeshComponent meshComp;
                     meshComp.modelFilePath = selection.GetAssetPath();
                     meshComp.model = ResourceManager::Instance().CreateModelInstance(selection.GetAssetPath());
                     const std::string name = std::filesystem::path(meshComp.modelFilePath).stem().string();
                     CreateEntityFromSnapshot(registry,
-                                             BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
-                                             entity,
-                                             "Create Model Child");
+                        BuildSingleEntitySnapshot(name, &meshComp, nullptr, nullptr),
+                        entity,
+                        "Create Model Child");
                 }
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedSpriteAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Sprite Child From Selected Texture")) {
                 if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-                } else {
+                }
+                else {
                     const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
                     auto snapshot = BuildSingleSpriteSnapshot(name, selection.GetAssetPath());
                     TryApplyTextureSize(snapshot, selection.GetAssetPath());
@@ -1033,43 +1148,51 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                 }
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedFontAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Text Child From Selected Font")) {
                 if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-                } else {
+                }
+                else {
                     const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
                     CreateEntityFromSnapshot(registry,
-                                             BuildSingleTextSnapshot(name, selection.GetAssetPath()),
-                                             entity,
-                                             "Create Text Child");
+                        BuildSingleTextSnapshot(name, selection.GetAssetPath()),
+                        entity,
+                        "Create Text Child");
                 }
             }
         }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedAudioAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Audio Source Child From Selected Clip")) {
                 if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-                } else {
+                }
+                else {
                     const std::string name = std::filesystem::path(selection.GetAssetPath()).stem().string();
                     CreateEntityFromSnapshot(registry,
-                                             BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
-                                             entity,
-                                             "Create Audio Source Child");
+                        BuildAudioEmitterSnapshot(name, selection.GetAssetPath(), true),
+                        entity,
+                        "Create Audio Source Child");
                 }
             }
         }
+
         if (ImGui::MenuItem("Create 2D Camera Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildCamera2DSnapshot(), entity, "Create 2D Camera Child");
             }
         }
+
         if (ImGui::MenuItem("Create Audio Source Child")) {
             if (!PrefabSystem::CanCreateChild(entity, *registry)) {
                 LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
-            } else {
+            }
+            else {
                 CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), entity, "Create Audio Source Child");
             }
         }
@@ -1077,8 +1200,10 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         ImGui::EndPopup();
     }
 
+    // このノードへ D&D できるようにする。
     HandleDragDropTarget(registry, entity);
 
+    // 子ノードを再帰描画する。
     if (isOpen && hasChildren) {
         EntityID currentChild = hierComp->firstChild;
         while (!Entity::IsNull(currentChild)) {
@@ -1089,56 +1214,70 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         }
         ImGui::TreePop();
     }
+
     ImGui::PopID();
 }
 
+// entity や asset の D&D を受け付けて、Reparent や生成を行う。
 void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEntity) {
     if (ImGui::BeginDragDropTarget()) {
+        // ------------------------------------------
+        // Entity の D&D: Reparent
+        // ------------------------------------------
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
             if (payload->DataSize == sizeof(EntityID)) {
                 EntityID draggedEntity = *static_cast<const EntityID*>(payload->Data);
                 if (registry->IsAlive(draggedEntity) &&
                     draggedEntity != parentEntity &&
                     !HierarchySystem::WouldCreateCycle(draggedEntity, parentEntity, *registry)) {
+
                     if (!PrefabSystem::CanReparent(draggedEntity, parentEntity, *registry)) {
                         LOG_WARN("[Prefab] Prefab instance internal hierarchy cannot be reparented. Use Unpack first.");
                         ImGui::EndDragDropTarget();
                         return;
                     }
+
                     EntityID oldParent = Entity::NULL_ID;
                     if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(draggedEntity)) {
                         oldParent = hierarchy->parent;
                     }
+
                     UndoSystem::Instance().ExecuteAction(
                         std::make_unique<ReparentEntityAction>(draggedEntity, parentEntity, oldParent, true),
                         *registry);
+
                     EditorSelection::Instance().SelectEntity(draggedEntity);
                 }
             }
         }
 
+        // ------------------------------------------
+        // Asset の D&D: 生成 / 割り当て
+        // ------------------------------------------
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
             std::string sourcePathStr((const char*)payload->Data);
             std::filesystem::path path(sourcePathStr);
             std::string ext = path.extension().string();
             std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-            // ==========================================
-            // ==========================================
+            // Material は既存 entity へ割り当てる。
             if (ext == ".mat") {
                 if (!Entity::IsNull(parentEntity)) {
                     auto* matComp = registry->GetComponent<MaterialComponent>(parentEntity);
                     MaterialComponent before = matComp ? *matComp : MaterialComponent{};
                     const bool hadComponent = (matComp != nullptr);
+
                     if (!matComp) {
                         MaterialComponent newMatComp;
                         newMatComp.materialAssetPath = sourcePathStr;
                         newMatComp.materialAsset = ResourceManager::Instance().GetMaterial(sourcePathStr);
                         registry->AddComponent(parentEntity, newMatComp);
-                    } else {
+                    }
+                    else {
                         matComp->materialAssetPath = sourcePathStr;
                         matComp->materialAsset = ResourceManager::Instance().GetMaterial(sourcePathStr);
                     }
+
                     MaterialComponent after = *registry->GetComponent<MaterialComponent>(parentEntity);
                     UndoSystem::Instance().RecordAction(
                         std::make_unique<OptionalComponentUndoAction<MaterialComponent>>(
@@ -1146,10 +1285,12 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                             hadComponent ? std::optional<MaterialComponent>(before) : std::nullopt,
                             std::optional<MaterialComponent>(after),
                             "Assign Material"));
+
                     PrefabSystem::MarkPrefabOverride(parentEntity, *registry);
                     EditorSelection::Instance().SelectEntity(parentEntity);
                 }
             }
+            // Prefab は Instantiate する。
             else if (ext == ".prefab") {
                 if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
@@ -1166,6 +1307,7 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                     EditorSelection::Instance().SelectEntity(newEntity);
                 }
             }
+            // モデルは MeshComponent 付き entity を生成する。
             else if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf") {
                 MeshComponent meshComp;
                 meshComp.modelFilePath = sourcePathStr;
@@ -1185,6 +1327,7 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                 UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
             }
+            // Sprite texture は Sprite entity を生成する。
             else if (IsSupportedSpriteAsset(sourcePathStr)) {
                 if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
@@ -1198,12 +1341,13 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                         TryApplyTextureSize(snapshot, sourcePathStr);
                         return snapshot;
                     }(),
-                    parentEntity,
-                    "Create Sprite From Asset");
+                        parentEntity,
+                        "Create Sprite From Asset");
                 auto* actionPtr = action.get();
                 UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
             }
+            // Font asset は Text entity を生成する。
             else if (IsSupportedFontAsset(sourcePathStr)) {
                 if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
@@ -1219,6 +1363,7 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                 UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
             }
+            // Audio asset は AudioEmitter entity を生成する。
             else if (IsSupportedAudioAsset(sourcePathStr)) {
                 if (!PrefabSystem::CanCreateChild(parentEntity, *registry)) {
                     LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
@@ -1235,6 +1380,7 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                 EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
             }
         }
+
         ImGui::EndDragDropTarget();
     }
 }

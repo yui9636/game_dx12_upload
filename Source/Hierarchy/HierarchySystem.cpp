@@ -8,11 +8,16 @@ using namespace DirectX;
 
 namespace
 {
+    // 旧実装で parent=0 を使っていた場合に備えて、
+    // 0 を Entity::NULL_ID に正規化する。
     EntityID NormalizeLegacyParent(EntityID parent)
     {
         return parent == 0 ? Entity::NULL_ID : parent;
     }
 
+    // entity の親を取得する。
+    // HierarchyComponent があればそちらを優先し、
+    // 無ければ TransformComponent の旧 parent 値を見る。
     EntityID GetParent(EntityID entity, Registry& registry)
     {
         if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
@@ -24,6 +29,8 @@ namespace
         return Entity::NULL_ID;
     }
 
+    // TransformComponent 側の親情報を同期する。
+    // 旧 parent フィールドも維持している構成向け。
     void SyncTransformParent(EntityID entity, EntityID parent, Registry& registry)
     {
         if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
@@ -32,6 +39,7 @@ namespace
         }
     }
 
+    // localMatrix を分解して localPosition / localRotation / localScale へ戻す。
     void DecomposeToLocal(const XMMATRIX& localMatrix, TransformComponent& transform)
     {
         XMVECTOR scale;
@@ -45,9 +53,12 @@ namespace
     }
 }
 
+// 階層更新。
+// まず親が dirty な子を dirty にし、その後 dirty な transform の worldMatrix を再計算する。
 void HierarchySystem::Update(Registry& registry) {
     Query<TransformComponent> query(registry);
 
+    // 親が dirty なら子も dirty にする。
     query.ForEachWithEntity([&](EntityID entity, TransformComponent& trans) {
         const EntityID parent = GetParent(entity, registry);
         if (!Entity::IsNull(parent)) {
@@ -56,16 +67,18 @@ void HierarchySystem::Update(Registry& registry) {
                 trans.isDirty = true;
             }
         }
-    });
+        });
 
+    // dirty なものだけ worldMatrix を再計算する。
     query.ForEachWithEntity([&](EntityID entity, TransformComponent& trans) {
         if (trans.isDirty) {
             ComputeWorldMatrix(entity, registry);
             trans.isDirty = false;
         }
-    });
+        });
 }
 
+// entity を newParent の子にしたとき循環参照が発生するか判定する。
 bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Registry& registry)
 {
     if (Entity::IsNull(entity) || Entity::IsNull(newParent)) {
@@ -75,6 +88,7 @@ bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Regi
         return true;
     }
 
+    // newParent から親方向へたどって entity に到達したら循環になる。
     EntityID cursor = newParent;
     while (!Entity::IsNull(cursor)) {
         if (cursor == entity) {
@@ -85,6 +99,7 @@ bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Regi
     return false;
 }
 
+// entity を現在の親子関係から切り離す。
 void HierarchySystem::Detach(EntityID entity, Registry& registry)
 {
     if (Entity::IsNull(entity)) {
@@ -98,6 +113,8 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
     }
 
     const EntityID parent = hierarchy->parent;
+
+    // 親の firstChild が自分なら差し替える。
     if (!Entity::IsNull(parent)) {
         if (auto* parentHierarchy = registry.GetComponent<HierarchyComponent>(parent)) {
             if (parentHierarchy->firstChild == entity) {
@@ -106,6 +123,7 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
         }
     }
 
+    // 前後 sibling のリンクをつなぎ直す。
     if (!Entity::IsNull(hierarchy->prevSibling)) {
         if (auto* prevHierarchy = registry.GetComponent<HierarchyComponent>(hierarchy->prevSibling)) {
             prevHierarchy->nextSibling = hierarchy->nextSibling;
@@ -117,19 +135,24 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
         }
     }
 
+    // 自身の親子リンクをクリアする。
     hierarchy->parent = Entity::NULL_ID;
     hierarchy->prevSibling = Entity::NULL_ID;
     hierarchy->nextSibling = Entity::NULL_ID;
     SyncTransformParent(entity, Entity::NULL_ID, registry);
 }
 
+// parent の子として child を付け直す。
+// 実処理は Reparent に委譲する。
 void HierarchySystem::AttachChild(EntityID parent, EntityID child, Registry& registry, bool keepWorldTransform)
 {
     Reparent(child, parent, registry, keepWorldTransform);
 }
 
+// entity の親を newParent に付け替える。
 void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& registry, bool keepWorldTransform)
 {
+    // 無効 entity は無視する。
     if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
         return;
     }
@@ -140,20 +163,24 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
         return;
     }
 
+    // keepWorldTransform 用に、付け替え前の worldMatrix を保持しておく。
     auto* childTransform = registry.GetComponent<TransformComponent>(entity);
     XMMATRIX childWorld = XMMatrixIdentity();
     if (childTransform) {
         childWorld = XMLoadFloat4x4(&childTransform->worldMatrix);
     }
 
+    // 子側に HierarchyComponent が無ければ追加する。
     auto* childHierarchy = registry.GetComponent<HierarchyComponent>(entity);
     if (!childHierarchy) {
         registry.AddComponent(entity, HierarchyComponent{});
         childHierarchy = registry.GetComponent<HierarchyComponent>(entity);
     }
 
+    // まず現在の親子関係から外す。
     Detach(entity, registry);
 
+    // 新しい親へ接続する。
     if (!Entity::IsNull(newParent)) {
         auto* parentHierarchy = registry.GetComponent<HierarchyComponent>(newParent);
         if (!parentHierarchy) {
@@ -161,6 +188,7 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
             parentHierarchy = registry.GetComponent<HierarchyComponent>(newParent);
         }
 
+        // 新しい親の firstChild の先頭へ挿入する。
         childHierarchy->parent = newParent;
         childHierarchy->prevSibling = Entity::NULL_ID;
         childHierarchy->nextSibling = parentHierarchy->firstChild;
@@ -174,6 +202,7 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
 
     SyncTransformParent(entity, newParent, registry);
 
+    // world を維持したい場合は、新親基準の local を逆算し直す。
     if (keepWorldTransform && childTransform) {
         XMMATRIX local = childWorld;
         if (!Entity::IsNull(newParent)) {
@@ -185,9 +214,11 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
         DecomposeToLocal(local, *childTransform);
     }
 
+    // 自分以下を dirty にする。
     MarkDirtyRecursive(entity, registry);
 }
 
+// entity 以下の subtree を再帰的に dirty にする。
 void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
 {
     if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
@@ -203,6 +234,7 @@ void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
         return;
     }
 
+    // firstChild から sibling をたどって再帰する。
     EntityID child = hierarchy->firstChild;
     while (!Entity::IsNull(child)) {
         EntityID next = Entity::NULL_ID;
@@ -214,10 +246,12 @@ void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
     }
 }
 
+// entity の localTransform から worldMatrix を再計算する。
 void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
     auto* trans = registry.GetComponent<TransformComponent>(entity);
     if (!trans) return;
 
+    // local TRS から localMatrix を組み立てる。
     XMMATRIX local = XMMatrixScaling(trans->localScale.x, trans->localScale.y, trans->localScale.z) *
         XMMatrixRotationQuaternion(XMLoadFloat4(&trans->localRotation)) *
         XMMatrixTranslation(trans->localPosition.x, trans->localPosition.y, trans->localPosition.z);
@@ -227,12 +261,15 @@ void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
     const EntityID parent = GetParent(entity, registry);
 
     XMMATRIX world;
+
+    // 親が無ければ world = local。
     if (Entity::IsNull(parent)) {
         world = local;
     }
     else {
         auto* parentTrans = registry.GetComponent<TransformComponent>(parent);
         if (parentTrans) {
+            // 親が dirty なら先に親を再計算する。
             if (parentTrans->isDirty) {
                 ComputeWorldMatrix(parent, registry);
                 parentTrans->isDirty = false;
@@ -243,8 +280,10 @@ void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
             world = local;
         }
     }
+
     XMStoreFloat4x4(&trans->worldMatrix, world);
 
+    // worldMatrix から worldPosition / worldRotation / worldScale を分解する。
     XMVECTOR vS, vR, vT;
     if (XMMatrixDecompose(&vS, &vR, &vT, world)) {
         XMStoreFloat3(&trans->worldPosition, vT);

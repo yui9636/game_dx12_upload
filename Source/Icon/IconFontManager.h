@@ -3,7 +3,7 @@
 #include <vector>
 #include <map>
 #include <string>
-#include "IconsFontAwesome7.h" //
+#include "IconsFontAwesome7.h" 
 
 enum class IconFontSize { Mini,Small, Medium, Large, Extra };
 enum class IconSemantic { Default, Success, Danger, Warning, Info };
