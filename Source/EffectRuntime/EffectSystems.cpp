@@ -30,12 +30,14 @@
 
 namespace
 {
+    // archetype が指定 component 群をすべて持っているかを判定する。
     template <typename... Ts>
     bool ArchetypeHas(Archetype* archetype)
     {
         return archetype && SignatureMatches(archetype->GetSignature(), CreateSignature<Ts...>());
     }
 
+    // playback の currentTime を runtime instance 側へ同期する。
     void SyncRuntimeTime(const EffectPlaybackComponent& playback)
     {
         if (playback.runtimeInstanceId == 0) {
@@ -47,6 +49,8 @@ namespace
         }
     }
 
+    // playback の lifetime fade を更新する。
+    // 非再生時は 0、ループ中または duration 無効時は 1 を返す。
     void UpdateLifetimeFade(EffectPlaybackComponent& playback)
     {
         if (!playback.isPlaying) {
@@ -63,6 +67,8 @@ namespace
         playback.lifetimeFade = 1.0f - normalized;
     }
 
+    // playback を dt だけ進める。
+    // 必要なら loop 処理を行い、runtime time と fade も同期する。
     void AdvancePlayback(EffectPlaybackComponent& playback, float dt)
     {
         if (!playback.isPlaying || playback.isPaused || playback.runtimeInstanceId == 0 || dt <= 0.0f) {
@@ -71,6 +77,7 @@ namespace
 
         playback.currentTime += dt;
 
+        // ループ有効なら duration を超えたぶん巻き戻す。
         if (playback.duration > 0.0f && playback.loop) {
             while (playback.currentTime >= playback.duration) {
                 playback.currentTime -= playback.duration;
@@ -81,8 +88,10 @@ namespace
         UpdateLifetimeFade(playback);
     }
 
+    // 停止した playback を最終状態へ確定する。
     void FinalizeStoppedPlayback(EffectPlaybackComponent& playback)
     {
+        // runtime instance が残っていれば破棄する。
         if (playback.runtimeInstanceId != 0) {
             EffectRuntimeRegistry::Instance().Destroy(playback.runtimeInstanceId);
             playback.runtimeInstanceId = 0;
@@ -92,9 +101,12 @@ namespace
         playback.isPaused = false;
         playback.currentTime = playback.duration;
         playback.lifetimeFade = 0.0f;
+
         SyncRuntimeTime(playback);
     }
 
+    // desiredWorld を entity の TransformComponent へ反映する。
+    // 親がいる場合は local に再分解し、world/local の両方を整合させる。
     void ApplyAttachedWorldToTransform(
         Registry& registry,
         EntityID entity,
@@ -107,9 +119,11 @@ namespace
             return;
         }
 
+        // まず world 情報を直接更新する。
         transform->prevWorldMatrix = transform->worldMatrix;
         transform->worldMatrix = desiredWorld;
 
+        // 親の worldMatrix を取得し、localMatrix を逆算する。
         XMMATRIX parentWorld = XMMatrixIdentity();
         if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
             if (!Entity::IsNull(hierarchy->parent)) {
@@ -123,6 +137,7 @@ namespace
         XMStoreFloat4x4(&localMatrix, XMLoadFloat4x4(&desiredWorld) * XMMatrixInverse(nullptr, parentWorld));
         transform->localMatrix = localMatrix;
 
+        // localMatrix を分解して local TRS を更新する。
         XMVECTOR localScale;
         XMVECTOR localRot;
         XMVECTOR localPos;
@@ -132,6 +147,7 @@ namespace
             XMStoreFloat3(&transform->localPosition, localPos);
         }
 
+        // desiredWorld から world TRS も更新する。
         XMVECTOR worldScale;
         XMVECTOR worldRot;
         XMVECTOR worldPos;
@@ -145,9 +161,11 @@ namespace
     }
 }
 
+// 再生要求のある effect entity を見つけ、runtime instance を spawn する。
 void EffectSpawnSystem::Update(Registry& registry, float)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
+        // Asset と Playback を持つ archetype のみ対象。
         if (!ArchetypeHas<EffectAssetComponent, EffectPlaybackComponent>(archetype)) {
             continue;
         }
@@ -170,42 +188,53 @@ void EffectSpawnSystem::Update(Registry& registry, float)
 
             const bool hasPendingRequest = request && request->pending;
             const bool shouldAutoPlay = asset.autoPlay && playback.runtimeInstanceId == 0 && !playback.isPlaying;
+
+            // pending request も autoPlay も無く、assetPath も空なら何もしない。
             if ((!hasPendingRequest && !shouldAutoPlay) || asset.assetPath.empty()) {
                 continue;
             }
 
+            // compiled asset を取得する。
             auto compiled = EffectRuntimeRegistry::Instance().GetCompiledAsset(asset.assetPath);
             if (!compiled || !compiled->valid) {
                 playback.isPlaying = false;
                 continue;
             }
 
+            // 既に runtime がある場合、restart 指定が無ければそのまま。
             if (playback.runtimeInstanceId != 0) {
                 if (!request || !request->restartIfActive) {
                     continue;
                 }
+
+                // restart 指定があるなら既存 runtime を破棄する。
                 EffectRuntimeRegistry::Instance().Destroy(playback.runtimeInstanceId);
                 playback.runtimeInstanceId = 0;
             }
 
+            // 新しい runtime instance を生成する。
             const uint32_t runtimeId = EffectRuntimeRegistry::Instance().Spawn(asset.assetPath, playback.seed);
             if (runtimeId == 0) {
                 playback.isPlaying = false;
                 continue;
             }
 
+            // 再生開始時間を決定する。
             const float requestedStartTime = request
                 ? (request->startTime < 0.0f ? 0.0f : request->startTime)
                 : (playback.currentTime < 0.0f ? 0.0f : playback.currentTime);
+
             playback.runtimeInstanceId = runtimeId;
             playback.currentTime = requestedStartTime;
             playback.duration = compiled->duration > 0.0f ? compiled->duration : playback.duration;
             playback.loop = asset.loop || playback.loop;
             playback.isPlaying = true;
             playback.stopRequested = false;
+
             SyncRuntimeTime(playback);
             UpdateLifetimeFade(playback);
 
+            // request を消費済みにする。
             if (request) {
                 request->pending = false;
                 request->startTime = 0.0f;
@@ -214,6 +243,7 @@ void EffectSpawnSystem::Update(Registry& registry, float)
     }
 }
 
+// 通常 effect の playback 時間を進める。
 void EffectPlaybackSystem::Update(Registry& registry, float dt)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
@@ -238,6 +268,7 @@ void EffectPlaybackSystem::Update(Registry& registry, float dt)
     }
 }
 
+// 親 entity や socket に追従する effect の Transform を更新する。
 void EffectAttachmentSystem::Update(Registry& registry)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
@@ -255,6 +286,8 @@ void EffectAttachmentSystem::Update(Registry& registry)
         for (size_t row = 0; row < archetype->GetEntityCount(); ++row) {
             const EntityID entity = archetype->GetEntities()[row];
             auto& attachment = attachments[row];
+
+            // 親が無い、または親が死んでいるなら追従できない。
             if (Entity::IsNull(attachment.parentEntity) || !registry.IsAlive(attachment.parentEntity)) {
                 continue;
             }
@@ -267,11 +300,13 @@ void EffectAttachmentSystem::Update(Registry& registry)
             DirectX::XMFLOAT4X4 desiredWorld{};
             bool resolved = false;
 
+            // socketName が指定されているなら、ノードソケット優先で解決する。
             if (!attachment.socketName.empty()) {
                 auto* parentMesh = registry.GetComponent<MeshComponent>(attachment.parentEntity);
                 if (parentMesh && parentMesh->model) {
                     auto* sockets = registry.GetComponent<NodeSocketComponent>(attachment.parentEntity);
                     int cachedBoneIndex = -1;
+
                     resolved = NodeAttachmentUtils::TryResolveNamedAttachmentWorldMatrix(
                         parentMesh->model.get(),
                         parentTransform->worldMatrix,
@@ -287,6 +322,7 @@ void EffectAttachmentSystem::Update(Registry& registry)
                 }
             }
 
+            // socket 解決できなければ親 world から通常合成する。
             if (!resolved) {
                 desiredWorld = NodeAttachmentUtils::ComposeAttachmentWorldMatrix(
                     parentTransform->worldMatrix,
@@ -301,6 +337,7 @@ void EffectAttachmentSystem::Update(Registry& registry)
     }
 }
 
+// シミュレーション段階で lifetime fade だけを再計算する。
 void EffectSimulationSystem::Update(Registry& registry, float)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
@@ -320,6 +357,7 @@ void EffectSimulationSystem::Update(Registry& registry, float)
     }
 }
 
+// 非ループ effect の寿命終了や stopRequested を見て停止確定する。
 void EffectLifetimeSystem::Update(Registry& registry, float)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
@@ -336,6 +374,7 @@ void EffectLifetimeSystem::Update(Registry& registry, float)
         for (size_t row = 0; row < archetype->GetEntityCount(); ++row) {
             auto& playback = playbacks[row];
             const bool reachedEnd = playback.duration > 0.0f && playback.currentTime >= playback.duration && !playback.loop;
+
             if (!playback.isPlaying || (!playback.stopRequested && !reachedEnd)) {
                 continue;
             }
@@ -345,6 +384,8 @@ void EffectLifetimeSystem::Update(Registry& registry, float)
     }
 }
 
+// プレビュー専用 effect を更新する。
+// duration 無効時は loop 扱いに寄せるなど、preview 向けの挙動を持つ。
 void EffectPreviewSystem::Update(Registry& registry, float dt)
 {
     if (dt <= 0.0f) {
@@ -364,6 +405,8 @@ void EffectPreviewSystem::Update(Registry& registry, float dt)
         auto* playbacks = static_cast<EffectPlaybackComponent*>(playbackColumn->Get(0));
         for (size_t row = 0; row < archetype->GetEntityCount(); ++row) {
             auto& playback = playbacks[row];
+
+            // preview で duration 不定の非ループは、実質ループに寄せる。
             if (!playback.loop && playback.isPlaying && playback.duration <= 0.0f) {
                 playback.loop = true;
             }
@@ -378,9 +421,11 @@ void EffectPreviewSystem::Update(Registry& registry, float dt)
     }
 }
 
+// effect entity から render packet を抽出して RenderQueue へ積む。
 void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQueue& queue)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
+        // 描画抽出には Asset / Playback / Transform が必要。
         if (!ArchetypeHas<EffectAssetComponent, EffectPlaybackComponent, TransformComponent>(archetype)) {
             continue;
         }
@@ -406,6 +451,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
             auto& asset = assets[row];
             auto& playback = playbacks[row];
             auto& transform = transforms[row];
+
+            // 再生中でない、runtime が無い、assetPath が無い場合は抽出しない。
             if (!playback.isPlaying || playback.runtimeInstanceId == 0 || asset.assetPath.empty()) {
                 continue;
             }
@@ -416,10 +463,13 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
             }
 
             const auto& compiled = *runtime->compiledAsset;
+
+            // compiled descriptor を一旦コピーし、override を後段で適用する。
             EffectMeshRendererDescriptor effectiveMesh = compiled.meshRenderer;
             EffectParticleSimulationLayout effectiveParticle = compiled.particleRenderer;
             float effectiveDuration = compiled.duration > 0.0f ? compiled.duration : playback.duration;
 
+            // parameter override があれば反映する。
             if (overrides && overrides[row].enabled) {
                 if (!overrides[row].scalarParameter.empty()) {
                     EffectParameterBindings::ApplyFloatParameter(
@@ -429,6 +479,7 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         effectiveParticle,
                         effectiveDuration);
                 }
+
                 if (!overrides[row].colorParameter.empty()) {
                     EffectParameterBindings::ApplyColorParameter(
                         overrides[row].colorParameter,
@@ -436,7 +487,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         effectiveMesh,
                         effectiveParticle);
                 }
-                // Multi-parameter overrides (Phase 1B)
+
+                // Phase 1B: 複数 scalar override。
                 const size_t scalarCount = (std::min)(overrides[row].scalarNames.size(), overrides[row].scalarValues.size());
                 for (size_t si = 0; si < scalarCount; ++si) {
                     if (!overrides[row].scalarNames[si].empty()) {
@@ -448,6 +500,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                             effectiveDuration);
                     }
                 }
+
+                // Phase 1B: 複数 color override。
                 const size_t colorCount = (std::min)(overrides[row].colorNames.size(), overrides[row].colorValues.size());
                 for (size_t ci = 0; ci < colorCount; ++ci) {
                     if (!overrides[row].colorNames[ci].empty()) {
@@ -460,29 +514,41 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 }
             }
 
+            // lifetime fade を alpha へ掛ける。
             DirectX::XMFLOAT4 tint = effectiveMesh.tint;
             tint.w *= playback.lifetimeFade;
 
+            // -------------------------------------------------
+            // Mesh effect 抽出
+            // -------------------------------------------------
             if (effectiveMesh.enabled) {
                 std::shared_ptr<ModelResource> modelResource;
+
+                // まず effect 専用 meshAssetPath から model を取得する。
                 if (!effectiveMesh.meshAssetPath.empty()) {
                     auto model = ResourceManager::Instance().GetModel(effectiveMesh.meshAssetPath);
                     if (model) {
                         modelResource = model->GetModelResource();
                     }
+
                     LOG_INFO("[EffectMesh] meshAssetPath='%s' model=%p modelResource=%p",
                         effectiveMesh.meshAssetPath.c_str(), (void*)model.get(), (void*)modelResource.get());
-                } else if (meshes && meshes[row].model) {
+                }
+                // 無ければ MeshComponent の model を fallback として使う。
+                else if (meshes && meshes[row].model) {
                     modelResource = meshes[row].model->GetModelResource();
                     LOG_INFO("[EffectMesh] fallback meshComponent model=%p", (void*)modelResource.get());
-                } else {
+                }
+                else {
                     LOG_WARN("[EffectMesh] No meshAssetPath and no MeshComponent fallback");
                 }
 
+                // material も同様に effect 専用パス優先、無ければ MaterialComponent fallback。
                 std::shared_ptr<MaterialAsset> materialAsset;
                 if (!effectiveMesh.materialAssetPath.empty()) {
                     materialAsset = ResourceManager::Instance().GetMaterial(effectiveMesh.materialAssetPath);
-                } else if (materials && !materials[row].materialAssetPath.empty()) {
+                }
+                else if (materials && !materials[row].materialAssetPath.empty()) {
                     materialAsset = materials[row].materialAsset
                         ? materials[row].materialAsset
                         : ResourceManager::Instance().GetMaterial(materials[row].materialAssetPath);
@@ -492,6 +558,7 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     LOG_ERROR("[EffectMesh] modelResource null — packet skipped. meshAssetPath='%s'",
                         effectiveMesh.meshAssetPath.c_str());
                 }
+
                 if (modelResource) {
                     EffectMeshPacket packet;
                     packet.modelResource = modelResource;
@@ -503,27 +570,26 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     packet.blendState = effectiveMesh.blendState;
                     packet.depthState = effectiveMesh.depthState;
                     packet.rasterizerState = effectiveMesh.rasterizerState;
+
+                    // variant key は shaderVariantKey 優先、無ければ shaderFlags を使う。
                     packet.shaderVariantKey = effectiveMesh.shaderVariantKey != 0
                         ? effectiveMesh.shaderVariantKey
                         : effectiveMesh.variantParams.shaderFlags;
+
                     packet.lifetimeFade = playback.lifetimeFade;
-                    // Phase A: variant params + alphaFade injection
+
+                    // Phase A: variant params を packet へ転写する。
                     packet.meshVariantParams = effectiveMesh.variantParams;
                     packet.meshVariantParams.constants.alphaFade = playback.lifetimeFade;
                     packet.meshVariantParams.constants.effectTime = playback.currentTime;
-                    // Phase C (P0): When MeshFlag_Dissolve is enabled, drive
-                    // dissolveAmount linearly from 0 to 1 over the effect's
-                    // lifetime. lifetimeFade goes 1.0 -> 0.0 (see EffectSystems
-                    // line ~63: lifetimeFade = 1 - normalized), so the progress
-                    // 0.0 -> 1.0 is (1 - lifetimeFade). This gives slash-style
-                    // templates an automatic "appear then dissolve" curve
-                    // without keyframing. A future P1 can add an opt-out flag
-                    // for templates that want a static dissolveAmount.
+
+                    // Dissolve 有効時は life に合わせて dissolveAmount を自動駆動する。
                     if (effectiveMesh.variantParams.shaderFlags & MeshFlag_Dissolve) {
                         packet.meshVariantParams.constants.dissolveAmount =
                             1.0f - playback.lifetimeFade;
                     }
-                    // Variant textures
+
+                    // variant texture 群を解決する。
                     auto& vp = effectiveMesh.variantParams;
                     if (!vp.baseTexturePath.empty())
                         packet.baseTexture = ResourceManager::Instance().GetTexture(vp.baseTexturePath);
@@ -537,11 +603,14 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         packet.subTexture = ResourceManager::Instance().GetTexture(vp.subTexturePath);
                     if (!vp.emissionTexPath.empty())
                         packet.emissionTexture = ResourceManager::Instance().GetTexture(vp.emissionTexPath);
+
+                    // カメラ距離で sortKey を作る。
                     const float dx = transform.worldPosition.x - rc.cameraPosition.x;
                     const float dy = transform.worldPosition.y - rc.cameraPosition.y;
                     const float dz = transform.worldPosition.z - rc.cameraPosition.z;
                     packet.distanceToCamera = std::sqrt(dx * dx + dy * dy + dz * dz);
                     packet.sortKey = static_cast<uint64_t>(packet.distanceToCamera * 1000.0f);
+
                     LOG_INFO("[EffectMesh] packet pushed: mesh='%s' material='%s' shaderId=%d blend=%d variantKey=0x%08X materialAsset=%p tint=(%.2f,%.2f,%.2f,%.2f)",
                         effectiveMesh.meshAssetPath.c_str(),
                         effectiveMesh.materialAssetPath.c_str(),
@@ -550,21 +619,29 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                         packet.shaderVariantKey,
                         (void*)packet.materialAsset.get(),
                         packet.baseColor.x, packet.baseColor.y, packet.baseColor.z, packet.baseColor.w);
+
                     queue.effectMeshPackets.push_back(std::move(packet));
                 }
             }
 
+            // -------------------------------------------------
+            // Particle effect 抽出
+            // -------------------------------------------------
             if (effectiveParticle.enabled) {
                 std::shared_ptr<ModelResource> particleModelResource;
+
+                // Mesh draw mode の場合のみ mesh model が必要。
                 if (effectiveParticle.drawMode == EffectParticleDrawMode::Mesh) {
                     if (!effectiveParticle.meshAssetPath.empty()) {
                         if (auto model = ResourceManager::Instance().GetModel(effectiveParticle.meshAssetPath)) {
                             particleModelResource = model->GetModelResource();
                         }
                     }
+
                     if (!particleModelResource && meshes && meshes[row].model) {
                         particleModelResource = meshes[row].model->GetModelResource();
                     }
+
                     if (!particleModelResource) {
                         continue;
                     }
@@ -621,22 +698,29 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 packet.gradientColor3 = effectiveParticle.gradientColor3;
                 packet.gradientMidTimes = effectiveParticle.gradientMidTimes;
                 packet.gradientKeyCount = effectiveParticle.gradientKeyCount;
+
                 for (int ai = 0; ai < 4; ++ai) packet.attractors[ai] = effectiveParticle.attractors[ai];
                 packet.attractorRadii = effectiveParticle.attractorRadii;
                 packet.attractorFalloff = effectiveParticle.attractorFalloff;
                 packet.attractorCount = effectiveParticle.attractorCount;
+
                 packet.collisionEnabled = effectiveParticle.collisionEnabled;
                 packet.collisionPlane = effectiveParticle.collisionPlane;
                 for (int ci = 0; ci < 4; ++ci) packet.collisionSpheres[ci] = effectiveParticle.collisionSpheres[ci];
                 packet.collisionSphereCount = effectiveParticle.collisionSphereCount;
                 packet.collisionRestitution = effectiveParticle.collisionRestitution;
                 packet.collisionFriction = effectiveParticle.collisionFriction;
+
                 packet.tint = effectiveParticle.tint;
                 packet.tintEnd = effectiveParticle.tintEnd;
                 packet.tint.w *= playback.lifetimeFade;
                 packet.tintEnd.w *= playback.lifetimeFade;
+
+                // 暫定 bounds。
                 packet.boundsCenter = transform.worldPosition;
                 packet.boundsExtents = { 0.5f, 0.5f, 0.5f };
+
+                // Mesh draw mode なら model bounds を使う。
                 if (particleModelResource) {
                     const auto& localBounds = particleModelResource->GetLocalBounds();
                     packet.boundsCenter = {
@@ -646,14 +730,18 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     };
                     packet.boundsExtents = localBounds.Extents;
                 }
+
+                // texture を解決する。
                 if (!effectiveParticle.texturePath.empty()) {
                     packet.texture = ResourceManager::Instance().GetTexture(effectiveParticle.texturePath);
                 }
+
                 queue.effectParticlePackets.push_back(std::move(packet));
             }
         }
     }
 
+    // metrics を更新する。
     queue.metrics.effectMeshPacketCount = static_cast<uint32_t>(queue.effectMeshPackets.size());
     queue.metrics.effectParticlePacketCount = static_cast<uint32_t>(queue.effectParticlePackets.size());
 }

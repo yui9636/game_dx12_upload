@@ -6,6 +6,7 @@
 
 namespace
 {
+    // EffectGraphPin を json へ変換する。
     nlohmann::json ToJson(const EffectGraphPin& pin)
     {
         return {
@@ -17,6 +18,7 @@ namespace
         };
     }
 
+    // json から EffectGraphPin を復元する。
     EffectGraphPin PinFromJson(const nlohmann::json& json)
     {
         EffectGraphPin pin;
@@ -28,6 +30,7 @@ namespace
         return pin;
     }
 
+    // EffectGraphNode を json へ変換する。
     nlohmann::json ToJson(const EffectGraphNode& node)
     {
         return {
@@ -58,6 +61,7 @@ namespace
         };
     }
 
+    // json から EffectGraphNode を復元する。
     EffectGraphNode NodeFromJson(const nlohmann::json& json)
     {
         EffectGraphNode node;
@@ -88,6 +92,7 @@ namespace
         return node;
     }
 
+    // EffectGraphLink を json へ変換する。
     nlohmann::json ToJson(const EffectGraphLink& link)
     {
         return {
@@ -97,6 +102,7 @@ namespace
         };
     }
 
+    // json から EffectGraphLink を復元する。
     EffectGraphLink LinkFromJson(const nlohmann::json& json)
     {
         EffectGraphLink link;
@@ -106,6 +112,7 @@ namespace
         return link;
     }
 
+    // EffectExposedParameter を json へ変換する。
     nlohmann::json ToJson(const EffectExposedParameter& parameter)
     {
         return {
@@ -115,6 +122,7 @@ namespace
         };
     }
 
+    // json から EffectExposedParameter を復元する。
     EffectExposedParameter ParameterFromJson(const nlohmann::json& json)
     {
         EffectExposedParameter parameter;
@@ -125,13 +133,17 @@ namespace
     }
 }
 
+// EffectGraphAsset を JSON ファイルとして保存する。
 bool EffectGraphSerializer::Save(const std::string& path, const EffectGraphAsset& asset)
 {
     std::filesystem::path filePath(path);
+
+    // 親ディレクトリがあるなら事前に作成する。
     if (filePath.has_parent_path()) {
         std::filesystem::create_directories(filePath.parent_path());
     }
 
+    // ルート JSON を組み立てる。
     nlohmann::json root;
     root["schemaVersion"] = asset.schemaVersion;
     root["graphId"] = asset.graphId;
@@ -139,43 +151,54 @@ bool EffectGraphSerializer::Save(const std::string& path, const EffectGraphAsset
     root["nextNodeId"] = asset.nextNodeId;
     root["nextPinId"] = asset.nextPinId;
     root["nextLinkId"] = asset.nextLinkId;
+
+    // プレビュー既定値を保存する。
     root["previewDefaults"] = {
         {"duration", asset.previewDefaults.duration},
         {"seed", asset.previewDefaults.seed},
         {"previewMeshPath", asset.previewDefaults.previewMeshPath},
         {"previewMaterialPath", asset.previewDefaults.previewMaterialPath}
     };
+
+    // 参照アセット一覧を保存する。
     root["referencedAssets"] = asset.referencedAssets;
 
+    // ノード一覧を保存する。
     root["nodes"] = nlohmann::json::array();
     for (const auto& node : asset.nodes) {
         root["nodes"].push_back(ToJson(node));
     }
 
+    // ピン一覧を保存する。
     root["pins"] = nlohmann::json::array();
     for (const auto& pin : asset.pins) {
         root["pins"].push_back(ToJson(pin));
     }
 
+    // リンク一覧を保存する。
     root["links"] = nlohmann::json::array();
     for (const auto& link : asset.links) {
         root["links"].push_back(ToJson(link));
     }
 
+    // 公開パラメータ一覧を保存する。
     root["exposedParameters"] = nlohmann::json::array();
     for (const auto& parameter : asset.exposedParameters) {
         root["exposedParameters"].push_back(ToJson(parameter));
     }
 
+    // ファイルを書き込みモードで開く。
     std::ofstream output(path, std::ios::binary);
     if (!output.is_open()) {
         return false;
     }
 
+    // 整形付き JSON として保存する。
     output << root.dump(2);
     return true;
 }
 
+// JSON ファイルから EffectGraphAsset を読み込む。
 bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outAsset)
 {
     std::ifstream input(path, std::ios::binary);
@@ -186,10 +209,12 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
     nlohmann::json root;
     try {
         input >> root;
-    } catch (...) {
+    }
+    catch (...) {
         return false;
     }
 
+    // 読み込み前に初期化する。
     outAsset = {};
     outAsset.schemaVersion = root.value("schemaVersion", 1u);
     outAsset.graphId = root.value("graphId", "effect_graph");
@@ -198,6 +223,7 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
     outAsset.nextPinId = root.value("nextPinId", 1u);
     outAsset.nextLinkId = root.value("nextLinkId", 1u);
 
+    // プレビュー既定値を読み込む。
     if (root.contains("previewDefaults")) {
         const auto& preview = root["previewDefaults"];
         outAsset.previewDefaults.duration = preview.value("duration", 2.0f);
@@ -206,28 +232,33 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
         outAsset.previewDefaults.previewMaterialPath = preview.value("previewMaterialPath", "");
     }
 
+    // 参照アセット一覧を読み込む。
     if (root.contains("referencedAssets") && root["referencedAssets"].is_array()) {
         outAsset.referencedAssets = root["referencedAssets"].get<std::vector<std::string>>();
     }
 
+    // ノード一覧を読み込む。
     if (root.contains("nodes") && root["nodes"].is_array()) {
         for (const auto& nodeJson : root["nodes"]) {
             outAsset.nodes.push_back(NodeFromJson(nodeJson));
         }
     }
 
+    // ピン一覧を読み込む。
     if (root.contains("pins") && root["pins"].is_array()) {
         for (const auto& pinJson : root["pins"]) {
             outAsset.pins.push_back(PinFromJson(pinJson));
         }
     }
 
+    // リンク一覧を読み込む。
     if (root.contains("links") && root["links"].is_array()) {
         for (const auto& linkJson : root["links"]) {
             outAsset.links.push_back(LinkFromJson(linkJson));
         }
     }
 
+    // 公開パラメータ一覧を読み込む。
     if (root.contains("exposedParameters") && root["exposedParameters"].is_array()) {
         for (const auto& parameterJson : root["exposedParameters"]) {
             outAsset.exposedParameters.push_back(ParameterFromJson(parameterJson));

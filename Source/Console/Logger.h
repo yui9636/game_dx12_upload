@@ -4,49 +4,67 @@
 #include <mutex>
 #include <filesystem>
 
-// ??????????
+// ログの重要度を表す列挙型。
 enum class LogLevel {
-    Info,
-    Warning,
-    Error
+    Info,     // 通常情報
+    Warning,  // 警告
+    Error     // エラー
 };
 
-// ImGui???????????
+// 1件ぶんのログ情報。
+// ImGui 上のログビューなどで表示するために使う。
 struct LogEntry {
+    // ログの種類。
     LogLevel level;
+
+    // ログ本文。
     std::string message;
 };
 
+// ログ出力を管理する singleton クラス。
+// Visual Studio 出力ウィンドウ、ログファイル、ImGui 表示用履歴の3か所を管理する。
 class Logger
 {
 public:
+    // singleton インスタンスを返す。
     static Logger& Instance() {
         static Logger instance;
         return instance;
     }
 
-    // ?????ImGui??VS????????????????
+    // 可変長引数付きでログを出力する。
+    // ImGui 履歴、VS 出力、ログファイルへ同時に書き込む。
     void Print(LogLevel level, const char* format, ...);
 
-    // ImGui?????????????????????
+    // 現在保持しているログ履歴を返す。
     const std::vector<LogEntry>& GetLogs() { return m_logs; }
+
+    // 保持中のログ履歴を消去する。
     void ClearLogs() {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_logs.clear();
     }
 
 private:
+    // singleton 用なのでコンストラクタは private。
     Logger() = default;
+
+    // 特別な破棄処理は不要。
     ~Logger() = default;
 
+    // 実際のログファイルパスを返す。
     std::filesystem::path GetLogFilePath() const;
 
-    std::vector<LogEntry> m_logs; // ???????
-    std::mutex m_mutex;           // ???????????
+    // メモリ上に保持しているログ履歴。
+    std::vector<LogEntry> m_logs;
+
+    // 複数スレッドからの同時書き込みを守るための mutex。
+    std::mutex m_mutex;
 };
 
 // ==========================================================
-// ?????????????Info, Warn, Error????????
+// デバッグビルド時だけ有効なログ出力マクロ。
+// Info / Warn / Error の3種類を簡単に呼べるようにする。
 // ==========================================================
 #if defined(_DEBUG)
 #define LOG_INFO(...)  { Logger::Instance().Print(LogLevel::Info, __VA_ARGS__); }

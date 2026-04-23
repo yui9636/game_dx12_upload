@@ -8,19 +8,24 @@
 
 using namespace DirectX;
 
+// フォント描画に必要なシェーダ・バッファ・状態オブジェクトを作成し、
+// .fnt ファイルを読み込んで文字情報とテクスチャを初期化する。
 Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
 {
     HRESULT hr = S_OK;
 
+    // 頂点レイアウトを定義する。
     D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
     };
 
+    // フォント描画用シェーダを読み込む。
     GpuResourceUtils::LoadVertexShader(device, "Data\\Shader\\Font_VS.cso", inputElementDesc, ARRAYSIZE(inputElementDesc), inputLayout.GetAddressOf(), vertexShader.GetAddressOf());
     GpuResourceUtils::LoadPixelShader(device, "Data\\Shader\\Font_PS.cso", pixelShader.GetAddressOf());
 
+    // SDF パラメータ用定数バッファを作成する。
     {
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = sizeof(SDFData);
@@ -30,7 +35,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         hr = device->CreateBuffer(&desc, nullptr, sdfConstantBuffer.GetAddressOf());
     }
 
-
+    // αブレンド用ステートを作成する。
     {
         D3D11_BLEND_DESC desc = {};
         desc.RenderTarget[0].BlendEnable = TRUE;
@@ -43,6 +48,8 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
         device->CreateBlendState(&desc, blendState.GetAddressOf());
     }
+
+    // 深度無効の DepthStencilState を作成する。
     {
         D3D11_DEPTH_STENCIL_DESC desc = {};
         desc.DepthEnable = FALSE;
@@ -50,6 +57,8 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
         device->CreateDepthStencilState(&desc, depthStencilState.GetAddressOf());
     }
+
+    // カリング無しのラスタライザステートを作成する。
     {
         D3D11_RASTERIZER_DESC desc = {};
         desc.FrontCounterClockwise = TRUE;
@@ -57,6 +66,8 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         desc.CullMode = D3D11_CULL_NONE;
         device->CreateRasterizerState(&desc, rasterizerState.GetAddressOf());
     }
+
+    // 線形サンプラを作成する。
     {
         D3D11_SAMPLER_DESC desc = {};
         desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -67,6 +78,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         device->CreateSamplerState(&desc, samplerState.GetAddressOf());
     }
 
+    // ワールド・ビュー・射影行列用の定数バッファを作成する。
     {
         D3D11_BUFFER_DESC desc = {};
         desc.ByteWidth = sizeof(CBMatrix);
@@ -76,6 +88,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         hr = device->CreateBuffer(&desc, nullptr, matrixBuffer.GetAddressOf());
     }
 
+    // 動的頂点バッファを作成する。
     {
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * maxSpriteCount * 4);
@@ -84,6 +97,9 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
         device->CreateBuffer(&bufferDesc, nullptr, vertexBuffer.GetAddressOf());
     }
+
+    // インデックスバッファを作成する。
+    // 1文字 = 4頂点 / 6インデックス の固定構造にしておく。
     {
         std::unique_ptr<UINT[]> indices = std::make_unique<UINT[]>(maxSpriteCount * 6);
         UINT* p = indices.get();
@@ -92,6 +108,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
             p[3] = i + 2; p[4] = i + 1; p[5] = i + 3;
             p += 6;
         }
+
         D3D11_BUFFER_DESC bufferDesc = {};
         bufferDesc.ByteWidth = static_cast<UINT>(sizeof(UINT) * maxSpriteCount * 6);
         bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
@@ -101,12 +118,14 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
     }
 
     // ---------------------------------------------------
+    // .fnt ファイルを読み込んで文字情報を構築する。
     // ---------------------------------------------------
     {
         FILE* fp = nullptr;
         fopen_s(&fp, filename, "rb");
         _ASSERT_EXPR_A(fp, "FNT File not found");
 
+        // ファイル全体をメモリへ読み込む。
         fseek(fp, 0, SEEK_END);
         long fntSize = ftell(fp);
         fseek(fp, 0, SEEK_SET);
@@ -116,9 +135,11 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
         fntData[fntSize] = '\0';
         fclose(fp);
 
+        // フォント画像への相対パス解決用にディレクトリ名を抜き出す。
         char dirname[256];
         _splitpath_s(filename, nullptr, 0, dirname, 256, nullptr, 0, nullptr, 0);
 
+        // 文字索引テーブルを初期化する。
         characterInfos.resize(0xFFFF);
         characterIndices.resize(0xFFFF);
         memset(characterIndices.data(), 0, sizeof(WORD) * characterIndices.size());
@@ -132,6 +153,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
 
         while (line)
         {
+            // common 行: フォント全体の基本情報を取得する。
             if (strncmp(line, "common", 6) == 0)
             {
                 char* tokenCtx = nullptr;
@@ -152,6 +174,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                 textureCount = pages;
                 shaderResourceViews.resize(pages);
             }
+            // page 行: 各ページ画像を読み込む。
             else if (strncmp(line, "page", 4) == 0)
             {
                 int id = 0;
@@ -176,6 +199,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                     }
                 }
             }
+            // chars 行: 総文字数を取得する。
             else if (strncmp(line, "chars", 5) == 0)
             {
                 char* pCount = strstr(line, "count=");
@@ -186,9 +210,9 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                     characterInfos.resize(characterCount);
                 }
             }
+            // char 行: 各文字の矩形とオフセット情報を取り込む。
             else if (strncmp(line, "char", 4) == 0)
             {
-
                 int id = 0, x = 0, y = 0, width = 0, height = 0;
                 int xoffset = 0, yoffset = 0, xadvance = 0, page = 0;
 
@@ -227,10 +251,6 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
                     info.page = page;
                     info.ascii = (id < 0x100);
 
-                    // char buf[256];
-                    // sprintf_s(buf, "ID:%d x:%d y:%d w:%d h:%d\n", id, x, y, width, height);
-                    // OutputDebugStringA(buf);
-
                     charInfoIndex++;
                 }
             }
@@ -238,6 +258,7 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
             line = strtok_s(nullptr, "\r\n", &lineContext);
         }
 
+        // 特殊コードを予約登録する。
         characterIndices.at(0x00) = CharacterInfo::EndCode;
         characterIndices.at(0x0a) = CharacterInfo::ReturnCode;
         characterIndices.at(0x09) = CharacterInfo::TabCode;
@@ -245,12 +266,15 @@ Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
     }
 }
 
+// SDF フォント描画用のしきい値とぼかし量を設定する。
 void Font::SetSDFParams(float threshold, float softness)
 {
     sdfThreshold = threshold;
     sdfSoftness = softness;
 }
 
+// 描画開始。
+// SDF 定数を更新し、頂点バッファを Map して書き込み開始状態にする。
 void Font::Begin(ID3D11DeviceContext* context)
 {
     D3D11_VIEWPORT viewport;
@@ -259,6 +283,7 @@ void Font::Begin(ID3D11DeviceContext* context)
     screenWidth = viewport.Width;
     screenHeight = viewport.Height;
 
+    // SDF パラメータを GPU へ反映する。
     D3D11_MAPPED_SUBRESOURCE ms;
     if (SUCCEEDED(context->Map(sdfConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
     {
@@ -269,6 +294,7 @@ void Font::Begin(ID3D11DeviceContext* context)
         context->Unmap(sdfConstantBuffer.Get(), 0);
     }
 
+    // 頂点バッファを開いて書き込み開始位置を設定する。
     context->Map(vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
     currentVertex = reinterpret_cast<Vertex*>(ms.pData);
     currentIndexCount = 0;
@@ -278,6 +304,8 @@ void Font::Begin(ID3D11DeviceContext* context)
     is3DMode = false;
 }
 
+// 2D テキストを描画キューへ積む。
+// 実際の DrawIndexed は End でまとめて行う。
 void Font::Draw(float x, float y, const wchar_t* string)
 {
     size_t length = wcslen(string);
@@ -291,6 +319,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
         if (word >= characterIndices.size()) continue;
         WORD code = characterIndices.at(word);
 
+        // 特殊文字処理。
         if (code == CharacterInfo::EndCode) break;
         else if (code == CharacterInfo::ReturnCode) { x = start_x; y += fontHeight * scaleY; continue; }
         else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
@@ -305,6 +334,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
         float width = info.width * scaleX;
         float height = info.height * scaleY;
 
+        // 4頂点分の矩形を組み立てる。
         currentVertex[0].position = { positionX,         positionY,          0.0f };
         currentVertex[1].position = { positionX + width, positionY,          0.0f };
         currentVertex[2].position = { positionX,         positionY + height, 0.0f };
@@ -315,6 +345,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
         currentVertex[2].texcoord = { info.left,  info.bottom };
         currentVertex[3].texcoord = { info.right, info.bottom };
 
+        // 2D はスクリーン座標から NDC へ変換する。
         for (int j = 0; j < 4; ++j)
         {
             currentVertex[j].color = DirectX::XMFLOAT4(1, 1, 1, 1);
@@ -326,6 +357,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
         currentVertex += 4;
         x += info.xadvance * scaleX;
 
+        // ページが切り替わったら新しい subset を作る。
         if (currentPage != info.page)
         {
             currentPage = info.page;
@@ -335,10 +367,12 @@ void Font::Draw(float x, float y, const wchar_t* string)
             subset.indexCount = 0;
             subsets.emplace_back(subset);
         }
+
         currentIndexCount += 6;
     }
 }
 
+// 3D 空間上のテキストを描画キューへ積む。
 void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CXMMATRIX projection, const wchar_t* string)
 {
     is3DMode = true;
@@ -359,6 +393,7 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
         if (word >= characterIndices.size()) continue;
         WORD code = characterIndices.at(word);
 
+        // 特殊文字処理。
         if (code == CharacterInfo::EndCode) break;
         else if (code == CharacterInfo::ReturnCode) { x = start_x; y -= fontHeight * scaleY; continue; }
         else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
@@ -374,6 +409,7 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
         float width = info.width * scaleX;
         float height = info.height * scaleY;
 
+        // 3D 空間用の矩形を組み立てる。
         currentVertex[0].position = { positionX,         positionY,          0.0f };
         currentVertex[1].position = { positionX + width, positionY,          0.0f };
         currentVertex[2].position = { positionX,         positionY - height, 0.0f };
@@ -392,6 +428,7 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
         currentVertex += 4;
         x += info.xadvance * scaleX;
 
+        // ページごとに subset を分ける。
         if (currentPage != info.page)
         {
             currentPage = info.page;
@@ -401,10 +438,12 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
             subset.indexCount = 0;
             subsets.emplace_back(subset);
         }
+
         currentIndexCount += 6;
     }
 }
 
+// 文字列の横幅を概算で返す。
 float Font::GetTextWidth(const wchar_t* string)
 {
     float width = 0.0f;
@@ -416,8 +455,8 @@ float Font::GetTextWidth(const wchar_t* string)
         if (word >= characterIndices.size()) continue;
         WORD code = characterIndices.at(word);
 
-        if (code == CharacterInfo::SpaceCode) { width += 20.0f; continue; } // Space
-        if (code == CharacterInfo::TabCode) { width += 80.0f; continue; } // Tab
+        if (code == CharacterInfo::SpaceCode) { width += 20.0f; continue; }
+        if (code == CharacterInfo::TabCode) { width += 80.0f; continue; }
         if (code == 0 || code >= CharacterInfo::ReturnCode) continue;
 
         const CharacterInfo& info = characterInfos.at(code);
@@ -426,10 +465,13 @@ float Font::GetTextWidth(const wchar_t* string)
     return width;
 }
 
+// 描画終了。
+// 頂点バッファを Unmap し、subset ごとに SRV を切り替えながら DrawIndexed する。
 void Font::End(ID3D11DeviceContext* context)
 {
     context->Unmap(vertexBuffer.Get(), 0);
 
+    // subset ごとの indexCount を確定する。
     if (!subsets.empty())
     {
         size_t size = subsets.size();
@@ -440,12 +482,15 @@ void Font::End(ID3D11DeviceContext* context)
         subsets.back().indexCount = currentIndexCount - subsets.back().startIndex;
     }
 
+    // シェーダと入力レイアウトを設定する。
     context->VSSetShader(vertexShader.Get(), nullptr, 0);
     context->PSSetShader(pixelShader.Get(), nullptr, 0);
     context->IASetInputLayout(inputLayout.Get());
 
+    // SDF 定数バッファを PS に渡す。
     context->PSSetConstantBuffers(0, 1, sdfConstantBuffer.GetAddressOf());
 
+    // 2D / 3D に応じた行列を設定する。
     D3D11_MAPPED_SUBRESOURCE ms;
     if (SUCCEEDED(context->Map(matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
     {
@@ -467,11 +512,12 @@ void Font::End(ID3D11DeviceContext* context)
             data->View = identity;
             data->Projection = identity;
         }
+
         context->Unmap(matrixBuffer.Get(), 0);
     }
     context->VSSetConstantBuffers(1, 1, matrixBuffer.GetAddressOf());
 
-
+    // 描画ステートを設定する。
     const float blend_factor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     context->OMSetBlendState(blendState.Get(), blend_factor, 0xFFFFFFFF);
     context->OMSetDepthStencilState(depthStencilState.Get(), 0);
@@ -484,6 +530,7 @@ void Font::End(ID3D11DeviceContext* context)
     context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    // subset 単位でテクスチャを切り替えて描画する。
     for (const auto& subset : subsets)
     {
         if (subset.shaderResourceView)
