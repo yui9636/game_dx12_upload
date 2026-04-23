@@ -315,10 +315,13 @@ namespace
     struct MeshDrawEntry
     {
         const EffectParticlePacket* packet = nullptr;
-        D3D12_GPU_VIRTUAL_ADDRESS particleDataGpuVa = 0ull;
-        D3D12_GPU_VIRTUAL_ADDRESS particleHeaderGpuVa = 0ull;
+        D3D12_GPU_VIRTUAL_ADDRESS aliveListGpuVa = 0ull;    // t0
+        D3D12_GPU_VIRTUAL_ADDRESS hotGpuVa = 0ull;          // t1 (BillboardHot - position/velocity)
+        D3D12_GPU_VIRTUAL_ADDRESS warmGpuVa = 0ull;         // t2 (BillboardWarm - packedColor)
+        D3D12_GPU_VIRTUAL_ADDRESS headerGpuVa = 0ull;       // t3 (BillboardHeader - alive flag)
+        D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVa = 0ull;// t4 (MeshAttribHot - rotation/scale)
         DX12Buffer* indirectArgsBuffer = nullptr;
-        uint32_t drawCount = 0; // kept until Phase 4 (DrawIndexedInstanced needs per-mesh indexCount)
+        uint32_t drawCount = 0; // CPU-side estimate; DrawIndexedInstanced uses this as instanceCount
     };
 
     struct RibbonDrawEntry
@@ -603,6 +606,7 @@ namespace
         sharedArena.billboardWarmBuffer = std::move(newWarmBuffer);
         sharedArena.billboardColdBuffer = std::move(newColdBuffer);
         sharedArena.billboardHeaderBuffer = std::move(newHeaderBuffer);
+        sharedArena.meshAttribHotBuffer = std::move(newMeshAttribHotBuffer);
         sharedArena.ribbonHistoryBuffer = std::move(newRibbonHistoryBuffer);
         sharedArena.deadListBuffer = std::move(newDeadListBuffer);
         sharedArena.aliveListBuffer = std::move(newAliveListBuffer);
@@ -621,6 +625,7 @@ namespace
         sharedArena.billboardWarmState = D3D12_RESOURCE_STATE_COMMON;
         sharedArena.billboardColdState = D3D12_RESOURCE_STATE_COMMON;
         sharedArena.billboardHeaderState = D3D12_RESOURCE_STATE_COMMON;
+        sharedArena.meshAttribHotState = D3D12_RESOURCE_STATE_COMMON;
         sharedArena.ribbonHistoryState = D3D12_RESOURCE_STATE_COMMON;
         sharedArena.deadListState = D3D12_RESOURCE_STATE_COMMON;
         sharedArena.aliveListState = D3D12_RESOURCE_STATE_COMMON;
@@ -1148,7 +1153,7 @@ namespace
         srvRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         srvRange.OffsetInDescriptorsFromTableStart = 0;
 
-        // Root params: b0, t0, u0-u7, descriptorTable(CurlNoise t1)
+        // Root params: b0, t0, u0-u8, descriptorTable(CurlNoise t1)
         // [0] b0  = CBV (simulation params)
         // [1] t0  = SRV (alive list prev / page table)
         // [2] u0  = UAV (BillboardHot)
@@ -1159,8 +1164,9 @@ namespace
         // [7] u5  = UAV (Counter)
         // [8] u6  = UAV (RibbonHistory)
         // [9] u7  = UAV (PageAliveCount) -- only used by Update
-        // [10] descriptorTable = curl noise SRV
-        D3D12_ROOT_PARAMETER1 params[11] = {};
+        // [10] u8 = UAV (MeshAttribHot) -- written only when gMeshFlags.x != 0; bound always to satisfy validation
+        // [11] descriptorTable = curl noise SRV
+        D3D12_ROOT_PARAMETER1 params[12] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
         params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
@@ -1191,10 +1197,13 @@ namespace
         params[9].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[9].Descriptor = { 7, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE };
         params[9].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        params[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[10].DescriptorTable.NumDescriptorRanges = 1;
-        params[10].DescriptorTable.pDescriptorRanges = &curlNoiseRange;
+        params[10].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[10].Descriptor = { 8, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_VOLATILE };
         params[10].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        params[11].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[11].DescriptorTable.NumDescriptorRanges = 1;
+        params[11].DescriptorTable.pDescriptorRanges = &curlNoiseRange;
+        params[11].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
         D3D12_STATIC_SAMPLER_DESC curlSampler = {};
         curlSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1806,31 +1815,50 @@ namespace
             return false;
         }
 
+        // SoA mesh VS consumes: AliveList(t0), BillboardHot(t1), BillboardWarm(t2),
+        // BillboardHeader(t3), MeshAttribHot(t4). PS consumes color_map at t5 via table.
         D3D12_DESCRIPTOR_RANGE1 textureRange = {};
         textureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         textureRange.NumDescriptors = 1;
-        textureRange.BaseShaderRegister = 2;
+        textureRange.BaseShaderRegister = 5;
         textureRange.RegisterSpace = 0;
         textureRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         textureRange.OffsetInDescriptorsFromTableStart = 0;
 
-        D3D12_ROOT_PARAMETER1 params[5] = {};
+        // [0] b0 CBV (CbScene: viewProj/light)
+        // [1] b2 CBV (render cbuffer: velocity stretch / global_alpha / curl_noise)
+        // [2] t0 SRV (AliveList)            [VS]
+        // [3] t1 SRV (BillboardHot)         [VS]
+        // [4] t2 SRV (BillboardWarm)        [VS]
+        // [5] t3 SRV (BillboardHeader)      [VS]
+        // [6] t4 SRV (MeshAttribHot)        [VS]
+        // [7] table t5 (color_map)          [PS]
+        D3D12_ROOT_PARAMETER1 params[8] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
         params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[1].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
-        params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[1].Descriptor = { 2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[2].Descriptor = { 1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[2].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
         params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-        params[3].Descriptor = { 2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
-        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[4].DescriptorTable.NumDescriptorRanges = 1;
-        params[4].DescriptorTable.pDescriptorRanges = &textureRange;
-        params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[3].Descriptor = { 1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[4].Descriptor = { 2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[5].Descriptor = { 3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        params[6].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[6].Descriptor = { 4, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
+        params[6].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        params[7].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[7].DescriptorTable.NumDescriptorRanges = 1;
+        params[7].DescriptorTable.pDescriptorRanges = &textureRange;
+        params[7].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
         D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
         samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -2379,16 +2407,19 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     auto* sharedWarmBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.billboardWarmBuffer.get());
     auto* sharedColdBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.billboardColdBuffer.get());
     auto* sharedHeaderBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.billboardHeaderBuffer.get());
+    auto* sharedMeshAttribHotBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.meshAttribHotBuffer.get());
     auto* sharedRibbonHistoryBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.ribbonHistoryBuffer.get());
     auto* sharedDeadListBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.deadListBuffer.get());
     auto* sharedAliveListBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.aliveListBuffer.get());
     auto* sharedPageAliveCountBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.pageAliveCountBuffer.get());
     auto* sharedPageAliveOffsetBuffer = static_cast<DX12Buffer*>(particleResources.sharedArena.pageAliveOffsetBuffer.get());
     if (!sharedHotBuffer || !sharedWarmBuffer || !sharedColdBuffer || !sharedHeaderBuffer ||
+        !sharedMeshAttribHotBuffer ||
         !sharedRibbonHistoryBuffer || !sharedDeadListBuffer ||
         !sharedAliveListBuffer || !sharedPageAliveCountBuffer || !sharedPageAliveOffsetBuffer ||
         !sharedHotBuffer->IsValid() || !sharedWarmBuffer->IsValid() ||
         !sharedColdBuffer->IsValid() || !sharedHeaderBuffer->IsValid() ||
+        !sharedMeshAttribHotBuffer->IsValid() ||
         !sharedRibbonHistoryBuffer->IsValid() || !sharedDeadListBuffer->IsValid() ||
         !sharedAliveListBuffer->IsValid()) {
         return;
@@ -2529,6 +2560,9 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
 
     // SoA binding: [0]b0, [1]t0, [2]u0=Hot, [3]u1=Warm, [4]u2=Cold,
     // [5]u3=Header, [6]u4=Dead, [7]u5=Counter, [8]u6=Ribbon, [9]u7=PageAlive, [10]CurlNoise
+    // meshAttribHotGpuVa is always valid (allocated by EnsureSharedArenaCapacity alongside billboards)
+    // so we can use it as a hard fallback when no billboard buffer is bound.
+    const D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotFallbackGpuVa = sharedMeshAttribHotBuffer->GetGPUVirtualAddress();
     auto bindSimulationResources = [&](const EffectParticleSimulationConstants& constants,
         D3D12_GPU_VIRTUAL_ADDRESS srvGpuVa,
         D3D12_GPU_VIRTUAL_ADDRESS hotGpuVa,
@@ -2538,7 +2572,8 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         D3D12_GPU_VIRTUAL_ADDRESS deadGpuVa,
         D3D12_GPU_VIRTUAL_ADDRESS counterGpuVaLocal,
         D3D12_GPU_VIRTUAL_ADDRESS ribbonHistoryGpuVaLocal,
-        D3D12_GPU_VIRTUAL_ADDRESS pageAliveCountGpuVaLocal)
+        D3D12_GPU_VIRTUAL_ADDRESS pageAliveCountGpuVaLocal,
+        D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVaLocal)
     {
         const auto allocation = dx12CommandList->AllocateDynamicConstantBuffer(&constants, static_cast<uint32_t>(sizeof(constants)));
         // DX12 requires non-null root descriptors - find any valid address as fallback
@@ -2547,6 +2582,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         if (fb == 0ull) fb = coldGpuVa;
         if (fb == 0ull) fb = headerGpuVaLocal;
         if (fb == 0ull) fb = counterGpuVaLocal;
+        if (fb == 0ull) fb = meshAttribHotFallbackGpuVa; // always valid
         nativeCommandList->SetComputeRootSignature(particleResources.simulationRootSignature.Get());
         nativeCommandList->SetComputeRootConstantBufferView(0, allocation.gpuVA);
         nativeCommandList->SetComputeRootShaderResourceView(1, srvGpuVa != 0ull ? srvGpuVa : fb);
@@ -2558,7 +2594,8 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         nativeCommandList->SetComputeRootUnorderedAccessView(7, counterGpuVaLocal != 0ull ? counterGpuVaLocal : fb);
         nativeCommandList->SetComputeRootUnorderedAccessView(8, ribbonHistoryGpuVaLocal != 0ull ? ribbonHistoryGpuVaLocal : fb);
         nativeCommandList->SetComputeRootUnorderedAccessView(9, pageAliveCountGpuVaLocal != 0ull ? pageAliveCountGpuVaLocal : fb);
-        nativeCommandList->SetComputeRootDescriptorTable(10, curlNoiseGpuHandle);
+        nativeCommandList->SetComputeRootUnorderedAccessView(10, meshAttribHotGpuVaLocal != 0ull ? meshAttribHotGpuVaLocal : meshAttribHotFallbackGpuVa);
+        nativeCommandList->SetComputeRootDescriptorTable(11, curlNoiseGpuHandle);
     };
 
     for (const EffectParticlePacket* packet : sortedPackets) {
@@ -2582,6 +2619,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         const D3D12_GPU_VIRTUAL_ADDRESS warmGpuVa = OffsetGpuVirtualAddress(sharedWarmBuffer, baseSlot64 * kBillboardWarmStride);
         const D3D12_GPU_VIRTUAL_ADDRESS coldGpuVa = OffsetGpuVirtualAddress(sharedColdBuffer, baseSlot64 * kBillboardColdStride);
         const D3D12_GPU_VIRTUAL_ADDRESS headerGpuVa = OffsetGpuVirtualAddress(sharedHeaderBuffer, baseSlot64 * kBillboardHeaderStride);
+        const D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVa = OffsetGpuVirtualAddress(sharedMeshAttribHotBuffer, baseSlot64 * kMeshAttribHotStride);
         const D3D12_GPU_VIRTUAL_ADDRESS ribbonHistoryGpuVa = OffsetGpuVirtualAddress(sharedRibbonHistoryBuffer, baseSlot64 * kEffectParticleRibbonHistoryLength * sizeof(DirectX::XMFLOAT4));
         const D3D12_GPU_VIRTUAL_ADDRESS deadListGpuVa = OffsetGpuVirtualAddress(sharedDeadListBuffer, baseSlot64 * sizeof(uint32_t));
         const D3D12_GPU_VIRTUAL_ADDRESS counterGpuVa = counterBuffer->GetGPUVirtualAddress();
@@ -2683,6 +2721,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             TransitionBuffer(nativeCommandList, sharedWarmBuffer->GetNativeResource(), particleResources.sharedArena.billboardWarmState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedColdBuffer->GetNativeResource(), particleResources.sharedArena.billboardColdState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedHeaderBuffer->GetNativeResource(), particleResources.sharedArena.billboardHeaderState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            TransitionBuffer(nativeCommandList, sharedMeshAttribHotBuffer->GetNativeResource(), particleResources.sharedArena.meshAttribHotState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedRibbonHistoryBuffer->GetNativeResource(), particleResources.sharedArena.ribbonHistoryState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedDeadListBuffer->GetNativeResource(), particleResources.sharedArena.deadListState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, counterBuffer->GetNativeResource(), runtimeBuffers->counterState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2692,7 +2731,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 // Initialize: zero all SoA streams, fill dead stack
                 const auto initConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, runtimeBuffers->capacity);
                 nativeCommandList->SetPipelineState(particleResources.initializePipelineState.Get());
-                bindSimulationResources(initConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, 0ull);
+                bindSimulationResources(initConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, 0ull, meshAttribHotGpuVa);
                 nativeCommandList->Dispatch((std::min)(runtimeBuffers->capacity, kMaxSingleDispatchParticles) / 64u + 1u, 1u, 1u);
                 AddUavBarrier(nativeCommandList, sharedHotBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedWarmBuffer->GetNativeResource());
@@ -2708,7 +2747,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             // ResetCounters shader: u0=Counter, u1=PageAliveCount; totalPages via gTiming.w
             const auto resetConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, particleResources.sharedArena.totalPages);
             nativeCommandList->SetPipelineState(particleResources.resetCountersPipelineState.Get());
-            bindSimulationResources(resetConstants, 0ull, counterGpuVa, pageAliveCountGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
+            bindSimulationResources(resetConstants, 0ull, counterGpuVa, pageAliveCountGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
             nativeCommandList->Dispatch((particleResources.sharedArena.totalPages + 63u) / 64u, 1u, 1u);
             AddUavBarrier(nativeCommandList, counterBuffer->GetNativeResource());
             AddUavBarrier(nativeCommandList, sharedPageAliveCountBuffer->GetNativeResource());
@@ -2717,7 +2756,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 // Emit: write to Hot/Warm/Cold/Header, pop from dead stack, side-write PageAliveCount
                 const auto emitConstants = makeSimulationConstants(*packet, *runtimeBuffers, simulationDeltaTime, particleLifetime, emitCount);
                 nativeCommandList->SetPipelineState(particleResources.emitPipelineState.Get());
-                bindSimulationResources(emitConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa);
+                bindSimulationResources(emitConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa, meshAttribHotGpuVa);
                 nativeCommandList->Dispatch((emitCount + 63u) / 64u, 1u, 1u);
                 AddUavBarrier(nativeCommandList, sharedHotBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedWarmBuffer->GetNativeResource());
@@ -2736,7 +2775,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 const auto updateConstants = makeSimulationConstants(*packet, *runtimeBuffers, simulationDeltaTime, particleLifetime, updateDispatchCount);
                 nativeCommandList->SetPipelineState(particleResources.updatePipelineState.Get());
                 // t0=AliveList, u0=Hot, u1=Warm, u2=Cold, u3=Header, u4=Dead, u5=Counter, u6=Ribbon, u7=PageAliveCount
-                bindSimulationResources(updateConstants, aliveListGpuVa, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa);
+                bindSimulationResources(updateConstants, aliveListGpuVa, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa, meshAttribHotGpuVa);
                 nativeCommandList->Dispatch((updateDispatchCount + 63u) / 64u, 1u, 1u);
                 AddUavBarrier(nativeCommandList, sharedHotBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedWarmBuffer->GetNativeResource());
@@ -2752,7 +2791,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             TransitionBuffer(nativeCommandList, sharedPageAliveOffsetBuffer->GetNativeResource(), particleResources.sharedArena.pageAliveOffsetState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto prefixConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, particleResources.sharedArena.totalPages);
             nativeCommandList->SetPipelineState(particleResources.prefixSumPipelineState.Get());
-            bindSimulationResources(prefixConstants, 0ull, pageAliveCountGpuVa, pageAliveOffsetGpuVa, counterGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull);
+            bindSimulationResources(prefixConstants, 0ull, pageAliveCountGpuVa, pageAliveOffsetGpuVa, counterGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
             nativeCommandList->Dispatch(1u, 1u, 1u);
             AddUavBarrier(nativeCommandList, sharedPageAliveOffsetBuffer->GetNativeResource());
             AddUavBarrier(nativeCommandList, counterBuffer->GetNativeResource());
@@ -2762,7 +2801,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             TransitionBuffer(nativeCommandList, sharedAliveListBuffer->GetNativeResource(), particleResources.sharedArena.aliveListState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto scatterConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, runtimeBuffers->pageCount);
             nativeCommandList->SetPipelineState(particleResources.scatterAlivePipelineState.Get());
-            bindSimulationResources(scatterConstants, 0ull, aliveListGpuVa, pageAliveOffsetGpuVa, headerGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull);
+            bindSimulationResources(scatterConstants, 0ull, aliveListGpuVa, pageAliveOffsetGpuVa, headerGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
             nativeCommandList->Dispatch(runtimeBuffers->pageCount, 1u, 1u);
             AddUavBarrier(nativeCommandList, sharedAliveListBuffer->GetNativeResource());
 
@@ -2770,7 +2809,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             // BuildDrawArgs shader: u0=IndirectArgs, u1=Counter
             TransitionBuffer(nativeCommandList, indirectArgsBuffer->GetNativeResource(), runtimeBuffers->indirectArgsState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             nativeCommandList->SetPipelineState(particleResources.buildDrawArgsPipelineState.Get());
-            bindSimulationResources(resetConstants, 0ull, indirectArgsBuffer->GetGPUVirtualAddress(), counterGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
+            bindSimulationResources(resetConstants, 0ull, indirectArgsBuffer->GetGPUVirtualAddress(), counterGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
             nativeCommandList->Dispatch(1u, 1u, 1u);
             AddUavBarrier(nativeCommandList, indirectArgsBuffer->GetNativeResource());
 
@@ -2879,7 +2918,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         }
 
         if (packet->drawMode == EffectParticleDrawMode::Mesh) {
-            meshDrawEntries.push_back({ packet, hotGpuVa, headerGpuVa, indirectArgsBuffer, drawCount });
+            meshDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, headerGpuVa, meshAttribHotGpuVa, indirectArgsBuffer, drawCount });
         } else if (packet->drawMode == EffectParticleDrawMode::Ribbon) {
             ribbonDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, ribbonHistoryGpuVa, indirectArgsBuffer, packet->blendMode });
         } else {
@@ -3064,7 +3103,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         renderConstants.velocityStretchMaxAspect = 1.0f;
         renderConstants.globalAlpha = 1.0f;
         const auto renderAllocation = dx12CommandList->AllocateDynamicConstantBuffer(&renderConstants, static_cast<uint32_t>(sizeof(renderConstants)));
-        nativeCommandList->SetGraphicsRootConstantBufferView(3, renderAllocation.gpuVA);
+        nativeCommandList->SetGraphicsRootConstantBufferView(1, renderAllocation.gpuVA);
 
         for (const auto& drawEntry : meshDrawEntries) {
             auto* texture = ResolveParticleTexture(particleResources, *drawEntry.packet);
@@ -3073,9 +3112,13 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             }
 
             d3dDevice->CopyDescriptorsSimple(1, particleResources.textureHeapCpu, texture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            nativeCommandList->SetGraphicsRootShaderResourceView(1, drawEntry.particleDataGpuVa);
-            nativeCommandList->SetGraphicsRootShaderResourceView(2, drawEntry.particleHeaderGpuVa);
-            nativeCommandList->SetGraphicsRootDescriptorTable(4, particleResources.textureHeapGpu);
+            // SoA mesh root sig: [2]=AliveList(t0) [3]=Hot(t1) [4]=Warm(t2) [5]=Header(t3) [6]=MeshAttribHot(t4) [7]=table t5 color_map
+            nativeCommandList->SetGraphicsRootShaderResourceView(2, drawEntry.aliveListGpuVa);
+            nativeCommandList->SetGraphicsRootShaderResourceView(3, drawEntry.hotGpuVa);
+            nativeCommandList->SetGraphicsRootShaderResourceView(4, drawEntry.warmGpuVa);
+            nativeCommandList->SetGraphicsRootShaderResourceView(5, drawEntry.headerGpuVa);
+            nativeCommandList->SetGraphicsRootShaderResourceView(6, drawEntry.meshAttribHotGpuVa);
+            nativeCommandList->SetGraphicsRootDescriptorTable(7, particleResources.textureHeapGpu);
 
             for (const auto& meshResource : drawEntry.packet->modelResource->GetMeshResources()) {
                 auto* vertexBuffer = dynamic_cast<DX12Buffer*>(meshResource.vertexBuffer.get());

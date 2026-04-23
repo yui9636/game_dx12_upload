@@ -1,6 +1,7 @@
 #include "compute_particle.hlsli"
 
-Texture2D color_map : register(t2);
+// t5: color_map (per SoA mesh root signature). s1: linear sampler (static).
+Texture2D color_map : register(t5);
 SamplerState LinearSamp : register(s1);
 
 struct PARTICLE_MESH_PS_IN

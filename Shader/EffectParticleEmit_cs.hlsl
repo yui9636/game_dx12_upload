@@ -14,6 +14,7 @@ RWStructuredBuffer<uint>            g_DeadStack        : register(u4);
 RWByteAddressBuffer                 g_CounterBuffer    : register(u5);
 RWStructuredBuffer<float4>          g_RibbonHistory    : register(u6);
 RWStructuredBuffer<uint>            g_PageAliveCount   : register(u7);
+RWStructuredBuffer<MeshAttribHot>   g_MeshAttribHot    : register(u8);
 
 [numthreads(64, 1, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -110,4 +111,38 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         g_RibbonHistory[historyBase + h] = posW;
     }
 
+    // ── Mesh attribute init (only when Mesh renderer bin) ──
+    // gMeshFlags.x: 0=billboard/ribbon (skip), 1=mesh
+    if (gMeshFlags.x > 0.5f)
+    {
+        // Per-particle orientation: base axis/speed + random yaw/pitch/roll offset.
+        const float yawRand   = lerp(-gMeshAngularRandomOrient.x, gMeshAngularRandomOrient.x, Hash01(seed * 7919u + slot * 1213u + 61u));
+        const float pitchRand = lerp(-gMeshAngularRandomOrient.y, gMeshAngularRandomOrient.y, Hash01(seed * 2683u + slot * 9973u + 139u));
+        const float rollRand  = lerp(-gMeshAngularRandomOrient.z, gMeshAngularRandomOrient.z, Hash01(seed * 4093u + slot * 2437u + 239u));
+        const float4 initialRotation = QuatNormalize(QuatFromYawPitchRoll(yawRand, pitchRand, rollRand));
+
+        // Scale: base xyz * (1 + random) — uniform random factor per-particle, preserves aspect.
+        const float scaleRandRange = max(gMeshInitialScale.w, 0.0f);
+        const float scaleRandFactor = lerp(1.0f - scaleRandRange, 1.0f + scaleRandRange, Hash01(seed * 8527u + slot * 5479u + 317u));
+        const float3 finalScale = gMeshInitialScale.xyz * scaleRandFactor;
+
+        // Angular speed: base rad/s * (1 + random).
+        const float speedRandRange = max(gMeshAngularRandomOrient.w, 0.0f);
+        const float speedRandFactor = lerp(1.0f - speedRandRange, 1.0f + speedRandRange, Hash01(seed * 3697u + slot * 6113u + 409u));
+        const float finalAngularSpeed = gMeshAngularAxisSpeed.w * speedRandFactor;
+
+        // Normalize axis (cbuffer may hold unnormalized input).
+        const float3 axisIn = gMeshAngularAxisSpeed.xyz;
+        const float axisLen = length(axisIn);
+        const float3 finalAxis = axisLen > 1e-5f ? (axisIn / axisLen) : float3(0.0f, 1.0f, 0.0f);
+
+        MeshAttribHot mattr;
+        mattr.rotation      = initialRotation;
+        mattr.scale         = finalScale;
+        mattr.angularSpeed  = finalAngularSpeed;
+        mattr.angularAxis   = finalAxis;
+        mattr.rotReserved   = 0.0f;
+        mattr.reserved      = uint4(0u, 0u, 0u, 0u);
+        g_MeshAttribHot[slot] = mattr;
+    }
 }

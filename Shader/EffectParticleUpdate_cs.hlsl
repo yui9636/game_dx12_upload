@@ -19,6 +19,7 @@ RWStructuredBuffer<uint>            g_DeadStack        : register(u4);
 RWByteAddressBuffer                 g_CounterBuffer    : register(u5);
 RWStructuredBuffer<float4>          g_RibbonHistory    : register(u6);
 RWStructuredBuffer<uint>            g_PageAliveCount   : register(u7);
+RWStructuredBuffer<MeshAttribHot>   g_MeshAttribHot    : register(u8);
 
 [numthreads(64, 1, 1)]
 void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -258,4 +259,16 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     // ── Side-write: per-page alive count (for PrefixSum) ──
     uint pageIdx = slot / PAGE_SIZE;
     InterlockedAdd(g_PageAliveCount[pageIdx], 1u);
+
+    // ── Mesh attribute integration (rotate current quaternion by angular velocity) ──
+    if (gMeshFlags.x > 0.5f)
+    {
+        MeshAttribHot mattr = g_MeshAttribHot[slot];
+        if (abs(mattr.angularSpeed) > 1e-5f)
+        {
+            float4 deltaQ = QuatFromAxisAngle(mattr.angularAxis, mattr.angularSpeed * dt);
+            mattr.rotation = QuatNormalize(QuatMultiply(deltaQ, mattr.rotation));
+            g_MeshAttribHot[slot] = mattr;
+        }
+    }
 }

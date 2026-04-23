@@ -1,7 +1,17 @@
-#include "compute_particle.hlsli"
+// ============================================================================
+// Mesh Particle VS (SoA): reads AliveList + BillboardHot/Warm/Header + MeshAttribHot
+// Draw: DrawIndexedInstanced(indexCount, aliveCount, 0, 0, 0)
+// Input: BONE layout retained for compatibility with existing mesh VB
+// ============================================================================
 
-StructuredBuffer<particle_data> particle_data_buffer : register(t0);
-StructuredBuffer<particle_header> particle_header_buffer : register(t1);
+#include "compute_particle.hlsli"
+#include "EffectParticleSoA.hlsli"
+
+StructuredBuffer<uint>              g_AliveList       : register(t0);
+StructuredBuffer<BillboardHot>      g_BillboardHot    : register(t1);
+StructuredBuffer<BillboardWarm>     g_BillboardWarm   : register(t2);
+StructuredBuffer<BillboardHeader>   g_BillboardHeader : register(t3);
+StructuredBuffer<MeshAttribHot>     g_MeshAttribHot   : register(t4);
 
 struct VS_IN
 {
@@ -22,28 +32,37 @@ struct VS_OUT
     float3 normal : TEXCOORD1;
 };
 
-float3 RotateVector(float3 v, float4 q)
-{
-    float3 t = 2.0f * cross(q.xyz, v);
-    return v + q.w * t + cross(q.xyz, t);
-}
-
 VS_OUT main(VS_IN input, uint instanceID : SV_InstanceID)
 {
     VS_OUT output = (VS_OUT)0;
 
-    particle_header header = particle_header_buffer[instanceID];
-    particle_data particle = particle_data_buffer[header.particle_index];
-    float alive = header.alive != 0 ? 1.0f : 0.0f;
+    // Instance -> slot via alive list
+    const uint slot = g_AliveList[instanceID];
 
-    float3 localPos = input.pos * particle.scale.xyz * alive;
-    float3 worldPos = RotateVector(localPos, particle.rotation) + particle.position.xyz;
-    float3 worldNormal = normalize(RotateVector(input.normal, particle.rotation));
+    // Safety: skip dead slots by collapsing to degenerate triangle
+    const BillboardHeader header = g_BillboardHeader[slot];
+    if (!HeaderIsAlive(header.packed)) {
+        output.position = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        return output;
+    }
+
+    const BillboardHot    hot    = g_BillboardHot[slot];
+    const BillboardWarm   warm   = g_BillboardWarm[slot];
+    const MeshAttribHot   mattr  = g_MeshAttribHot[slot];
+
+    // Per-particle transform:
+    // 1) local scale (per-axis) -> 2) rotate by quaternion -> 3) translate to world position
+    const float3 localPosScaled = input.pos * mattr.scale;
+    const float3 worldPos = QuatRotate(localPosScaled, mattr.rotation) + hot.position;
+    const float3 worldNormal = normalize(QuatRotate(input.normal, mattr.rotation));
+
+    // Color: lifecycle-tinted packed color from Warm stream
+    const float4 lifeColor = UnpackRGBA8(warm.packedColor);
 
     output.position = mul(float4(worldPos, 1.0f), viewProjection);
     output.texcoord = input.uv;
     output.normal = worldNormal;
-    output.color = input.color * particle.color;
+    output.color = input.color * lifeColor;
     output.color.a *= global_alpha;
     return output;
 }
