@@ -247,7 +247,10 @@ struct EffectGraphPreviewDefaults
 // Effect Graph アセット本体。
 struct EffectGraphAsset
 {
-    uint32_t schemaVersion = 1;
+    // schemaVersion 2: MeshParticle Phase 2 — SpriteRenderer ノードが mesh 用スロット
+    //   (stringValue2 / vectorValue5 / vectorValue6 / vectorValue7) を参照し始めた。
+    //   旧 v1 アセットは新スロットが 0 デフォルトでロードされ、UI で後から編集可能。
+    uint32_t schemaVersion = 2;
     std::string graphId = "effect_graph";
     std::string name = "Untitled Effect";
 
@@ -655,6 +658,14 @@ struct EffectParticleSimulationLayout
     uint32_t collisionSphereCount = 0;
     float collisionRestitution = 0.5f;
     float collisionFriction = 0.3f;
+
+    // MeshParticle Phase 2: Mesh 描画モード用パラメータ (drawMode == Mesh 時のみ有効)。
+    DirectX::XMFLOAT3 meshInitialScale = { 1.0f, 1.0f, 1.0f };
+    float             meshScaleRandom = 0.0f;        // 0..1: ±一様倍率
+    DirectX::XMFLOAT3 meshAngularAxis = { 0.0f, 1.0f, 0.0f };
+    float             meshAngularSpeed = 0.0f;        // rad/s (base)
+    DirectX::XMFLOAT3 meshAngularOrientRandom = { 0.0f, 0.0f, 0.0f }; // yaw/pitch/roll の ±範囲 (rad)
+    float             meshAngularSpeedRandom = 0.0f;  // 0..1: 角速度の ±倍率
 };
 
 // エフェクトグラフをコンパイルした最終成果物。

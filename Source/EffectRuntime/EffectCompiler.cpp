@@ -516,9 +516,35 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
                 }
             }
 
-            // Mesh draw mode の場合は preview default mesh を使う。
+            // MeshParticle Phase 2: Mesh draw mode の場合、SpriteRenderer ノードの mesh 用
+            //   汎用スロットから descriptor を組み立てる。
+            //     stringValue2  : meshAssetPath (空なら previewDefaults にフォールバック)
+            //     vectorValue5  : meshInitialScale.xyz + meshScaleRandom.w
+            //     vectorValue6  : meshAngularAxis.xyz + meshAngularSpeed.w
+            //     vectorValue7  : meshAngularOrientRandom.xyz + meshAngularSpeedRandom.w
             if (compiled->particleRenderer.drawMode == EffectParticleDrawMode::Mesh) {
-                compiled->particleRenderer.meshAssetPath = asset.previewDefaults.previewMeshPath;
+                compiled->particleRenderer.meshAssetPath = !node->stringValue2.empty()
+                    ? node->stringValue2
+                    : asset.previewDefaults.previewMeshPath;
+
+                const DirectX::XMFLOAT4 scaleV = node->vectorValue5;
+                const float sx = scaleV.x > 0.0001f ? scaleV.x : 1.0f;
+                const float sy = scaleV.y > 0.0001f ? scaleV.y : 1.0f;
+                const float sz = scaleV.z > 0.0001f ? scaleV.z : 1.0f;
+                compiled->particleRenderer.meshInitialScale = { sx, sy, sz };
+                compiled->particleRenderer.meshScaleRandom = std::clamp(scaleV.w, 0.0f, 1.0f);
+
+                const DirectX::XMFLOAT4 axisV = node->vectorValue6;
+                const float axisLen2 = axisV.x * axisV.x + axisV.y * axisV.y + axisV.z * axisV.z;
+                if (axisLen2 > 1e-6f) {
+                    compiled->particleRenderer.meshAngularAxis = { axisV.x, axisV.y, axisV.z };
+                }
+                // else keep default (0, 1, 0)
+                compiled->particleRenderer.meshAngularSpeed = axisV.w;
+
+                const DirectX::XMFLOAT4 randV = node->vectorValue7;
+                compiled->particleRenderer.meshAngularOrientRandom = { randV.x, randV.y, randV.z };
+                compiled->particleRenderer.meshAngularSpeedRandom = std::clamp(randV.w, 0.0f, 1.0f);
             }
         }
     }

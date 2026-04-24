@@ -2555,6 +2555,31 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             static_cast<float>(packet.collisionSphereCount),
             static_cast<float>(packet.attractorCount)
         };
+        // MeshParticle Phase 2: copy packet mesh fields into the compute cbuffer.
+        // meshFlags.x == 1.0 turns on the mesh-mode branch in Emit/Update CS;
+        // zero for Billboard/Ribbon keeps the existing fast path unchanged.
+        constants.meshInitialScale = {
+            packet.meshInitialScale.x,
+            packet.meshInitialScale.y,
+            packet.meshInitialScale.z,
+            (std::max)(0.0f, packet.meshScaleRandom)
+        };
+        constants.meshAngularAxisSpeed = {
+            packet.meshAngularAxis.x,
+            packet.meshAngularAxis.y,
+            packet.meshAngularAxis.z,
+            packet.meshAngularSpeed
+        };
+        constants.meshAngularRandomOrient = {
+            packet.meshAngularOrientRandom.x,
+            packet.meshAngularOrientRandom.y,
+            packet.meshAngularOrientRandom.z,
+            (std::max)(0.0f, packet.meshAngularSpeedRandom)
+        };
+        constants.meshFlags = {
+            packet.drawMode == EffectParticleDrawMode::Mesh ? 1.0f : 0.0f,
+            0.0f, 0.0f, 0.0f
+        };
         return constants;
     };
 

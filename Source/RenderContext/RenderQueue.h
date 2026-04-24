@@ -221,6 +221,13 @@ struct EffectParticlePacket {
     uint32_t collisionSphereCount = 0;
     float collisionRestitution = 0.5f;
     float collisionFriction = 0.3f;
+    // MeshParticle Phase 2: Mesh 描画モード用 (drawMode == Mesh 時のみ有効)
+    DirectX::XMFLOAT3 meshInitialScale = { 1.0f, 1.0f, 1.0f };
+    float             meshScaleRandom = 0.0f;
+    DirectX::XMFLOAT3 meshAngularAxis = { 0.0f, 1.0f, 0.0f };
+    float             meshAngularSpeed = 0.0f;
+    DirectX::XMFLOAT3 meshAngularOrientRandom = { 0.0f, 0.0f, 0.0f };
+    float             meshAngularSpeedRandom = 0.0f;
 };
 
 struct TrailVertex {

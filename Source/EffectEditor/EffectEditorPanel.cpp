@@ -934,6 +934,92 @@ void EffectEditorPanel::DrawToolbar()
                     "Data/Effect/Flow/Flow.png");
             }
 
+            ImGui::Separator();
+            ImGui::TextDisabled("-- Mesh Particle Effects --");
+
+            // applyMeshParticleTemplate: SoA v3 Mesh-mode particles.
+            // Reuses the standard particle path (applyTemplate) with
+            // drawMode=Mesh, then stamps the SpriteRenderer node's
+            // mesh-only slots (stringValue2, vectorValue5/6/7) that are
+            // read by EffectCompiler to populate CompiledEffectAsset's
+            // mesh particle fields. Unlike applyMeshTemplate, this does
+            // NOT spawn MeshRenderer/MeshSource nodes — a single mesh is
+            // scattered by GPU particle simulation, not driven by the
+            // static mesh renderer.
+            const auto applyMeshParticleTemplate = [&](
+                const char* effectName,
+                float duration,
+                float spawnRate,
+                uint32_t burstCount,
+                float particleLifetime,
+                float speed,
+                EffectSpawnShapeType shapeType,
+                const DirectX::XMFLOAT3& acceleration,
+                float drag,
+                const DirectX::XMFLOAT3& shapeParams,
+                const char* meshPath,
+                const DirectX::XMFLOAT3& meshScale,
+                float meshScaleRandom,
+                const DirectX::XMFLOAT3& angularAxis,
+                float angularSpeed,
+                const DirectX::XMFLOAT3& angularOrientRandom,
+                float angularSpeedRandom,
+                const DirectX::XMFLOAT4& startColor,
+                const DirectX::XMFLOAT4& endColor)
+            {
+                applyTemplate(
+                    effectName, duration, spawnRate, burstCount,
+                    particleLifetime, 1.0f /*startSize*/, 1.0f /*endSize*/, speed,
+                    shapeType, acceleration, drag, shapeParams, 0.0f /*spinRate*/,
+                    EffectParticleDrawMode::Mesh, EffectParticleSortMode::BackToFront,
+                    0.08f /*ribbonWidth*/, 0.30f /*ribbonStretch*/,
+                    "" /*texturePath*/, 1u /*subUvCols*/, 1u /*subUvRows*/, 0.0f /*subUvFrameRate*/,
+                    0.0f /*curlStrength*/, 0.18f /*curlScale*/, 0.20f /*curlScrollSpeed*/, 0.0f /*vortexStrength*/,
+                    startColor, endColor);
+
+                // applyTemplate called CloseCurrentPopup; the popup is still
+                // open until this frame ends so the sprite node lookup still
+                // works.  Re-find SpriteRenderer (the m_asset node vector
+                // may have been reallocated) and stamp mesh-specific slots.
+                EffectGraphNode* spriteNode = FindNodeByType(EffectGraphNodeType::SpriteRenderer);
+                if (!spriteNode) {
+                    return;
+                }
+                spriteNode->stringValue2 = meshPath ? meshPath : "";
+                spriteNode->vectorValue5 = { meshScale.x, meshScale.y, meshScale.z, std::clamp(meshScaleRandom, 0.0f, 1.0f) };
+                spriteNode->vectorValue6 = { angularAxis.x, angularAxis.y, angularAxis.z, angularSpeed };
+                spriteNode->vectorValue7 = { angularOrientRandom.x, angularOrientRandom.y, angularOrientRandom.z,
+                                             std::clamp(angularSpeedRandom, 0.0f, 1.0f) };
+                m_compileDirty = true;
+            };
+
+            if (ImGui::MenuItem("Debris (Mesh)")) {
+                // Burst of small rock-like chunks that scatter from a point,
+                // fall under gravity, and slowly tumble. Low angular speed +
+                // small orient randomization so the pieces look heavy.
+                applyMeshParticleTemplate(
+                    "Debris (Mesh)", 2.5f, 0.0f, 48u, 1.8f, 3.2f,
+                    EffectSpawnShapeType::Sphere, { 0.0f, -6.5f, 0.0f }, 0.12f, { 0.18f, 0.18f, 0.18f },
+                    "Data/Model/Cube/cube.fbx",
+                    { 0.12f, 0.12f, 0.12f }, 0.35f /*scaleRandom*/,
+                    { 0.0f, 1.0f, 0.0f }, 3.5f /*angularSpeed*/,
+                    { 0.25f, 0.25f, 0.25f }, 0.4f /*angularSpeedRandom*/,
+                    { 0.78f, 0.62f, 0.45f, 1.0f }, { 0.35f, 0.28f, 0.22f, 0.0f });
+            }
+            if (ImGui::MenuItem("Spinning Shards")) {
+                // Fast-rotating shards bursting outward. High angular speed,
+                // strong orient randomization so each shard has a unique
+                // rotation axis; useful as a crystal/ice shatter.
+                applyMeshParticleTemplate(
+                    "Spinning Shards", 1.8f, 0.0f, 32u, 1.4f, 5.5f,
+                    EffectSpawnShapeType::Sphere, { 0.0f, -1.8f, 0.0f }, 0.05f, { 0.22f, 0.22f, 0.22f },
+                    "Data/Model/Cube/cube.fbx",
+                    { 0.08f, 0.08f, 0.18f }, 0.4f /*scaleRandom*/,
+                    { 0.0f, 1.0f, 0.0f }, 14.0f /*angularSpeed*/,
+                    { 1.0f, 1.0f, 1.0f }, 0.6f /*angularSpeedRandom*/,
+                    { 0.65f, 0.85f, 1.00f, 1.0f }, { 0.25f, 0.45f, 1.00f, 0.0f });
+            }
+
             ImGui::EndPopup();
         }
 
@@ -2140,6 +2226,21 @@ void EffectEditorPanel::DrawGuiPanel()
                 if (ImGui::DragInt("Flipbook Rows", &subUvRows, 1.0f, 1, 32)) {
                     spriteNode->vectorValue3.w = static_cast<float>(subUvRows);
                     m_compileDirty = true;
+                }
+
+                // MeshParticle Phase 2: only visible when drawMode == Mesh.
+                //   slots: stringValue2=meshPath, vectorValue5=scale+scaleRand,
+                //          vectorValue6=axis+speed, vectorValue7=orientRand+speedRand
+                if (drawMode == static_cast<int>(EffectParticleDrawMode::Mesh)) {
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Mesh Particle");
+                    DrawAssetSlotControl("Mesh Asset##SpriteMesh", spriteNode->stringValue2, AssetPickerKind::Mesh, spriteNode->id, false);
+                    m_compileDirty |= ImGui::DragFloat3("Initial Scale", &spriteNode->vectorValue5.x, 0.01f, 0.001f, 100.0f, "%.3f");
+                    m_compileDirty |= ImGui::SliderFloat("Scale Random", &spriteNode->vectorValue5.w, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                    m_compileDirty |= ImGui::DragFloat3("Angular Axis", &spriteNode->vectorValue6.x, 0.01f, -1.0f, 1.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat("Angular Speed (rad/s)", &spriteNode->vectorValue6.w, 0.05f, -20.0f, 20.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat3("Orient Rand YPR (rad)", &spriteNode->vectorValue7.x, 0.01f, 0.0f, 6.2832f, "%.2f");
+                    m_compileDirty |= ImGui::SliderFloat("Speed Random##Mesh", &spriteNode->vectorValue7.w, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
                 }
             }
 
@@ -3405,6 +3506,19 @@ void EffectEditorPanel::DrawDetailsPanel()
                     m_compileDirty = true;
                 }
                 DrawAssetSlotControl("Texture", node->stringValue, AssetPickerKind::Texture, node->id, false);
+
+                // MeshParticle Phase 2: show mesh-only fields when drawMode == Mesh.
+                if (drawMode == static_cast<int>(EffectParticleDrawMode::Mesh)) {
+                    ImGui::Separator();
+                    ImGui::TextDisabled("Mesh Particle");
+                    DrawAssetSlotControl("Mesh Asset##NodeMesh", node->stringValue2, AssetPickerKind::Mesh, node->id, false);
+                    m_compileDirty |= ImGui::DragFloat3("Initial Scale", &node->vectorValue5.x, 0.01f, 0.001f, 100.0f, "%.3f");
+                    m_compileDirty |= ImGui::SliderFloat("Scale Random", &node->vectorValue5.w, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                    m_compileDirty |= ImGui::DragFloat3("Angular Axis", &node->vectorValue6.x, 0.01f, -1.0f, 1.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat("Angular Speed (rad/s)", &node->vectorValue6.w, 0.05f, -20.0f, 20.0f, "%.2f");
+                    m_compileDirty |= ImGui::DragFloat3("Orient Rand YPR (rad)", &node->vectorValue7.x, 0.01f, 0.0f, 6.2832f, "%.2f");
+                    m_compileDirty |= ImGui::SliderFloat("Speed Random##Mesh", &node->vectorValue7.w, 0.0f, 1.0f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+                }
             }
             break;
         }

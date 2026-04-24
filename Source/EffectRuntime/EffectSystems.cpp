@@ -711,6 +711,14 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 packet.collisionRestitution = effectiveParticle.collisionRestitution;
                 packet.collisionFriction = effectiveParticle.collisionFriction;
 
+                // MeshParticle Phase 2: 回転/スケール/角速度の compiled descriptor -> packet コピー。
+                packet.meshInitialScale = effectiveParticle.meshInitialScale;
+                packet.meshScaleRandom = effectiveParticle.meshScaleRandom;
+                packet.meshAngularAxis = effectiveParticle.meshAngularAxis;
+                packet.meshAngularSpeed = effectiveParticle.meshAngularSpeed;
+                packet.meshAngularOrientRandom = effectiveParticle.meshAngularOrientRandom;
+                packet.meshAngularSpeedRandom = effectiveParticle.meshAngularSpeedRandom;
+
                 packet.tint = effectiveParticle.tint;
                 packet.tintEnd = effectiveParticle.tintEnd;
                 packet.tint.w *= playback.lifetimeFade;
