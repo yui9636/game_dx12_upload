@@ -2,7 +2,7 @@
 #include "PlayerTagComponent.h"
 #include "LocomotionStateComponent.h"
 #include "ActionStateComponent.h"
-#include "DodgeStateComponent.h"
+#include "StateMachineParamsComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
@@ -15,50 +15,58 @@ namespace InputAction {
     constexpr int Dodge = 2;
 }
 
+namespace
+{
+    float ReadPressedTrigger(const ResolvedInputStateComponent& input, int actionIndex)
+    {
+        if (actionIndex < 0 || actionIndex >= input.actionCount) {
+            return 0.0f;
+        }
+        return input.actions[actionIndex].pressed ? 1.0f : 0.0f;
+    }
+
+    void ClearActionTriggers(StateMachineParamsComponent& params)
+    {
+        params.SetParam("LightAttack", 0.0f);
+        params.SetParam("HeavyAttack", 0.0f);
+        params.SetParam("Dodge", 0.0f);
+    }
+}
+
 void PlayerInputSystem::Update(Registry& registry) {
-    Signature sig = CreateSignature<PlayerTagComponent, LocomotionStateComponent, ActionStateComponent, ResolvedInputStateComponent>();
+    Signature sig = CreateSignature<
+        PlayerTagComponent,
+        LocomotionStateComponent,
+        ActionStateComponent,
+        ResolvedInputStateComponent,
+        StateMachineParamsComponent>();
+
     for (auto* arch : registry.GetAllArchetypes()) {
         if (!SignatureMatches(arch->GetSignature(), sig)) continue;
-        auto* locoCol   = arch->GetColumn(TypeManager::GetComponentTypeID<LocomotionStateComponent>());
+        auto* locoCol = arch->GetColumn(TypeManager::GetComponentTypeID<LocomotionStateComponent>());
         auto* actionCol = arch->GetColumn(TypeManager::GetComponentTypeID<ActionStateComponent>());
-        auto* inputCol  = arch->GetColumn(TypeManager::GetComponentTypeID<ResolvedInputStateComponent>());
-        auto* dodgeCol  = arch->GetColumn(TypeManager::GetComponentTypeID<DodgeStateComponent>());
-        if (!locoCol || !actionCol || !inputCol) continue;
+        auto* inputCol = arch->GetColumn(TypeManager::GetComponentTypeID<ResolvedInputStateComponent>());
+        auto* paramsCol = arch->GetColumn(TypeManager::GetComponentTypeID<StateMachineParamsComponent>());
+        if (!locoCol || !actionCol || !inputCol || !paramsCol) continue;
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-            auto& loco   = *static_cast<LocomotionStateComponent*>(locoCol->Get(i));
+            auto& loco = *static_cast<LocomotionStateComponent*>(locoCol->Get(i));
             auto& action = *static_cast<ActionStateComponent*>(actionCol->Get(i));
-            auto& input  = *static_cast<ResolvedInputStateComponent*>(inputCol->Get(i));
+            auto& input = *static_cast<ResolvedInputStateComponent*>(inputCol->Get(i));
+            auto& params = *static_cast<StateMachineParamsComponent*>(paramsCol->Get(i));
 
-            // Dead/Damage states ignore input
-            if (action.state == CharacterState::Dead || action.state == CharacterState::Damage)
+            if (action.state == CharacterState::Dead || action.state == CharacterState::Damage) {
+                loco.moveInput = { 0.0f, 0.0f };
+                ClearActionTriggers(params);
                 continue;
+            }
 
-            // Move input (always written)
             loco.moveInput = { input.axes[0], input.axes[1] };
 
-            // Dodge trigger
-            if (dodgeCol) {
-                auto& dodge = *static_cast<DodgeStateComponent*>(dodgeCol->Get(i));
-                dodge.dodgeTriggered = false;
-                if (input.actions[InputAction::Dodge].pressed &&
-                    input.actions[InputAction::Dodge].framesSincePressed < 10) {
-                    dodge.dodgeTriggered = true;
-                }
-            }
-
-            // Attack triggers — only from Locomotion
-            if (action.state == CharacterState::Locomotion) {
-                if (input.actions[InputAction::AttackLight].pressed &&
-                    input.actions[InputAction::AttackLight].framesSincePressed < 10) {
-                    action.reservedNodeIndex = (loco.gaitIndex >= 2) ? 10 : 0;
-                }
-                else if (input.actions[InputAction::AttackHeavy].pressed &&
-                         input.actions[InputAction::AttackHeavy].framesSincePressed < 12) {
-                    action.reservedNodeIndex = 7;
-                }
-            }
-            // Combo input buffering during Action is handled by ActionSystem
+            // StateMachine owns action and dodge transitions. Input only writes one-frame triggers.
+            params.SetParam("LightAttack", ReadPressedTrigger(input, InputAction::AttackLight));
+            params.SetParam("HeavyAttack", ReadPressedTrigger(input, InputAction::AttackHeavy));
+            params.SetParam("Dodge", ReadPressedTrigger(input, InputAction::Dodge));
         }
     }
 }

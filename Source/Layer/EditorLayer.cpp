@@ -167,11 +167,65 @@ void EditorLayer::Update(const EngineTime& time)
     }
 
     XMStoreFloat3(&m_editorCameraPosition, pos);
+    SyncMainCameraEntityToEditorCamera();
 
     if (m_showSequencer && m_gameLayer && m_activeWorkspace == WorkspaceTab::LevelEditor) {
         m_sequencerPanel.Update(time, &m_gameLayer->GetRegistry());
     } else if (m_gameLayer) {
         m_sequencerPanel.Suspend(&m_gameLayer->GetRegistry());
+    }
+}
+
+void EditorLayer::SyncMainCameraEntityToEditorCamera()
+{
+    if (!m_gameLayer) {
+        return;
+    }
+
+    const bool useEditorCamera =
+        m_activeWorkspace == WorkspaceTab::PlayerEditor ||
+        (m_activeWorkspace == WorkspaceTab::LevelEditor &&
+            (m_sceneViewHovered || m_lastFocusedWindow == WindowFocusTarget::SceneView));
+    if (!useEditorCamera) {
+        return;
+    }
+
+    using namespace DirectX;
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    const Signature targetSig = CreateSignature<TransformComponent, CameraMainTagComponent>();
+    const ComponentTypeID transformId = TypeManager::GetComponentTypeID<TransformComponent>();
+    const ComponentTypeID cameraCtrlId = TypeManager::GetComponentTypeID<CameraFreeControlComponent>();
+
+    const XMFLOAT3 cameraPosition = GetEditorCameraPosition();
+    const XMVECTOR cameraRotation = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
+
+    for (auto* archetype : registry.GetAllArchetypes()) {
+        if (!SignatureMatches(archetype->GetSignature(), targetSig)) {
+            continue;
+        }
+
+        auto* transformColumn = archetype->GetColumn(transformId);
+        auto* cameraCtrlColumn = archetype->GetSignature().test(cameraCtrlId)
+            ? archetype->GetColumn(cameraCtrlId)
+            : nullptr;
+        if (!transformColumn) {
+            continue;
+        }
+
+        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+            auto& transform = *static_cast<TransformComponent*>(transformColumn->Get(i));
+            transform.localPosition = cameraPosition;
+            XMStoreFloat4(&transform.localRotation, cameraRotation);
+            transform.isDirty = true;
+
+            if (cameraCtrlColumn) {
+                auto& cameraCtrl = *static_cast<CameraFreeControlComponent*>(cameraCtrlColumn->Get(i));
+                cameraCtrl.pitch = m_editorCameraPitch;
+                cameraCtrl.yaw = m_editorCameraYaw;
+            }
+            return;
+        }
     }
 }
 

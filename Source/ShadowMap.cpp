@@ -959,9 +959,7 @@ void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource
                 const auto& bone = mesh->bones[i];
                 XMMATRIX nodeTransform = XMLoadFloat4x4(&bone.worldTransform);
                 XMMATRIX offsetTransform = XMLoadFloat4x4(&bone.offsetTransform);
-                // ModelResource stores world-space node transforms already, so applying
-                // actorWorld again here pushes skinned shadow casters to the wrong place.
-                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], offsetTransform * nodeTransform);
+                XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], offsetTransform * nodeTransform * actorWorld);
             }
         }
         else

@@ -26,6 +26,8 @@
 #include "Animator/AnimatorService.h"
 #include "Animator/AnimatorComponent.h"
 #include "Collision/CollisionManager.h"
+#include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/ActionStateComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/HitStopComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
@@ -65,6 +67,9 @@ static constexpr uint32_t kScancodeA = 4;
 static constexpr uint32_t kScancodeD = 7;
 static constexpr uint32_t kScancodeS = 22;
 static constexpr uint32_t kScancodeW = 26;
+static constexpr uint32_t kScancodeJ = 13;
+static constexpr uint8_t kMouseButtonLeft = 1;
+static constexpr uint8_t kGamepadButtonX = 2;
 static constexpr uint8_t kGamepadAxisLeftX = 0;
 static constexpr uint8_t kGamepadAxisLeftY = 1;
 
@@ -328,6 +333,74 @@ static bool MoveAxisBindingTo(InputActionMapAsset& map, const char* axisName, si
     return false;
 }
 
+static ActionBinding* FindActionBinding(InputActionMapAsset& map, const char* actionName)
+{
+    for (auto& action : map.actions) {
+        if (action.actionName == actionName) {
+            return &action;
+        }
+    }
+    return nullptr;
+}
+
+static bool EnsurePhase1BActionBinding(
+    InputActionMapAsset& map,
+    const char* actionName,
+    uint32_t scancode,
+    uint8_t mouseButton,
+    uint8_t gamepadButton)
+{
+    bool changed = false;
+    ActionBinding* action = FindActionBinding(map, actionName);
+    if (!action) {
+        ActionBinding newAction;
+        newAction.actionName = actionName;
+        map.actions.push_back(newAction);
+        action = &map.actions.back();
+        changed = true;
+    }
+
+    if (action->scancode == 0) {
+        action->scancode = scancode;
+        changed = true;
+    }
+    if (action->mouseButton == 0) {
+        action->mouseButton = mouseButton;
+        changed = true;
+    }
+    if (action->gamepadButton == 0xFF) {
+        action->gamepadButton = gamepadButton;
+        changed = true;
+    }
+    if (action->trigger != ActionTriggerType::Pressed) {
+        action->trigger = ActionTriggerType::Pressed;
+        changed = true;
+    }
+
+    return changed;
+}
+
+static bool MoveActionBindingTo(InputActionMapAsset& map, const char* actionName, size_t targetIndex)
+{
+    for (size_t i = 0; i < map.actions.size(); ++i) {
+        if (map.actions[i].actionName != actionName) {
+            continue;
+        }
+        if (i == targetIndex) {
+            return false;
+        }
+
+        ActionBinding action = map.actions[i];
+        map.actions.erase(map.actions.begin() + static_cast<std::ptrdiff_t>(i));
+        if (targetIndex > map.actions.size()) {
+            targetIndex = map.actions.size();
+        }
+        map.actions.insert(map.actions.begin() + static_cast<std::ptrdiff_t>(targetIndex), action);
+        return true;
+    }
+    return false;
+}
+
 static bool EnsurePhase1AInputMap(InputActionMapAsset& map)
 {
     bool changed = false;
@@ -344,6 +417,63 @@ static bool EnsurePhase1AInputMap(InputActionMapAsset& map)
     changed |= EnsurePhase1AAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
     changed |= MoveAxisBindingTo(map, "MoveX", 0);
     changed |= MoveAxisBindingTo(map, "MoveY", 1);
+    return changed;
+}
+
+static bool EnsurePhase1BInputMap(InputActionMapAsset& map)
+{
+    bool changed = EnsurePhase1AInputMap(map);
+    changed |= EnsurePhase1BActionBinding(map, "LightAttack", kScancodeJ, kMouseButtonLeft, kGamepadButtonX);
+    changed |= MoveActionBindingTo(map, "LightAttack", 0);
+    return changed;
+}
+
+static bool EnsureLight1ActionNode(ActionDatabaseComponent& database, int animationIndex)
+{
+    bool changed = false;
+    if (database.nodeCount < 1) {
+        database.nodeCount = 1;
+        changed = true;
+    }
+
+    ActionNode& light1 = database.nodes[0];
+    if (animationIndex >= 0 && light1.animIndex != animationIndex) {
+        light1.animIndex = animationIndex;
+        changed = true;
+    }
+    if (light1.nextLight != -1) {
+        light1.nextLight = -1;
+        changed = true;
+    }
+    if (light1.nextHeavy != -1) {
+        light1.nextHeavy = -1;
+        changed = true;
+    }
+    if (light1.inputStart != 0.0f) {
+        light1.inputStart = 0.0f;
+        changed = true;
+    }
+    if (light1.inputEnd != 1.0f) {
+        light1.inputEnd = 1.0f;
+        changed = true;
+    }
+    if (light1.comboStart != 0.9f) {
+        light1.comboStart = 0.9f;
+        changed = true;
+    }
+    if (light1.cancelStart != 0.35f) {
+        light1.cancelStart = 0.35f;
+        changed = true;
+    }
+    if (light1.damageVal <= 0) {
+        light1.damageVal = 10;
+        changed = true;
+    }
+    if (light1.animSpeed <= 0.0f) {
+        light1.animSpeed = 1.0f;
+        changed = true;
+    }
+
     return changed;
 }
 
@@ -1588,6 +1718,72 @@ void PlayerEditorPanel::ApplyLocomotionTransitionPreset(StateTransition& trans, 
 
 void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
 {
+    auto containsKeyword = [](const std::string& loweredName, std::initializer_list<const char*> keywords) -> bool
+    {
+        for (const char* keyword : keywords) {
+            if (!keyword || keyword[0] == '\0') {
+                continue;
+            }
+
+            const std::string loweredKeyword = ToLowerAscii(keyword);
+            if (loweredName.find(loweredKeyword) != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto isNonForwardLocomotionAnimation = [&](int animationIndex) -> bool
+    {
+        if (!m_model) {
+            return false;
+        }
+
+        const auto& animations = m_model->GetAnimations();
+        if (animationIndex < 0 || animationIndex >= static_cast<int>(animations.size())) {
+            return false;
+        }
+
+        const std::string loweredName = ToLowerAscii(animations[animationIndex].name);
+        return containsKeyword(loweredName, {
+            "back", "backward",
+            "left", "right",
+            "strafe", "side",
+            "_l45", "_r45",
+            "_l90", "_r90",
+            "turn_l", "turn_r"
+        });
+    };
+
+    auto findPreferredMoveAnimation = [&]() -> int
+    {
+        if (!m_model) {
+            return -1;
+        }
+
+        const auto& animations = m_model->GetAnimations();
+        for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+            const std::string loweredName = ToLowerAscii(animations[i].name);
+            if (containsKeyword(loweredName, { "walk", "move", "jog", "run", "locomotion" }) &&
+                containsKeyword(loweredName, { "front", "forward", "_fwd", "fwd" }) &&
+                !isNonForwardLocomotionAnimation(i))
+            {
+                return i;
+            }
+        }
+
+        for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+            const std::string loweredName = ToLowerAscii(animations[i].name);
+            if (containsKeyword(loweredName, { "walk", "move", "jog", "run", "locomotion" }) &&
+                !isNonForwardLocomotionAnimation(i))
+            {
+                return i;
+            }
+        }
+
+        return FindAnimationIndexByKeyword({ "walk", "move", "run", "jog", "locomotion" });
+    };
+
     EnsureStateMachineParameter("MoveX", ParameterType::Float, 0.0f);
     EnsureStateMachineParameter("MoveY", ParameterType::Float, 0.0f);
     EnsureStateMachineParameter("MoveMagnitude", ParameterType::Float, 0.0f);
@@ -1595,6 +1791,9 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
     EnsureStateMachineParameter("Gait", ParameterType::Int, 0.0f);
     EnsureStateMachineParameter("IsWalking", ParameterType::Bool, 0.0f);
     EnsureStateMachineParameter("IsRunning", ParameterType::Bool, 0.0f);
+    EnsureStateMachineParameter("LightAttack", ParameterType::Trigger, 0.0f);
+    EnsureStateMachineParameter("HeavyAttack", ParameterType::Trigger, 0.0f);
+    EnsureStateMachineParameter("Dodge", ParameterType::Trigger, 0.0f);
 
     uint32_t idleId = 0;
     if (StateNode* idle = FindStateByName("Idle")) {
@@ -1637,8 +1836,8 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
     if (idle->animationIndex < 0) {
         idle->animationIndex = FindAnimationIndexByKeyword({ "idle" });
     }
-    if (move->animationIndex < 0) {
-        move->animationIndex = FindAnimationIndexByKeyword({ "walk", "move", "run", "jog", "locomotion" });
+    if (move->animationIndex < 0 || isNonForwardLocomotionAnimation(move->animationIndex)) {
+        move->animationIndex = findPreferredMoveAnimation();
     }
 
     m_stateMachineAsset.defaultStateId = idle->id;
@@ -1678,6 +1877,125 @@ void PlayerEditorPanel::ApplyFullPlayerPhase1APreset()
         ApplyEditorBindingsToPreviewEntity();
         PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
     }
+}
+
+void PlayerEditorPanel::ApplyFullPlayerPreset()
+{
+    ApplyFullPlayerPhase1APreset();
+    ApplyLightAttackPhase1BPreset();
+}
+
+void PlayerEditorPanel::ApplyLightAttackPhase1BPreset()
+{
+    ApplyLocomotionStateMachinePreset();
+
+    InputActionMapAsset& inputMap = m_inputMappingTab.GetEditingMapMutable();
+    if (EnsurePhase1BInputMap(inputMap)) {
+        m_inputMappingTab.MarkDirty();
+    }
+
+    int attackAnimIndex = FindAnimationIndexByKeyword({ "light", "attack", "combo", "slash", "sword", "katana", "punch", "strike" });
+    if (attackAnimIndex < 0 && m_model && !m_model->GetAnimations().empty()) {
+        attackAnimIndex = (m_selectedAnimIndex >= 0 && m_selectedAnimIndex < static_cast<int>(m_model->GetAnimations().size()))
+            ? m_selectedAnimIndex
+            : 0;
+    }
+
+    StateNode* idle = FindStateByName("Idle");
+    StateNode* move = FindStateByName("Move");
+    uint32_t light1Id = 0;
+    if (StateNode* light1 = FindStateByName("Light1")) {
+        light1Id = light1->id;
+    } else if (StateNode* light1 = m_stateMachineAsset.AddState("Light1", StateNodeType::Action)) {
+        light1Id = light1->id;
+    }
+
+    StateNode* light1 = light1Id != 0 ? m_stateMachineAsset.FindState(light1Id) : nullptr;
+    if (light1) {
+        light1->name = "Light1";
+        light1->type = StateNodeType::Action;
+        light1->loopAnimation = false;
+        light1->canInterrupt = false;
+        light1->animSpeed = 1.0f;
+        if (attackAnimIndex >= 0) {
+            light1->animationIndex = attackAnimIndex;
+        }
+        light1->properties["ActionNodeIndex"] = 0.0f;
+        if (light1->position.x == 0.0f && light1->position.y == 0.0f) {
+            light1->position = { 560.0f, 0.0f };
+        }
+    }
+
+    auto applyLightAttackTransition = [&](StateTransition& transition)
+    {
+        transition.conditions.clear();
+        transition.priority = 200;
+        transition.hasExitTime = false;
+        transition.exitTimeNormalized = 0.0f;
+        transition.blendDuration = 0.05f;
+
+        TransitionCondition condition;
+        condition.type = ConditionType::Input;
+        strncpy_s(condition.param, "LightAttack", _TRUNCATE);
+        condition.compare = CompareOp::Equal;
+        condition.value = 1.0f;
+        transition.conditions.push_back(condition);
+    };
+
+    if (light1) {
+        if (idle) {
+            StateTransition* transition = FindTransition(idle->id, light1->id);
+            if (!transition) {
+                transition = m_stateMachineAsset.AddTransition(idle->id, light1->id);
+            }
+            if (transition) {
+                applyLightAttackTransition(*transition);
+            }
+        }
+
+        if (move) {
+            StateTransition* transition = FindTransition(move->id, light1->id);
+            if (!transition) {
+                transition = m_stateMachineAsset.AddTransition(move->id, light1->id);
+            }
+            if (transition) {
+                applyLightAttackTransition(*transition);
+            }
+        }
+
+        if (idle) {
+            StateTransition* transition = FindTransition(light1->id, idle->id);
+            if (!transition) {
+                transition = m_stateMachineAsset.AddTransition(light1->id, idle->id);
+            }
+            if (transition) {
+                transition->conditions.clear();
+                transition->priority = 100;
+                transition->hasExitTime = false;
+                transition->exitTimeNormalized = 0.0f;
+                transition->blendDuration = 0.12f;
+
+                TransitionCondition condition;
+                condition.type = ConditionType::AnimEnd;
+                condition.compare = CompareOp::Equal;
+                condition.value = 1.0f;
+                transition->conditions.push_back(condition);
+            }
+        }
+    }
+
+    if (CanUsePreviewEntity()) {
+        ApplyEditorBindingsToPreviewEntity();
+        if (ActionDatabaseComponent* database = m_registry->GetComponent<ActionDatabaseComponent>(m_previewEntity)) {
+            EnsureLight1ActionNode(*database, attackAnimIndex);
+        }
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
+    }
+
+    m_selectedNodeId = light1 ? light1->id : m_selectedNodeId;
+    m_selectedTransitionId = 0;
+    m_selectionCtx = light1 ? SelectionContext::StateNode : m_selectionCtx;
+    m_stateMachineDirty = true;
 }
 
 void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
@@ -1723,6 +2041,7 @@ void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
     const StateNode* previousState = m_stateMachineAsset.FindState(m_runtimePreviousStateId);
     const AnimatorComponent* animator = m_registry->GetComponent<AnimatorComponent>(m_previewEntity);
     const LocomotionStateComponent* locomotion = m_registry->GetComponent<LocomotionStateComponent>(m_previewEntity);
+    const ActionStateComponent* actionState = m_registry->GetComponent<ActionStateComponent>(m_previewEntity);
 
     std::string currentAnimation = "(none)";
     if (animator && m_model) {
@@ -1740,6 +2059,14 @@ void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
     ImGui::Text("Last Transition: %s", m_runtimeLastTransitionLabel.empty() ? "(none)" : m_runtimeLastTransitionLabel.c_str());
     ImGui::Text("State Timer: %.2fs", params->stateTimer);
     ImGui::Text("Animation: %s", currentAnimation.c_str());
+    if (actionState && actionState->state == CharacterState::Action) {
+        const std::string actionLabel = actionState->currentNodeIndex == 0
+            ? "Light1"
+            : ("Node " + std::to_string(actionState->currentNodeIndex));
+        ImGui::Text("Current Action: %s", actionLabel.c_str());
+    } else {
+        ImGui::Text("Current Action: (none)");
+    }
 
     const float moveX = params->GetParam("MoveX");
     const float moveY = params->GetParam("MoveY");
@@ -1818,8 +2145,9 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     }
 
     if (ImGui::BeginPopup("AddStateTemplatePopup")) {
-        if (ImGui::MenuItem("Full Player (Phase 1A)")) ApplyFullPlayerPhase1APreset();
+        if (ImGui::MenuItem("Full Player (Idle/Move + Light1)")) ApplyFullPlayerPreset();
         if (ImGui::MenuItem("Idle / Move Preset")) ApplyLocomotionStateMachinePreset();
+        if (ImGui::MenuItem("Light Attack")) ApplyLightAttackPhase1BPreset();
         ImGui::Separator();
         if (ImGui::MenuItem("Locomotion")) AddStateTemplate(StateNodeType::Locomotion, { 0.0f, 0.0f });
         if (ImGui::MenuItem("Action"))     AddStateTemplate(StateNodeType::Action, { 0.0f, 0.0f });
@@ -2962,71 +3290,6 @@ void PlayerEditorPanel::DrawStateNodeInspector()
         PreviewStateNode(state->id, true);
     }
 
-    ImGui::Separator();
-    ImGui::Text("Timeline");
-    const TimelineLibraryComponent* timelineLibrary =
-        CanUsePreviewEntity() ? m_registry->GetComponent<TimelineLibraryComponent>(m_previewEntity) : nullptr;
-
-    std::string selectedTimelineLabel = "None";
-    if (state->timelineId != 0) {
-        if (timelineLibrary) {
-            for (const auto& asset : timelineLibrary->assets) {
-                if (asset.id == state->timelineId) {
-                    selectedTimelineLabel = asset.name.empty()
-                        ? ("Timeline #" + std::to_string(asset.id))
-                        : asset.name;
-                    break;
-                }
-            }
-        }
-        if (selectedTimelineLabel == "None" && HasTimelineAssetContent(m_timelineAsset) && m_timelineAsset.id == state->timelineId) {
-            selectedTimelineLabel = m_timelineAsset.name.empty()
-                ? ("Timeline #" + std::to_string(m_timelineAsset.id))
-                : m_timelineAsset.name;
-        }
-    }
-
-    if (ImGui::BeginCombo("Timeline", selectedTimelineLabel.c_str())) {
-        const bool noneSelected = state->timelineId == 0;
-        if (ImGui::Selectable("None", noneSelected)) {
-            state->timelineId = 0;
-            m_stateMachineDirty = true;
-        }
-        if (noneSelected) {
-            ImGui::SetItemDefaultFocus();
-        }
-
-        if (HasTimelineAssetContent(m_timelineAsset)) {
-            const std::string currentTimelineLabel = m_timelineAsset.name.empty()
-                ? ("Current Timeline #" + std::to_string(m_timelineAsset.id == 0 ? 1 : m_timelineAsset.id))
-                : ("Current: " + m_timelineAsset.name);
-            const uint32_t currentTimelineId = m_timelineAsset.id == 0 ? 1u : m_timelineAsset.id;
-            const bool selected = state->timelineId == currentTimelineId;
-            if (ImGui::Selectable(currentTimelineLabel.c_str(), selected)) {
-                state->timelineId = currentTimelineId;
-                m_stateMachineDirty = true;
-            }
-        }
-
-        if (timelineLibrary) {
-            for (const auto& asset : timelineLibrary->assets) {
-                if (HasTimelineAssetContent(m_timelineAsset) && asset.id == m_timelineAsset.id) {
-                    continue;
-                }
-
-                const std::string itemLabel = asset.name.empty()
-                    ? ("Timeline #" + std::to_string(asset.id))
-                    : asset.name;
-                const bool selected = state->timelineId == asset.id;
-                if (ImGui::Selectable(itemLabel.c_str(), selected)) {
-                    state->timelineId = asset.id;
-                    m_stateMachineDirty = true;
-                }
-            }
-        }
-        ImGui::EndCombo();
-    }
-
     ImGui::Text("Input Map");
     const auto& editingMap = m_inputMappingTab.GetEditingMap();
     ImGui::TextDisabled("Action Map: %s", editingMap.name.empty() ? "(none)" : editingMap.name.c_str());
@@ -3062,7 +3325,11 @@ void PlayerEditorPanel::DrawStateMachineParameterList()
 
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
-        ApplyFullPlayerPhase1APreset();
+        ApplyFullPlayerPreset();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(ICON_FA_BOLT " Add Light Attack")) {
+        ApplyLightAttackPhase1BPreset();
     }
 
     ImGui::Separator();

@@ -403,6 +403,7 @@ private:
     void RequestWindowFocus(WindowFocusTarget target);
     void ApplyPendingWindowFocus(WindowFocusTarget target);
     void SetLastFocusedWindow(WindowFocusTarget target, bool focused);
+    void SyncMainCameraEntityToEditorCamera();
     void SaveCameraBookmark(size_t slot);
     void LoadCameraBookmark(size_t slot);
     void DrawRenamePopup();

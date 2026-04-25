@@ -714,15 +714,7 @@ void PlayerEditorSession::RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& p
     TimelineItemBuffer buffer{};
 
     const TimelineAsset* sourceTimeline = nullptr;
-    if (const StateNode* selectedState = panel.m_stateMachineAsset.FindState(panel.m_selectedNodeId)) {
-        if (selectedState->timelineId != 0) {
-            if (const auto* timelineLibrary = panel.m_registry->GetComponent<TimelineLibraryComponent>(panel.m_previewEntity)) {
-                sourceTimeline = FindTimelineAssetById(*timelineLibrary, selectedState->timelineId);
-            }
-        }
-    }
-
-    if (!sourceTimeline && HasTimelineAssetContent(panel.m_timelineAsset)) {
+    if (HasTimelineAssetContent(panel.m_timelineAsset)) {
         sourceTimeline = &panel.m_timelineAsset;
     }
 

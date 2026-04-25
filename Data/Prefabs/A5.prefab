@@ -3,8 +3,23 @@
     {
       "components": {
         "ActionDatabaseComponent": {
-          "nodeCount": 0,
-          "nodes": []
+          "nodeCount": 1,
+          "nodes": [
+            {
+              "animIndex": 68,
+              "animSpeed": 1.0,
+              "cancelStart": 0.3499999940395355,
+              "comboStart": 0.8999999761581421,
+              "damageVal": 10,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            }
+          ]
         },
         "CharacterPhysicsComponent": {
           "acceleration": 50.0,
@@ -24,7 +39,17 @@
           "maxHealth": 100
         },
         "InputActionMapComponent": {
-          "actions": [],
+          "actions": [
+            {
+              "actionName": "LightAttack",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 2,
+              "mouseButton": 1,
+              "scancode": 13,
+              "trigger": "Pressed"
+            }
+          ],
           "axes": [
             {
               "axisName": "MoveX",
@@ -140,20 +165,20 @@
               "id": 1,
               "loopAnimation": true,
               "name": "Idle",
-              "posX": 0.0,
-              "posY": 0.0,
+              "posX": -233.48695373535156,
+              "posY": -10.263161659240723,
               "timelineId": 0,
               "type": 0
             },
             {
               "animSpeed": 1.0,
-              "animationIndex": 2,
+              "animationIndex": 7,
               "canInterrupt": true,
               "id": 2,
               "loopAnimation": true,
               "name": "Move",
-              "posX": 280.0,
-              "posY": 0.0,
+              "posX": 15.723548889160156,
+              "posY": -115.46056365966797,
               "timelineId": 0,
               "type": 0
             }

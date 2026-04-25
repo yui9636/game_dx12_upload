@@ -4,6 +4,9 @@
 #include "Animator/AnimatorService.h"
 #include "Component/ComponentSignature.h"
 #include "Component/MeshComponent.h"
+#include "Gameplay/ActionStateComponent.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/PlaybackComponent.h"
@@ -23,6 +26,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 
 namespace
 {
@@ -73,17 +77,22 @@ namespace
             : 0.0f;
     }
 
-    const TimelineAsset* FindTimelineAssetById(const TimelineLibraryComponent* timelineLibrary, uint32_t timelineId)
+    const TimelineAsset* FindTimelineAssetForAnimation(const TimelineLibraryComponent* timelineLibrary, int animationIndex)
     {
-        if (!timelineLibrary || timelineId == 0) {
+        if (!timelineLibrary || timelineLibrary->assets.empty()) {
             return nullptr;
         }
 
         for (const auto& asset : timelineLibrary->assets) {
-            if (asset.id == timelineId) {
+            if (asset.animationIndex == animationIndex) {
                 return &asset;
             }
         }
+
+        if (timelineLibrary->assets.size() == 1) {
+            return &timelineLibrary->assets.front();
+        }
+
         return nullptr;
     }
 
@@ -109,7 +118,7 @@ namespace
             return;
         }
 
-        const TimelineAsset* asset = FindTimelineAssetById(timelineLibrary, state.timelineId);
+        const TimelineAsset* asset = FindTimelineAssetForAnimation(timelineLibrary, state.animationIndex);
         if (!asset) {
             ResetTimelineRuntime(registry, entity);
             return;
@@ -126,13 +135,133 @@ namespace
             return;
         }
 
+        float moveMagnitude = sqrtf(
+            locomotion->moveInput.x * locomotion->moveInput.x +
+            locomotion->moveInput.y * locomotion->moveInput.y);
+        if (moveMagnitude > 1.0f) {
+            moveMagnitude = 1.0f;
+        }
+
         params.SetParam("MoveX", locomotion->moveInput.x);
         params.SetParam("MoveY", locomotion->moveInput.y);
-        params.SetParam("MoveMagnitude", locomotion->inputStrength);
-        params.SetParam("IsMoving", locomotion->gaitIndex > 0 ? 1.0f : 0.0f);
+        params.SetParam("MoveMagnitude", moveMagnitude);
+        params.SetParam("IsMoving", moveMagnitude > 0.01f ? 1.0f : 0.0f);
         params.SetParam("Gait", static_cast<float>(locomotion->gaitIndex));
         params.SetParam("IsWalking", locomotion->gaitIndex == 1 ? 1.0f : 0.0f);
         params.SetParam("IsRunning", locomotion->gaitIndex == 3 ? 1.0f : 0.0f);
+    }
+
+    CharacterState ToCharacterState(StateNodeType type)
+    {
+        switch (type) {
+        case StateNodeType::Action: return CharacterState::Action;
+        case StateNodeType::Dodge:  return CharacterState::Dodge;
+        case StateNodeType::Damage: return CharacterState::Damage;
+        case StateNodeType::Dead:   return CharacterState::Dead;
+        default:                    return CharacterState::Locomotion;
+        }
+    }
+
+    int ResolveActionNodeIndex(const StateNode& state)
+    {
+        const auto it = state.properties.find("ActionNodeIndex");
+        if (it == state.properties.end()) {
+            return -1;
+        }
+        return static_cast<int>(it->second);
+    }
+
+    void SyncActionStateFromStateNode(Registry& registry, EntityID entity, const StateNode& state)
+    {
+        ActionStateComponent* action = registry.GetComponent<ActionStateComponent>(entity);
+        if (!action) {
+            return;
+        }
+
+        action->state = ToCharacterState(state.type);
+        action->stateTimer = 0.0f;
+        action->reservedNodeIndex = -1;
+
+        if (state.type == StateNodeType::Action) {
+            action->currentNodeIndex = ResolveActionNodeIndex(state);
+            if (CharacterPhysicsComponent* physics = registry.GetComponent<CharacterPhysicsComponent>(entity)) {
+                physics->velocity.x = 0.0f;
+                physics->velocity.z = 0.0f;
+            }
+        } else if (state.type == StateNodeType::Dodge) {
+            action->currentNodeIndex = -1;
+            if (DodgeStateComponent* dodge = registry.GetComponent<DodgeStateComponent>(entity)) {
+                dodge->dodgeTimer = 0.0f;
+                if (const LocomotionStateComponent* locomotion = registry.GetComponent<LocomotionStateComponent>(entity)) {
+                    const float moveX = locomotion->moveInput.x;
+                    const float moveY = locomotion->moveInput.y;
+                    const float lenSq = moveX * moveX + moveY * moveY;
+                    if (lenSq > 0.0001f) {
+                        dodge->dodgeAngleY = atan2f(moveX, moveY);
+                    }
+                }
+            }
+        } else {
+            action->currentNodeIndex = -1;
+        }
+    }
+
+    void MirrorActionStateFromStateNode(
+        Registry& registry,
+        EntityID entity,
+        const StateNode& state,
+        float stateTimer)
+    {
+        ActionStateComponent* action = registry.GetComponent<ActionStateComponent>(entity);
+        if (!action) {
+            return;
+        }
+
+        action->state = ToCharacterState(state.type);
+        action->stateTimer = stateTimer;
+        action->reservedNodeIndex = -1;
+        action->currentNodeIndex = state.type == StateNodeType::Action
+            ? ResolveActionNodeIndex(state)
+            : -1;
+    }
+
+    void EnterState(
+        Registry& registry,
+        EntityID entity,
+        StateMachineParamsComponent& params,
+        PlaybackComponent& playback,
+        const StateNode& state,
+        const TimelineLibraryComponent* timelineLibrary,
+        float blendDuration)
+    {
+        params.currentStateId = state.id;
+        params.stateTimer = 0.0f;
+        params.animFinished = false;
+
+        playback.currentSeconds = 0.0f;
+        playback.clipLength = ResolveStateAnimationClipLength(registry, entity, state);
+        playback.playing = true;
+        playback.looping = state.loopAnimation;
+        playback.stopAtEnd = !state.loopAnimation;
+        playback.playSpeed = state.animSpeed > 0.0f ? state.animSpeed : 1.0f;
+        playback.finished = false;
+
+        SyncActionStateFromStateNode(registry, entity, state);
+        AnimatorService::Instance().StopAction(entity, blendDuration);
+        AnimatorService::Instance().PlayBase(
+            entity,
+            state.animationIndex,
+            state.loopAnimation,
+            blendDuration,
+            playback.playSpeed);
+        ApplyTimelineStateAsset(registry, entity, state, timelineLibrary);
+    }
+
+    void ClearTriggerParameters(StateMachineParamsComponent& params)
+    {
+        params.SetParam("LightAttack", 0.0f);
+        params.SetParam("HeavyAttack", 0.0f);
+        params.SetParam("Dodge", 0.0f);
     }
 
     bool EvaluateCondition(
@@ -147,6 +276,19 @@ namespace
 
         switch (cond.type) {
         case ConditionType::Input:
+            if (cond.param && cond.param[0] != '\0') {
+                bool numeric = true;
+                for (const char* p = cond.param; *p != '\0'; ++p) {
+                    if (*p < '0' || *p > '9') {
+                        numeric = false;
+                        break;
+                    }
+                }
+                if (!numeric) {
+                    lhs = params.GetParam(cond.param);
+                    break;
+                }
+            }
             if (input) {
                 const int idx = ResolveInputActionIndex(cond.param, inputActionMap);
                 if (idx >= 0 && idx < ResolvedInputStateComponent::MAX_ACTIONS) {
@@ -232,34 +374,24 @@ void StateMachineSystem::Update(Registry& registry, float dt)
 
             const StateMachineAsset& asset = stateMachineAssetComponent.asset;
             if (asset.states.empty()) {
+                ClearTriggerParameters(smp);
                 continue;
             }
 
             SyncLocomotionParameters(smp, loco);
 
             if (smp.currentStateId == 0) {
-                smp.currentStateId = asset.defaultStateId;
-                smp.stateTimer = 0.0f;
-
-                if (const StateNode* initialState = asset.FindState(smp.currentStateId)) {
-                    AnimatorService::Instance().PlayBase(
-                        entity,
-                        initialState->animationIndex,
-                        initialState->loopAnimation,
-                        0.0f,
-                        initialState->animSpeed);
-                    pb.currentSeconds = 0.0f;
-                    pb.clipLength = ResolveStateAnimationClipLength(registry, entity, *initialState);
-                    pb.playing = true;
-                    pb.looping = initialState->loopAnimation;
-                    pb.playSpeed = initialState->animSpeed;
-                    pb.finished = false;
-                    ApplyTimelineStateAsset(registry, entity, *initialState, timelineLibrary);
+                if (const StateNode* initialState = asset.FindState(asset.defaultStateId)) {
+                    EnterState(registry, entity, smp, pb, *initialState, timelineLibrary, 0.0f);
                 }
             }
 
             smp.stateTimer += dt;
             smp.animFinished = pb.finished;
+
+            if (const StateNode* currentState = asset.FindState(smp.currentStateId)) {
+                MirrorActionStateFromStateNode(registry, entity, *currentState, smp.stateTimer);
+            }
 
             auto transitions = asset.GetTransitionsFrom(smp.currentStateId);
             const StateTransition* best = nullptr;
@@ -291,32 +423,20 @@ void StateMachineSystem::Update(Registry& registry, float dt)
             }
 
             if (!best) {
+                ClearTriggerParameters(smp);
                 continue;
             }
-
-            smp.currentStateId = best->toState;
-            smp.stateTimer = 0.0f;
-            smp.animFinished = false;
 
             const StateNode* newState = asset.FindState(best->toState);
             if (!newState) {
+                ClearTriggerParameters(smp);
                 continue;
             }
 
-            pb.currentSeconds = 0.0f;
-            pb.clipLength = ResolveStateAnimationClipLength(registry, entity, *newState);
-            pb.playing = true;
-            pb.looping = newState->loopAnimation;
-            pb.playSpeed = newState->animSpeed;
-            pb.finished = false;
-
-            AnimatorService::Instance().PlayBase(
-                entity,
-                newState->animationIndex,
-                newState->loopAnimation,
-                best->blendDuration,
-                newState->animSpeed);
-            ApplyTimelineStateAsset(registry, entity, *newState, timelineLibrary);
+            if (newState->id != smp.currentStateId) {
+                EnterState(registry, entity, smp, pb, *newState, timelineLibrary, best->blendDuration);
+            }
+            ClearTriggerParameters(smp);
         }
     }
 }
