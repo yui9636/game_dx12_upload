@@ -269,7 +269,7 @@ void EffectPlaybackSystem::Update(Registry& registry, float dt)
 }
 
 // 親 entity や socket に追従する effect の Transform を更新する。
-void EffectAttachmentSystem::Update(Registry& registry)
+void EffectAttachmentSystem::Update(Registry& registry, float dt)
 {
     for (auto* archetype : registry.GetAllArchetypes()) {
         if (!ArchetypeHas<EffectAttachmentComponent, TransformComponent>(archetype)) {
@@ -331,6 +331,25 @@ void EffectAttachmentSystem::Update(Registry& registry)
                     attachment.offsetScale,
                     NodeAttachmentSpace::NodeLocal);
             }
+
+            // Velocity sample for VFX modulation. Spec: skip first frame to avoid
+            // huge initial spike when prevWorldPos == {0,0,0}.
+            const DirectX::XMFLOAT3 worldPos = {
+                desiredWorld._41, desiredWorld._42, desiredWorld._43
+            };
+            if (!attachment.velocityInitialized || dt <= 0.0f) {
+                attachment.worldVelocity = { 0.0f, 0.0f, 0.0f };
+                attachment.worldSpeed    = 0.0f;
+                attachment.velocityInitialized = true;
+            } else {
+                const float invDt = 1.0f / dt;
+                const float vx = (worldPos.x - attachment.prevWorldPos.x) * invDt;
+                const float vy = (worldPos.y - attachment.prevWorldPos.y) * invDt;
+                const float vz = (worldPos.z - attachment.prevWorldPos.z) * invDt;
+                attachment.worldVelocity = { vx, vy, vz };
+                attachment.worldSpeed    = std::sqrt(vx*vx + vy*vy + vz*vz);
+            }
+            attachment.prevWorldPos = worldPos;
 
             ApplyAttachedWorldToTransform(registry, entity, desiredWorld);
         }
@@ -742,6 +761,24 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 // texture を解決する。
                 if (!effectiveParticle.texturePath.empty()) {
                     packet.texture = ResourceManager::Instance().GetTexture(effectiveParticle.texturePath);
+                }
+
+                // CharacterTrailEffects: velocity-driven additive modulation.
+                // EffectAttachmentSystem populates worldSpeed; here we fold it into the packet.
+                if (auto* attachment = registry.GetComponent<EffectAttachmentComponent>(archetype->GetEntities()[row])) {
+                    if (attachment->velocityModulateEnabled) {
+                        const float ref = (attachment->velocitySpeedRef > 0.001f) ? attachment->velocitySpeedRef : 0.001f;
+                        float modulator = attachment->worldSpeed / ref;
+                        if (modulator < 0.0f) modulator = 0.0f;
+                        if (modulator > attachment->velocityModulatorMax) modulator = attachment->velocityModulatorMax;
+
+                        packet.spawnRate += attachment->velocitySpawnRateAdd * modulator;
+                        packet.startSize += attachment->velocityWidthAdd * modulator;
+                        float a = packet.tint.w + attachment->velocityAlphaAdd * modulator;
+                        if (a < 0.0f) a = 0.0f;
+                        if (a > 1.0f) a = 1.0f;
+                        packet.tint.w = a;
+                    }
                 }
 
                 queue.effectParticlePackets.push_back(std::move(packet));

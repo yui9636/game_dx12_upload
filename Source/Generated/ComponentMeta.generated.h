@@ -22,6 +22,7 @@ template <typename T>
 struct ComponentMeta;
 
 // --- Component Includes ---
+#include "Component/ActorTypeComponent.h"
 #include "Component/AudioBusSendComponent.h"
 #include "Component/AudioEmitterComponent.h"
 #include "Component/AudioListenerComponent.h"
@@ -88,6 +89,15 @@ struct ComponentMeta;
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
+
+template <>
+struct ComponentMeta<ActorTypeComponent> {
+    static constexpr std::string_view Name = "ActorTypeComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("type", &ActorTypeComponent::type),
+        MakeField("factionId", &ActorTypeComponent::factionId)
+    );
+};
 
 template <>
 struct ComponentMeta<AudioBusSendComponent> {
@@ -294,7 +304,17 @@ struct ComponentMeta<EffectAttachmentComponent> {
         MakeField("socketName", &EffectAttachmentComponent::socketName),
         MakeField("offsetLocal", &EffectAttachmentComponent::offsetLocal),
         MakeField("offsetRotDeg", &EffectAttachmentComponent::offsetRotDeg),
-        MakeField("offsetScale", &EffectAttachmentComponent::offsetScale)
+        MakeField("offsetScale", &EffectAttachmentComponent::offsetScale),
+        MakeField("velocityModulateEnabled", &EffectAttachmentComponent::velocityModulateEnabled),
+        MakeField("velocitySpeedRef", &EffectAttachmentComponent::velocitySpeedRef),
+        MakeField("velocitySpawnRateAdd", &EffectAttachmentComponent::velocitySpawnRateAdd),
+        MakeField("velocityWidthAdd", &EffectAttachmentComponent::velocityWidthAdd),
+        MakeField("velocityAlphaAdd", &EffectAttachmentComponent::velocityAlphaAdd),
+        MakeField("velocityModulatorMax", &EffectAttachmentComponent::velocityModulatorMax),
+        MakeField("velocityInitialized", &EffectAttachmentComponent::velocityInitialized),
+        MakeField("prevWorldPos", &EffectAttachmentComponent::prevWorldPos),
+        MakeField("worldVelocity", &EffectAttachmentComponent::worldVelocity),
+        MakeField("worldSpeed", &EffectAttachmentComponent::worldSpeed)
     );
 };
 
@@ -919,6 +939,7 @@ struct ComponentMeta<TimelineLibraryComponent> {
 
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
+    ActorTypeComponent,
     AudioBusSendComponent,
     AudioEmitterComponent,
     AudioListenerComponent,

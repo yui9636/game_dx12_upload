@@ -126,15 +126,15 @@ void GameLayer::Update(const EngineTime& time)
 
     // --- Gameplay Systems (spec order) ---
     PlayerInputSystem::Update(m_registry);
-    ActionSystem::Update(m_registry, time.dt);
-    DodgeSystem::Update(m_registry, time.dt);
+    PlaybackSystem::Update(m_registry, time.dt);
+    StateMachineSystem::Update(m_registry, time.dt);
     LocomotionSystem::Update(m_registry, time.dt);
     StaminaSystem::Update(m_registry, time.dt);
     HealthSystem::Update(m_registry, time.dt);
     CharacterPhysicsSystem::Update(m_registry, time.dt);
-    PlaybackSystem::Update(m_registry, time.dt);
-    StateMachineSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
+    ActionSystem::Update(m_registry, time.dt);
+    DodgeSystem::Update(m_registry, time.dt);
     CinematicService::Instance().Update(time);
     EffectSpawnSystem::Update(m_registry, time.dt);
     EffectPlaybackSystem::Update(m_registry, time.dt);
@@ -156,7 +156,7 @@ void GameLayer::Update(const EngineTime& time)
     TimelineVFXSystem::Update(m_registry);
     TimelineAudioSystem::Update(m_registry);
     TimelineShakeSystem::Update(m_registry, time.dt);
-    EffectAttachmentSystem::Update(m_registry);
+    EffectAttachmentSystem::Update(m_registry, time.dt);
     TrailSystem::Update(m_registry, time.dt);
     HitboxTrackingSystem::Update(m_registry);
 

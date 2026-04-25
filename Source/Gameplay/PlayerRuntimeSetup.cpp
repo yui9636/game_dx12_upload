@@ -1,6 +1,7 @@
 #include "PlayerRuntimeSetup.h"
 
 #include "Component/ColliderComponent.h"
+#include "Component/MeshComponent.h"
 #include "Component/NodeSocketComponent.h"
 #include "Collision/CollisionManager.h"
 #include "Gameplay/ActionDatabaseComponent.h"
@@ -15,6 +16,7 @@
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/PlayerTagComponent.h"
+#include "Component/ActorTypeComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StaminaComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
@@ -25,9 +27,13 @@
 #include "Input/InputContextComponent.h"
 #include "Input/InputUserComponent.h"
 #include "Input/ResolvedInputStateComponent.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Query.h"
 
+#include <algorithm>
+#include <cctype>
+#include <string>
 #include <vector>
 
 namespace
@@ -36,6 +42,9 @@ namespace
     constexpr uint32_t kScancodeD = 7;
     constexpr uint32_t kScancodeS = 22;
     constexpr uint32_t kScancodeW = 26;
+    constexpr uint32_t kScancodeJ = 13;
+    constexpr uint8_t kMouseButtonLeft = 1;
+    constexpr uint8_t kGamepadButtonX = 2;
     constexpr uint8_t kGamepadAxisLeftX = 0;
     constexpr uint8_t kGamepadAxisLeftY = 1;
 
@@ -58,6 +67,9 @@ namespace
         stateMachine.SetParam("Gait", 0.0f);
         stateMachine.SetParam("IsWalking", 0.0f);
         stateMachine.SetParam("IsRunning", 0.0f);
+        stateMachine.SetParam("LightAttack", 0.0f);
+        stateMachine.SetParam("HeavyAttack", 0.0f);
+        stateMachine.SetParam("Dodge", 0.0f);
     }
 
     AxisBinding* FindAxisBinding(InputActionMapAsset& map, const char* axisName)
@@ -68,6 +80,43 @@ namespace
             }
         }
         return nullptr;
+    }
+
+    ActionBinding* FindActionBinding(InputActionMapAsset& map, const char* actionName)
+    {
+        for (auto& action : map.actions) {
+            if (action.actionName == actionName) {
+                return &action;
+            }
+        }
+        return nullptr;
+    }
+
+    void EnsureActionBinding(
+        InputActionMapAsset& map,
+        const char* actionName,
+        uint32_t scancode,
+        uint8_t mouseButton,
+        uint8_t gamepadButton)
+    {
+        ActionBinding* action = FindActionBinding(map, actionName);
+        if (!action) {
+            ActionBinding newAction;
+            newAction.actionName = actionName;
+            map.actions.push_back(newAction);
+            action = &map.actions.back();
+        }
+
+        if (action->scancode == 0) {
+            action->scancode = scancode;
+        }
+        if (action->mouseButton == 0) {
+            action->mouseButton = mouseButton;
+        }
+        if (action->gamepadButton == 0xFF) {
+            action->gamepadButton = gamepadButton;
+        }
+        action->trigger = ActionTriggerType::Pressed;
     }
 
     void EnsureAxisBinding(
@@ -122,6 +171,26 @@ namespace
         }
     }
 
+    void MoveActionBindingTo(InputActionMapAsset& map, const char* actionName, size_t targetIndex)
+    {
+        for (size_t i = 0; i < map.actions.size(); ++i) {
+            if (map.actions[i].actionName != actionName) {
+                continue;
+            }
+            if (i == targetIndex) {
+                return;
+            }
+
+            ActionBinding action = map.actions[i];
+            map.actions.erase(map.actions.begin() + static_cast<std::vector<ActionBinding>::difference_type>(i));
+            if (targetIndex > map.actions.size()) {
+                targetIndex = map.actions.size();
+            }
+            map.actions.insert(map.actions.begin() + static_cast<std::vector<ActionBinding>::difference_type>(targetIndex), action);
+            return;
+        }
+    }
+
     void EnsureDefaultPlayerInputMap(InputActionMapAsset& map)
     {
         if (map.name.empty()) {
@@ -133,6 +202,8 @@ namespace
 
         EnsureAxisBinding(map, "MoveX", kScancodeD, kScancodeA, kGamepadAxisLeftX);
         EnsureAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
+        EnsureActionBinding(map, "LightAttack", kScancodeJ, kMouseButtonLeft, kGamepadButtonX);
+        MoveActionBindingTo(map, "LightAttack", 0);
         MoveAxisBindingTo(map, "MoveX", 0);
         MoveAxisBindingTo(map, "MoveY", 1);
     }
@@ -159,6 +230,66 @@ namespace
         }
         if (locomotion.turnSpeed > 1080.0f || locomotion.turnSpeed <= 0.0f) {
             locomotion.turnSpeed = 720.0f;
+        }
+    }
+
+    std::string ToLowerAscii(std::string value)
+    {
+        std::transform(
+            value.begin(),
+            value.end(),
+            value.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    }
+
+    int FindPreferredLightAttackAnimation(Registry& registry, EntityID entity)
+    {
+        const MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model) {
+            return -1;
+        }
+
+        const auto& animations = mesh->model->GetAnimations();
+        const char* keywords[] = { "light", "attack", "combo", "slash", "sword", "katana", "punch", "strike" };
+        for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
+            const std::string loweredName = ToLowerAscii(animations[i].name);
+            for (const char* keyword : keywords) {
+                if (loweredName.find(keyword) != std::string::npos) {
+                    return i;
+                }
+            }
+        }
+
+        return animations.empty() ? -1 : 0;
+    }
+
+    void EnsureDefaultActionDatabase(Registry& registry, EntityID entity, ActionDatabaseComponent& database)
+    {
+        const bool createdLight1 = database.nodeCount < 1;
+        if (database.nodeCount < 1) {
+            database.nodeCount = 1;
+        }
+
+        ActionNode& light1 = database.nodes[0];
+        const int preferredAnimation = FindPreferredLightAttackAnimation(registry, entity);
+        if (preferredAnimation >= 0 && (createdLight1 || light1.animIndex < 0)) {
+            light1.animIndex = preferredAnimation;
+        } else if (light1.animIndex < 0) {
+            light1.animIndex = 0;
+        }
+
+        if (createdLight1) {
+            light1.nextLight = -1;
+            light1.nextHeavy = -1;
+            light1.inputStart = 0.0f;
+            light1.inputEnd = 1.0f;
+            light1.comboStart = 0.9f;
+            light1.cancelStart = 0.35f;
+            light1.damageVal = 10;
+        }
+        if (light1.animSpeed <= 0.0f) {
+            light1.animSpeed = 1.0f;
         }
     }
 
@@ -199,10 +330,18 @@ namespace PlayerRuntimeSetup
             playerTag->playerId = 1;
         }
 
+        ActorTypeComponent* actorType = EnsureComponent<ActorTypeComponent>(registry, entity);
+        if (actorType && actorType->type == ActorType::None) {
+            actorType->type = ActorType::Player;
+        }
+
         EnsureComponent<CharacterPhysicsComponent>(registry, entity);
         EnsureComponent<HealthComponent>(registry, entity);
         EnsureComponent<StaminaComponent>(registry, entity);
-        EnsureComponent<ActionDatabaseComponent>(registry, entity);
+        ActionDatabaseComponent* actionDatabase = EnsureComponent<ActionDatabaseComponent>(registry, entity);
+        if (actionDatabase) {
+            EnsureDefaultActionDatabase(registry, entity, *actionDatabase);
+        }
         EnsureComponent<StateMachineAssetComponent>(registry, entity);
         EnsureComponent<TimelineLibraryComponent>(registry, entity);
         InputActionMapComponent* inputActionMap = EnsureComponent<InputActionMapComponent>(registry, entity);
