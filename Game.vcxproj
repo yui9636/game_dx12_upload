@@ -307,6 +307,7 @@
     <ClInclude Include="Source\Physics\PhysicsSyncSystem.h" />
     <ClInclude Include="Source\Physics\PhysicsSystem.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h" />
+    <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\EffectRuntime\EffectCompiler.h" />
     <ClInclude Include="Source\EffectRuntime\EffectService.h" />
     <ClInclude Include="Source\EffectRuntime\EffectGraphAsset.h" />
@@ -591,6 +592,12 @@
     <ClCompile Include="Source\Physics\PhysicsSyncSystem.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSystem.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorTemplates.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorAssetPicker.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorDocument.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorRuntimeOverride.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorGraphPanel.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorTimelinePanel.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectCompiler.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectService.cpp" />
     <ClCompile Include="Source\EffectRuntime\EffectGraphSerializer.cpp" />

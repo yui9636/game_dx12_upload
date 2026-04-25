@@ -19,6 +19,7 @@ namespace ax::NodeEditor
 
 class EffectEditorPanel
 {
+    friend class EffectEditorTemplates;
 public:
     EffectEditorPanel();
     ~EffectEditorPanel();
