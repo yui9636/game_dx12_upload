@@ -182,12 +182,19 @@ namespace
         action->stateTimer = 0.0f;
         action->reservedNodeIndex = -1;
 
-        if (state.type == StateNodeType::Action) {
-            action->currentNodeIndex = ResolveActionNodeIndex(state);
+        // Spec §8: hand horizontal velocity control to the StateMachine-owned system
+        // (Action / Dodge / Damage / Dead). Without this, leftover Locomotion velocity
+        // — or DodgeSystem's per-frame override starting from a stale dodgeAngleY — keeps
+        // the character sliding after entering a non-Locomotion state.
+        if (state.type != StateNodeType::Locomotion) {
             if (CharacterPhysicsComponent* physics = registry.GetComponent<CharacterPhysicsComponent>(entity)) {
                 physics->velocity.x = 0.0f;
                 physics->velocity.z = 0.0f;
             }
+        }
+
+        if (state.type == StateNodeType::Action) {
+            action->currentNodeIndex = ResolveActionNodeIndex(state);
         } else if (state.type == StateNodeType::Dodge) {
             action->currentNodeIndex = -1;
             if (DodgeStateComponent* dodge = registry.GetComponent<DodgeStateComponent>(entity)) {
@@ -259,9 +266,9 @@ namespace
 
     void ClearTriggerParameters(StateMachineParamsComponent& params)
     {
-        params.SetParam("LightAttack", 0.0f);
-        params.SetParam("HeavyAttack", 0.0f);
+        params.SetParam("Attack", 0.0f);
         params.SetParam("Dodge", 0.0f);
+        params.SetParam("Damaged", 0.0f);
     }
 
     bool EvaluateCondition(

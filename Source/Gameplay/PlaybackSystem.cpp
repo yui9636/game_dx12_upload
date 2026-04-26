@@ -36,7 +36,19 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
 
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
             auto& pb = *static_cast<PlaybackComponent*>(playCol->Get(i));
-            if (!pb.playing || pb.clipLength <= 0.0f) continue;
+            if (!pb.playing) continue;
+
+            // Animation-less state (clipLength==0): mark finished immediately so
+            // AnimEnd transitions still fire. Otherwise non-loop states without an
+            // assigned animation lock the StateMachine forever (e.g. Dodge/Damage
+            // when their clip lookup failed).
+            if (pb.clipLength <= 0.0f) {
+                if (pb.stopAtEnd && !pb.looping) {
+                    pb.playing = false;
+                    pb.finished = true;
+                }
+                continue;
+            }
 
             float timeScale = 1.0f;
 

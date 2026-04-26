@@ -131,10 +131,10 @@ void GameLayer::Update(const EngineTime& time)
     LocomotionSystem::Update(m_registry, time.dt);
     StaminaSystem::Update(m_registry, time.dt);
     HealthSystem::Update(m_registry, time.dt);
+    DodgeSystem::Update(m_registry, time.dt);
     CharacterPhysicsSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
     ActionSystem::Update(m_registry, time.dt);
-    DodgeSystem::Update(m_registry, time.dt);
     CinematicService::Instance().Update(time);
     EffectSpawnSystem::Update(m_registry, time.dt);
     EffectPlaybackSystem::Update(m_registry, time.dt);
@@ -146,9 +146,13 @@ void GameLayer::Update(const EngineTime& time)
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
 
     TransformSystem transformSys;
+
     transformSys.Update(m_registry);
 
     AnimatorSystem::Update(m_registry, time.dt);
+
+    transformSys.Update(m_registry);
+
     ModelUpdateSystem::Update(m_registry);
 
     NodeAttachmentSystem::Update(m_registry);

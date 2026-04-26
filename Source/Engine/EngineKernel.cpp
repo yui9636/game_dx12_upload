@@ -1752,6 +1752,22 @@
 #include <cstring>
 #include <fstream>
 #include "Gameplay/TimelineShakeSystem.h"
+#include "GameLoop/GameLoopSystem.h"
+#include "GameLoop/SceneTransitionSystem.h"
+#include "GameLoop/UIButtonClickSystem.h"
+#include "GameLoop/UIButtonClickEventQueue.h"
+#include "Component/CameraComponent.h"
+#include "Component/Camera2DComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/HierarchyComponent.h"
+#include "Component/NameComponent.h"
+#include "Input/InputUserComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputActionMapComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Input/InputResolveSystem.h"
+#include "System/Query.h"
 
 namespace {
     // DX12 実行時診断の有効フラグ。
@@ -2774,6 +2790,67 @@ void EngineKernel::Initialize()
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
+    // GameLoop default asset を読み込む (なければ default を生成する)。
+    {
+        const std::filesystem::path gameLoopPath = "Data/GameLoop/Main.gameloop";
+        if (!m_gameLoopAsset.LoadFromFile(gameLoopPath)) {
+            LOG_WARN("[GameLoop] %s not found, using default loop", gameLoopPath.string().c_str());
+            m_gameLoopAsset = GameLoopAsset::CreateDefault();
+        }
+    }
+
+    // GameLoop persistent input owner entity を生成する (scene 跨ぎで保持される)。
+    if (!m_gameLoopInputOwnerInitialized) {
+        EntityID owner = m_gameLoopRegistry.CreateEntity();
+        m_gameLoopRegistry.AddComponent(owner, NameComponent{ "GameLoopInputOwner" });
+
+        InputUserComponent userComp{};
+        userComp.userId = 0;
+        userComp.isPrimary = true;
+        m_gameLoopRegistry.AddComponent(owner, userComp);
+
+        m_gameLoopRegistry.AddComponent(owner, InputBindingComponent{});
+
+        InputContextComponent ctx{};
+        ctx.priority = InputContextPriority::RuntimeUI;
+        ctx.enabled = true;
+        m_gameLoopRegistry.AddComponent(owner, ctx);
+
+        InputActionMapComponent mapComp{};
+        mapComp.asset.name = "GameLoop";
+        // Index 0 = Confirm.
+        {
+            ActionBinding b;
+            b.actionName = "Confirm";
+            b.scancode = 40;        // SDL Enter
+            b.gamepadButton = 0;    // SDL Gamepad A
+            b.trigger = ActionTriggerType::Pressed;
+            mapComp.asset.actions.push_back(b);
+        }
+        // Index 1 = Cancel.
+        {
+            ActionBinding b;
+            b.actionName = "Cancel";
+            b.scancode = 41;        // SDL Escape
+            b.gamepadButton = 1;    // SDL Gamepad B
+            b.trigger = ActionTriggerType::Pressed;
+            mapComp.asset.actions.push_back(b);
+        }
+        // Index 2 = Retry.
+        {
+            ActionBinding b;
+            b.actionName = "Retry";
+            b.scancode = 21;        // SDL R
+            b.gamepadButton = 2;    // SDL Gamepad X
+            b.trigger = ActionTriggerType::Pressed;
+            mapComp.asset.actions.push_back(b);
+        }
+        m_gameLoopRegistry.AddComponent(owner, mapComp);
+        m_gameLoopRegistry.AddComponent(owner, ResolvedInputStateComponent{});
+
+        m_gameLoopInputOwnerInitialized = true;
+    }
+
     // DX12 では EditorLayer を作って終了。
     if (isDX12) {
         m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
@@ -2837,6 +2914,61 @@ void EngineKernel::Update(float rawDt)
         time.dt = 0.0f;
 
     if (m_gameLayer) m_gameLayer->Update(time);
+
+    // ---- GameLoop pipeline (frame 末尾扱い)。
+    if (m_gameLayer) {
+        Registry& gameRegistry = m_gameLayer->GetRegistry();
+
+        // GameLoop 用 persistent input owner も resolve する。
+        InputResolveSystem::Update(m_gameLoopRegistry, m_inputQueue, time.unscaledDt);
+
+        // 2D Button click を main camera 行列で hit test する。
+        // 編集中は EditorLayer の Game View rect (前 frame 分) を使う。
+        DirectX::XMFLOAT4 gameViewRect{ 0.0f, 0.0f, 0.0f, 0.0f };
+        if (m_editorLayer) {
+            gameViewRect = m_editorLayer->GetGameViewRect();
+            if (gameViewRect.z <= 1.0f || gameViewRect.w <= 1.0f) {
+                const DirectX::XMFLOAT2 sz = m_editorLayer->GetGameViewSize();
+                gameViewRect = { 0.0f, 0.0f, sz.x, sz.y };
+            }
+        }
+        DirectX::XMFLOAT4X4 cameraView{};
+        DirectX::XMFLOAT4X4 cameraProj{};
+        bool hasCamera = false;
+        {
+            Query<CameraMainTagComponent, CameraMatricesComponent> q(gameRegistry);
+            q.ForEach([&](CameraMainTagComponent&, CameraMatricesComponent& mats) {
+                if (!hasCamera) {
+                    cameraView = mats.view;
+                    cameraProj = mats.projection;
+                    hasCamera = true;
+                }
+            });
+        }
+        if (hasCamera) {
+            UIButtonClickSystem::Update(
+                gameRegistry,
+                m_uiButtonClickQueue,
+                m_inputQueue,
+                gameViewRect,
+                cameraView,
+                cameraProj);
+        }
+
+        GameLoopSystem::Update(
+            m_gameLoopAsset,
+            m_gameLoopRuntime,
+            gameRegistry,
+            m_gameLoopRegistry,
+            m_uiButtonClickQueue,
+            time.dt);
+
+        // frame 末尾: 実際の scene load を消化する。
+        SceneTransitionSystem::UpdateEndOfFrame(m_gameLoopRuntime, gameRegistry);
+
+        // 1 frame 分の click event を破棄。
+        m_uiButtonClickQueue.Clear();
+    }
 
     // AudioWorld 更新。
     if (m_audioWorld && m_gameLayer) {
@@ -3519,6 +3651,32 @@ void EngineKernel::Play()
         mode = EngineMode::Play;
         if (m_editorLayer && m_gameLayer) {
             m_editorLayer->GetInputBridge().OnPlayStarted(m_gameLayer->GetRegistry());
+
+            // Editor で開いていた scene path を退避する (Stop 時に復元)。
+            m_savedEditorScenePath = m_editorLayer->GetCurrentScenePath();
+        }
+
+        // GameLoop を起動する。startNode の scene を frame 末尾で load する。
+        GameLoopRuntime& rt = m_gameLoopRuntime;
+        rt.Reset();
+        rt.isActive = true;
+
+        if (!m_gameLoopAsset.nodes.empty()) {
+            const GameLoopNode* startNode = m_gameLoopAsset.FindNode(m_gameLoopAsset.startNodeId);
+            if (startNode) {
+                rt.pendingNodeId            = startNode->id;
+                rt.pendingScenePath         = startNode->scenePath;
+                rt.sceneTransitionRequested = true;
+                rt.forceReload              = true;
+            }
+            else {
+                LOG_ERROR("[GameLoop] startNodeId %u not found in asset", m_gameLoopAsset.startNodeId);
+                rt.isActive = false;
+            }
+        }
+        else {
+            LOG_WARN("[GameLoop] asset has no nodes; GameLoop disabled");
+            rt.isActive = false;
         }
     }
     else if (mode == EngineMode::Pause) {
@@ -3536,6 +3694,16 @@ void EngineKernel::Stop()
         if (m_editorLayer && m_gameLayer) {
             m_editorLayer->GetInputBridge().OnPlayStopped(m_gameLayer->GetRegistry());
         }
+
+        // GameLoop runtime をリセットする。
+        m_gameLoopRuntime.Reset();
+        m_uiButtonClickQueue.Clear();
+
+        // Editor scene を復元する (Play 開始時の scene へ戻る)。
+        if (m_editorLayer && !m_savedEditorScenePath.empty()) {
+            m_editorLayer->LoadSceneFromPath(m_savedEditorScenePath);
+        }
+        m_savedEditorScenePath.clear();
     }
 
     m_stepFrameRequested = false;

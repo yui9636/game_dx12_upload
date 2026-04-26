@@ -43,8 +43,10 @@ namespace
     constexpr uint32_t kScancodeS = 22;
     constexpr uint32_t kScancodeW = 26;
     constexpr uint32_t kScancodeJ = 13;
+    constexpr uint32_t kScancodeSpace = 44;
     constexpr uint8_t kMouseButtonLeft = 1;
     constexpr uint8_t kGamepadButtonX = 2;
+    constexpr uint8_t kGamepadButtonB = 1;
     constexpr uint8_t kGamepadAxisLeftX = 0;
     constexpr uint8_t kGamepadAxisLeftY = 1;
 
@@ -67,9 +69,9 @@ namespace
         stateMachine.SetParam("Gait", 0.0f);
         stateMachine.SetParam("IsWalking", 0.0f);
         stateMachine.SetParam("IsRunning", 0.0f);
-        stateMachine.SetParam("LightAttack", 0.0f);
-        stateMachine.SetParam("HeavyAttack", 0.0f);
+        stateMachine.SetParam("Attack", 0.0f);
         stateMachine.SetParam("Dodge", 0.0f);
+        stateMachine.SetParam("Damaged", 0.0f);
     }
 
     AxisBinding* FindAxisBinding(InputActionMapAsset& map, const char* axisName)
@@ -202,8 +204,10 @@ namespace
 
         EnsureAxisBinding(map, "MoveX", kScancodeD, kScancodeA, kGamepadAxisLeftX);
         EnsureAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
-        EnsureActionBinding(map, "LightAttack", kScancodeJ, kMouseButtonLeft, kGamepadButtonX);
-        MoveActionBindingTo(map, "LightAttack", 0);
+        EnsureActionBinding(map, "Attack", kScancodeJ, kMouseButtonLeft, kGamepadButtonX);
+        EnsureActionBinding(map, "Dodge", kScancodeSpace, 0, kGamepadButtonB);
+        MoveActionBindingTo(map, "Attack", 0);
+        MoveActionBindingTo(map, "Dodge", 1);
         MoveAxisBindingTo(map, "MoveX", 0);
         MoveAxisBindingTo(map, "MoveY", 1);
     }
@@ -243,53 +247,76 @@ namespace
         return value;
     }
 
-    int FindPreferredLightAttackAnimation(Registry& registry, EntityID entity)
+    // Spec §12: per-slot attack animation lookup (Attack1〜3).
+    int FindAttackAnimationBySlot(Registry& registry, EntityID entity, int slot)
     {
         const MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
         if (!mesh || !mesh->model) {
             return -1;
         }
 
+        char k1[32], k2[32], k3[32];
+        snprintf(k1, sizeof(k1), "combo%d",  slot);
+        snprintf(k2, sizeof(k2), "combo_%d", slot);
+        snprintf(k3, sizeof(k3), "attack%d", slot);
+
         const auto& animations = mesh->model->GetAnimations();
-        const char* keywords[] = { "light", "attack", "combo", "slash", "sword", "katana", "punch", "strike" };
         for (int i = 0; i < static_cast<int>(animations.size()); ++i) {
             const std::string loweredName = ToLowerAscii(animations[i].name);
-            for (const char* keyword : keywords) {
-                if (loweredName.find(keyword) != std::string::npos) {
-                    return i;
-                }
+            if (loweredName.find(k1) != std::string::npos ||
+                loweredName.find(k2) != std::string::npos ||
+                loweredName.find(k3) != std::string::npos) {
+                return i;
             }
         }
-
-        return animations.empty() ? -1 : 0;
+        return -1;
     }
 
+    // Spec §11: Attack1〜3 nodes with comboStart / cancelStart / damage tuning.
+    // Spec §3.3: Idempotent — preserve user-edited fields when re-running.
     void EnsureDefaultActionDatabase(Registry& registry, EntityID entity, ActionDatabaseComponent& database)
     {
-        const bool createdLight1 = database.nodeCount < 1;
-        if (database.nodeCount < 1) {
-            database.nodeCount = 1;
+        struct AttackTuning {
+            float comboStart;
+            float cancelStart;
+            int damage;
+        };
+        static const AttackTuning kTuning[3] = {
+            { 0.4f, 0.2f, 10 },
+            { 0.4f, 0.2f, 12 },
+            { 0.5f, 0.3f, 18 },
+        };
+
+        const bool needsExpansion = database.nodeCount < 3;
+        if (needsExpansion) {
+            database.nodeCount = 3;
         }
 
-        ActionNode& light1 = database.nodes[0];
-        const int preferredAnimation = FindPreferredLightAttackAnimation(registry, entity);
-        if (preferredAnimation >= 0 && (createdLight1 || light1.animIndex < 0)) {
-            light1.animIndex = preferredAnimation;
-        } else if (light1.animIndex < 0) {
-            light1.animIndex = 0;
-        }
+        for (int slot = 0; slot < 3; ++slot) {
+            ActionNode& node = database.nodes[slot];
+            const bool wasFresh = needsExpansion && (node.animIndex == 0 && node.damageVal == 0);
 
-        if (createdLight1) {
-            light1.nextLight = -1;
-            light1.nextHeavy = -1;
-            light1.inputStart = 0.0f;
-            light1.inputEnd = 1.0f;
-            light1.comboStart = 0.9f;
-            light1.cancelStart = 0.35f;
-            light1.damageVal = 10;
-        }
-        if (light1.animSpeed <= 0.0f) {
-            light1.animSpeed = 1.0f;
+            if (node.animIndex < 0 || wasFresh) {
+                const int preferred = FindAttackAnimationBySlot(registry, entity, slot + 1);
+                if (preferred >= 0) {
+                    node.animIndex = preferred;
+                } else if (node.animIndex < 0) {
+                    node.animIndex = 0;
+                }
+            }
+
+            if (wasFresh) {
+                node.nextLight   = -1;
+                node.nextHeavy   = -1;
+                node.inputStart  = 0.0f;
+                node.inputEnd    = 1.0f;
+                node.comboStart  = kTuning[slot].comboStart;
+                node.cancelStart = kTuning[slot].cancelStart;
+                node.damageVal   = kTuning[slot].damage;
+            }
+            if (node.animSpeed <= 0.0f) {
+                node.animSpeed = 1.0f;
+            }
         }
     }
 

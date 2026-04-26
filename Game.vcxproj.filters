@@ -35,6 +35,7 @@
     <Filter Include="Source\Environment" />
     <Filter Include="Source\Font" />
     <Filter Include="Source\Gameplay" />
+    <Filter Include="Source\GameLoop" />
     <Filter Include="Source\Generated" />
     <Filter Include="Source\Grid" />
     <Filter Include="Source\Hierarchy" />
@@ -644,6 +645,9 @@
     <ClInclude Include="Source\PlayerEditor\PlayerEditorPanel.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
+    <ClInclude Include="Source\PlayerEditor\PlayerEditorPanelInternal.h">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClInclude>
     <ClInclude Include="Source\PlayerEditor\PlayerEditorSession.h">
       <Filter>Source\PlayerEditor</Filter>
     </ClInclude>
@@ -1027,6 +1031,30 @@
     </ClInclude>
     <ClInclude Include="Source\Utils\TransformUtils.h">
       <Filter>Source\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\UIButtonComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\GameLoopAsset.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\GameLoopRuntime.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\GameLoopSystem.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\SceneTransitionSystem.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\UIButtonClickEventQueue.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\UIButtonClickSystem.h">
+      <Filter>Source\GameLoop</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -1438,6 +1466,24 @@
     <ClCompile Include="Source\PlayerEditor\PlayerEditorPanel.cpp">
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorPanelInternal.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorViewportPanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorSkeletonPanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorStateMachinePanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorTimelinePanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PlayerEditor\PlayerEditorInspectorPanel.cpp">
+      <Filter>Source\PlayerEditor</Filter>
+    </ClCompile>
     <ClCompile Include="Source\PlayerEditor\PlayerEditorSession.cpp">
       <Filter>Source\PlayerEditor</Filter>
     </ClCompile>
@@ -1725,6 +1771,27 @@
     </ClCompile>
     <ClCompile Include="Source\Utils\TransformUtils.cpp">
       <Filter>Source\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopAsset.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanel.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopRuntime.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopSystem.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\SceneTransitionSystem.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\UIButtonClickEventQueue.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\UIButtonClickSystem.cpp">
+      <Filter>Source\GameLoop</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

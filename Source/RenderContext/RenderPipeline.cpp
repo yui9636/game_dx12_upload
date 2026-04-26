@@ -270,6 +270,26 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
 
 void RenderPipeline::ResetForSceneChange()
 {
+    auto discardDx12Barriers = [](const std::shared_ptr<DX12CommandList>& commandList) {
+        if (commandList) {
+            commandList->DiscardResourceBarriers();
+        }
+    };
+
+    if (auto* dx12CommandList = dynamic_cast<DX12CommandList*>(m_commandList.get())) {
+        dx12CommandList->DiscardResourceBarriers();
+    }
+    for (auto& pool : m_workerDx12CommandListPools) {
+        for (auto& commandList : pool) {
+            discardDx12Barriers(commandList);
+        }
+    }
+    for (auto& slot : m_inFlightRecordedDx12Lists) {
+        for (auto& commandList : slot) {
+            discardDx12Barriers(commandList);
+        }
+    }
+
     m_viewHistory.clear();
     m_graphPassScratch.clear();
     m_prepGraphScratch.clear();

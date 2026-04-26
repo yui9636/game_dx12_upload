@@ -140,20 +140,31 @@ private:
 
     // 笏笏 StateMachine internals 笏笏
     void DrawNodeGraph(ImVec2 canvasSize);
+    void FitGraphToContent(const ImVec2& canvasSize);
     void DrawStateNodeInspector();
     void DrawStateMachineParameterList();
     void DrawStateMachineRuntimeStatus();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
     void AddStateTemplate(StateNodeType type, const DirectX::XMFLOAT2& graphPosition);
     void ApplyFullPlayerPreset();
-    void ApplyFullPlayerPhase1APreset();
-    void ApplyLightAttackPhase1BPreset();
+    void RemoveBrokenTransitions();
     void ApplyLocomotionStateMachinePreset();
+    void ApplyAttackComboPreset();
+    void ApplyDodgePreset();
+    void ApplyDamagePreset();
     void ApplyLocomotionTransitionPreset(struct StateTransition& trans, bool enteringMove);
     void EnsureStateMachineParameter(const char* name, ParameterType type, float defaultValue);
     StateNode* FindStateByName(const char* name);
     struct StateTransition* FindTransition(uint32_t fromState, uint32_t toState);
     int FindAnimationIndexByKeyword(std::initializer_list<const char*> keywords) const;
+    int FindIdleAnimation() const;
+    int FindWalkAnimation() const;
+    int FindJogAnimation() const;
+    int FindRunAnimation() const;
+    int FindAttackAnimation(int slot) const;
+    int FindDodgeAnimation() const;
+    int FindDamageAnimation() const;
+    bool IsNonForwardLocomotionAnimation(int animationIndex) const;
 
     // 笏笏 Connection mode (drag-wire) 笏笏
     bool     m_isConnecting      = false;
@@ -190,6 +201,11 @@ private:
     uint32_t m_selectedTransitionId = 0;
     DirectX::XMFLOAT2 m_graphOffset = { 200, 150 };
     float    m_graphZoom            = 1.0f;
+    bool     m_graphRightPanActive    = false;
+    DirectX::XMFLOAT2 m_graphRightPanStart = { 0.0f, 0.0f };
+    bool     m_graphConnectDragActive = false;
+    uint32_t m_graphConnectDragFrom   = 0;
+    bool     m_graphFitRequested      = true;
 
     // 笏笏 Skeleton state 笏笏
     std::shared_ptr<Model> m_ownedModel;

@@ -126,6 +126,7 @@ void DX12CommandList::Begin() {
     auto* allocator = m_useDeviceFrameAllocator ? m_device->GetCurrentAllocator() : m_ownedAllocator.Get();
     allocator->Reset();
     m_commandList->Reset(allocator, nullptr);
+    m_pendingBarriers.clear();
 
     // Reset frame allocator
     m_frameSrvAllocator->Reset();
@@ -155,6 +156,10 @@ void DX12CommandList::Submit() {
 
 void DX12CommandList::FlushResourceBarriers() {
     FlushPendingBarriers();
+}
+
+void DX12CommandList::DiscardResourceBarriers() {
+    m_pendingBarriers.clear();
 }
 
 void DX12CommandList::RestoreFrameDescriptorHeap() {
@@ -744,6 +749,10 @@ void DX12CommandList::FlushPendingBarriers() {
         for (const auto& barrier : m_pendingBarriers) {
             if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION &&
                 barrier.Transition.StateBefore == barrier.Transition.StateAfter) {
+                continue;
+            }
+            if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION &&
+                barrier.Transition.pResource == nullptr) {
                 continue;
             }
             barriers.push_back(barrier);

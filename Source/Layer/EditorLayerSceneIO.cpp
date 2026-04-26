@@ -58,12 +58,10 @@ void EditorLayer::DrawRecoveryPopup()
         if (ImGui::Button("Recover", ImVec2(140, 0))) {
             const std::filesystem::path autosavePath = m_pendingRecoveryAutosavePath;
             const std::filesystem::path scenePath = m_pendingRecoveryScenePath;
-            const bool recovered = !autosavePath.empty() && LoadSceneFromPath(autosavePath);
-            if (recovered) {
-                m_sceneSavePath = scenePath.empty() ? autosavePath.string() : scenePath.string();
-                const uint64_t revision = UndoSystem::Instance().GetECSRevision();
-                m_savedSceneRevision = (revision == (std::numeric_limits<uint64_t>::max)()) ? revision : revision + 1;
-                LOG_INFO("[Editor] Recovered autosave: %s", autosavePath.string().c_str());
+            if (!autosavePath.empty()) {
+                m_pendingSceneAction = PendingSceneAction::LoadScenePath;
+                m_pendingSceneLoadPath = autosavePath;
+                m_pendingRecoveredSceneSavePath = scenePath.empty() ? autosavePath : scenePath;
             }
             m_pendingRecoveryAutosavePath.clear();
             m_pendingRecoveryScenePath.clear();
@@ -203,7 +201,17 @@ bool EditorLayer::ExecutePendingSceneAction()
     case PendingSceneAction::OpenSceneDialog:
         return OpenScene();
     case PendingSceneAction::LoadScenePath:
-        return !scenePath.empty() && LoadSceneFromPath(scenePath);
+    {
+        const std::filesystem::path recoveredSceneSavePath = m_pendingRecoveredSceneSavePath;
+        const bool loaded = !scenePath.empty() && LoadSceneFromPath(scenePath);
+        if (loaded && !recoveredSceneSavePath.empty()) {
+            m_sceneSavePath = recoveredSceneSavePath.string();
+            MarkSceneSaved();
+            LOG_INFO("[Editor] Recovered autosave: %s", scenePath.string().c_str());
+        }
+        m_pendingRecoveredSceneSavePath.clear();
+        return loaded;
+    }
     default:
         return false;
     }
@@ -229,6 +237,7 @@ void EditorLayer::NewScene()
     m_hasGizmoBeforeTransform = false;
     m_pendingRecoveryAutosavePath.clear();
     m_pendingRecoveryScenePath.clear();
+    m_pendingRecoveredSceneSavePath.clear();
     m_openRecoveryPopup = false;
     m_autosaveAccumulator = 0.0;
     m_hasCheckedRecovery = true;
@@ -261,6 +270,7 @@ bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
     m_sceneSavePath = scenePath.string();
     m_pendingRecoveryAutosavePath.clear();
     m_pendingRecoveryScenePath.clear();
+    m_pendingRecoveredSceneSavePath.clear();
     m_openRecoveryPopup = false;
     m_autosaveAccumulator = 0.0;
     m_hasCheckedRecovery = true;
@@ -300,6 +310,7 @@ bool EditorLayer::SaveCurrentScene()
         m_sceneSavePath = scenePath.string();
         m_pendingRecoveryAutosavePath.clear();
         m_pendingRecoveryScenePath.clear();
+        m_pendingRecoveredSceneSavePath.clear();
         m_autosaveAccumulator = 0.0;
         MarkSceneSaved();
     } else {

@@ -1,0 +1,432 @@
+#include "GameLoopAsset.h"
+
+#include <algorithm>
+#include <fstream>
+#include <set>
+#include <unordered_set>
+#include <queue>
+
+#include <nlohmann/json.hpp>
+
+#include "Input/ResolvedInputStateComponent.h"
+
+namespace
+{
+    const char* ConditionTypeToString(GameLoopConditionType t)
+    {
+        switch (t) {
+        case GameLoopConditionType::None:               return "None";
+        case GameLoopConditionType::InputPressed:       return "InputPressed";
+        case GameLoopConditionType::UIButtonClicked:    return "UIButtonClicked";
+        case GameLoopConditionType::TimerElapsed:       return "TimerElapsed";
+        case GameLoopConditionType::ActorDead:          return "ActorDead";
+        case GameLoopConditionType::AllActorsDead:      return "AllActorsDead";
+        case GameLoopConditionType::ActorMovedDistance: return "ActorMovedDistance";
+        case GameLoopConditionType::RuntimeFlag:        return "RuntimeFlag";
+        case GameLoopConditionType::StateMachineState:  return "StateMachineState";
+        case GameLoopConditionType::TimelineEvent:      return "TimelineEvent";
+        case GameLoopConditionType::CustomEvent:        return "CustomEvent";
+        }
+        return "None";
+    }
+
+    GameLoopConditionType ConditionTypeFromString(const std::string& s)
+    {
+        if (s == "None")               return GameLoopConditionType::None;
+        if (s == "InputPressed")       return GameLoopConditionType::InputPressed;
+        if (s == "UIButtonClicked")    return GameLoopConditionType::UIButtonClicked;
+        if (s == "TimerElapsed")       return GameLoopConditionType::TimerElapsed;
+        if (s == "ActorDead")          return GameLoopConditionType::ActorDead;
+        if (s == "AllActorsDead")      return GameLoopConditionType::AllActorsDead;
+        if (s == "ActorMovedDistance") return GameLoopConditionType::ActorMovedDistance;
+        if (s == "RuntimeFlag")        return GameLoopConditionType::RuntimeFlag;
+        if (s == "StateMachineState")  return GameLoopConditionType::StateMachineState;
+        if (s == "TimelineEvent")      return GameLoopConditionType::TimelineEvent;
+        if (s == "CustomEvent")        return GameLoopConditionType::CustomEvent;
+        return GameLoopConditionType::None;
+    }
+
+    const char* ActorTypeToString(ActorType t)
+    {
+        switch (t) {
+        case ActorType::None:    return "None";
+        case ActorType::Player:  return "Player";
+        case ActorType::Enemy:   return "Enemy";
+        case ActorType::NPC:     return "NPC";
+        case ActorType::Neutral: return "Neutral";
+        }
+        return "None";
+    }
+
+    ActorType ActorTypeFromString(const std::string& s)
+    {
+        if (s == "Player")  return ActorType::Player;
+        if (s == "Enemy")   return ActorType::Enemy;
+        if (s == "NPC")     return ActorType::NPC;
+        if (s == "Neutral") return ActorType::Neutral;
+        return ActorType::None;
+    }
+
+    const char* NodeTypeToString(GameLoopNodeType t)
+    {
+        switch (t) {
+        case GameLoopNodeType::Scene: return "Scene";
+        }
+        return "Scene";
+    }
+
+    GameLoopNodeType NodeTypeFromString(const std::string& s)
+    {
+        (void)s;
+        return GameLoopNodeType::Scene;
+    }
+
+    nlohmann::json ConditionToJson(const GameLoopCondition& c)
+    {
+        nlohmann::json j;
+        j["type"] = ConditionTypeToString(c.type);
+        if (c.actorType != ActorType::None) j["actorType"] = ActorTypeToString(c.actorType);
+        if (!c.targetName.empty())          j["targetName"]   = c.targetName;
+        if (!c.parameterName.empty())       j["parameterName"] = c.parameterName;
+        if (!c.eventName.empty())           j["eventName"]     = c.eventName;
+        if (c.actionIndex >= 0)             j["actionIndex"]   = c.actionIndex;
+        if (c.threshold != 0.0f)            j["threshold"]     = c.threshold;
+        if (c.seconds != 0.0f)              j["seconds"]       = c.seconds;
+        return j;
+    }
+
+    GameLoopCondition ConditionFromJson(const nlohmann::json& j)
+    {
+        GameLoopCondition c;
+        c.type          = ConditionTypeFromString(j.value("type", std::string{ "None" }));
+        c.actorType     = ActorTypeFromString(j.value("actorType", std::string{ "None" }));
+        c.targetName    = j.value("targetName",    std::string{});
+        c.parameterName = j.value("parameterName", std::string{});
+        c.eventName     = j.value("eventName",     std::string{});
+        c.actionIndex   = j.value("actionIndex",   -1);
+        c.threshold     = j.value("threshold",     0.0f);
+        c.seconds       = j.value("seconds",       0.0f);
+        return c;
+    }
+}
+
+const GameLoopNode* GameLoopAsset::FindNode(uint32_t id) const
+{
+    for (const auto& n : nodes) {
+        if (n.id == id) return &n;
+    }
+    return nullptr;
+}
+
+GameLoopNode* GameLoopAsset::FindNode(uint32_t id)
+{
+    for (auto& n : nodes) {
+        if (n.id == id) return &n;
+    }
+    return nullptr;
+}
+
+uint32_t GameLoopAsset::AllocateNodeId() const
+{
+    uint32_t maxId = 0;
+    for (const auto& n : nodes) {
+        if (n.id > maxId) maxId = n.id;
+    }
+    return maxId + 1;
+}
+
+GameLoopAsset GameLoopAsset::CreateDefault()
+{
+    GameLoopAsset a;
+    a.version     = 1;
+    a.startNodeId = 1;
+
+    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene });
+    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene });
+    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene });
+
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 1; t.toNodeId = 2;
+        t.name = "Start";
+        t.requireAllConditions = false;
+        GameLoopCondition c1; c1.type = GameLoopConditionType::UIButtonClicked; c1.targetName = "StartButton";
+        GameLoopCondition c2; c2.type = GameLoopConditionType::InputPressed;    c2.actionIndex = 0;
+        t.conditions = { c1, c2 };
+        a.transitions.push_back(t);
+    }
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 2; t.toNodeId = 3;
+        t.name = "Clear";
+        t.requireAllConditions = false;
+        GameLoopCondition c1; c1.type = GameLoopConditionType::AllActorsDead;      c1.actorType = ActorType::Enemy;
+        GameLoopCondition c2; c2.type = GameLoopConditionType::ActorMovedDistance; c2.actorType = ActorType::Player; c2.threshold = 1.0f;
+        t.conditions = { c1, c2 };
+        a.transitions.push_back(t);
+    }
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 3; t.toNodeId = 2;
+        t.name = "Retry";
+        t.requireAllConditions = false;
+        GameLoopCondition c1; c1.type = GameLoopConditionType::UIButtonClicked; c1.targetName = "RetryButton";
+        GameLoopCondition c2; c2.type = GameLoopConditionType::InputPressed;    c2.actionIndex = 2;
+        t.conditions = { c1, c2 };
+        a.transitions.push_back(t);
+    }
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 3; t.toNodeId = 1;
+        t.name = "BackToTitle";
+        t.requireAllConditions = false;
+        GameLoopCondition c1; c1.type = GameLoopConditionType::UIButtonClicked; c1.targetName = "TitleButton";
+        GameLoopCondition c2; c2.type = GameLoopConditionType::InputPressed;    c2.actionIndex = 1;
+        t.conditions = { c1, c2 };
+        a.transitions.push_back(t);
+    }
+    return a;
+}
+
+bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
+{
+    std::ifstream ifs(path);
+    if (!ifs) return false;
+
+    nlohmann::json j;
+    try { ifs >> j; }
+    catch (...) { return false; }
+
+    GameLoopAsset out;
+    out.version     = j.value("version", 1);
+    out.startNodeId = j.value("startNodeId", 0u);
+
+    if (j.contains("nodes") && j["nodes"].is_array()) {
+        for (const auto& nj : j["nodes"]) {
+            GameLoopNode n;
+            n.id        = nj.value("id", 0u);
+            n.name      = nj.value("name", std::string{});
+            n.scenePath = nj.value("scenePath", std::string{});
+            n.type      = NodeTypeFromString(nj.value("type", std::string{ "Scene" }));
+            out.nodes.push_back(n);
+        }
+    }
+
+    if (j.contains("transitions") && j["transitions"].is_array()) {
+        for (const auto& tj : j["transitions"]) {
+            GameLoopTransition t;
+            t.fromNodeId            = tj.value("fromNodeId", 0u);
+            t.toNodeId              = tj.value("toNodeId",   0u);
+            t.name                  = tj.value("name", std::string{});
+            t.requireAllConditions  = tj.value("requireAllConditions", true);
+            if (tj.contains("conditions") && tj["conditions"].is_array()) {
+                for (const auto& cj : tj["conditions"]) {
+                    t.conditions.push_back(ConditionFromJson(cj));
+                }
+            }
+            out.transitions.push_back(t);
+        }
+    }
+
+    *this = std::move(out);
+    return true;
+}
+
+bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
+{
+    nlohmann::json j;
+    j["version"]     = version;
+    j["startNodeId"] = startNodeId;
+
+    nlohmann::json nodesJson = nlohmann::json::array();
+    for (const auto& n : nodes) {
+        nlohmann::json nj;
+        nj["id"]        = n.id;
+        nj["name"]      = n.name;
+        nj["scenePath"] = n.scenePath;
+        nj["type"]      = NodeTypeToString(n.type);
+        nodesJson.push_back(nj);
+    }
+    j["nodes"] = nodesJson;
+
+    nlohmann::json transitionsJson = nlohmann::json::array();
+    for (const auto& t : transitions) {
+        nlohmann::json tj;
+        tj["fromNodeId"]           = t.fromNodeId;
+        tj["toNodeId"]             = t.toNodeId;
+        tj["name"]                 = t.name;
+        tj["requireAllConditions"] = t.requireAllConditions;
+        nlohmann::json condsJson   = nlohmann::json::array();
+        for (const auto& c : t.conditions) {
+            condsJson.push_back(ConditionToJson(c));
+        }
+        tj["conditions"] = condsJson;
+        transitionsJson.push_back(tj);
+    }
+    j["transitions"] = transitionsJson;
+
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+
+    std::ofstream ofs(path);
+    if (!ofs) return false;
+    ofs << j.dump(2);
+    return true;
+}
+
+bool GameLoopValidateResult::HasError() const
+{
+    for (const auto& m : messages) {
+        if (m.severity == GameLoopValidateSeverity::Error) return true;
+    }
+    return false;
+}
+
+int GameLoopValidateResult::ErrorCount() const
+{
+    int n = 0;
+    for (const auto& m : messages) {
+        if (m.severity == GameLoopValidateSeverity::Error) ++n;
+    }
+    return n;
+}
+
+int GameLoopValidateResult::WarningCount() const
+{
+    int n = 0;
+    for (const auto& m : messages) {
+        if (m.severity == GameLoopValidateSeverity::Warning) ++n;
+    }
+    return n;
+}
+
+GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
+{
+    GameLoopValidateResult r;
+
+    // start node 存在
+    if (asset.FindNode(asset.startNodeId) == nullptr) {
+        r.messages.push_back({ GameLoopValidateSeverity::Error, "startNodeId が nodes に存在しない" });
+    }
+
+    // node id 重複
+    {
+        std::set<uint32_t> seen;
+        for (const auto& n : asset.nodes) {
+            if (!seen.insert(n.id).second) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "node id が重複: " + std::to_string(n.id) });
+            }
+        }
+    }
+
+    // node 個別検査
+    for (const auto& n : asset.nodes) {
+        if (n.name.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, "node name が空 (id=" + std::to_string(n.id) + ")" });
+        }
+        if (n.scenePath.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath が空 (" + n.name + ")" });
+        }
+    }
+
+    // transition 検査
+    for (size_t i = 0; i < asset.transitions.size(); ++i) {
+        const auto& t = asset.transitions[i];
+        const std::string label = "transition[" + std::to_string(i) + "]";
+        if (asset.FindNode(t.fromNodeId) == nullptr) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId が存在しない" });
+        }
+        if (asset.FindNode(t.toNodeId) == nullptr) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId が存在しない" });
+        }
+        if (t.conditions.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " conditions が空" });
+        }
+        for (size_t ci = 0; ci < t.conditions.size(); ++ci) {
+            const auto& c = t.conditions[ci];
+            const std::string clabel = label + ".cond[" + std::to_string(ci) + "]";
+            switch (c.type) {
+            case GameLoopConditionType::InputPressed:
+                if (c.actionIndex < 0 || c.actionIndex >= ResolvedInputStateComponent::MAX_ACTIONS) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " InputPressed actionIndex 範囲外" });
+                }
+                break;
+            case GameLoopConditionType::UIButtonClicked:
+                if (c.targetName.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " UIButtonClicked targetName が空" });
+                }
+                break;
+            case GameLoopConditionType::TimerElapsed:
+                if (c.seconds <= 0.0f) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " TimerElapsed seconds は > 0" });
+                }
+                break;
+            case GameLoopConditionType::ActorMovedDistance:
+                if (c.threshold <= 0.0f) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance threshold は > 0" });
+                }
+                if (c.actorType == ActorType::None) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance actorType は None 不可" });
+                }
+                break;
+            case GameLoopConditionType::ActorDead:
+            case GameLoopConditionType::AllActorsDead:
+                if (c.actorType == ActorType::None) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " actor 系 actorType は None 不可" });
+                }
+                break;
+            case GameLoopConditionType::RuntimeFlag:
+                if (c.parameterName.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " RuntimeFlag parameterName が空" });
+                }
+                break;
+            case GameLoopConditionType::StateMachineState:
+                if (c.parameterName.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " StateMachineState parameterName が空" });
+                }
+                break;
+            case GameLoopConditionType::TimelineEvent:
+            case GameLoopConditionType::CustomEvent:
+                if (c.eventName.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " event 系 eventName が空" });
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    // dead-end / unreachable node 検査
+    {
+        std::unordered_set<uint32_t> hasOutgoing;
+        for (const auto& t : asset.transitions) hasOutgoing.insert(t.fromNodeId);
+        for (const auto& n : asset.nodes) {
+            if (hasOutgoing.find(n.id) == hasOutgoing.end()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' は出口 transition を持たない" });
+            }
+        }
+
+        std::unordered_set<uint32_t> reachable;
+        std::queue<uint32_t> q;
+        if (asset.FindNode(asset.startNodeId)) {
+            reachable.insert(asset.startNodeId);
+            q.push(asset.startNodeId);
+        }
+        while (!q.empty()) {
+            const uint32_t cur = q.front(); q.pop();
+            for (const auto& t : asset.transitions) {
+                if (t.fromNodeId == cur && reachable.insert(t.toNodeId).second) {
+                    q.push(t.toNodeId);
+                }
+            }
+        }
+        for (const auto& n : asset.nodes) {
+            if (reachable.find(n.id) == reachable.end()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' は start から到達不能" });
+            }
+        }
+    }
+
+    return r;
+}

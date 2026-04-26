@@ -788,6 +788,7 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kSerializerWindowTitle, nullptr, &m_showSerializer);
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
             ImGui::MenuItem(kSequencerWindowTitle, nullptr, &m_showSequencer);
+            ImGui::MenuItem("GameLoop Editor", nullptr, &m_showGameLoopEditor);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
             ImGui::MenuItem(kAudioWindowTitle, nullptr, &m_showAudioWindow);

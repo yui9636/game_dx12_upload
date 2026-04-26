@@ -337,6 +337,12 @@ void EditorLayer::RenderUI()
         m_assetBrowser->RenderUI(&m_showAssetBrowser, &assetFocused);
         SetLastFocusedWindow(WindowFocusTarget::AssetBrowser, assetFocused);
     }
+    if (m_showGameLoopEditor) {
+        bool focused = false;
+        ApplyPendingWindowFocus(WindowFocusTarget::GameLoopEditor);
+        m_gameLoopEditorPanel.Draw(&m_showGameLoopEditor, &focused);
+        SetLastFocusedWindow(WindowFocusTarget::GameLoopEditor, focused);
+    }
 }
 
 void EditorLayer::RenderDetachedWindows()
@@ -383,13 +389,13 @@ void EditorLayer::SyncEffectEditorPanelState()
     m_effectEditorPanel.SetSelectedContext(selectedEntity, meshPath);
 }
 
-// PlayerEditor ’†‚¾‚¯ editor camera ‚É“K—p‚·‚é shake ƒIƒtƒZƒbƒg‚ğİ’è‚·‚éB
+// PlayerEditor ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ editor camera ï¿½É“Kï¿½pï¿½ï¿½ï¿½ï¿½ shake ï¿½Iï¿½tï¿½Zï¿½bï¿½gï¿½ï¿½İ’è‚·ï¿½ï¿½B
 void EditorLayer::SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset)
 {
     m_editorCameraShakeOffset = offset;
 }
 
-// PlayerEditor —p camera shake ƒIƒtƒZƒbƒg‚ğƒNƒŠƒA‚·‚éB
+// PlayerEditor ï¿½p camera shake ï¿½Iï¿½tï¿½Zï¿½bï¿½gï¿½ï¿½ï¿½Nï¿½ï¿½ï¿½Aï¿½ï¿½ï¿½ï¿½B
 void EditorLayer::ClearPlayerEditorCameraShakeOffset()
 {
     m_editorCameraShakeOffset = { 0.0f, 0.0f, 0.0f };

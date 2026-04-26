@@ -10,6 +10,10 @@
 #include "System/Query.h"
 #include <algorithm>
 #include <cmath>
+#include "Component/HierarchyComponent.h"
+#include "Component/PhysicsComponent.h"
+#include "Physics/PhysicsManager.h"
+#include <Jolt/Physics/Body/BodyInterface.h>
 
 using namespace DirectX;
 
@@ -241,6 +245,142 @@ namespace
             animator.rootMotionDelta = { 0.0f, 0.0f, 0.0f };
         }
     }
+
+    // root motion delta がほぼゼロかどうかを判定する。
+// 小さすぎる移動で Transform / PhysicsBody を更新し続けないために使う。
+    static bool IsNearlyZeroRootMotionDelta(const DirectX::XMFLOAT3& delta)
+    {
+        const float epsilon = 0.000001f;
+
+        if (std::fabs(delta.x) > epsilon) {
+            return false;
+        }
+
+        if (std::fabs(delta.y) > epsilon) {
+            return false;
+        }
+
+        if (std::fabs(delta.z) > epsilon) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // world 座標の位置を、親がある場合だけ local 座標へ変換する。
+    static DirectX::XMVECTOR ConvertWorldPositionToLocalPosition(
+        Registry& registry,
+        EntityID entity,
+        DirectX::XMVECTOR worldPosition)
+    {
+        using namespace DirectX;
+
+        HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        if (!hierarchy || Entity::IsNull(hierarchy->parent)) {
+            return worldPosition;
+        }
+
+        TransformComponent* parentTransform = registry.GetComponent<TransformComponent>(hierarchy->parent);
+        if (!parentTransform) {
+            return worldPosition;
+        }
+
+        const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
+        const XMMATRIX inverseParentWorld = XMMatrixInverse(nullptr, parentWorld);
+
+        return XMVector3TransformCoord(worldPosition, inverseParentWorld);
+    }
+
+    // world delta を、親がある場合だけ local delta へ変換する。
+    static DirectX::XMVECTOR ConvertWorldDeltaToLocalDelta(
+        Registry& registry,
+        EntityID entity,
+        DirectX::XMVECTOR worldDelta)
+    {
+        using namespace DirectX;
+
+        HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        if (!hierarchy || Entity::IsNull(hierarchy->parent)) {
+            return worldDelta;
+        }
+
+        TransformComponent* parentTransform = registry.GetComponent<TransformComponent>(hierarchy->parent);
+        if (!parentTransform) {
+            return worldDelta;
+        }
+
+        const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
+        const XMMATRIX inverseParentWorld = XMMatrixInverse(nullptr, parentWorld);
+
+        return XMVector3TransformNormal(worldDelta, inverseParentWorld);
+    }
+
+    // root motion delta を、この entity の実際の移動元へ反映する。
+    // PhysicsComponent がある場合は physics body を正とし、Transform は body の新位置へ同期する。
+    // PhysicsComponent が無い場合だけ Transform に直接加算する。
+    static void ApplyRootMotionToMotionOwner(
+        Registry& registry,
+        EntityID entity,
+        TransformComponent& transform,
+        const AnimatorComponent& animator)
+    {
+        using namespace DirectX;
+
+        if (!animator.enableRootMotion) {
+            return;
+        }
+
+        if (IsNearlyZeroRootMotionDelta(animator.rootMotionDelta)) {
+            return;
+        }
+
+        PhysicsComponent* physics = registry.GetComponent<PhysicsComponent>(entity);
+        if (physics && !physics->bodyID.IsInvalid()) {
+            JPH::BodyInterface& bodyInterface = PhysicsManager::Instance().GetBodyInterface();
+
+            const JPH::RVec3 currentBodyPosition = bodyInterface.GetPosition(physics->bodyID);
+            const JPH::Quat currentBodyRotation = bodyInterface.GetRotation(physics->bodyID);
+
+            const JPH::RVec3 nextBodyPosition(
+                currentBodyPosition.GetX() + static_cast<double>(animator.rootMotionDelta.x),
+                currentBodyPosition.GetY() + static_cast<double>(animator.rootMotionDelta.y),
+                currentBodyPosition.GetZ() + static_cast<double>(animator.rootMotionDelta.z));
+
+            bodyInterface.SetPositionAndRotation(
+                physics->bodyID,
+                nextBodyPosition,
+                currentBodyRotation,
+                JPH::EActivation::Activate);
+
+            const XMVECTOR nextWorldPosition = XMVectorSet(
+                static_cast<float>(nextBodyPosition.GetX()),
+                static_cast<float>(nextBodyPosition.GetY()),
+                static_cast<float>(nextBodyPosition.GetZ()),
+                1.0f);
+
+            const XMVECTOR nextLocalPosition = ConvertWorldPositionToLocalPosition(
+                registry,
+                entity,
+                nextWorldPosition);
+
+            XMStoreFloat3(&transform.localPosition, nextLocalPosition);
+            transform.isDirty = true;
+            return;
+        }
+
+        const XMVECTOR worldDelta = XMLoadFloat3(&animator.rootMotionDelta);
+        const XMVECTOR localDelta = ConvertWorldDeltaToLocalDelta(registry, entity, worldDelta);
+
+        XMVECTOR localPosition = XMLoadFloat3(&transform.localPosition);
+        localPosition += localDelta;
+
+        XMStoreFloat3(&transform.localPosition, localPosition);
+        transform.isDirty = true;
+    }
+
+
+
+
 }
 
 // AnimatorSystem の毎フレーム更新。
@@ -341,6 +481,8 @@ void AnimatorSystem::Update(Registry& registry, float dt)
             // それ以外は base layer の root motion を使う。
             ComputeRootMotion(animator, runtime, transform, animator.baseLayer, prevBaseTime, animator.baseLayer.currentTime);
         }
+
+        ApplyRootMotionToMotionOwner(registry, entity, transform, animator);
 
         // base layer の pose を計算する。
         if (animator.baseLayer.currentAnimIndex >= 0) {

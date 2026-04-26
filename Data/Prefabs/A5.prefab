@@ -3,14 +3,42 @@
     {
       "components": {
         "ActionDatabaseComponent": {
-          "nodeCount": 1,
+          "nodeCount": 3,
           "nodes": [
             {
-              "animIndex": 68,
+              "animIndex": 75,
               "animSpeed": 1.0,
-              "cancelStart": 0.3499999940395355,
-              "comboStart": 0.8999999761581421,
+              "cancelStart": 0.20000000298023224,
+              "comboStart": 0.4000000059604645,
               "damageVal": 10,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            },
+            {
+              "animIndex": 76,
+              "animSpeed": 1.0,
+              "cancelStart": 0.20000000298023224,
+              "comboStart": 0.4000000059604645,
+              "damageVal": 12,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            },
+            {
+              "animIndex": 77,
+              "animSpeed": 1.0,
+              "cancelStart": 0.30000001192092896,
+              "comboStart": 0.5,
+              "damageVal": 18,
               "inputEnd": 1.0,
               "inputStart": 0.0,
               "magnetismRange": 10.0,
@@ -38,15 +66,27 @@
           "health": 100,
           "maxHealth": 100
         },
+        "HierarchyComponent": {
+          "isActive": true
+        },
         "InputActionMapComponent": {
           "actions": [
             {
-              "actionName": "LightAttack",
+              "actionName": "Attack",
               "axisDirection": 1.0,
               "gamepadAxis": 255,
               "gamepadButton": 2,
               "mouseButton": 1,
               "scancode": 13,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Dodge",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 1,
+              "mouseButton": 0,
+              "scancode": 44,
               "trigger": "Pressed"
             }
           ],
@@ -119,7 +159,7 @@
         "StateMachineAssetComponent": {
           "defaultStateId": 1,
           "name": "",
-          "nextId": 5,
+          "nextId": 45,
           "parameters": [
             {
               "defaultValue": 0.0,
@@ -155,6 +195,21 @@
               "defaultValue": 0.0,
               "name": "IsRunning",
               "type": 2
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "Attack",
+              "type": 3
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "Dodge",
+              "type": 3
+            },
+            {
+              "defaultValue": 0.0,
+              "name": "Damaged",
+              "type": 3
             }
           ],
           "states": [
@@ -165,8 +220,8 @@
               "id": 1,
               "loopAnimation": true,
               "name": "Idle",
-              "posX": -233.48695373535156,
-              "posY": -10.263161659240723,
+              "posX": 0.0,
+              "posY": 0.0,
               "timelineId": 0,
               "type": 0
             },
@@ -176,11 +231,104 @@
               "canInterrupt": true,
               "id": 2,
               "loopAnimation": true,
-              "name": "Move",
-              "posX": 15.723548889160156,
-              "posY": -115.46056365966797,
+              "name": "Walk",
+              "posX": 220.0,
+              "posY": 0.0,
               "timelineId": 0,
               "type": 0
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 17,
+              "canInterrupt": true,
+              "id": 3,
+              "loopAnimation": true,
+              "name": "Jog",
+              "posX": 440.0,
+              "posY": 0.0,
+              "timelineId": 0,
+              "type": 0
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 22,
+              "canInterrupt": true,
+              "id": 4,
+              "loopAnimation": true,
+              "name": "Run",
+              "posX": 660.0,
+              "posY": 0.0,
+              "timelineId": 0,
+              "type": 0
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 75,
+              "canInterrupt": false,
+              "id": 11,
+              "loopAnimation": false,
+              "name": "Attack1",
+              "posX": 0.0,
+              "posY": 220.0,
+              "properties": {
+                "ActionNodeIndex": 0.0
+              },
+              "timelineId": 0,
+              "type": 1
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 76,
+              "canInterrupt": false,
+              "id": 12,
+              "loopAnimation": false,
+              "name": "Attack2",
+              "posX": 240.0,
+              "posY": 220.0,
+              "properties": {
+                "ActionNodeIndex": 1.0
+              },
+              "timelineId": 0,
+              "type": 1
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 77,
+              "canInterrupt": false,
+              "id": 13,
+              "loopAnimation": false,
+              "name": "Attack3",
+              "posX": 480.0,
+              "posY": 220.0,
+              "properties": {
+                "ActionNodeIndex": 2.0
+              },
+              "timelineId": 0,
+              "type": 1
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 73,
+              "canInterrupt": false,
+              "id": 20,
+              "loopAnimation": false,
+              "name": "Dodge",
+              "posX": 720.0,
+              "posY": 220.0,
+              "timelineId": 0,
+              "type": 2
+            },
+            {
+              "animSpeed": 1.0,
+              "animationIndex": 51,
+              "canInterrupt": false,
+              "id": 29,
+              "loopAnimation": false,
+              "name": "Damage",
+              "posX": 720.0,
+              "posY": 440.0,
+              "timelineId": 0,
+              "type": 4
             }
           ],
           "transitions": [
@@ -189,7 +337,7 @@
               "conditions": [
                 {
                   "compare": 4,
-                  "param": "IsMoving",
+                  "param": "Gait",
                   "type": 5,
                   "value": 1.0
                 }
@@ -197,7 +345,7 @@
               "exitTimeNormalized": 0.0,
               "fromState": 1,
               "hasExitTime": false,
-              "id": 3,
+              "id": 5,
               "priority": 100,
               "toState": 2
             },
@@ -206,7 +354,7 @@
               "conditions": [
                 {
                   "compare": 5,
-                  "param": "IsMoving",
+                  "param": "Gait",
                   "type": 5,
                   "value": 0.0
                 }
@@ -214,7 +362,500 @@
               "exitTimeNormalized": 0.0,
               "fromState": 2,
               "hasExitTime": false,
-              "id": 4,
+              "id": 6,
+              "priority": 100,
+              "toState": 1
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 4,
+                  "param": "Gait",
+                  "type": 5,
+                  "value": 2.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 7,
+              "priority": 100,
+              "toState": 3
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 5,
+                  "param": "Gait",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 3,
+              "hasExitTime": false,
+              "id": 8,
+              "priority": 100,
+              "toState": 2
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 4,
+                  "param": "Gait",
+                  "type": 5,
+                  "value": 3.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 3,
+              "hasExitTime": false,
+              "id": 9,
+              "priority": 100,
+              "toState": 4
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 5,
+                  "param": "Gait",
+                  "type": 5,
+                  "value": 2.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 4,
+              "hasExitTime": false,
+              "id": 10,
+              "priority": 100,
+              "toState": 3
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.4000000059604645,
+              "fromState": 11,
+              "hasExitTime": true,
+              "id": 15,
+              "priority": 200,
+              "toState": 12
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.4000000059604645,
+              "fromState": 12,
+              "hasExitTime": true,
+              "id": 16,
+              "priority": 200,
+              "toState": 13
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 1,
+              "hasExitTime": false,
+              "id": 21,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 22,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 3,
+              "hasExitTime": false,
+              "id": 23,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 4,
+              "hasExitTime": false,
+              "id": 24,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.20000000298023224,
+              "fromState": 11,
+              "hasExitTime": true,
+              "id": 25,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.20000000298023224,
+              "fromState": 12,
+              "hasExitTime": true,
+              "id": 26,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Dodge",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.20000000298023224,
+              "fromState": 13,
+              "hasExitTime": true,
+              "id": 27,
+              "priority": 300,
+              "toState": 20
+            },
+            {
+              "blendDuration": 0.11999999731779099,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "",
+                  "type": 2,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 20,
+              "hasExitTime": false,
+              "id": 28,
+              "priority": 100,
+              "toState": 1
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 1,
+              "hasExitTime": false,
+              "id": 30,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 31,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 3,
+              "hasExitTime": false,
+              "id": 32,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 4,
+              "hasExitTime": false,
+              "id": 33,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 11,
+              "hasExitTime": false,
+              "id": 34,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 12,
+              "hasExitTime": false,
+              "id": 35,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.05000000074505806,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Damaged",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 13,
+              "hasExitTime": false,
+              "id": 36,
+              "priority": 500,
+              "toState": 29
+            },
+            {
+              "blendDuration": 0.15000000596046448,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "",
+                  "type": 2,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 29,
+              "hasExitTime": false,
+              "id": 37,
+              "priority": 100,
+              "toState": 1
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 1,
+              "hasExitTime": false,
+              "id": 38,
+              "priority": 200,
+              "toState": 11
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 2,
+              "hasExitTime": false,
+              "id": 39,
+              "priority": 200,
+              "toState": 11
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 3,
+              "hasExitTime": false,
+              "id": 40,
+              "priority": 200,
+              "toState": 11
+            },
+            {
+              "blendDuration": 0.07999999821186066,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "Attack",
+                  "type": 5,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 4,
+              "hasExitTime": false,
+              "id": 41,
+              "priority": 200,
+              "toState": 11
+            },
+            {
+              "blendDuration": 0.11999999731779099,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "",
+                  "type": 2,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 11,
+              "hasExitTime": false,
+              "id": 42,
+              "priority": 100,
+              "toState": 1
+            },
+            {
+              "blendDuration": 0.11999999731779099,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "",
+                  "type": 2,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 12,
+              "hasExitTime": false,
+              "id": 43,
+              "priority": 100,
+              "toState": 1
+            },
+            {
+              "blendDuration": 0.11999999731779099,
+              "conditions": [
+                {
+                  "compare": 0,
+                  "param": "",
+                  "type": 2,
+                  "value": 1.0
+                }
+              ],
+              "exitTimeNormalized": 0.0,
+              "fromState": 13,
+              "hasExitTime": false,
+              "id": 44,
               "priority": 100,
               "toState": 1
             }
@@ -222,6 +863,18 @@
         },
         "StateMachineParamsComponent": {
           "params": [
+            {
+              "name": "Attack",
+              "value": 0.0
+            },
+            {
+              "name": "Dodge",
+              "value": 0.0
+            },
+            {
+              "name": "Damaged",
+              "value": 0.0
+            },
             {
               "name": "MoveX",
               "value": 0.0

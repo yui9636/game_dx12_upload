@@ -36,6 +36,7 @@ public:
     void End();
     void Submit();
     void FlushResourceBarriers();
+    void DiscardResourceBarriers();
     void RestoreFrameDescriptorHeap();
     void RestoreDescriptorHeap();  // ImGui 描画後にフレームヒープとルートシグネチャを復元
     void BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count);

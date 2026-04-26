@@ -592,6 +592,11 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
         return false;
     }
 
+    // Sanitize the in-memory state machine before binding, so the saved prefab
+    // never carries dead transitions (e.g. legacy 0xDDDDDDDD fromState/toState
+    // entries) that would silently shadow the runtime evaluation.
+    panel.RemoveBrokenTransitions();
+
     ApplyEditorBindingsToPreviewEntity(panel);
 
     // Socket鬯ｮ・ｫ繝ｻ・ｲ郢晢ｽｻ繝ｻ・ｰ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｰ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｱ鬯ｩ蟷｢・ｽ・｢郢晢ｽｻ繝ｻ・ｧ驛｢譎｢・ｽ・ｻ髯懈ｻゑｽｽ・ｪeview Entity鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ驛｢譎｢・ｽ・ｻ郢晢ｽｻ繝ｻ・ｸ鬯ｮ・ｫ繝ｻ・ｴ髯ｷ・ｴ郢晢ｽｻ繝ｻ・ｽ繝ｻ・ｽ郢晢ｽｻ繝ｻ・ｸ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬯ｮ・｢繝ｻ・ｧ郢晢ｽｻ繝ｻ・ｴ鬯ｩ謳ｾ・ｽ・ｯ郢晢ｽｻ繝ｻ・ｾ鬯ｩ謳ｾ・ｽ・ｵ郢晢ｽｻ繝ｻ・ｺ鬮ｯ・ｷ繝ｻ・ｷ郢晢ｽｻ繝ｻ・ｶ郢晢ｽｻ邵ｺ・､・つ鬩幢ｽ｢隴趣ｽ｢繝ｻ・ｽ繝ｻ・ｻ
