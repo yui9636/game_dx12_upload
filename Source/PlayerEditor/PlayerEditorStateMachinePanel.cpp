@@ -851,8 +851,43 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         ImGui::OpenPopup("AddStateTemplatePopup");
     }
     ImGui::SameLine();
-    if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
-        ApplyFullPlayerPreset();
+    // v2.0: setup button switches by ActorEditorMode.
+    // Player -> ApplyFullPlayerPreset()
+    // Enemy  -> EnemyEditorSetupFullEnemy()  (toolbar version is upstream;
+    //          this in-graph mirror is here so users don't have to scroll up)
+    // NPC    -> EnemyEditorSetupFullNPC()
+    switch (m_actorEditorMode) {
+    case ActorEditorMode::Player:
+        if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
+            ApplyFullPlayerPreset();
+        }
+        break;
+    case ActorEditorMode::Enemy:
+        if (m_registry && CanUsePreviewEntity()) {
+            if (ImGui::Button(ICON_FA_BOLT " Setup Full Enemy")) {
+                extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
+                EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
+                m_stateMachineDirty = true;
+            }
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::Button(ICON_FA_BOLT " Setup Full Enemy");
+            ImGui::EndDisabled();
+        }
+        break;
+    case ActorEditorMode::NPC:
+        if (m_registry && CanUsePreviewEntity()) {
+            if (ImGui::Button(ICON_FA_USER " Setup Full NPC")) {
+                extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
+                EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
+                m_stateMachineDirty = true;
+            }
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::Button(ICON_FA_USER " Setup Full NPC");
+            ImGui::EndDisabled();
+        }
+        break;
     }
     ImGui::SameLine();
     if (DrawToolbarButton(ICON_FA_PLAY " Preview State", hasSelectedState)) {
@@ -884,7 +919,29 @@ void PlayerEditorPanel::DrawStateMachinePanel()
 
     if (ImGui::BeginPopup("AddStateTemplatePopup")) {
         ImGui::TextDisabled("Presets:");
-        if (ImGui::MenuItem("Setup Full Player"))     ApplyFullPlayerPreset();
+        switch (m_actorEditorMode) {
+        case ActorEditorMode::Player:
+            if (ImGui::MenuItem("Setup Full Player")) ApplyFullPlayerPreset();
+            break;
+        case ActorEditorMode::Enemy:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::MenuItem("Setup Full Enemy")) {
+                    extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            }
+            break;
+        case ActorEditorMode::NPC:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::MenuItem("Setup Full NPC")) {
+                    extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            }
+            break;
+        }
         if (ImGui::MenuItem("Setup Locomotion Only")) ApplyLocomotionStateMachinePreset();
         if (ImGui::MenuItem("Add Attack Combo"))      ApplyAttackComboPreset();
         if (ImGui::MenuItem("Add Dodge"))             ApplyDodgePreset();
@@ -1364,7 +1421,29 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         float posY = (mousePos.y - origin.y - m_graphOffset.y) / m_graphZoom;
 
         ImGui::TextDisabled("Presets:");
-        if (ImGui::MenuItem("Setup Full Player"))     ApplyFullPlayerPreset();
+        switch (m_actorEditorMode) {
+        case ActorEditorMode::Player:
+            if (ImGui::MenuItem("Setup Full Player")) ApplyFullPlayerPreset();
+            break;
+        case ActorEditorMode::Enemy:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::MenuItem("Setup Full Enemy")) {
+                    extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            }
+            break;
+        case ActorEditorMode::NPC:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::MenuItem("Setup Full NPC")) {
+                    extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            }
+            break;
+        }
         if (ImGui::MenuItem("Setup Locomotion Only")) ApplyLocomotionStateMachinePreset();
         if (ImGui::MenuItem("Add Attack Combo"))      ApplyAttackComboPreset();
         if (ImGui::MenuItem("Add Dodge"))             ApplyDodgePreset();
@@ -1388,8 +1467,38 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         const float centerY = origin.y + canvasSize.y * 0.5f - buttonHeight - 8.0f;
 
         ImGui::SetCursorScreenPos(ImVec2(centerX, centerY));
-        if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player##Graph", ImVec2(buttonWidth, 0.0f))) {
-            ApplyFullPlayerPreset();
+        switch (m_actorEditorMode) {
+        case ActorEditorMode::Player:
+            if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player##Graph", ImVec2(buttonWidth, 0.0f))) {
+                ApplyFullPlayerPreset();
+            }
+            break;
+        case ActorEditorMode::Enemy:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::Button(ICON_FA_BOLT " Setup Full Enemy##Graph", ImVec2(buttonWidth, 0.0f))) {
+                    extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            } else {
+                ImGui::BeginDisabled();
+                ImGui::Button(ICON_FA_BOLT " Setup Full Enemy##Graph", ImVec2(buttonWidth, 0.0f));
+                ImGui::EndDisabled();
+            }
+            break;
+        case ActorEditorMode::NPC:
+            if (m_registry && CanUsePreviewEntity()) {
+                if (ImGui::Button(ICON_FA_USER " Setup Full NPC##Graph", ImVec2(buttonWidth, 0.0f))) {
+                    extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
+                    EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
+                    m_stateMachineDirty = true;
+                }
+            } else {
+                ImGui::BeginDisabled();
+                ImGui::Button(ICON_FA_USER " Setup Full NPC##Graph", ImVec2(buttonWidth, 0.0f));
+                ImGui::EndDisabled();
+            }
+            break;
         }
 
         ImGui::SetCursorScreenPos(ImVec2(centerX, centerY + buttonHeight + 8.0f));
