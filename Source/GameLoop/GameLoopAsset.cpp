@@ -266,7 +266,9 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
     j["transitions"] = transitionsJson;
 
     std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
+    if (!path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path(), ec);
+    }
 
     std::ofstream ofs(path);
     if (!ofs) return false;
@@ -304,43 +306,43 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
 {
     GameLoopValidateResult r;
 
-    // start node 存在
+    // start node existence.
     if (asset.FindNode(asset.startNodeId) == nullptr) {
-        r.messages.push_back({ GameLoopValidateSeverity::Error, "startNodeId が nodes に存在しない" });
+        r.messages.push_back({ GameLoopValidateSeverity::Error, "startNodeId is not in nodes" });
     }
 
-    // node id 重複
+    // duplicate node ids.
     {
         std::set<uint32_t> seen;
         for (const auto& n : asset.nodes) {
             if (!seen.insert(n.id).second) {
-                r.messages.push_back({ GameLoopValidateSeverity::Error, "node id が重複: " + std::to_string(n.id) });
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "duplicate node id: " + std::to_string(n.id) });
             }
         }
     }
 
-    // node 個別検査
+    // per-node checks.
     for (const auto& n : asset.nodes) {
         if (n.name.empty()) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, "node name が空 (id=" + std::to_string(n.id) + ")" });
+            r.messages.push_back({ GameLoopValidateSeverity::Error, "node name empty (id=" + std::to_string(n.id) + ")" });
         }
         if (n.scenePath.empty()) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath が空 (" + n.name + ")" });
+            r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath empty (" + n.name + ")" });
         }
     }
 
-    // transition 検査
+    // transition checks.
     for (size_t i = 0; i < asset.transitions.size(); ++i) {
         const auto& t = asset.transitions[i];
         const std::string label = "transition[" + std::to_string(i) + "]";
         if (asset.FindNode(t.fromNodeId) == nullptr) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId が存在しない" });
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId not found" });
         }
         if (asset.FindNode(t.toNodeId) == nullptr) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId が存在しない" });
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId not found" });
         }
         if (t.conditions.empty()) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " conditions が空" });
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " conditions is empty" });
         }
         for (size_t ci = 0; ci < t.conditions.size(); ++ci) {
             const auto& c = t.conditions[ci];
@@ -348,47 +350,47 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
             switch (c.type) {
             case GameLoopConditionType::InputPressed:
                 if (c.actionIndex < 0 || c.actionIndex >= ResolvedInputStateComponent::MAX_ACTIONS) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " InputPressed actionIndex 範囲外" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " InputPressed actionIndex out of range" });
                 }
                 break;
             case GameLoopConditionType::UIButtonClicked:
                 if (c.targetName.empty()) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " UIButtonClicked targetName が空" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " UIButtonClicked targetName is empty" });
                 }
                 break;
             case GameLoopConditionType::TimerElapsed:
                 if (c.seconds <= 0.0f) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " TimerElapsed seconds は > 0" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " TimerElapsed seconds must be > 0" });
                 }
                 break;
             case GameLoopConditionType::ActorMovedDistance:
                 if (c.threshold <= 0.0f) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance threshold は > 0" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance threshold must be > 0" });
                 }
                 if (c.actorType == ActorType::None) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance actorType は None 不可" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " ActorMovedDistance actorType cannot be None" });
                 }
                 break;
             case GameLoopConditionType::ActorDead:
             case GameLoopConditionType::AllActorsDead:
                 if (c.actorType == ActorType::None) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " actor 系 actorType は None 不可" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " actor condition actorType cannot be None" });
                 }
                 break;
             case GameLoopConditionType::RuntimeFlag:
                 if (c.parameterName.empty()) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " RuntimeFlag parameterName が空" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " RuntimeFlag parameterName is empty" });
                 }
                 break;
             case GameLoopConditionType::StateMachineState:
                 if (c.parameterName.empty()) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " StateMachineState parameterName が空" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " StateMachineState parameterName is empty" });
                 }
                 break;
             case GameLoopConditionType::TimelineEvent:
             case GameLoopConditionType::CustomEvent:
                 if (c.eventName.empty()) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " event 系 eventName が空" });
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " event-type eventName is empty" });
                 }
                 break;
             default:
@@ -397,13 +399,13 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         }
     }
 
-    // dead-end / unreachable node 検査
+    // dead-end / unreachable nodes.
     {
         std::unordered_set<uint32_t> hasOutgoing;
         for (const auto& t : asset.transitions) hasOutgoing.insert(t.fromNodeId);
         for (const auto& n : asset.nodes) {
             if (hasOutgoing.find(n.id) == hasOutgoing.end()) {
-                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' は出口 transition を持たない" });
+                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' has no outgoing transition" });
             }
         }
 
@@ -423,7 +425,7 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         }
         for (const auto& n : asset.nodes) {
             if (reachable.find(n.id) == reachable.end()) {
-                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' は start から到達不能" });
+                r.messages.push_back({ GameLoopValidateSeverity::Warning, "node '" + n.name + "' is not reachable from start" });
             }
         }
     }

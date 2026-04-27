@@ -2,9 +2,8 @@
 #include <string>
 #include <vector>
 
-// 1 frame 分の UI Button click event を蓄えるキュー。
-// GameLayer::Update 末尾で UIButtonClickSystem が Push し、
-// GameLoopSystem が Contains で参照、frame 末尾で EngineKernel が Clear する。
+// Per-frame UI button click queue.
+// UIButtonClickSystem pushes, GameLoopSystem reads, EngineKernel clears at end-of-frame.
 class UIButtonClickEventQueue
 {
 public:

@@ -150,7 +150,7 @@ void GameLoopEditorPanel::DrawNodeList()
     if (ImGui::Button("-##RemoveNode") && m_selectedNodeIndex >= 0 && m_selectedNodeIndex < (int)a.nodes.size()) {
         const uint32_t removedId = a.nodes[m_selectedNodeIndex].id;
         a.nodes.erase(a.nodes.begin() + m_selectedNodeIndex);
-        // 関連 transition も除去する。
+        // Drop any transitions that reference this node.
         a.transitions.erase(
             std::remove_if(a.transitions.begin(), a.transitions.end(),
                 [removedId](const GameLoopTransition& t) {
@@ -184,7 +184,7 @@ void GameLoopEditorPanel::DrawNodeInspector()
     ImGui::TextUnformatted("Node Inspector");
 
     if (m_selectedNodeIndex < 0 || m_selectedNodeIndex >= (int)a.nodes.size()) {
-        ImGui::TextDisabled("(node 未選択)");
+        ImGui::TextDisabled("(no node selected)");
         return;
     }
 
@@ -224,7 +224,7 @@ void GameLoopEditorPanel::DrawTransitionList()
             t.toNodeId   = a.nodes.front().id;
         }
         t.name = "NewTransition";
-        t.conditions.push_back(GameLoopCondition{}); // None で開始
+        t.conditions.push_back(GameLoopCondition{}); // None to start
         a.transitions.push_back(t);
         m_selectedTransitionIndex = (int)a.transitions.size() - 1;
     }
@@ -271,7 +271,7 @@ void GameLoopEditorPanel::DrawTransitionInspector()
     ImGui::TextUnformatted("Transition Inspector");
 
     if (m_selectedTransitionIndex < 0 || m_selectedTransitionIndex >= (int)a.transitions.size()) {
-        ImGui::TextDisabled("(transition 未選択)");
+        ImGui::TextDisabled("(no transition selected)");
         return;
     }
 
@@ -328,7 +328,7 @@ void GameLoopEditorPanel::DrawConditionEditor(GameLoopCondition& c, int /*condit
 
     switch (c.type) {
     case GameLoopConditionType::None:
-        ImGui::TextDisabled("(常に true)");
+        ImGui::TextDisabled("(always true)");
         break;
 
     case GameLoopConditionType::InputPressed:
@@ -395,7 +395,7 @@ void GameLoopEditorPanel::DrawConditionEditor(GameLoopCondition& c, int /*condit
 void GameLoopEditorPanel::DrawValidateResult()
 {
     if (!m_validatedOnce) {
-        ImGui::TextDisabled("Validate ボタンを押すと結果がここに出ます。");
+        ImGui::TextDisabled("Press [Validate] to populate this section.");
         return;
     }
     ImGui::Text("Validate: %d errors, %d warnings", m_lastValidate.ErrorCount(), m_lastValidate.WarningCount());
@@ -434,7 +434,7 @@ void GameLoopEditorPanel::DoSave()
 {
     DoValidate();
     if (m_lastValidate.HasError()) {
-        LOG_WARN("[GameLoop] Validate に Error があります。Save 中止。");
+        LOG_WARN("[GameLoop] Validate has errors. Save aborted.");
         return;
     }
     if (Asset().SaveToFile(m_currentPath)) {

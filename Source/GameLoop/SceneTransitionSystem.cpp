@@ -20,7 +20,7 @@ namespace
         runtime.forceReload                = false;
         runtime.nodeTimer                  = 0.0f;
         runtime.observedActorPositionInitialized = false;
-        // flags は scene 跨ぎで保持する。
+        // flags are kept across scenes.
     }
 
     void DiscardPendingTransition(GameLoopRuntime& runtime)
@@ -38,14 +38,14 @@ void SceneTransitionSystem::UpdateEndOfFrame(GameLoopRuntime& runtime, Registry&
     if (!runtime.sceneTransitionRequested) return;
 
     if (runtime.pendingScenePath.empty()) {
-        LOG_ERROR("[SceneTransitionSystem] pendingScenePath が空のまま遷移要求が来ました");
+        LOG_ERROR("[SceneTransitionSystem] pendingScenePath is empty while a transition was requested");
         DiscardPendingTransition(runtime);
         return;
     }
 
     const bool sameScene = (runtime.pendingScenePath == runtime.currentScenePath);
     if (sameScene && !runtime.forceReload) {
-        // node id だけ更新し、scene の reload は行わない。
+        // Update node id but skip the actual scene reload.
         ApplySuccessfulTransition(runtime);
         return;
     }
@@ -55,8 +55,8 @@ void SceneTransitionSystem::UpdateEndOfFrame(GameLoopRuntime& runtime, Registry&
 
     const bool ok = PrefabSystem::LoadSceneIntoRegistry(runtime.pendingScenePath, gameRegistry);
     if (!ok) {
-        LOG_ERROR("[SceneTransitionSystem] LoadSceneIntoRegistry 失敗: %s", runtime.pendingScenePath.c_str());
-        // currentNode / currentScenePath / nodeTimer / flags は保持。
+        LOG_ERROR("[SceneTransitionSystem] LoadSceneIntoRegistry failed: %s", runtime.pendingScenePath.c_str());
+        // Keep current scene state.
         DiscardPendingTransition(runtime);
         return;
     }

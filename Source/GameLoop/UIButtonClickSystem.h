@@ -6,8 +6,8 @@ class Registry;
 class UIButtonClickEventQueue;
 class InputEventQueue;
 
-// 2D UI Button の click を検出し、UIButtonClickEventQueue に Push する。
-// view/projection は呼び出し側 (EngineKernel) が main camera から構築する。
+// Detect 2D UI Button clicks and push them into the event queue.
+// view/projection are passed in (built from the main camera by EngineKernel).
 class UIButtonClickSystem
 {
 public:

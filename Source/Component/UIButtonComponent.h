@@ -2,15 +2,14 @@
 
 #include <string>
 
-// 2D UI Button を識別する component。
-// CanvasItemComponent + RectTransformComponent + SpriteComponent と
-// 組み合わせて Hierarchy 上で button entity を構成する。
-// click 検出は UIButtonClickSystem が行う。
+// Marks an entity as a 2D UI button.
+// Combine with CanvasItemComponent + RectTransformComponent + SpriteComponent
+// in a Hierarchy. Click detection is done by UIButtonClickSystem.
 struct UIButtonComponent
 {
-    // 一意な ID。GameLoopCondition::UIButtonClicked.targetName と一致させる。
+    // Unique id. Must match GameLoopCondition::UIButtonClicked.targetName.
     std::string buttonId;
 
-    // false の間は click event を発行しない。
+    // While false, no click event is emitted for this button.
     bool enabled = true;
 };

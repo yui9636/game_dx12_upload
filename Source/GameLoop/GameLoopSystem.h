@@ -5,9 +5,9 @@ struct GameLoopAsset;
 struct GameLoopRuntime;
 class UIButtonClickEventQueue;
 
-// 現在 node の transition condition を評価し、
-// 成立した遷移があれば runtime.pending* と sceneTransitionRequested を立てる。
-// 実 scene load は SceneTransitionSystem に委ねる。
+// Evaluate transition conditions for the current node.
+// On a satisfied transition, set runtime.pending* and sceneTransitionRequested.
+// Does NOT load scenes (SceneTransitionSystem does that).
 class GameLoopSystem
 {
 public:

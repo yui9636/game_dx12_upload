@@ -6,7 +6,7 @@
 
 #include "Component/ActorTypeComponent.h"
 
-// GameLoop で扱う遷移条件の種別。
+// Condition kind used by GameLoop transitions.
 enum class GameLoopConditionType : uint8_t
 {
     None              = 0,
@@ -18,33 +18,33 @@ enum class GameLoopConditionType : uint8_t
     ActorMovedDistance= 6,
     RuntimeFlag       = 7,
 
-    // Phase 4 拡張。
+    // Phase 4 extensions.
     StateMachineState = 100,
     TimelineEvent     = 101,
     CustomEvent       = 102,
 };
 
-// 1 つの transition 成立条件。
+// One transition condition.
 struct GameLoopCondition
 {
     GameLoopConditionType type = GameLoopConditionType::None;
 
     ActorType    actorType     = ActorType::None;
-    std::string  targetName;     // UIButtonClicked の buttonId / 将来の actor name
-    std::string  parameterName;  // RuntimeFlag のキー / StateMachineState のステート名
-    std::string  eventName;      // TimelineEvent / CustomEvent のイベント名
+    std::string  targetName;     // UIButtonClicked buttonId / future actor name.
+    std::string  parameterName;  // RuntimeFlag key / StateMachineState state name.
+    std::string  eventName;      // TimelineEvent / CustomEvent name.
     int          actionIndex    = -1;
     float        threshold      = 0.0f;
     float        seconds        = 0.0f;
 };
 
-// scene を表す node の型。
+// Node kind. Phase 1 only supports Scene.
 enum class GameLoopNodeType : uint8_t
 {
     Scene = 0,
 };
 
-// GameLoop graph の 1 node = 1 scene。
+// One node in the GameLoop graph (one node = one scene).
 struct GameLoopNode
 {
     uint32_t          id        = 0;
@@ -53,7 +53,7 @@ struct GameLoopNode
     GameLoopNodeType  type      = GameLoopNodeType::Scene;
 };
 
-// node から node への遷移。
+// Transition between two nodes.
 struct GameLoopTransition
 {
     uint32_t                       fromNodeId           = 0;
@@ -63,7 +63,7 @@ struct GameLoopTransition
     bool                           requireAllConditions = true;
 };
 
-// scene 進行 graph の authoring data。
+// Authoring data for the scene transition graph.
 struct GameLoopAsset
 {
     int                              version     = 1;
@@ -71,24 +71,22 @@ struct GameLoopAsset
     std::vector<GameLoopNode>        nodes;
     std::vector<GameLoopTransition>  transitions;
 
-    // GameLoopNode を id から検索する。なければ nullptr。
+    // Returns nullptr if id is not present.
     const GameLoopNode* FindNode(uint32_t id) const;
     GameLoopNode*       FindNode(uint32_t id);
 
-    // 新規 node の id を採番する (現在の最大 id + 1)。
+    // Allocate a fresh node id (max+1).
     uint32_t AllocateNodeId() const;
 
-    // 標準サンプル loop (Title -> Battle -> Result -> Retry / Cancel) を生成する。
+    // Build the standard sample loop (Title -> Battle -> Result, with Retry / Cancel).
     static GameLoopAsset CreateDefault();
 
-    // JSON ファイルから読み込む (Phase 2)。
+    // JSON load / save (Phase 2).
     bool LoadFromFile(const std::filesystem::path& path);
-
-    // JSON ファイルに保存する (Phase 2)。
     bool SaveToFile(const std::filesystem::path& path) const;
 };
 
-// validate 結果の severity。
+// Severity of a validate message.
 enum class GameLoopValidateSeverity : uint8_t
 {
     Info    = 0,
@@ -111,5 +109,5 @@ struct GameLoopValidateResult
     int  WarningCount() const;
 };
 
-// asset を validate する。
+// Run all validate rules against the asset.
 GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset);

@@ -5,44 +5,46 @@
 
 #include <DirectXMath.h>
 
-// scene を跨いで保持される GameLoop の runtime 状態。
-// Registry には載せず、EngineKernel が所有する。
+// Runtime state for the GameLoop. Persistent across scene loads.
+// Owned by EngineKernel (NOT by any Registry).
 struct GameLoopRuntime
 {
-    // graph 上の現在 node id。
+    // Current node id in the graph.
     uint32_t currentNodeId  = 0;
 
-    // 直前 node id。debug や演出で参照可能。
+    // Previous node id (kept for debug/effects).
     uint32_t previousNodeId = 0;
 
-    // 遷移要求中の next node id。SceneTransitionSystem が消化する。
+    // Pending next node id (consumed by SceneTransitionSystem).
     uint32_t pendingNodeId  = 0;
 
     std::string currentScenePath;
     std::string pendingScenePath;
 
-    // 遷移要求が出ているか。GameLoopSystem が立て、SceneTransitionSystem がクリアする。
+    // True while a transition is requested (set by GameLoopSystem,
+    // cleared by SceneTransitionSystem).
     bool sceneTransitionRequested = false;
 
-    // 同期 load 中フラグ。Phase 1 では実質単フレーム扱いだが、async 化への布石。
+    // True while a synchronous load is in progress.
+    // Phase 1 keeps this short-lived; placeholder for future async loads.
     bool waitingSceneLoad = false;
 
-    // current==pending でも強制 reload する場合に true。
+    // Force a reload even if pendingScenePath == currentScenePath.
     bool forceReload = false;
 
-    // node 開始からの経過時間 (TimerElapsed condition 用)。
+    // Time (seconds) since the current node started. Used by TimerElapsed.
     float nodeTimer = 0.0f;
 
-    // ActorMovedDistance 用、node 開始時に観測対象 actor の位置を控える。
+    // ActorMovedDistance: position of the observed actor when the node started.
     DirectX::XMFLOAT3 observedActorStartPosition{ 0.0f, 0.0f, 0.0f };
     bool              observedActorPositionInitialized = false;
 
-    // RuntimeFlag / CustomEvent condition 用フラグテーブル。
+    // RuntimeFlag / CustomEvent flag table.
     std::unordered_map<std::string, bool> flags;
 
-    // GameLoop が進行中か (Play 中の有効フラグ)。
+    // True while GameLoop is running (Play in progress).
     bool isActive = false;
 
-    // すべての runtime state を Editor 戻り時の初期状態にリセットする。
+    // Reset to the post-Stop initial state.
     void Reset();
 };

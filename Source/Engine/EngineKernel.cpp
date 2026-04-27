@@ -2790,7 +2790,7 @@ void EngineKernel::Initialize()
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
-    // GameLoop default asset を読み込む (なければ default を生成する)。
+    // Load default GameLoop asset (or build the default loop if missing).
     {
         const std::filesystem::path gameLoopPath = "Data/GameLoop/Main.gameloop";
         if (!m_gameLoopAsset.LoadFromFile(gameLoopPath)) {
@@ -2799,7 +2799,7 @@ void EngineKernel::Initialize()
         }
     }
 
-    // GameLoop persistent input owner entity を生成する (scene 跨ぎで保持される)。
+    // Create the GameLoop persistent input owner entity (kept across scene loads).
     if (!m_gameLoopInputOwnerInitialized) {
         EntityID owner = m_gameLoopRegistry.CreateEntity();
         m_gameLoopRegistry.AddComponent(owner, NameComponent{ "GameLoopInputOwner" });
@@ -2915,15 +2915,15 @@ void EngineKernel::Update(float rawDt)
 
     if (m_gameLayer) m_gameLayer->Update(time);
 
-    // ---- GameLoop pipeline (frame 末尾扱い)。
+    // ---- GameLoop pipeline (treated as end-of-frame).
     if (m_gameLayer) {
         Registry& gameRegistry = m_gameLayer->GetRegistry();
 
-        // GameLoop 用 persistent input owner も resolve する。
+        // Resolve inputs for the GameLoop persistent owner registry as well.
         InputResolveSystem::Update(m_gameLoopRegistry, m_inputQueue, time.unscaledDt);
 
-        // 2D Button click を main camera 行列で hit test する。
-        // 編集中は EditorLayer の Game View rect (前 frame 分) を使う。
+        // 2D button click hit test using the main camera matrices.
+        // In editor mode, use last frame's game view rect.
         DirectX::XMFLOAT4 gameViewRect{ 0.0f, 0.0f, 0.0f, 0.0f };
         if (m_editorLayer) {
             gameViewRect = m_editorLayer->GetGameViewRect();
@@ -2963,10 +2963,10 @@ void EngineKernel::Update(float rawDt)
             m_uiButtonClickQueue,
             time.dt);
 
-        // frame 末尾: 実際の scene load を消化する。
+        // End-of-frame: consume the scene load.
         SceneTransitionSystem::UpdateEndOfFrame(m_gameLoopRuntime, gameRegistry);
 
-        // 1 frame 分の click event を破棄。
+        // Drop the 1 frame of click events.
         m_uiButtonClickQueue.Clear();
     }
 
@@ -3652,11 +3652,11 @@ void EngineKernel::Play()
         if (m_editorLayer && m_gameLayer) {
             m_editorLayer->GetInputBridge().OnPlayStarted(m_gameLayer->GetRegistry());
 
-            // Editor で開いていた scene path を退避する (Stop 時に復元)。
+            // Save the current editor scene path so we can restore it on Stop.
             m_savedEditorScenePath = m_editorLayer->GetCurrentScenePath();
         }
 
-        // GameLoop を起動する。startNode の scene を frame 末尾で load する。
+        // Start GameLoop. The startNode's scene is loaded at end-of-frame.
         GameLoopRuntime& rt = m_gameLoopRuntime;
         rt.Reset();
         rt.isActive = true;
@@ -3695,11 +3695,11 @@ void EngineKernel::Stop()
             m_editorLayer->GetInputBridge().OnPlayStopped(m_gameLayer->GetRegistry());
         }
 
-        // GameLoop runtime をリセットする。
+        // Reset GameLoop runtime.
         m_gameLoopRuntime.Reset();
         m_uiButtonClickQueue.Clear();
 
-        // Editor scene を復元する (Play 開始時の scene へ戻る)。
+        // Restore the editor scene we had open before Play.
         if (m_editorLayer && !m_savedEditorScenePath.empty()) {
             m_editorLayer->LoadSceneFromPath(m_savedEditorScenePath);
         }

@@ -112,7 +112,7 @@ namespace
             DirectX::XMFLOAT3 cur{};
             if (!TryGetFirstActorPosition(gameRegistry, c.actorType, cur)) return false;
 
-            // 必要なら今の frame で初期位置を控える。
+            // First chance: capture the start position.
             if (!runtime.observedActorPositionInitialized) {
                 runtime.observedActorStartPosition = cur;
                 runtime.observedActorPositionInitialized = true;
@@ -136,7 +136,7 @@ namespace
 
         case GameLoopConditionType::StateMachineState:
         {
-            // 指定 actorType の actor が、現在 state の name == parameterName か。
+            // Match: actor of type c.actorType whose current state name == c.parameterName.
             if (c.parameterName.empty()) return false;
             bool matched = false;
             Query<ActorTypeComponent, StateMachineAssetComponent, StateMachineParamsComponent> q(gameRegistry);
@@ -155,7 +155,7 @@ namespace
 
         case GameLoopConditionType::TimelineEvent:
         {
-            // TimelineEvent は gameplay 側が runtime.flags[eventName] を立てる契約。
+            // Gameplay code is expected to set runtime.flags[eventName] = true.
             auto it = runtime.flags.find(c.eventName);
             return it != runtime.flags.end() && it->second;
         }
