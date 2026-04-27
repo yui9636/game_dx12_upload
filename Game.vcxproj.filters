@@ -36,6 +36,7 @@
     <Filter Include="Source\Font" />
     <Filter Include="Source\Gameplay" />
     <Filter Include="Source\GameLoop" />
+    <Filter Include="Source\AI" />
     <Filter Include="Source\Generated" />
     <Filter Include="Source\Grid" />
     <Filter Include="Source\Hierarchy" />
@@ -1056,6 +1057,18 @@
     <ClInclude Include="Source\GameLoop\UIButtonClickSystem.h">
       <Filter>Source\GameLoop</Filter>
     </ClInclude>
+    <ClInclude Include="Source\AI\AggroComponent.h">                  <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeAsset.h">               <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h">      <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeEditorPanel.h">         <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h">    <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeSystem.h">              <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\BlackboardComponent.h">             <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\EnemyConfigAsset.h">                <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\EnemyRuntimeSetup.h">               <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\PerceptionComponent.h">             <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\AI\PerceptionSystem.h">                <Filter>Source\AI</Filter></ClInclude>
+    <ClInclude Include="Source\Gameplay\EnemyTagComponent.h">         <Filter>Source\Gameplay</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="External\FSR2\dx11\ffx_fsr2_dx11.cpp">
@@ -1793,6 +1806,12 @@
     <ClCompile Include="Source\GameLoop\UIButtonClickSystem.cpp">
       <Filter>Source\GameLoop</Filter>
     </ClCompile>
+    <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp">       <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\BehaviorTreeEditorPanel.cpp"> <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp">      <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\EnemyConfigAsset.cpp">        <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp">       <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\PerceptionSystem.cpp">        <Filter>Source\AI</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\BloomPS.hlsl">

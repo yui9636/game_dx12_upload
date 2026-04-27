@@ -21,6 +21,9 @@
 #include "Trail/TrailSystem.h"
 #include "Trail/TrailExtractSystem.h"
 #include "Gameplay/PlayerInputSystem.h"
+#include "AI/PerceptionSystem.h"
+#include "AI/BehaviorTreeSystem.h"
+#include "AI/EnemyRuntimeSetup.h"
 #include "Gameplay/ActionSystem.h"
 #include "Gameplay/DodgeSystem.h"
 #include "Gameplay/LocomotionSystem.h"
@@ -125,7 +128,18 @@ void GameLayer::Update(const EngineTime& time)
     InputFeedbackSystem::Update(m_registry, kernel.GetInputBackend(), time.unscaledDt);
 
     // --- Gameplay Systems (spec order) ---
+    // Make sure Enemy entities have all AI components (cheap; only runs when needed).
+    EnemyRuntimeSetup::EnsureAllEnemyRuntimeComponents(m_registry, false);
+
+    // AI: perception (write Aggro / Blackboard) before BT decision.
+    PerceptionSystem::Update(m_registry, time.dt);
+
+    // Player input (writes SM params for player-tagged entities).
     PlayerInputSystem::Update(m_registry);
+
+    // AI decision (writes SM params + locomotion for enemies).
+    BehaviorTreeSystem::Update(m_registry, time.dt);
+
     PlaybackSystem::Update(m_registry, time.dt);
     StateMachineSystem::Update(m_registry, time.dt);
     LocomotionSystem::Update(m_registry, time.dt);

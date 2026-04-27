@@ -28,4 +28,11 @@ struct LocomotionStateComponent {
     float launchBoost = 1.0f;       // Multiplier below 30% max speed
     float deceleration = 18.0f;
     float turnSpeed = 720.0f;       // Degrees/sec
+
+    // Interpretation of moveInput.
+    //   true  : camera-relative stick input (Player default).
+    //   false : world-space x/z direction (AI / scripted movement).
+    // LocomotionSystem skips the camera basis transform when this is false.
+    // See EnemyAI_BehaviorTree_Spec_v1.0_2026-04-27.md sections 3.7 / 5.5.
+    bool useCameraRelativeInput = true;
 };

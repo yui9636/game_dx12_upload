@@ -410,6 +410,8 @@ namespace PlayerRuntimeSetup
         LocomotionStateComponent* locomotion = EnsureComponent<LocomotionStateComponent>(registry, entity);
         if (locomotion) {
             EnsureLocomotionRuntimeTuning(*locomotion);
+            // Player input is camera-relative stick input.
+            locomotion->useCameraRelativeInput = true;
         }
         EnsureComponent<ActionStateComponent>(registry, entity);
         EnsureComponent<DodgeStateComponent>(registry, entity);

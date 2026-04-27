@@ -62,6 +62,7 @@ struct ComponentMeta;
 #include "Component/TextComponent.h"
 #include "Component/TrailComponent.h"
 #include "Component/TransformComponent.h"
+#include "Component/UIButtonComponent.h"
 #include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
 #include "Input/InputContextComponent.h"
@@ -75,6 +76,7 @@ struct ComponentMeta;
 #include "Gameplay/AnimatorComponent.h"
 #include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/DodgeStateComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/HitStopComponent.h"
@@ -89,6 +91,11 @@ struct ComponentMeta;
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
+#include "AI/AggroComponent.h"
+#include "AI/BehaviorTreeAssetComponent.h"
+#include "AI/BehaviorTreeRuntimeComponent.h"
+#include "AI/BlackboardComponent.h"
+#include "AI/PerceptionComponent.h"
 
 template <>
 struct ComponentMeta<ActorTypeComponent> {
@@ -619,6 +626,15 @@ struct ComponentMeta<TransformComponent> {
 };
 
 template <>
+struct ComponentMeta<UIButtonComponent> {
+    static constexpr std::string_view Name = "UIButtonComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("buttonId", &UIButtonComponent::buttonId),
+        MakeField("enabled", &UIButtonComponent::enabled)
+    );
+};
+
+template <>
 struct ComponentMeta<InputActionMapComponent> {
     static constexpr std::string_view Name = "InputActionMapComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -775,6 +791,14 @@ struct ComponentMeta<DodgeStateComponent> {
 };
 
 template <>
+struct ComponentMeta<EnemyTagComponent> {
+    static constexpr std::string_view Name = "EnemyTagComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("enemyKindId", &EnemyTagComponent::enemyKindId)
+    );
+};
+
+template <>
 struct ComponentMeta<HealthComponent> {
     static constexpr std::string_view Name = "HealthComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -826,7 +850,8 @@ struct ComponentMeta<LocomotionStateComponent> {
         MakeField("acceleration", &LocomotionStateComponent::acceleration),
         MakeField("launchBoost", &LocomotionStateComponent::launchBoost),
         MakeField("deceleration", &LocomotionStateComponent::deceleration),
-        MakeField("turnSpeed", &LocomotionStateComponent::turnSpeed)
+        MakeField("turnSpeed", &LocomotionStateComponent::turnSpeed),
+        MakeField("useCameraRelativeInput", &LocomotionStateComponent::useCameraRelativeInput)
     );
 };
 
@@ -937,6 +962,60 @@ struct ComponentMeta<TimelineLibraryComponent> {
     );
 };
 
+template <>
+struct ComponentMeta<AggroComponent> {
+    static constexpr std::string_view Name = "AggroComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("threat", &AggroComponent::threat),
+        MakeField("timeSinceSighted", &AggroComponent::timeSinceSighted),
+        MakeField("loseTargetAfter", &AggroComponent::loseTargetAfter)
+    );
+};
+
+template <>
+struct ComponentMeta<BehaviorTreeAssetComponent> {
+    static constexpr std::string_view Name = "BehaviorTreeAssetComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("assetPath", &BehaviorTreeAssetComponent::assetPath)
+    );
+};
+
+template <>
+struct ComponentMeta<BehaviorTreeRuntimeComponent> {
+    static constexpr std::string_view Name = "BehaviorTreeRuntimeComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("activeNodeStack", &BehaviorTreeRuntimeComponent::activeNodeStack),
+        MakeField("activeNodeStackDepth", &BehaviorTreeRuntimeComponent::activeNodeStackDepth),
+        MakeField("nodeStateIds", &BehaviorTreeRuntimeComponent::nodeStateIds),
+        MakeField("nodeStateValues", &BehaviorTreeRuntimeComponent::nodeStateValues),
+        MakeField("nodeStateCount", &BehaviorTreeRuntimeComponent::nodeStateCount),
+        MakeField("debugTraceIds", &BehaviorTreeRuntimeComponent::debugTraceIds),
+        MakeField("debugTraceStatus", &BehaviorTreeRuntimeComponent::debugTraceStatus),
+        MakeField("debugTraceCount", &BehaviorTreeRuntimeComponent::debugTraceCount)
+    );
+};
+
+template <>
+struct ComponentMeta<BlackboardComponent> {
+    static constexpr std::string_view Name = "BlackboardComponent";
+    static constexpr auto Fields = std::make_tuple();
+};
+
+template <>
+struct ComponentMeta<PerceptionComponent> {
+    static constexpr std::string_view Name = "PerceptionComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("sightEnabled", &PerceptionComponent::sightEnabled),
+        MakeField("sightRadius", &PerceptionComponent::sightRadius),
+        MakeField("sightFOV", &PerceptionComponent::sightFOV),
+        MakeField("sightHeight", &PerceptionComponent::sightHeight),
+        MakeField("requireLineOfSight", &PerceptionComponent::requireLineOfSight),
+        MakeField("hearingEnabled", &PerceptionComponent::hearingEnabled),
+        MakeField("hearingRadius", &PerceptionComponent::hearingRadius),
+        MakeField("targetFactionMask", &PerceptionComponent::targetFactionMask)
+    );
+};
+
 // 全コンポーネントの型リスト
 using AllComponentTypes = std::tuple<
     ActorTypeComponent,
@@ -983,6 +1062,7 @@ using AllComponentTypes = std::tuple<
     TextComponent,
     TrailComponent,
     TransformComponent,
+    UIButtonComponent,
     InputActionMapComponent,
     InputBindingComponent,
     InputContextComponent,
@@ -996,6 +1076,7 @@ using AllComponentTypes = std::tuple<
     AnimatorComponent,
     CharacterPhysicsComponent,
     DodgeStateComponent,
+    EnemyTagComponent,
     HealthComponent,
     HitboxTrackingComponent,
     HitStopComponent,
@@ -1009,5 +1090,10 @@ using AllComponentTypes = std::tuple<
     StateMachineAssetComponent,
     StateMachineParamsComponent,
     TimelineComponent,
-    TimelineLibraryComponent
+    TimelineLibraryComponent,
+    AggroComponent,
+    BehaviorTreeAssetComponent,
+    BehaviorTreeRuntimeComponent,
+    BlackboardComponent,
+    PerceptionComponent
 >;

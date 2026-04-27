@@ -31,6 +31,9 @@
 #include "Component/ShadowSettingsComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/UIButtonComponent.h"
+#include "Component/ActorTypeComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
+#include "AI/BehaviorTreeAssetComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
@@ -153,6 +156,21 @@ namespace
             writeComponent("UIButtonComponent", json{
                 {"buttonId", btn->buttonId},
                 {"enabled",  btn->enabled}
+                });
+        }
+
+        // ActorTypeComponent.
+        if (const auto& actor = std::get<std::optional<ActorTypeComponent>>(node.components); actor.has_value()) {
+            writeComponent("ActorTypeComponent", json{
+                {"type",      static_cast<int>(actor->type)},
+                {"factionId", actor->factionId}
+                });
+        }
+
+        // EnemyTagComponent.
+        if (const auto& tag = std::get<std::optional<EnemyTagComponent>>(node.components); tag.has_value()) {
+            writeComponent("EnemyTagComponent", json{
+                {"enemyKindId", tag->enemyKindId}
                 });
         }
 
@@ -664,6 +682,23 @@ namespace
             const json& value = components["UIButtonComponent"];
             component.buttonId = value.value("buttonId", component.buttonId);
             component.enabled  = value.value("enabled",  component.enabled);
+            SetOptional(node.components, component);
+        }
+
+        // ActorTypeComponent.
+        if (components.contains("ActorTypeComponent")) {
+            ActorTypeComponent component;
+            const json& value = components["ActorTypeComponent"];
+            component.type      = static_cast<ActorType>(value.value("type", static_cast<int>(component.type)));
+            component.factionId = value.value("factionId", component.factionId);
+            SetOptional(node.components, component);
+        }
+
+        // EnemyTagComponent.
+        if (components.contains("EnemyTagComponent")) {
+            EnemyTagComponent component;
+            const json& value = components["EnemyTagComponent"];
+            component.enemyKindId = value.value("enemyKindId", component.enemyKindId);
             SetOptional(node.components, component);
         }
 

@@ -84,8 +84,14 @@ void LocomotionSystem::Update(Registry& registry, float dt) {
 
             const float inputX = loco.moveInput.x;
             const float inputY = loco.moveInput.y;
-            const float worldX = cameraBasis.right.x * inputX + cameraBasis.forward.x * inputY;
-            const float worldZ = cameraBasis.right.y * inputX + cameraBasis.forward.y * inputY;
+            // AI / scripted entities (useCameraRelativeInput == false) write moveInput
+            // already in world x/z. Player entities use camera-relative stick input.
+            const float worldX = loco.useCameraRelativeInput
+                ? (cameraBasis.right.x * inputX + cameraBasis.forward.x * inputY)
+                : inputX;
+            const float worldZ = loco.useCameraRelativeInput
+                ? (cameraBasis.right.y * inputX + cameraBasis.forward.y * inputY)
+                : inputY;
 
             float strength = sqrtf(worldX * worldX + worldZ * worldZ);
             strength = std::clamp(strength, 0.0f, 1.0f);

@@ -343,6 +343,13 @@ void EditorLayer::RenderUI()
         m_gameLoopEditorPanel.Draw(&m_showGameLoopEditor, &focused);
         SetLastFocusedWindow(WindowFocusTarget::GameLoopEditor, focused);
     }
+    if (m_showBehaviorTreeEditor) {
+        bool focused = false;
+        ApplyPendingWindowFocus(WindowFocusTarget::BehaviorTreeEditor);
+        Registry* reg = m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr;
+        m_behaviorTreeEditorPanel.Draw(reg, &m_showBehaviorTreeEditor, &focused);
+        SetLastFocusedWindow(WindowFocusTarget::BehaviorTreeEditor, focused);
+    }
 }
 
 void EditorLayer::RenderDetachedWindows()

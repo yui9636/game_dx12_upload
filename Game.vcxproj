@@ -81,7 +81,7 @@
       <AssemblerOutputFile>Data\Shader\%(Filename).cod</AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/"</Command>
+      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/" "$(ProjectDir)Source\AI" "AI/"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Debug\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
@@ -122,7 +122,7 @@
       </AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/"</Command>
+      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/" "$(ProjectDir)Source\AI" "AI/"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Release\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
@@ -218,6 +218,18 @@
     <ClInclude Include="Source\FrameBuffer.h" />
     <ClInclude Include="Source\Component\UIButtonComponent.h" />
     <ClInclude Include="Source\Generated\ComponentMeta.generated.h" />
+    <ClInclude Include="Source\AI\AggroComponent.h" />
+    <ClInclude Include="Source\AI\BehaviorTreeAsset.h" />
+    <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h" />
+    <ClInclude Include="Source\AI\BehaviorTreeEditorPanel.h" />
+    <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h" />
+    <ClInclude Include="Source\AI\BehaviorTreeSystem.h" />
+    <ClInclude Include="Source\AI\BlackboardComponent.h" />
+    <ClInclude Include="Source\AI\EnemyConfigAsset.h" />
+    <ClInclude Include="Source\AI\EnemyRuntimeSetup.h" />
+    <ClInclude Include="Source\AI\PerceptionComponent.h" />
+    <ClInclude Include="Source\AI\PerceptionSystem.h" />
+    <ClInclude Include="Source\Gameplay\EnemyTagComponent.h" />
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h" />
     <ClInclude Include="Source\GameLoop\GameLoopRuntime.h" />
@@ -577,6 +589,12 @@
     <ClCompile Include="Source\Gameplay\PlayerRuntimeSetup.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp" />
+    <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp" />
+    <ClCompile Include="Source\AI\BehaviorTreeEditorPanel.cpp" />
+    <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp" />
+    <ClCompile Include="Source\AI\EnemyConfigAsset.cpp" />
+    <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp" />
+    <ClCompile Include="Source\AI\PerceptionSystem.cpp" />
     <ClCompile Include="Source\GameLoop\GameLoopAsset.cpp" />
     <ClCompile Include="Source\GameLoop\GameLoopEditorPanel.cpp" />
     <ClCompile Include="Source\GameLoop\GameLoopRuntime.cpp" />
