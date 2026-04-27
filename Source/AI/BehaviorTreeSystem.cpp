@@ -17,6 +17,7 @@
 #include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Registry/Registry.h"
 #include "Type/TypeInfo.h"
@@ -529,39 +530,68 @@ void BehaviorTreeSystem::Update(Registry& registry, float dt)
 {
     if (EngineKernel::Instance().GetMode() != EngineMode::Play) return;
 
+    // v2.0 state-bound model: BT path is resolved from the current StateNode.
+    // Falls back to BehaviorTreeAssetComponent.assetPath only when the
+    // state has no behaviorTreePath of its own (v1.0 compatibility).
     Signature sig = CreateSignature<
         EnemyTagComponent,
-        BehaviorTreeAssetComponent,
         BehaviorTreeRuntimeComponent,
         BlackboardComponent,
         TransformComponent,
         LocomotionStateComponent,
         ActionStateComponent,
-        StateMachineParamsComponent>();
+        StateMachineParamsComponent,
+        StateMachineAssetComponent>();
 
     for (auto* arch : registry.GetAllArchetypes()) {
         if (!SignatureMatches(arch->GetSignature(), sig)) continue;
 
-        auto* assetCol  = arch->GetColumn(TypeManager::GetComponentTypeID<BehaviorTreeAssetComponent>());
         auto* rtCol     = arch->GetColumn(TypeManager::GetComponentTypeID<BehaviorTreeRuntimeComponent>());
         auto* bbCol     = arch->GetColumn(TypeManager::GetComponentTypeID<BlackboardComponent>());
         auto* trCol     = arch->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
         auto* locoCol   = arch->GetColumn(TypeManager::GetComponentTypeID<LocomotionStateComponent>());
         auto* actCol    = arch->GetColumn(TypeManager::GetComponentTypeID<ActionStateComponent>());
         auto* smCol     = arch->GetColumn(TypeManager::GetComponentTypeID<StateMachineParamsComponent>());
-        if (!assetCol || !rtCol || !bbCol || !trCol || !locoCol || !actCol || !smCol) continue;
+        auto* smAssetCol= arch->GetColumn(TypeManager::GetComponentTypeID<StateMachineAssetComponent>());
+        if (!rtCol || !bbCol || !trCol || !locoCol || !actCol || !smCol || !smAssetCol) continue;
 
         const auto& ents = arch->GetEntities();
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
-            auto& assetComp = *static_cast<BehaviorTreeAssetComponent*>(assetCol->Get(i));
             auto& runtime   = *static_cast<BehaviorTreeRuntimeComponent*>(rtCol->Get(i));
             auto& bb        = *static_cast<BlackboardComponent*>(bbCol->Get(i));
             auto& tr        = *static_cast<TransformComponent*>(trCol->Get(i));
             auto& loco      = *static_cast<LocomotionStateComponent*>(locoCol->Get(i));
             auto& act       = *static_cast<ActionStateComponent*>(actCol->Get(i));
             auto& sm        = *static_cast<StateMachineParamsComponent*>(smCol->Get(i));
+            auto& smAsset   = *static_cast<StateMachineAssetComponent*>(smAssetCol->Get(i));
 
-            const BehaviorTreeAsset* asset = LoadOrCache(assetComp.assetPath);
+            // Reset BT runtime when the SM state changes (per-state BTs
+            // must not inherit Wait timers / Cooldown / rising-edge phase
+            // from the previous state).
+            const uint32_t currentStateId = sm.currentStateId;
+            if (currentStateId != runtime.lastTickedStateId) {
+                runtime.ResetAll();
+                runtime.lastTickedStateId = currentStateId;
+            }
+
+            // Resolve which BT to tick for this entity in this state.
+            std::string btPath;
+            if (const StateNode* stateNode = smAsset.asset.FindState(currentStateId)) {
+                if (!stateNode->behaviorTreePath.empty()) btPath = stateNode->behaviorTreePath;
+            }
+            if (btPath.empty()) {
+                // v1.0 fallback: entity-level BT.
+                if (auto* legacy = registry.GetComponent<BehaviorTreeAssetComponent>(ents[i])) {
+                    if (!legacy->assetPath.empty()) btPath = legacy->assetPath;
+                }
+            }
+
+            if (btPath.empty()) {
+                // No AI configured for this state. SM-only entity.
+                continue;
+            }
+
+            const BehaviorTreeAsset* asset = LoadOrCache(btPath);
             if (!asset) continue;
             const BTNode* root = asset->FindNode(asset->rootId);
             if (!root) continue;

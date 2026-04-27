@@ -8,7 +8,6 @@
 #include "PlayerEditor/PlayerEditorWindow.h"
 #include "EffectEditor/EffectEditorPanel.h"
 #include "GameLoop/GameLoopEditorPanel.h"
-#include "AI/BehaviorTreeEditorPanel.h"
 #include "Sequencer/SequencerPanel.h"
 #include <memory>
 #include <array>
@@ -97,8 +96,7 @@ public:
         GBufferDebug,
         PlayerEditor,
         EffectEditor,
-        GameLoopEditor,
-        BehaviorTreeEditor
+        GameLoopEditor
     };
 
     enum class WorkspaceTab
@@ -261,13 +259,11 @@ private:
     bool m_showPlayerEditor = false;
     bool m_showEffectEditor = false;
     bool m_showGameLoopEditor = false;
-    bool m_showBehaviorTreeEditor = false;
     WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
     PlayerEditorPanel m_playerEditorPanel;
     EffectEditorPanel m_effectEditorPanel;
     SequencerPanel m_sequencerPanel;
     GameLoopEditorPanel m_gameLoopEditorPanel;
-    BehaviorTreeEditorPanel m_behaviorTreeEditorPanel;
     std::unique_ptr<PlayerEditorWindow> m_playerEditorWindow;
     SceneShadingMode m_sceneShadingMode = SceneShadingMode::Lit;
     DirectX::XMFLOAT2 m_sceneViewSize = { 0.0f, 0.0f };

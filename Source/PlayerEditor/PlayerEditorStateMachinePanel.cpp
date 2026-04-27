@@ -1525,6 +1525,12 @@ void PlayerEditorPanel::DrawStateNodeInspector()
             m_selectionCtx = SelectionContext::Transition;
         }
     }
+
+    // v2.0 ActorEditor: state-bound BT inspector (Enemy / NPC only).
+    if (m_actorEditorMode != ActorEditorMode::Player) {
+        ImGui::Separator();
+        DrawStateAISection(*state);
+    }
 }
 
 void PlayerEditorPanel::DrawStateMachineParameterList()
@@ -1723,4 +1729,393 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
         m_stateMachineDirty = true;
     }
     ImGui::PopStyleColor();
+}
+
+// ============================================================================
+// State-bound BT Inspector (v2.0)
+// Embedded inside DrawStateNodeInspector when ActorEditorMode != Player.
+// See Docs/ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md sections 3, 5, 6.
+// ============================================================================
+
+namespace
+{
+    bool ContainsCaseInsensitive(const std::string& haystack, const char* needle)
+    {
+        if (!needle) return false;
+        const size_t nlen = std::strlen(needle);
+        if (nlen == 0) return false;
+        for (size_t i = 0; i + nlen <= haystack.size(); ++i) {
+            bool match = true;
+            for (size_t k = 0; k < nlen; ++k) {
+                const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(haystack[i + k])));
+                const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(needle[k])));
+                if (a != b) { match = false; break; }
+            }
+            if (match) return true;
+        }
+        return false;
+    }
+
+    const char* kBTNodeLabels[] = {
+        "Root",
+        "Sequence", "Selector", "Parallel",
+        "Inverter", "Repeat", "Cooldown", "ConditionGuard",
+        "HasTarget", "TargetInRange", "TargetVisible",
+        "HealthBelow", "StaminaAbove", "BlackboardEqual",
+        "Wait", "FaceTarget", "MoveToTarget", "StrafeAroundTarget", "Retreat",
+        "Attack", "DodgeAction",
+        "SetSMParam", "PlayState", "SetBlackboard",
+    };
+    const BTNodeType kBTNodeValues[] = {
+        BTNodeType::Root,
+        BTNodeType::Sequence, BTNodeType::Selector, BTNodeType::Parallel,
+        BTNodeType::Inverter, BTNodeType::Repeat, BTNodeType::Cooldown, BTNodeType::ConditionGuard,
+        BTNodeType::HasTarget, BTNodeType::TargetInRange, BTNodeType::TargetVisible,
+        BTNodeType::HealthBelow, BTNodeType::StaminaAbove, BTNodeType::BlackboardEqual,
+        BTNodeType::Wait, BTNodeType::FaceTarget, BTNodeType::MoveToTarget, BTNodeType::StrafeAroundTarget, BTNodeType::Retreat,
+        BTNodeType::Attack, BTNodeType::DodgeAction,
+        BTNodeType::SetSMParam, BTNodeType::PlayState, BTNodeType::SetBlackboard,
+    };
+    constexpr int kBTNodeTypeCount = sizeof(kBTNodeValues) / sizeof(kBTNodeValues[0]);
+
+    int FindBTTypeIndex(BTNodeType t)
+    {
+        for (int i = 0; i < kBTNodeTypeCount; ++i) if (kBTNodeValues[i] == t) return i;
+        return 0;
+    }
+
+    void DrawInlineBTRowRecursive(BehaviorTreeAsset& a, uint32_t nodeId, int depth,
+                                  int& selectedIndex, std::vector<uint32_t>& visitStack)
+    {
+        for (uint32_t v : visitStack) if (v == nodeId) {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "(cycle: %u)", nodeId);
+            return;
+        }
+        visitStack.push_back(nodeId);
+
+        BTNode* n = a.FindNode(nodeId);
+        if (!n) { ImGui::TextDisabled("(missing %u)", nodeId); visitStack.pop_back(); return; }
+
+        int index = -1;
+        for (size_t i = 0; i < a.nodes.size(); ++i) if (a.nodes[i].id == nodeId) { index = (int)i; break; }
+
+        ImGui::PushID((int)nodeId);
+        ImGui::Indent(depth * 14.0f);
+        char label[192];
+        std::snprintf(label, sizeof(label), "[%s] %s (id=%u)",
+            BTNodeTypeToString(n->type),
+            n->name.empty() ? "(unnamed)" : n->name.c_str(),
+            n->id);
+        if (ImGui::Selectable(label, selectedIndex == index)) selectedIndex = index;
+        ImGui::Unindent(depth * 14.0f);
+        ImGui::PopID();
+
+        for (uint32_t cid : n->childrenIds) {
+            DrawInlineBTRowRecursive(a, cid, depth + 1, selectedIndex, visitStack);
+        }
+        visitStack.pop_back();
+    }
+}
+
+void PlayerEditorPanel::DrawStateAISection(StateNode& state)
+{
+    ImGui::TextColored(ImVec4(0.6f, 0.9f, 1.0f, 1.0f), "AI / Behavior Tree (state-bound)");
+
+    char noteBuf[256] = {};
+    std::strncpy(noteBuf, state.aiNote.c_str(), sizeof(noteBuf) - 1);
+    if (ImGui::InputText("aiNote", noteBuf, sizeof(noteBuf))) {
+        state.aiNote = noteBuf;
+        m_stateMachineDirty = true;
+    }
+
+    char pathBuf[256] = {};
+    std::strncpy(pathBuf, state.behaviorTreePath.c_str(), sizeof(pathBuf) - 1);
+    if (ImGui::InputText("btPath", pathBuf, sizeof(pathBuf))) {
+        state.behaviorTreePath = pathBuf;
+        m_stateMachineDirty = true;
+        m_inlineBtLoaded = false;
+    }
+
+    if (ImGui::Button("New Default Subtree")) {
+        GenerateDefaultSubtreeForState(state);
+        m_stateMachineDirty = true;
+        m_inlineBtDirty = true;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(m_inlineBtExpanded ? "Hide Inline Editor" : "Edit Inline")) {
+        m_inlineBtExpanded = !m_inlineBtExpanded;
+        if (m_inlineBtExpanded) {
+            LoadInlineBTForState(state);
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Save BT")) {
+        SaveInlineBTForState(state);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Validate BT")) {
+        m_inlineBtLastValidate = ValidateBehaviorTree(m_inlineBtAsset);
+        m_inlineBtValidatedOnce = true;
+    }
+
+    if (state.behaviorTreePath.empty()) {
+        ImGui::TextDisabled("(state has no AI; BehaviorTreeSystem will skip ticking)");
+    } else {
+        ImGui::TextDisabled("Path: %s", state.behaviorTreePath.c_str());
+    }
+
+    if (m_inlineBtExpanded) {
+        if (m_inlineBtStateId != state.id) LoadInlineBTForState(state);
+
+        ImGui::BeginChild("InlineBTEditor", ImVec2(0.0f, 260.0f), true);
+
+        ImGui::Columns(2, "InlineBTCols");
+        DrawInlineBTTreeView();
+        ImGui::NextColumn();
+        DrawInlineBTNodeInspector();
+        ImGui::Columns(1);
+
+        if (m_inlineBtValidatedOnce) {
+            ImGui::Separator();
+            ImGui::Text("Validate: %d errors / %d warnings",
+                        m_inlineBtLastValidate.ErrorCount(),
+                        m_inlineBtLastValidate.WarningCount());
+            for (const auto& m : m_inlineBtLastValidate.messages) {
+                ImVec4 col = ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
+                const char* tag = "[I]";
+                if (m.severity == BTValidateSeverity::Warning) { col = ImVec4(1.0f, 0.85f, 0.4f, 1.0f); tag = "[W]"; }
+                if (m.severity == BTValidateSeverity::Error)   { col = ImVec4(1.0f, 0.4f,  0.4f, 1.0f); tag = "[E]"; }
+                ImGui::TextColored(col, "%s %s", tag, m.message.c_str());
+            }
+        }
+
+        ImGui::EndChild();
+    }
+}
+
+void PlayerEditorPanel::DrawInlineBTTreeView()
+{
+    ImGui::TextUnformatted("Tree");
+    ImGui::BeginChild("InlineBTTree", ImVec2(0.0f, 200.0f), true);
+    if (m_inlineBtAsset.nodes.empty()) {
+        ImGui::TextDisabled("(empty - press 'New Default Subtree')");
+    } else if (m_inlineBtAsset.FindNode(m_inlineBtAsset.rootId) == nullptr) {
+        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "rootId %u not found", m_inlineBtAsset.rootId);
+    } else {
+        std::vector<uint32_t> visitStack;
+        DrawInlineBTRowRecursive(m_inlineBtAsset, m_inlineBtAsset.rootId, 0, m_inlineBtSelectedIndex, visitStack);
+    }
+    ImGui::EndChild();
+
+    if (ImGui::Button("+ Child")) {
+        if (m_inlineBtSelectedIndex >= 0 && m_inlineBtSelectedIndex < (int)m_inlineBtAsset.nodes.size()) {
+            BTNode child;
+            child.id = m_inlineBtAsset.AllocateNodeId();
+            child.type = BTNodeType::Wait;
+            child.fParam0 = 1.0f;
+            child.name = "NewNode";
+            m_inlineBtAsset.nodes[m_inlineBtSelectedIndex].childrenIds.push_back(child.id);
+            m_inlineBtAsset.nodes.push_back(child);
+            m_inlineBtDirty = true;
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("- Delete")) {
+        if (m_inlineBtSelectedIndex >= 0 && m_inlineBtSelectedIndex < (int)m_inlineBtAsset.nodes.size()) {
+            const uint32_t removedId = m_inlineBtAsset.nodes[m_inlineBtSelectedIndex].id;
+            if (removedId != m_inlineBtAsset.rootId) {
+                m_inlineBtAsset.nodes.erase(m_inlineBtAsset.nodes.begin() + m_inlineBtSelectedIndex);
+                for (auto& n : m_inlineBtAsset.nodes) {
+                    n.childrenIds.erase(
+                        std::remove(n.childrenIds.begin(), n.childrenIds.end(), removedId),
+                        n.childrenIds.end());
+                }
+                m_inlineBtSelectedIndex = -1;
+                m_inlineBtDirty = true;
+            }
+        }
+    }
+}
+
+void PlayerEditorPanel::DrawInlineBTNodeInspector()
+{
+    ImGui::TextUnformatted("Node");
+    if (m_inlineBtSelectedIndex < 0 || m_inlineBtSelectedIndex >= (int)m_inlineBtAsset.nodes.size()) {
+        ImGui::TextDisabled("(no node selected)");
+        return;
+    }
+    BTNode& n = m_inlineBtAsset.nodes[m_inlineBtSelectedIndex];
+
+    char nameBuf[128] = {};
+    std::strncpy(nameBuf, n.name.c_str(), sizeof(nameBuf) - 1);
+    if (ImGui::InputText("name", nameBuf, sizeof(nameBuf))) { n.name = nameBuf; m_inlineBtDirty = true; }
+
+    int typeIdx = FindBTTypeIndex(n.type);
+    if (ImGui::Combo("type", &typeIdx, kBTNodeLabels, kBTNodeTypeCount)) {
+        n.type = kBTNodeValues[typeIdx];
+        m_inlineBtDirty = true;
+    }
+    ImGui::Text("id: %u", n.id);
+
+    switch (n.type) {
+    case BTNodeType::Wait:
+    case BTNodeType::Cooldown:
+    case BTNodeType::TargetInRange:
+    case BTNodeType::Retreat:
+    case BTNodeType::StrafeAroundTarget:
+        if (ImGui::InputFloat("fParam0", &n.fParam0)) m_inlineBtDirty = true;
+        break;
+    case BTNodeType::MoveToTarget:
+        if (ImGui::InputFloat("stopRange", &n.fParam0)) m_inlineBtDirty = true;
+        break;
+    case BTNodeType::HealthBelow:
+        if (ImGui::SliderFloat("threshold (0-1)", &n.fParam0, 0.0f, 1.0f)) m_inlineBtDirty = true;
+        break;
+    case BTNodeType::Repeat:
+        if (ImGui::InputInt("count", &n.iParam0)) m_inlineBtDirty = true;
+        break;
+    case BTNodeType::Parallel:
+        if (ImGui::InputInt("successThreshold", &n.iParam0)) m_inlineBtDirty = true;
+        break;
+    case BTNodeType::SetSMParam: {
+        char buf[64] = {};
+        std::strncpy(buf, n.sParam0.c_str(), sizeof(buf) - 1);
+        if (ImGui::InputText("paramName", buf, sizeof(buf))) { n.sParam0 = buf; m_inlineBtDirty = true; }
+        if (ImGui::InputFloat("value", &n.fParam0)) m_inlineBtDirty = true;
+        break;
+    }
+    case BTNodeType::ConditionGuard: {
+        char buf[64] = {};
+        std::strncpy(buf, n.sParam0.c_str(), sizeof(buf) - 1);
+        if (ImGui::InputText("conditionNodeId", buf, sizeof(buf))) { n.sParam0 = buf; m_inlineBtDirty = true; }
+        break;
+    }
+    case BTNodeType::PlayState: {
+        char buf[64] = {};
+        std::strncpy(buf, n.sParam0.c_str(), sizeof(buf) - 1);
+        if (ImGui::InputText("stateName", buf, sizeof(buf))) { n.sParam0 = buf; m_inlineBtDirty = true; }
+        break;
+    }
+    default:
+        ImGui::TextDisabled("(no editable params)");
+        break;
+    }
+}
+
+void PlayerEditorPanel::LoadInlineBTForState(StateNode& state)
+{
+    m_inlineBtStateId      = state.id;
+    m_inlineBtSelectedIndex = -1;
+    m_inlineBtValidatedOnce = false;
+    m_inlineBtDirty         = false;
+
+    if (state.behaviorTreePath.empty()) {
+        m_inlineBtAsset = BehaviorTreeAsset{};
+        m_inlineBtLoaded = false;
+        return;
+    }
+    if (!m_inlineBtAsset.LoadFromFile(state.behaviorTreePath)) {
+        m_inlineBtAsset = BehaviorTreeAsset{};
+        m_inlineBtLoaded = false;
+        return;
+    }
+    m_inlineBtLoaded = true;
+}
+
+void PlayerEditorPanel::SaveInlineBTForState(StateNode& state)
+{
+    if (state.behaviorTreePath.empty()) {
+        char generated[256];
+        std::snprintf(generated, sizeof(generated),
+            "Data/AI/BehaviorTrees/%s_%s.bt",
+            m_stateMachineAsset.name.empty() ? "Actor" : m_stateMachineAsset.name.c_str(),
+            state.name.empty() ? "State" : state.name.c_str());
+        state.behaviorTreePath = generated;
+        m_stateMachineDirty = true;
+    }
+    if (m_inlineBtAsset.SaveToFile(state.behaviorTreePath)) {
+        m_inlineBtDirty = false;
+        m_inlineBtLoaded = true;
+    }
+}
+
+void PlayerEditorPanel::GenerateDefaultSubtreeForState(StateNode& state)
+{
+    BehaviorTreeAsset a;
+    a.version = 1;
+
+    auto pushNode = [&](BTNodeType type, const std::string& name) -> uint32_t {
+        BTNode n;
+        n.id = a.AllocateNodeId();
+        n.type = type;
+        n.name = name;
+        a.nodes.push_back(n);
+        return n.id;
+    };
+
+    auto setChildren = [&](uint32_t id, std::vector<uint32_t> children) {
+        for (auto& nn : a.nodes) {
+            if (nn.id == id) { nn.childrenIds = std::move(children); return; }
+        }
+    };
+
+    auto setParam = [&](uint32_t id, float fp0 = 0.0f, int ip0 = 0,
+                        const std::string& sp0 = "", const std::string& sp1 = "") {
+        for (auto& nn : a.nodes) {
+            if (nn.id == id) {
+                nn.fParam0 = fp0;
+                nn.iParam0 = ip0;
+                if (!sp0.empty()) nn.sParam0 = sp0;
+                if (!sp1.empty()) nn.sParam1 = sp1;
+                return;
+            }
+        }
+    };
+
+    const std::string& sname = state.name;
+    if (ContainsCaseInsensitive(sname, "idle")) {
+        // Selector { Sequence { HasTarget, SetSMParam("Attack", 1) }, Wait(0.5) }
+        const uint32_t root = pushNode(BTNodeType::Root, "Root");
+        const uint32_t sel  = pushNode(BTNodeType::Selector, "Sel");
+        const uint32_t seq  = pushNode(BTNodeType::Sequence, "TryAttack");
+        const uint32_t has  = pushNode(BTNodeType::HasTarget, "HasTarget?");
+        const uint32_t setp = pushNode(BTNodeType::SetSMParam, "RequestAttack");
+        const uint32_t wait = pushNode(BTNodeType::Wait, "Idle");
+        a.rootId = root;
+        setChildren(root, { sel });
+        setChildren(sel,  { seq, wait });
+        setChildren(seq,  { has, setp });
+        setParam(setp, 1.0f, 0, "Attack", "");
+        setParam(wait, 0.5f);
+    } else if (ContainsCaseInsensitive(sname, "chase")) {
+        // Sequence { HasTarget, MoveToTarget(stopRange=1.5) }
+        const uint32_t root = pushNode(BTNodeType::Root, "Root");
+        const uint32_t seq  = pushNode(BTNodeType::Sequence, "Chase");
+        const uint32_t has  = pushNode(BTNodeType::HasTarget, "HasTarget?");
+        const uint32_t mv   = pushNode(BTNodeType::MoveToTarget, "MoveTo");
+        a.rootId = root;
+        setChildren(root, { seq });
+        setChildren(seq,  { has, mv });
+        setParam(mv, 1.5f);
+    } else if (ContainsCaseInsensitive(sname, "attack") ||
+               ContainsCaseInsensitive(sname, "damage") ||
+               ContainsCaseInsensitive(sname, "dead")) {
+        // No BT - animation-only state.
+        a.nodes.clear();
+        a.rootId = 0;
+    } else {
+        // Generic: just Wait(1.0).
+        const uint32_t root = pushNode(BTNodeType::Root, "Root");
+        const uint32_t wait = pushNode(BTNodeType::Wait, "Wait");
+        a.rootId = root;
+        setChildren(root, { wait });
+        setParam(wait, 1.0f);
+    }
+
+    m_inlineBtAsset = std::move(a);
+    m_inlineBtStateId = state.id;
+    m_inlineBtSelectedIndex = -1;
+    m_inlineBtValidatedOnce = false;
+    m_inlineBtDirty = true;
+    m_inlineBtLoaded = true;
 }

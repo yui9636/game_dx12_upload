@@ -10,6 +10,7 @@
 #include "Component/ColliderComponent.h"
 #include "Component/NodeSocket.h"
 #include "Entity/Entity.h"
+#include "AI/BehaviorTreeAsset.h"
 
 struct ImVec2;
 class Registry;
@@ -25,6 +26,15 @@ class PlayerEditorSession;
 //   Right:  Properties (top) / Animator+Input (bottom, tabbed)
 //   Bottom: Timeline (full width)
 // ============================================================================
+
+// v2.0 ActorEditor: PlayerEditor edits one of three actor kinds.
+// See Docs/ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md.
+enum class ActorEditorMode : uint8_t
+{
+    Player = 0,
+    Enemy  = 1,
+    NPC    = 2,
+};
 
 class PlayerEditorPanel
 {
@@ -142,6 +152,13 @@ private:
     void DrawNodeGraph(ImVec2 canvasSize);
     void FitGraphToContent(const ImVec2& canvasSize);
     void DrawStateNodeInspector();
+    // v2.0 state-bound BT integration into State Inspector (Enemy / NPC mode only).
+    void DrawStateAISection(StateNode& state);
+    void DrawInlineBTTreeView();
+    void DrawInlineBTNodeInspector();
+    void LoadInlineBTForState(StateNode& state);
+    void SaveInlineBTForState(StateNode& state);
+    void GenerateDefaultSubtreeForState(StateNode& state);
     void DrawStateMachineParameterList();
     void DrawStateMachineRuntimeStatus();
     void DrawTransitionConditionEditor(struct StateTransition* trans);
@@ -181,6 +198,20 @@ private:
     bool                m_stateMachineDirty = false;
     bool                m_socketDirty = false;
     bool                m_colliderDirty = false;
+
+    // v2.0: ActorEditor mode (Player / Enemy / NPC). Affects toolbar buttons
+    // and the StateMachinePanel AI section visibility.
+    ActorEditorMode     m_actorEditorMode = ActorEditorMode::Player;
+
+    // v2.0: state-bound BT inline editor state.
+    BehaviorTreeAsset   m_inlineBtAsset;
+    uint32_t            m_inlineBtStateId        = 0;     // which StateNode owns the loaded asset
+    int                 m_inlineBtSelectedIndex  = -1;
+    bool                m_inlineBtLoaded         = false; // false = empty / unsynced
+    bool                m_inlineBtDirty          = false;
+    BTValidateResult    m_inlineBtLastValidate;
+    bool                m_inlineBtValidatedOnce  = false;
+    bool                m_inlineBtExpanded       = false;
 
     // 笏笏 Preview 笏笏
     PreviewState m_previewState;

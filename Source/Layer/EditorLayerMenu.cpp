@@ -789,7 +789,6 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem(kConsoleWindowTitle, nullptr, &m_showConsole);
             ImGui::MenuItem(kSequencerWindowTitle, nullptr, &m_showSequencer);
             ImGui::MenuItem("GameLoop Editor", nullptr, &m_showGameLoopEditor);
-            ImGui::MenuItem("Behavior Tree Editor", nullptr, &m_showBehaviorTreeEditor);
             ImGui::Separator();
             ImGui::MenuItem(ICON_FA_SUN " Lighting Settings", nullptr, &m_showLightingWindow);
             ImGui::MenuItem(kAudioWindowTitle, nullptr, &m_showAudioWindow);

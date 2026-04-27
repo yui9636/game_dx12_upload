@@ -991,7 +991,8 @@ struct ComponentMeta<BehaviorTreeRuntimeComponent> {
         MakeField("nodeStateCount", &BehaviorTreeRuntimeComponent::nodeStateCount),
         MakeField("debugTraceIds", &BehaviorTreeRuntimeComponent::debugTraceIds),
         MakeField("debugTraceStatus", &BehaviorTreeRuntimeComponent::debugTraceStatus),
-        MakeField("debugTraceCount", &BehaviorTreeRuntimeComponent::debugTraceCount)
+        MakeField("debugTraceCount", &BehaviorTreeRuntimeComponent::debugTraceCount),
+        MakeField("lastTickedStateId", &BehaviorTreeRuntimeComponent::lastTickedStateId)
     );
 };
 

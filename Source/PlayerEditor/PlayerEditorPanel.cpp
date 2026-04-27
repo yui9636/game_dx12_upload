@@ -237,6 +237,27 @@ void PlayerEditorPanel::SetModel(const Model* model)
 
 void PlayerEditorPanel::DrawToolbar()
 {
+    // v2.0 ActorEditor: mode dropdown.
+    {
+        const char* modeLabels[] = { "Player", "Enemy", "NPC" };
+        int modeIdx = static_cast<int>(m_actorEditorMode);
+        ImGui::PushItemWidth(110.0f);
+        if (ImGui::Combo("Mode", &modeIdx, modeLabels, IM_ARRAYSIZE(modeLabels))) {
+            const auto newMode = static_cast<ActorEditorMode>(modeIdx);
+            if (newMode != m_actorEditorMode) {
+                if (HasAnyDirtyDocument()) {
+                    // Defer destructive switch: warn but still apply (Save/Discard
+                    // dialog can be wired later. v2.0 minimum: log + proceed).
+                }
+                m_actorEditorMode = newMode;
+                m_inlineBtExpanded = false;
+                m_inlineBtLoaded   = false;
+            }
+        }
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+    }
+
     if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open")) {
         char pathBuffer[MAX_PATH] = {};
         if (!m_currentModelPath.empty()) {
@@ -250,6 +271,28 @@ void PlayerEditorPanel::DrawToolbar()
     const bool canSaveWorkspace = CanUsePreviewEntity();
     if (DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save", canSaveWorkspace)) {
         SavePrefabDocument(false);
+    }
+
+    // v2.0 ActorEditor: mode-specific Setup / Repair buttons.
+    if (m_actorEditorMode == ActorEditorMode::Enemy && m_registry && CanUsePreviewEntity()) {
+        ImGui::SameLine();
+        if (DrawToolbarButton("Setup Full Enemy")) {
+            extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
+            EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
+            m_stateMachineDirty = true;
+        }
+        ImGui::SameLine();
+        if (DrawToolbarButton("Repair Runtime")) {
+            extern void EnemyEditorRepairRuntime(class Registry&, EntityID);
+            EnemyEditorRepairRuntime(*m_registry, m_previewEntity);
+        }
+    } else if (m_actorEditorMode == ActorEditorMode::NPC && m_registry && CanUsePreviewEntity()) {
+        ImGui::SameLine();
+        if (DrawToolbarButton("Setup Full NPC")) {
+            extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
+            EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
+            m_stateMachineDirty = true;
+        }
     }
 }
 

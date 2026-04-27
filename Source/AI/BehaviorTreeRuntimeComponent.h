@@ -30,6 +30,13 @@ struct BehaviorTreeRuntimeComponent
     uint8_t  debugTraceStatus[MAX_DEBUG_TRACE] = {};
     uint8_t  debugTraceCount                   = 0;
 
+    // ---- v2.0 (state-bound) ----
+    // StateMachine state id observed at the previous tick.
+    // BehaviorTreeSystem calls ResetAll() whenever this differs from the
+    // current state, so each state always starts the BT from scratch.
+    // 0 = "no state observed yet". Any change triggers a reset.
+    uint32_t lastTickedStateId = 0;
+
     // ---- Helpers (header-only inlines) ----
     float GetNodeState(uint32_t nodeId, float defaultValue = 0.0f) const
     {
@@ -69,6 +76,8 @@ struct BehaviorTreeRuntimeComponent
         activeNodeStackDepth = 0;
         nodeStateCount       = 0;
         debugTraceCount      = 0;
+        // lastTickedStateId is intentionally left untouched here; the system
+        // is responsible for synchronising it with the current SM state.
     }
 
     void PushDebugTrace(uint32_t nodeId, uint8_t status)

@@ -1060,7 +1060,6 @@
     <ClInclude Include="Source\AI\AggroComponent.h">                  <Filter>Source\AI</Filter></ClInclude>
     <ClInclude Include="Source\AI\BehaviorTreeAsset.h">               <Filter>Source\AI</Filter></ClInclude>
     <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h">      <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BehaviorTreeEditorPanel.h">         <Filter>Source\AI</Filter></ClInclude>
     <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h">    <Filter>Source\AI</Filter></ClInclude>
     <ClInclude Include="Source\AI\BehaviorTreeSystem.h">              <Filter>Source\AI</Filter></ClInclude>
     <ClInclude Include="Source\AI\BlackboardComponent.h">             <Filter>Source\AI</Filter></ClInclude>
@@ -1807,7 +1806,6 @@
       <Filter>Source\GameLoop</Filter>
     </ClCompile>
     <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp">       <Filter>Source\AI</Filter></ClCompile>
-    <ClCompile Include="Source\AI\BehaviorTreeEditorPanel.cpp"> <Filter>Source\AI</Filter></ClCompile>
     <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp">      <Filter>Source\AI</Filter></ClCompile>
     <ClCompile Include="Source\AI\EnemyConfigAsset.cpp">        <Filter>Source\AI</Filter></ClCompile>
     <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp">       <Filter>Source\AI</Filter></ClCompile>

@@ -86,6 +86,15 @@ struct StateNode
 
     // Custom properties (name -> value)
     std::unordered_map<std::string, float> properties;
+
+    // ---- v2.0: state-bound AI / Behavior Tree ----
+    // Path to a .bt file. Empty means "no AI for this state".
+    // BehaviorTreeSystem ticks this BT only while the entity is in this state.
+    // See ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md.
+    std::string behaviorTreePath;
+
+    // Free-text designer note shown in the State Inspector AI section.
+    std::string aiNote;
 };
 
 // ============================================================================

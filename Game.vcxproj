@@ -221,7 +221,6 @@
     <ClInclude Include="Source\AI\AggroComponent.h" />
     <ClInclude Include="Source\AI\BehaviorTreeAsset.h" />
     <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h" />
-    <ClInclude Include="Source\AI\BehaviorTreeEditorPanel.h" />
     <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h" />
     <ClInclude Include="Source\AI\BehaviorTreeSystem.h" />
     <ClInclude Include="Source\AI\BlackboardComponent.h" />
@@ -590,7 +589,6 @@
     <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineRuntimeSystem.cpp" />
     <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp" />
-    <ClCompile Include="Source\AI\BehaviorTreeEditorPanel.cpp" />
     <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp" />
     <ClCompile Include="Source\AI\EnemyConfigAsset.cpp" />
     <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp" />

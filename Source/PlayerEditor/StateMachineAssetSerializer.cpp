@@ -78,6 +78,10 @@ static nlohmann::json StateToJson(const StateNode& s)
     j["posX"]              = s.position.x;
     j["posY"]              = s.position.y;
 
+    // v2.0: state-bound BT path + designer note (omit when empty for cleaner JSON).
+    if (!s.behaviorTreePath.empty()) j["behaviorTreePath"] = s.behaviorTreePath;
+    if (!s.aiNote.empty())           j["aiNote"]           = s.aiNote;
+
     if (!s.properties.empty()) {
         nlohmann::json props;
         for (auto& [k, v] : s.properties) props[k] = v;
@@ -99,6 +103,10 @@ static StateNode StateFromJson(const nlohmann::json& j)
     s.canInterrupt      = j.value("canInterrupt", true);
     s.position.x        = j.value("posX", 0.0f);
     s.position.y        = j.value("posY", 0.0f);
+
+    // v2.0: state-bound BT path + designer note (default: empty).
+    s.behaviorTreePath  = j.value("behaviorTreePath", std::string{});
+    s.aiNote            = j.value("aiNote", std::string{});
 
     if (j.contains("properties") && j["properties"].is_object())
         for (auto& [k, v] : j["properties"].items())

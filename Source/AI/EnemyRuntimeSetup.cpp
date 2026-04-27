@@ -19,6 +19,7 @@
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
+#include "PlayerEditor/StateMachineAsset.h"
 #include "Registry/Registry.h"
 #include "Type/TypeInfo.h"
 
@@ -115,6 +116,34 @@ namespace EnemyRuntimeSetup
         }
     }
 
+    void EnsureNPCRuntimeComponents(Registry& registry, EntityID entity)
+    {
+        if (Entity::IsNull(entity)) return;
+
+        if (auto* actor = EnsureComponent<ActorTypeComponent>(registry, entity)) {
+            actor->type = ActorType::NPC;
+        }
+        EnsureComponent<TransformComponent>(registry, entity);
+        EnsureComponent<HierarchyComponent>(registry, entity);
+        EnsureComponent<HealthComponent>(registry, entity);
+        EnsureComponent<CharacterPhysicsComponent>(registry, entity);
+        EnsureComponent<HitStopComponent>(registry, entity);
+        EnsureComponent<HitboxTrackingComponent>(registry, entity);
+        EnsureComponent<TimelineComponent>(registry, entity);
+        EnsureComponent<TimelineItemBuffer>(registry, entity);
+        EnsureComponent<ActionStateComponent>(registry, entity);
+        EnsureComponent<DodgeStateComponent>(registry, entity);
+        EnsureComponent<StateMachineParamsComponent>(registry, entity);
+        if (auto* loco = EnsureComponent<LocomotionStateComponent>(registry, entity)) {
+            loco->useCameraRelativeInput = false;
+        }
+        // NPC also gets BTRuntime + Blackboard so state-bound BT can run for them too.
+        EnsureComponent<BehaviorTreeAssetComponent>(registry, entity);
+        EnsureComponent<BehaviorTreeRuntimeComponent>(registry, entity);
+        EnsureComponent<BlackboardComponent>(registry, entity);
+        // No PerceptionComponent / AggroComponent for NPC by default.
+    }
+
     EntityID SpawnFromConfig(Registry& registry,
                              const EnemyConfigAsset& config,
                              const DirectX::XMFLOAT3& position)
@@ -153,4 +182,77 @@ namespace EnemyRuntimeSetup
 
         return e;
     }
+}
+
+// ============================================================================
+// v2.0 ActorEditor toolbar helpers
+// ============================================================================
+
+namespace
+{
+    StateNode* FindOrCreateState(StateMachineAsset& sm, const char* name, StateNodeType type)
+    {
+        for (auto& s : sm.states) {
+            if (s.name == name) return &s;
+        }
+        return sm.AddState(name, type);
+    }
+
+    void EnsureTransition(StateMachineAsset& sm, uint32_t fromId, uint32_t toId)
+    {
+        for (const auto& t : sm.transitions) {
+            if (t.fromState == fromId && t.toState == toId) return;
+        }
+        sm.AddTransition(fromId, toId);
+    }
+}
+
+void EnemyEditorSetupFullEnemy(Registry& registry, EntityID entity, StateMachineAsset& sm)
+{
+    if (Entity::IsNull(entity)) return;
+
+    // 1) Components
+    EnemyRuntimeSetup::EnsureEnemyRuntimeComponents(registry, entity);
+
+    // 2) States (idempotent: existing names are reused).
+    StateNode* idle    = FindOrCreateState(sm, "Idle",    StateNodeType::Locomotion);
+    StateNode* chase   = FindOrCreateState(sm, "Chase",   StateNodeType::Locomotion);
+    StateNode* attack1 = FindOrCreateState(sm, "Attack1", StateNodeType::Action);
+    StateNode* damaged = FindOrCreateState(sm, "Damaged", StateNodeType::Damage);
+    StateNode* dead    = FindOrCreateState(sm, "Dead",    StateNodeType::Dead);
+
+    if (sm.defaultStateId == 0 && idle) sm.defaultStateId = idle->id;
+
+    // 3) Default BT paths (state-bound; designer can later change paths per state).
+    auto setBT = [&sm](StateNode* s, const char* leaf) {
+        if (!s) return;
+        if (s->behaviorTreePath.empty()) {
+            const std::string base = sm.name.empty() ? std::string{ "Enemy" } : sm.name;
+            s->behaviorTreePath = "Data/AI/BehaviorTrees/" + base + "_" + leaf + ".bt";
+        }
+    };
+    setBT(idle,    "Idle");
+    setBT(chase,   "Chase");
+    // Attack / Damage / Dead are animation-only by default (path stays empty).
+    (void)attack1; (void)damaged; (void)dead;
+
+    // 4) Default transitions (idempotent).
+    if (idle && chase)   EnsureTransition(sm, idle->id, chase->id);
+    if (chase && attack1)EnsureTransition(sm, chase->id, attack1->id);
+    if (attack1 && idle) EnsureTransition(sm, attack1->id, idle->id);
+    if (damaged && idle) EnsureTransition(sm, damaged->id, idle->id);
+}
+
+void EnemyEditorSetupFullNPC(Registry& registry, EntityID entity, StateMachineAsset& sm)
+{
+    if (Entity::IsNull(entity)) return;
+    EnemyRuntimeSetup::EnsureNPCRuntimeComponents(registry, entity);
+    StateNode* idle = FindOrCreateState(sm, "Idle", StateNodeType::Locomotion);
+    if (idle && sm.defaultStateId == 0) sm.defaultStateId = idle->id;
+}
+
+void EnemyEditorRepairRuntime(Registry& registry, EntityID entity)
+{
+    if (Entity::IsNull(entity)) return;
+    EnemyRuntimeSetup::EnsureEnemyRuntimeComponents(registry, entity);
 }
