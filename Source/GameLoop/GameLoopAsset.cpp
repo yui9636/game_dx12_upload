@@ -12,6 +12,7 @@
 
 namespace
 {
+    // Converts condition enum to save-file string.
     const char* ConditionTypeToString(GameLoopConditionType t)
     {
         switch (t) {
@@ -30,6 +31,7 @@ namespace
         return "None";
     }
 
+    // Converts save-file string to condition enum.
     GameLoopConditionType ConditionTypeFromString(const std::string& s)
     {
         if (s == "None")               return GameLoopConditionType::None;
@@ -46,6 +48,7 @@ namespace
         return GameLoopConditionType::None;
     }
 
+    // Converts actor enum to save-file string.
     const char* ActorTypeToString(ActorType t)
     {
         switch (t) {
@@ -58,6 +61,7 @@ namespace
         return "None";
     }
 
+    // Converts save-file string to actor enum.
     ActorType ActorTypeFromString(const std::string& s)
     {
         if (s == "Player")  return ActorType::Player;
@@ -67,6 +71,7 @@ namespace
         return ActorType::None;
     }
 
+    // Converts node enum to save-file string.
     const char* NodeTypeToString(GameLoopNodeType t)
     {
         switch (t) {
@@ -75,38 +80,50 @@ namespace
         return "Scene";
     }
 
+    // Converts save-file string to node enum.
     GameLoopNodeType NodeTypeFromString(const std::string& s)
     {
         (void)s;
         return GameLoopNodeType::Scene;
     }
 
+    // Serializes one transition condition.
     nlohmann::json ConditionToJson(const GameLoopCondition& c)
     {
         nlohmann::json j;
         j["type"] = ConditionTypeToString(c.type);
         if (c.actorType != ActorType::None) j["actorType"] = ActorTypeToString(c.actorType);
-        if (!c.targetName.empty())          j["targetName"]   = c.targetName;
+        if (!c.targetName.empty())          j["targetName"] = c.targetName;
         if (!c.parameterName.empty())       j["parameterName"] = c.parameterName;
-        if (!c.eventName.empty())           j["eventName"]     = c.eventName;
-        if (c.actionIndex >= 0)             j["actionIndex"]   = c.actionIndex;
-        if (c.threshold != 0.0f)            j["threshold"]     = c.threshold;
-        if (c.seconds != 0.0f)              j["seconds"]       = c.seconds;
+        if (!c.eventName.empty())           j["eventName"] = c.eventName;
+        if (c.actionIndex >= 0)             j["actionIndex"] = c.actionIndex;
+        if (c.threshold != 0.0f)            j["threshold"] = c.threshold;
+        if (c.seconds != 0.0f)              j["seconds"] = c.seconds;
         return j;
     }
 
+    // Deserializes one transition condition.
     GameLoopCondition ConditionFromJson(const nlohmann::json& j)
     {
         GameLoopCondition c;
-        c.type          = ConditionTypeFromString(j.value("type", std::string{ "None" }));
-        c.actorType     = ActorTypeFromString(j.value("actorType", std::string{ "None" }));
-        c.targetName    = j.value("targetName",    std::string{});
+        c.type = ConditionTypeFromString(j.value("type", std::string{ "None" }));
+        c.actorType = ActorTypeFromString(j.value("actorType", std::string{ "None" }));
+        c.targetName = j.value("targetName", std::string{});
         c.parameterName = j.value("parameterName", std::string{});
-        c.eventName     = j.value("eventName",     std::string{});
-        c.actionIndex   = j.value("actionIndex",   -1);
-        c.threshold     = j.value("threshold",     0.0f);
-        c.seconds       = j.value("seconds",       0.0f);
+        c.eventName = j.value("eventName", std::string{});
+        c.actionIndex = j.value("actionIndex", -1);
+        c.threshold = j.value("threshold", 0.0f);
+        c.seconds = j.value("seconds", 0.0f);
         return c;
+    }
+
+    // Creates an InputPressed condition for the specified action index.
+    GameLoopCondition MakeInputPressedCondition(int actionIndex)
+    {
+        GameLoopCondition condition;
+        condition.type = GameLoopConditionType::InputPressed;
+        condition.actionIndex = actionIndex;
+        return condition;
     }
 }
 
@@ -138,12 +155,12 @@ uint32_t GameLoopAsset::AllocateNodeId() const
 GameLoopAsset GameLoopAsset::CreateDefault()
 {
     GameLoopAsset a;
-    a.version     = 1;
+    a.version = 1;
     a.startNodeId = 1;
 
-    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene });
-    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene });
-    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene });
+    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 80.0f, 120.0f } });
+    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 420.0f, 120.0f } });
+    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 760.0f, 120.0f } });
 
     {
         GameLoopTransition t;
@@ -188,6 +205,47 @@ GameLoopAsset GameLoopAsset::CreateDefault()
     return a;
 }
 
+GameLoopAsset GameLoopAsset::CreateZTestLoop()
+{
+    GameLoopAsset a;
+    a.version = 1;
+    a.startNodeId = 1;
+
+    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 80.0f, 120.0f } });
+    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 420.0f, 120.0f } });
+    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 760.0f, 120.0f } });
+
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 1;
+        t.toNodeId = 2;
+        t.name = "TitleToBattle";
+        t.requireAllConditions = true;
+        t.conditions.push_back(MakeInputPressedCondition(0));
+        a.transitions.push_back(t);
+    }
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 2;
+        t.toNodeId = 3;
+        t.name = "BattleToResult";
+        t.requireAllConditions = true;
+        t.conditions.push_back(MakeInputPressedCondition(0));
+        a.transitions.push_back(t);
+    }
+    {
+        GameLoopTransition t;
+        t.fromNodeId = 3;
+        t.toNodeId = 2;
+        t.name = "ResultToBattle";
+        t.requireAllConditions = true;
+        t.conditions.push_back(MakeInputPressedCondition(0));
+        a.transitions.push_back(t);
+    }
+
+    return a;
+}
+
 bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
 {
     std::ifstream ifs(path);
@@ -198,27 +256,31 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
     catch (...) { return false; }
 
     GameLoopAsset out;
-    out.version     = j.value("version", 1);
+    out.version = j.value("version", 1);
     out.startNodeId = j.value("startNodeId", 0u);
 
     if (j.contains("nodes") && j["nodes"].is_array()) {
+        int nodeIndex = 0;
         for (const auto& nj : j["nodes"]) {
             GameLoopNode n;
-            n.id        = nj.value("id", 0u);
-            n.name      = nj.value("name", std::string{});
+            n.id = nj.value("id", 0u);
+            n.name = nj.value("name", std::string{});
             n.scenePath = nj.value("scenePath", std::string{});
-            n.type      = NodeTypeFromString(nj.value("type", std::string{ "Scene" }));
+            n.type = NodeTypeFromString(nj.value("type", std::string{ "Scene" }));
+            n.graphPos.x = nj.value("posX", 80.0f + 340.0f * static_cast<float>(nodeIndex));
+            n.graphPos.y = nj.value("posY", 120.0f);
             out.nodes.push_back(n);
+            ++nodeIndex;
         }
     }
 
     if (j.contains("transitions") && j["transitions"].is_array()) {
         for (const auto& tj : j["transitions"]) {
             GameLoopTransition t;
-            t.fromNodeId            = tj.value("fromNodeId", 0u);
-            t.toNodeId              = tj.value("toNodeId",   0u);
-            t.name                  = tj.value("name", std::string{});
-            t.requireAllConditions  = tj.value("requireAllConditions", true);
+            t.fromNodeId = tj.value("fromNodeId", 0u);
+            t.toNodeId = tj.value("toNodeId", 0u);
+            t.name = tj.value("name", std::string{});
+            t.requireAllConditions = tj.value("requireAllConditions", true);
             if (tj.contains("conditions") && tj["conditions"].is_array()) {
                 for (const auto& cj : tj["conditions"]) {
                     t.conditions.push_back(ConditionFromJson(cj));
@@ -235,16 +297,18 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
 bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
 {
     nlohmann::json j;
-    j["version"]     = version;
+    j["version"] = version;
     j["startNodeId"] = startNodeId;
 
     nlohmann::json nodesJson = nlohmann::json::array();
     for (const auto& n : nodes) {
         nlohmann::json nj;
-        nj["id"]        = n.id;
-        nj["name"]      = n.name;
+        nj["id"] = n.id;
+        nj["name"] = n.name;
         nj["scenePath"] = n.scenePath;
-        nj["type"]      = NodeTypeToString(n.type);
+        nj["type"] = NodeTypeToString(n.type);
+        nj["posX"] = n.graphPos.x;
+        nj["posY"] = n.graphPos.y;
         nodesJson.push_back(nj);
     }
     j["nodes"] = nodesJson;
@@ -252,11 +316,11 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
     nlohmann::json transitionsJson = nlohmann::json::array();
     for (const auto& t : transitions) {
         nlohmann::json tj;
-        tj["fromNodeId"]           = t.fromNodeId;
-        tj["toNodeId"]             = t.toNodeId;
-        tj["name"]                 = t.name;
+        tj["fromNodeId"] = t.fromNodeId;
+        tj["toNodeId"] = t.toNodeId;
+        tj["name"] = t.name;
         tj["requireAllConditions"] = t.requireAllConditions;
-        nlohmann::json condsJson   = nlohmann::json::array();
+        nlohmann::json condsJson = nlohmann::json::array();
         for (const auto& c : t.conditions) {
             condsJson.push_back(ConditionToJson(c));
         }
