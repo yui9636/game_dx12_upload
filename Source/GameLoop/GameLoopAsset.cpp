@@ -1,14 +1,18 @@
 #include "GameLoopAsset.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <fstream>
 #include <set>
 #include <unordered_set>
 #include <queue>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
 #include "Input/ResolvedInputStateComponent.h"
+#include "System/PathResolver.h"
 
 namespace
 {
@@ -46,6 +50,23 @@ namespace
         if (s == "TimelineEvent")      return GameLoopConditionType::TimelineEvent;
         if (s == "CustomEvent")        return GameLoopConditionType::CustomEvent;
         return GameLoopConditionType::None;
+    }
+
+    const char* LoadingModeToString(GameLoopLoadingMode mode)
+    {
+        switch (mode) {
+        case GameLoopLoadingMode::Immediate:      return "Immediate";
+        case GameLoopLoadingMode::FadeOnly:       return "FadeOnly";
+        case GameLoopLoadingMode::LoadingOverlay: return "LoadingOverlay";
+        }
+        return "Immediate";
+    }
+
+    GameLoopLoadingMode LoadingModeFromString(const std::string& s)
+    {
+        if (s == "FadeOnly")       return GameLoopLoadingMode::FadeOnly;
+        if (s == "LoadingOverlay") return GameLoopLoadingMode::LoadingOverlay;
+        return GameLoopLoadingMode::Immediate;
     }
 
     // Converts actor enum to save-file string.
@@ -117,6 +138,32 @@ namespace
         return c;
     }
 
+    nlohmann::json LoadingPolicyToJson(const GameLoopLoadingPolicy& p)
+    {
+        nlohmann::json j;
+        j["mode"] = LoadingModeToString(p.mode);
+        j["fadeOutSeconds"] = p.fadeOutSeconds;
+        j["fadeInSeconds"] = p.fadeInSeconds;
+        j["minimumLoadingSeconds"] = p.minimumLoadingSeconds;
+        if (!p.loadingMessage.empty()) {
+            j["loadingMessage"] = p.loadingMessage;
+        }
+        j["blockInput"] = p.blockInput;
+        return j;
+    }
+
+    GameLoopLoadingPolicy LoadingPolicyFromJson(const nlohmann::json& j)
+    {
+        GameLoopLoadingPolicy p;
+        p.mode = LoadingModeFromString(j.value("mode", std::string{ "Immediate" }));
+        p.fadeOutSeconds = j.value("fadeOutSeconds", 0.15f);
+        p.fadeInSeconds = j.value("fadeInSeconds", 0.15f);
+        p.minimumLoadingSeconds = j.value("minimumLoadingSeconds", 0.0f);
+        p.loadingMessage = j.value("loadingMessage", std::string{});
+        p.blockInput = j.value("blockInput", true);
+        return p;
+    }
+
     // Creates an InputPressed condition for the specified action index.
     GameLoopCondition MakeInputPressedCondition(int actionIndex)
     {
@@ -125,6 +172,64 @@ namespace
         condition.actionIndex = actionIndex;
         return condition;
     }
+
+    bool IsAbsolutePathString(const std::string& path)
+    {
+        if (path.size() >= 3 && std::isalpha(static_cast<unsigned char>(path[0])) && path[1] == ':' &&
+            (path[2] == '/' || path[2] == '\\')) {
+            return true;
+        }
+        return path.rfind("\\\\", 0) == 0 || path.rfind("//", 0) == 0;
+    }
+
+    bool ContainsParentTraversal(const std::string& path)
+    {
+        std::string normalized = path;
+        std::replace(normalized.begin(), normalized.end(), '\\', '/');
+        return normalized == ".." ||
+            normalized.rfind("../", 0) == 0 ||
+            normalized.find("/../") != std::string::npos ||
+            normalized.size() >= 3 && normalized.compare(normalized.size() - 3, 3, "/..") == 0;
+    }
+
+    size_t FindDataSegment(const std::string& path)
+    {
+        std::string lower = path;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        const size_t dataPos = lower.find("data/");
+        if (dataPos == std::string::npos) {
+            return std::string::npos;
+        }
+        return dataPos;
+    }
+}
+
+std::string NormalizeGameLoopScenePath(const std::string& inputPath)
+{
+    if (inputPath.empty()) {
+        return {};
+    }
+
+    std::string path = inputPath;
+    std::replace(path.begin(), path.end(), '\\', '/');
+
+    const size_t dataPos = FindDataSegment(path);
+    if (dataPos == std::string::npos) {
+        return {};
+    }
+
+    std::string relative = path.substr(dataPos);
+    if (ContainsParentTraversal(relative)) {
+        return {};
+    }
+
+    if (relative.size() < 5 || relative.substr(0, 5) != "Data/") {
+        // Canonicalize the Data segment casing while preserving the rest.
+        relative = "Data/" + relative.substr(5);
+    }
+    return relative;
 }
 
 const GameLoopNode* GameLoopAsset::FindNode(uint32_t id) const
@@ -143,27 +248,52 @@ GameLoopNode* GameLoopAsset::FindNode(uint32_t id)
     return nullptr;
 }
 
-uint32_t GameLoopAsset::AllocateNodeId() const
+uint32_t GameLoopAsset::AllocateNodeId()
 {
-    uint32_t maxId = 0;
+    uint32_t maxId = nextNodeId;
     for (const auto& n : nodes) {
-        if (n.id > maxId) maxId = n.id;
+        if (n.id >= maxId) maxId = n.id + 1;
     }
-    return maxId + 1;
+    nextNodeId = maxId + 1;
+    return maxId;
+}
+
+uint32_t GameLoopAsset::AllocateTransitionId()
+{
+    uint32_t id = nextTransitionId;
+    if (id == 0) {
+        id = 1;
+    }
+    for (;;) {
+        bool used = false;
+        for (const auto& transition : transitions) {
+            if (transition.id == id) {
+                used = true;
+                break;
+            }
+        }
+        if (!used) break;
+        ++id;
+    }
+    nextTransitionId = id + 1;
+    return id;
 }
 
 GameLoopAsset GameLoopAsset::CreateDefault()
 {
     GameLoopAsset a;
-    a.version = 1;
+    a.version = 2;
     a.startNodeId = 1;
+    a.nextNodeId = 4;
+    a.nextTransitionId = 1;
 
-    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 80.0f, 120.0f } });
-    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 420.0f, 120.0f } });
-    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 760.0f, 120.0f } });
+    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 0.0f, 0.0f } });
+    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 400.0f, 0.0f } });
+    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 800.0f, 0.0f } });
 
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 1; t.toNodeId = 2;
         t.name = "Start";
         t.requireAllConditions = false;
@@ -174,6 +304,7 @@ GameLoopAsset GameLoopAsset::CreateDefault()
     }
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 2; t.toNodeId = 3;
         t.name = "Clear";
         t.requireAllConditions = false;
@@ -184,6 +315,7 @@ GameLoopAsset GameLoopAsset::CreateDefault()
     }
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 3; t.toNodeId = 2;
         t.name = "Retry";
         t.requireAllConditions = false;
@@ -194,6 +326,7 @@ GameLoopAsset GameLoopAsset::CreateDefault()
     }
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 3; t.toNodeId = 1;
         t.name = "BackToTitle";
         t.requireAllConditions = false;
@@ -208,15 +341,18 @@ GameLoopAsset GameLoopAsset::CreateDefault()
 GameLoopAsset GameLoopAsset::CreateZTestLoop()
 {
     GameLoopAsset a;
-    a.version = 1;
+    a.version = 2;
     a.startNodeId = 1;
+    a.nextNodeId = 4;
+    a.nextTransitionId = 1;
 
-    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 80.0f, 120.0f } });
-    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 420.0f, 120.0f } });
-    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 760.0f, 120.0f } });
+    a.nodes.push_back({ 1, "Title",  "Data/Scenes/Title.scene",  GameLoopNodeType::Scene, { 0.0f, 0.0f } });
+    a.nodes.push_back({ 2, "Battle", "Data/Scenes/Battle.scene", GameLoopNodeType::Scene, { 400.0f, 0.0f } });
+    a.nodes.push_back({ 3, "Result", "Data/Scenes/Result.scene", GameLoopNodeType::Scene, { 800.0f, 0.0f } });
 
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 1;
         t.toNodeId = 2;
         t.name = "TitleToBattle";
@@ -226,6 +362,7 @@ GameLoopAsset GameLoopAsset::CreateZTestLoop()
     }
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 2;
         t.toNodeId = 3;
         t.name = "BattleToResult";
@@ -235,6 +372,7 @@ GameLoopAsset GameLoopAsset::CreateZTestLoop()
     }
     {
         GameLoopTransition t;
+        t.id = a.AllocateTransitionId();
         t.fromNodeId = 3;
         t.toNodeId = 2;
         t.name = "ResultToBattle";
@@ -256,8 +394,10 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
     catch (...) { return false; }
 
     GameLoopAsset out;
-    out.version = j.value("version", 1);
+    out.version = 2;
     out.startNodeId = j.value("startNodeId", 0u);
+    out.nextNodeId = j.value("nextNodeId", 1u);
+    out.nextTransitionId = j.value("nextTransitionId", 1u);
 
     if (j.contains("nodes") && j["nodes"].is_array()) {
         int nodeIndex = 0;
@@ -265,10 +405,12 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
             GameLoopNode n;
             n.id = nj.value("id", 0u);
             n.name = nj.value("name", std::string{});
-            n.scenePath = nj.value("scenePath", std::string{});
+            const std::string rawScenePath = nj.value("scenePath", std::string{});
+            const std::string normalizedScenePath = NormalizeGameLoopScenePath(rawScenePath);
+            n.scenePath = normalizedScenePath.empty() ? rawScenePath : normalizedScenePath;
             n.type = NodeTypeFromString(nj.value("type", std::string{ "Scene" }));
-            n.graphPos.x = nj.value("posX", 80.0f + 340.0f * static_cast<float>(nodeIndex));
-            n.graphPos.y = nj.value("posY", 120.0f);
+            n.graphPos.x = nj.value("posX", 400.0f * static_cast<float>(nodeIndex));
+            n.graphPos.y = nj.value("posY", 0.0f);
             out.nodes.push_back(n);
             ++nodeIndex;
         }
@@ -277,16 +419,34 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
     if (j.contains("transitions") && j["transitions"].is_array()) {
         for (const auto& tj : j["transitions"]) {
             GameLoopTransition t;
+            t.id = tj.value("id", 0u);
+            if (t.id == 0) {
+                t.id = out.AllocateTransitionId();
+            }
             t.fromNodeId = tj.value("fromNodeId", 0u);
             t.toNodeId = tj.value("toNodeId", 0u);
             t.name = tj.value("name", std::string{});
             t.requireAllConditions = tj.value("requireAllConditions", true);
+            if (tj.contains("loading") && tj["loading"].is_object()) {
+                t.loadingPolicy = LoadingPolicyFromJson(tj["loading"]);
+            }
             if (tj.contains("conditions") && tj["conditions"].is_array()) {
                 for (const auto& cj : tj["conditions"]) {
                     t.conditions.push_back(ConditionFromJson(cj));
                 }
             }
             out.transitions.push_back(t);
+        }
+    }
+
+    for (const auto& n : out.nodes) {
+        if (n.id >= out.nextNodeId) {
+            out.nextNodeId = n.id + 1;
+        }
+    }
+    for (const auto& t : out.transitions) {
+        if (t.id >= out.nextTransitionId) {
+            out.nextTransitionId = t.id + 1;
         }
     }
 
@@ -299,13 +459,16 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
     nlohmann::json j;
     j["version"] = version;
     j["startNodeId"] = startNodeId;
+    j["nextNodeId"] = nextNodeId;
+    j["nextTransitionId"] = nextTransitionId;
 
     nlohmann::json nodesJson = nlohmann::json::array();
     for (const auto& n : nodes) {
         nlohmann::json nj;
         nj["id"] = n.id;
         nj["name"] = n.name;
-        nj["scenePath"] = n.scenePath;
+        const std::string normalizedScenePath = NormalizeGameLoopScenePath(n.scenePath);
+        nj["scenePath"] = normalizedScenePath.empty() ? n.scenePath : normalizedScenePath;
         nj["type"] = NodeTypeToString(n.type);
         nj["posX"] = n.graphPos.x;
         nj["posY"] = n.graphPos.y;
@@ -316,6 +479,7 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
     nlohmann::json transitionsJson = nlohmann::json::array();
     for (const auto& t : transitions) {
         nlohmann::json tj;
+        tj["id"] = t.id;
         tj["fromNodeId"] = t.fromNodeId;
         tj["toNodeId"] = t.toNodeId;
         tj["name"] = t.name;
@@ -325,6 +489,7 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
             condsJson.push_back(ConditionToJson(c));
         }
         tj["conditions"] = condsJson;
+        tj["loading"] = LoadingPolicyToJson(t.loadingPolicy);
         transitionsJson.push_back(tj);
     }
     j["transitions"] = transitionsJson;
@@ -370,6 +535,10 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
 {
     GameLoopValidateResult r;
 
+    if (asset.nodes.empty()) {
+        r.messages.push_back({ GameLoopValidateSeverity::Error, "nodes is empty" });
+    }
+
     // start node existence.
     if (asset.FindNode(asset.startNodeId) == nullptr) {
         r.messages.push_back({ GameLoopValidateSeverity::Error, "startNodeId is not in nodes" });
@@ -385,28 +554,105 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         }
     }
 
+    // duplicate transition ids.
+    {
+        std::set<uint32_t> seen;
+        for (const auto& t : asset.transitions) {
+            if (t.id == 0) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "transition id is 0" });
+                continue;
+            }
+            if (!seen.insert(t.id).second) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "duplicate transition id: " + std::to_string(t.id) });
+            }
+        }
+    }
+
+    {
+        uint32_t maxNodeId = 0;
+        for (const auto& n : asset.nodes) {
+            if (n.id > maxNodeId) maxNodeId = n.id;
+        }
+        if (!asset.nodes.empty() && asset.nextNodeId <= maxNodeId) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "nextNodeId is not greater than existing node ids" });
+        }
+
+        uint32_t maxTransitionId = 0;
+        for (const auto& t : asset.transitions) {
+            if (t.id > maxTransitionId) maxTransitionId = t.id;
+        }
+        if (!asset.transitions.empty() && asset.nextTransitionId <= maxTransitionId) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "nextTransitionId is not greater than existing transition ids" });
+        }
+    }
+
     // per-node checks.
+    std::set<std::string> nodeNames;
     for (const auto& n : asset.nodes) {
         if (n.name.empty()) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, "node name empty (id=" + std::to_string(n.id) + ")" });
         }
+        else if (!nodeNames.insert(n.name).second) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "duplicate node name: " + n.name });
+        }
         if (n.scenePath.empty()) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath empty (" + n.name + ")" });
+        }
+        else {
+            if (IsAbsolutePathString(n.scenePath)) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not be absolute (" + n.name + ")" });
+            }
+            if (ContainsParentTraversal(n.scenePath)) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not contain parent traversal (" + n.name + ")" });
+            }
+
+            const std::string normalized = NormalizeGameLoopScenePath(n.scenePath);
+            if (normalized.empty()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must be under Data/ (" + n.name + ")" });
+            }
+            else {
+                std::error_code ec;
+                if (!std::filesystem::exists(PathResolver::Resolve(normalized), ec)) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, "scene file not found: " + normalized });
+                }
+            }
+        }
+        if (!std::isfinite(n.graphPos.x) || !std::isfinite(n.graphPos.y)) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "node graphPos is not finite (" + n.name + ")" });
+        }
+        else if (std::fabs(n.graphPos.x) > 100000.0f || std::fabs(n.graphPos.y) > 100000.0f) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "node graphPos is very far from origin (" + n.name + ")" });
         }
     }
 
     // transition checks.
+    std::set<std::pair<uint32_t, uint32_t>> transitionPairs;
     for (size_t i = 0; i < asset.transitions.size(); ++i) {
         const auto& t = asset.transitions[i];
         const std::string label = "transition[" + std::to_string(i) + "]";
+        if (t.name.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " name is empty" });
+        }
         if (asset.FindNode(t.fromNodeId) == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId not found" });
         }
         if (asset.FindNode(t.toNodeId) == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId not found" });
         }
+        if (!transitionPairs.insert({ t.fromNodeId, t.toNodeId }).second) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " duplicates an existing from/to pair" });
+        }
         if (t.conditions.empty()) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " conditions is empty" });
+        }
+        if (t.loadingPolicy.fadeOutSeconds < 0.0f) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading fadeOutSeconds must be >= 0" });
+        }
+        if (t.loadingPolicy.fadeInSeconds < 0.0f) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading fadeInSeconds must be >= 0" });
+        }
+        if (t.loadingPolicy.minimumLoadingSeconds < 0.0f) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading minimumLoadingSeconds must be >= 0" });
         }
         for (size_t ci = 0; ci < t.conditions.size(); ++ci) {
             const auto& c = t.conditions[ci];
@@ -415,6 +661,9 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
             case GameLoopConditionType::InputPressed:
                 if (c.actionIndex < 0 || c.actionIndex >= ResolvedInputStateComponent::MAX_ACTIONS) {
                     r.messages.push_back({ GameLoopValidateSeverity::Error, clabel + " InputPressed actionIndex out of range" });
+                }
+                else if (c.actionIndex > 2) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, clabel + " InputPressed actionIndex is outside standard GameLoop actions" });
                 }
                 break;
             case GameLoopConditionType::UIButtonClicked:

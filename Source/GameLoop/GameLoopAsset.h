@@ -39,6 +39,23 @@ struct GameLoopCondition
     float        seconds = 0.0f;
 };
 
+enum class GameLoopLoadingMode : uint8_t
+{
+    Immediate = 0,
+    FadeOnly,
+    LoadingOverlay,
+};
+
+struct GameLoopLoadingPolicy
+{
+    GameLoopLoadingMode mode = GameLoopLoadingMode::Immediate;
+    float fadeOutSeconds = 0.15f;
+    float fadeInSeconds = 0.15f;
+    float minimumLoadingSeconds = 0.0f;
+    std::string loadingMessage;
+    bool blockInput = true;
+};
+
 // Node kind. Phase 1 only supports Scene.
 enum class GameLoopNodeType : uint8_t
 {
@@ -60,18 +77,22 @@ struct GameLoopNode
 // Transition between two nodes.
 struct GameLoopTransition
 {
+    uint32_t                       id = 0;
     uint32_t                       fromNodeId = 0;
     uint32_t                       toNodeId = 0;
     std::string                    name;
     std::vector<GameLoopCondition> conditions;
     bool                           requireAllConditions = true;
+    GameLoopLoadingPolicy          loadingPolicy;
 };
 
 // Authoring data for the scene transition graph.
 struct GameLoopAsset
 {
-    int                              version = 1;
+    int                              version = 2;
     uint32_t                         startNodeId = 0;
+    uint32_t                         nextNodeId = 1;
+    uint32_t                         nextTransitionId = 1;
     std::vector<GameLoopNode>        nodes;
     std::vector<GameLoopTransition>  transitions;
 
@@ -80,7 +101,8 @@ struct GameLoopAsset
     GameLoopNode* FindNode(uint32_t id);
 
     // Allocate a fresh node id (max+1).
-    uint32_t AllocateNodeId() const;
+    uint32_t AllocateNodeId();
+    uint32_t AllocateTransitionId();
 
     // Build the standard sample loop (Title -> Battle -> Result, with Retry / Cancel).
     static GameLoopAsset CreateDefault();
@@ -118,3 +140,7 @@ struct GameLoopValidateResult
 
 // Run all validate rules against the asset.
 GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset);
+
+// Stores scene paths in a portable Data/... form. Returns empty if the path
+// cannot be normalized into the project Data directory.
+std::string NormalizeGameLoopScenePath(const std::string& path);
