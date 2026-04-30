@@ -4,6 +4,7 @@ GameLoopEditorPanelInternal::GameLoopEditorPanelInternal()
 {
     std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
     std::strncpy(m_saveAsPath, m_currentPath.string().c_str(), sizeof(m_saveAsPath) - 1);
+    m_asset.version = 4;
 }
 
 void GameLoopEditorPanelInternal::Draw(bool* p_open, bool* outFocused)
@@ -20,7 +21,6 @@ void GameLoopEditorPanelInternal::Draw(bool* p_open, bool* outFocused)
     DrawToolbar();
     DrawMainLayout();
     DrawScenePickerPopup();
-    DrawConditionPresetPopup();
 
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput) {
         if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) DeleteSelected();
@@ -42,6 +42,7 @@ void GameLoopEditorPanelInternal::DrawToolbar()
     if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("New Empty")) {
             m_asset = GameLoopAsset{};
+            m_asset.version = 4;
             m_nodeViews.clear();
             ClearSelection();
             m_fitRequested = true;
@@ -74,7 +75,10 @@ void GameLoopEditorPanelInternal::DrawToolbar()
 
     if (ImGui::BeginPopupModal("LoadGameLoop", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Path", m_loadPath, sizeof(m_loadPath));
-        if (ImGui::Button("Load")) { Load(m_loadPath); ImGui::CloseCurrentPopup(); }
+        if (ImGui::Button("Load")) {
+            Load(m_loadPath);
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
@@ -82,7 +86,11 @@ void GameLoopEditorPanelInternal::DrawToolbar()
 
     if (ImGui::BeginPopupModal("SaveGameLoopAs", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Path", m_saveAsPath, sizeof(m_saveAsPath));
-        if (ImGui::Button("Save")) { m_currentPath = m_saveAsPath; Save(); ImGui::CloseCurrentPopup(); }
+        if (ImGui::Button("Save")) {
+            m_currentPath = m_saveAsPath;
+            Save();
+            ImGui::CloseCurrentPopup();
+        }
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
@@ -93,7 +101,7 @@ void GameLoopEditorPanelInternal::DrawMainLayout()
 {
     ImVec2 avail = ImGui::GetContentRegionAvail();
 
-    float inspectW = 300.0f;
+    float inspectW = 340.0f;
     float validateH = 92.0f;
     float topH = MaxF(260.0f, avail.y - validateH - 8.0f);
     float graphW = MaxF(260.0f, avail.x - inspectW - 8.0f);
@@ -112,4 +120,3 @@ void GameLoopEditorPanelInternal::DrawMainLayout()
     DrawValidateSummary();
     ImGui::EndChild();
 }
-

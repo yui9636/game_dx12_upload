@@ -3,24 +3,24 @@
 
 namespace
 {
-    // ノード本体を左ドラッグしている間のノードIDを保持する。
-    // GraphCanvas が左クリックを奪っても移動不能にならないよう、Graph.cpp 内だけの状態として管理する。
+    
+    
     uint32_t g_draggingGameLoopNodeId = 0;
 
-    // ズーム倍率をそのまま反映した、見た目上のフォントサイズを返す。
+    
     float CalcSafeGraphTextFontSize(float zoom)
     {
         return ImGui::GetFontSize() * ClampF(zoom, 0.10f, 4.00f);
     }
 
-    // 現在の ImGui フォントの基準サイズを返す。
+    
     float GetSafeBaseFontSize()
     {
         const float fontSize = ImGui::GetFontSize();
         return fontSize > 0.0f ? fontSize : 13.0f;
     }
 
-    // 指定フォントサイズで描いた場合の見た目上の文字サイズを返す。
+    
     ImVec2 CalcSafeTextSizeAtFontSize(const char* text, float fontSize)
     {
         if (!text || fontSize <= 0.0f || !ImGui::GetFont()) {
@@ -33,7 +33,7 @@ namespace
         return ImVec2(baseSize.x * visualScale, baseSize.y * visualScale);
     }
 
-    // AddText 直後の頂点だけを拡大し、DX12 側のフォントテクスチャ再生成を避ける。
+    
     void ScaleSafeTextVertices(ImDrawList* drawList, int vertexStart, const ImVec2& origin, float visualScale)
     {
         if (!drawList || visualScale <= 0.0f) {
@@ -50,8 +50,8 @@ namespace
         }
     }
 
-    // 指定フォントサイズ相当で文字を描画する。
-    // AddText には基準サイズだけを渡すため、DX12 Legacy Single Descriptor Mode でも安全に描画できる。
+    
+    
     void DrawSafeTextAtFontSize(ImDrawList* drawList, const ImVec2& position, ImU32 color, const char* text, float fontSize)
     {
         if (!drawList || !text || fontSize <= 0.0f || !ImGui::GetFont()) {
@@ -65,7 +65,7 @@ namespace
         ScaleSafeTextVertices(drawList, vertexStart, position, visualScale);
     }
 
-    // 指定フォントサイズで収まるように、中央省略した文字列を返す。
+    
     std::string BuildSafeMiddleEllipsisAtFontSize(const std::string& text, float maxWidth, float fontSize)
     {
         if (text.empty() || maxWidth <= 0.0f || fontSize <= 0.0f) {
@@ -105,13 +105,13 @@ namespace
         return ellipsis;
     }
 
-    // ズーム倍率をそのまま反映して文字を描画する。
+    
     void DrawSafeTextScaled(ImDrawList* drawList, const ImVec2& position, ImU32 color, const char* text, float zoom)
     {
         DrawSafeTextAtFontSize(drawList, position, color, text, CalcSafeGraphTextFontSize(zoom));
     }
 
-    // ノード中央のシーン名を、ノード内で可能な限り大きく表示するためのフォントサイズを返す。
+    
     float CalcLargeSceneNameFontSize(const std::string& sceneName, float maxWidth, float maxHeight, float zoom)
     {
         if (sceneName.empty() || maxWidth <= 1.0f || maxHeight <= 1.0f || zoom <= 0.0f) {
@@ -135,8 +135,7 @@ namespace
             if (fits) {
                 result = mid;
                 low = mid;
-            }
-            else {
+            } else {
                 high = mid;
             }
         }
@@ -144,7 +143,7 @@ namespace
         return result;
     }
 
-    // scenePath から表示用のシーン名を作る。拡張子とディレクトリは表示しない。
+    
     std::string BuildSceneDisplayName(const GameLoopNode& node)
     {
         if (!node.scenePath.empty()) {
@@ -161,7 +160,7 @@ namespace
     }
 }
 
-// グラフキャンバス、背景グリッド、ノード、遷移をまとめて描画する。
+
 void GameLoopEditorPanelInternal::DrawGraph(const ImVec2& sizeIn)
 {
     ImVec2 size(MaxF(sizeIn.x, 200.0f), MaxF(sizeIn.y, 200.0f));
@@ -192,8 +191,8 @@ void GameLoopEditorPanelInternal::DrawGraph(const ImVec2& sizeIn)
         }
     }
 
-    // 背景アイテムは左クリックを取らない。
-    // 左クリックを取ると、後から描画するノードの選択と移動が死ぬ。
+    
+    
     ImGui::SetCursorScreenPos(origin);
     ImGui::InvisibleButton("GraphCanvas", size, ImGuiButtonFlags_MouseButtonMiddle);
     const bool canvasHovered = ImGui::IsMouseHoveringRect(origin, end, true);
@@ -234,7 +233,6 @@ void GameLoopEditorPanelInternal::DrawGraph(const ImVec2& sizeIn)
                 if (m_hoveredNodeId != 0 && m_hoveredNodeId != m_connectFromNodeId) {
                     AddTransition(m_connectFromNodeId, m_hoveredNodeId);
                 }
-        
             }
             m_connecting = false;
             m_connectionDragged = false;
@@ -287,7 +285,7 @@ void GameLoopEditorPanelInternal::DrawGraph(const ImVec2& sizeIn)
     dl->PopClipRect();
 }
 
-// シーンノードを描画し、選択、ドラッグ、接続開始、置換 D&D を処理する。
+
 void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& origin)
 {
     DirectX::XMFLOAT2& gp = GetOrCreateNodePos(node.id);
@@ -354,8 +352,8 @@ void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& ori
         dl->AddCircle(outputPin, pin + 3.0f, IM_COL32(180, 215, 255, 255), 18, 2.0f);
     }
 
-    // D&D ターゲット用の item は残す。
-    // ただし、クリックとドラッグ判定は ImGui の IsItemActive に依存させない。
+    
+    
     ImGui::SetCursorScreenPos(pos);
     ImGui::PushID(static_cast<int>(node.id));
     ImGui::InvisibleButton("NodeBody", ImVec2(w, h), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
@@ -371,15 +369,13 @@ void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& ori
         m_connectFromNodeId = node.id;
         m_connectionDragged = false;
         g_draggingGameLoopNodeId = 0;
-    }
-    else if (bodyHovered && ImGui::GetIO().KeyAlt && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    } else if (bodyHovered && ImGui::GetIO().KeyAlt && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         SelectNode(node.id);
         m_connecting = true;
         m_connectFromNodeId = node.id;
         m_connectionDragged = false;
         g_draggingGameLoopNodeId = 0;
-    }
-    else if (bodyHovered &&
+    } else if (bodyHovered &&
         ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
         !ImGui::IsKeyDown(ImGuiKey_Space) &&
         !outputPinHovered) {
@@ -413,7 +409,7 @@ void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& ori
     ImGui::PopID();
 }
 
-// 遷移エッジを描画し、選択、条件追加、右クリックメニューを処理する。
+
 void GameLoopEditorPanelInternal::DrawTransition(int index, const ImVec2& origin)
 {
     GameLoopTransition& t = m_asset.transitions[index];
@@ -466,10 +462,6 @@ void GameLoopEditorPanelInternal::DrawTransition(int index, const ImVec2& origin
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         SelectTransition(index);
     }
-    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-        SelectTransition(index);
-        ImGui::OpenPopup(ConditionPopup);
-    }
     if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
         SelectTransition(index);
         ImGui::OpenPopup("TransitionContext");
@@ -479,7 +471,7 @@ void GameLoopEditorPanelInternal::DrawTransition(int index, const ImVec2& origin
     }
 }
 
-// グラフ背景の右クリックメニューを描画する。
+
 void GameLoopEditorPanelInternal::DrawGraphContextMenu()
 {
     if (ImGui::BeginPopup("GraphContext")) {
@@ -490,7 +482,7 @@ void GameLoopEditorPanelInternal::DrawGraphContextMenu()
     }
 }
 
-// ノードの右クリックメニューを描画する。
+
 void GameLoopEditorPanelInternal::DrawNodeContextMenu(GameLoopNode& node)
 {
     if (ImGui::BeginPopup("NodeContext")) {
@@ -508,13 +500,10 @@ void GameLoopEditorPanelInternal::DrawNodeContextMenu(GameLoopNode& node)
     }
 }
 
-// 遷移の右クリックメニューを描画する。
+
 void GameLoopEditorPanelInternal::DrawTransitionContextMenu(int index)
 {
     if (ImGui::BeginPopup("TransitionContext")) {
-        if (ImGui::MenuItem("Add Condition")) {
-            ImGui::OpenPopup(ConditionPopup);
-        }
         if (ImGui::MenuItem("Reverse")) {
             ReverseTransition(index);
         }
@@ -525,7 +514,7 @@ void GameLoopEditorPanelInternal::DrawTransitionContextMenu(int index)
     }
 }
 
-// 現在のノード配置に合わせて、グラフ全体が見える位置と倍率へ調整する。
+
 void GameLoopEditorPanelInternal::FitGraph(const ImVec2& size)
 {
     if (m_asset.nodes.empty()) {
@@ -560,7 +549,7 @@ void GameLoopEditorPanelInternal::FitGraph(const ImVec2& size)
     m_graphOffset.y = (size.y - graphH * m_graphZoom) * 0.5f - minY * m_graphZoom;
 }
 
-// グラフ座標をスクリーン座標へ変換する。
+
 ImVec2 GameLoopEditorPanelInternal::GraphToScreen(const DirectX::XMFLOAT2& p, const ImVec2& origin) const
 {
     return ImVec2(
@@ -568,7 +557,7 @@ ImVec2 GameLoopEditorPanelInternal::GraphToScreen(const DirectX::XMFLOAT2& p, co
         origin.y + m_graphOffset.y + p.y * m_graphZoom);
 }
 
-// スクリーン座標をグラフ座標へ変換する。
+
 DirectX::XMFLOAT2 GameLoopEditorPanelInternal::ScreenToGraph(const ImVec2& p, const ImVec2& origin) const
 {
     return {

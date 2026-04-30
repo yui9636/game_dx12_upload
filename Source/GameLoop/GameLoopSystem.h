@@ -1,13 +1,11 @@
 #pragma once
 
 class Registry;
+class UIButtonClickEventQueue;
+class InputEventQueue;
 struct GameLoopAsset;
 struct GameLoopRuntime;
-class UIButtonClickEventQueue;
 
-// Evaluate transition conditions for the current node.
-// On a satisfied transition, set runtime.pending* and sceneTransitionRequested.
-// Does NOT load scenes (SceneTransitionSystem does that).
 class GameLoopSystem
 {
 public:
@@ -17,5 +15,6 @@ public:
         Registry&                      gameRegistry,
         Registry&                      gameLoopRegistry,
         const UIButtonClickEventQueue& clickQueue,
+        const InputEventQueue&         inputQueue,
         float                          dt);
 };

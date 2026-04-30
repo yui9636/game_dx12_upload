@@ -7,7 +7,9 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+
 #include <DirectXMath.h>
+
 #include "GameLoopAsset.h"
 #include "GameLoopScenePicker.h"
 
@@ -20,15 +22,13 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
-
 namespace
 {
     constexpr float NodeW = 260.0f;
     constexpr float NodeH = 92.0f;
     constexpr float PinR = 7.0f;
     constexpr const char* PickerPopup = "GameLoop Scene Picker";
-    constexpr const char* ConditionPopup = "GameLoop Condition Preset";
-
+    
     float MinF(float a, float b) { return a < b ? a : b; }
     float MaxF(float a, float b) { return a > b ? a : b; }
     float ClampF(float v, float a, float b) { return v < a ? a : (v > b ? b : v); }
@@ -81,23 +81,6 @@ namespace
         return x * x + y * y <= r * r;
     }
 
-    const char* ActionName(int i)
-    {
-        if (i == 0) return "Confirm";
-        if (i == 1) return "Cancel";
-        if (i == 2) return "Retry";
-        return "Input";
-    }
-
-    const char* ActorName(ActorType t)
-    {
-        if (t == ActorType::Player) return "Player";
-        if (t == ActorType::Enemy) return "Enemy";
-        if (t == ActorType::NPC) return "NPC";
-        if (t == ActorType::Neutral) return "Neutral";
-        return "None";
-    }
-
     ImU32 StatusColor(int s)
     {
         if (s >= 2) return IM_COL32(230, 76, 86, 255);
@@ -139,13 +122,20 @@ namespace
 class GameLoopEditorPanelInternal
 {
 public:
+    
     GameLoopEditorPanelInternal();
+
+    
     void Draw(bool* p_open = nullptr, bool* outFocused = nullptr);
+
+    
     const std::filesystem::path& GetCurrentPath() const { return m_currentPath; }
+
+    
     void SetCurrentPath(const std::filesystem::path& p) { m_currentPath = p; }
 
 private:
-    enum class SelectionKind { None, Node, Transition, Condition };
+    enum class SelectionKind { None, Node, Transition };
     enum class PickerMode { None, CreateNode, ReplaceNode, CreateNodeAndTransition };
 
     struct NodeView
@@ -162,10 +152,10 @@ private:
     void DrawNode(GameLoopNode& node, const ImVec2& origin);
     void DrawTransition(int index, const ImVec2& origin);
     void DrawScenePickerPopup();
-    void DrawConditionPresetPopup();
     void DrawGraphContextMenu();
     void DrawNodeContextMenu(GameLoopNode& node);
     void DrawTransitionContextMenu(int index);
+    void DrawLoadingPolicyEditor(GameLoopTransition& transition);
 
     void OpenPickerForCreate(const DirectX::XMFLOAT2& pos);
     void OpenPickerForReplace(uint32_t nodeId);
@@ -173,7 +163,6 @@ private:
     void AddSceneNode(const std::string& scenePath, const DirectX::XMFLOAT2& pos);
     void ReplaceNodeScene(uint32_t nodeId, const std::string& scenePath);
     void AddTransition(uint32_t fromNodeId, uint32_t toNodeId);
-    void AddConditionPreset(GameLoopTransition& transition, int presetIndex);
 
     GameLoopNode* FindNode(uint32_t id);
     const GameLoopNode* FindNode(uint32_t id) const;
@@ -197,7 +186,6 @@ private:
 
     ImVec2 GraphToScreen(const DirectX::XMFLOAT2& p, const ImVec2& origin) const;
     DirectX::XMFLOAT2 ScreenToGraph(const ImVec2& p, const ImVec2& origin) const;
-    std::string ConditionLabel(const GameLoopCondition& c) const;
     std::string TransitionLabel(const GameLoopTransition& t) const;
     std::string Ellipsis(const std::string& text, float width) const;
     int SceneStatus(const GameLoopNode& node) const;

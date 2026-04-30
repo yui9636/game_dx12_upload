@@ -2955,12 +2955,14 @@ void EngineKernel::Update(float rawDt)
                 cameraProj);
         }
 
+     
         GameLoopSystem::Update(
             m_gameLoopAsset,
             m_gameLoopRuntime,
-            gameRegistry,
+            m_gameLayer->GetRegistry(),
             m_gameLoopRegistry,
             m_uiButtonClickQueue,
+            m_inputQueue,
             time.dt);
 
         // End-of-frame: consume the scene load.

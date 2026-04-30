@@ -23,6 +23,7 @@ const std::filesystem::path& GameLoopEditorPanel::GetCurrentPath() const
     return m_internal->GetCurrentPath();
 }
 
+
 void GameLoopEditorPanel::SetCurrentPath(const std::filesystem::path& p)
 {
     m_internal->SetCurrentPath(p);

@@ -9,6 +9,7 @@ void GameLoopEditorPanelInternal::AddSceneNode(const std::string& path, const Di
     n.id = m_asset.AllocateNodeId();
     n.name = GameLoopScenePicker::BuildNodeNameFromScenePath(norm);
     n.scenePath = norm;
+    n.graphPos = pos;
 
     m_asset.nodes.push_back(n);
     m_nodeViews.push_back({ n.id, pos });
@@ -35,31 +36,13 @@ void GameLoopEditorPanelInternal::AddTransition(uint32_t from, uint32_t to)
     if (!FindNode(from) || !FindNode(to) || from == to) return;
 
     GameLoopTransition t;
+    t.id = m_asset.AllocateTransitionId();
     t.fromNodeId = from;
     t.toNodeId = to;
     t.name = "Transition";
-    t.requireAllConditions = false;
 
     m_asset.transitions.push_back(t);
     SelectTransition((int)m_asset.transitions.size() - 1);
-    ImGui::OpenPopup(ConditionPopup);
-    m_dirty = true;
-}
-
-void GameLoopEditorPanelInternal::AddConditionPreset(GameLoopTransition& t, int p)
-{
-    GameLoopCondition c;
-
-    if (p == 0) { c.type = GameLoopConditionType::InputPressed; c.actionIndex = 0; }
-    else if (p == 1) { c.type = GameLoopConditionType::InputPressed; c.actionIndex = 2; }
-    else if (p == 2) { c.type = GameLoopConditionType::InputPressed; c.actionIndex = 1; }
-    else if (p == 3) { c.type = GameLoopConditionType::UIButtonClicked; c.targetName = "StartButton"; }
-    else if (p == 4) { c.type = GameLoopConditionType::TimerElapsed; c.seconds = 3.0f; }
-    else if (p == 5) { c.type = GameLoopConditionType::AllActorsDead; c.actorType = ActorType::Enemy; }
-    else { c.type = GameLoopConditionType::ActorMovedDistance; c.actorType = ActorType::Player; c.threshold = 1.0f; }
-
-    t.conditions.push_back(c);
-    m_selectedConditionIndex = (int)t.conditions.size() - 1;
     m_dirty = true;
 }
 
@@ -165,4 +148,3 @@ void GameLoopEditorPanelInternal::Load(const std::filesystem::path& path)
         m_validated = false;
     }
 }
-
