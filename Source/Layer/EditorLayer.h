@@ -132,6 +132,8 @@ public:
     // PlayerEditor �p camera shake �I�t�Z�b�g���N���A����B
     void ClearPlayerEditorCameraShakeOffset();
 
+
+
     AssetBrowser* GetAssetBrowser() const { return m_assetBrowser.get(); }
     EditorInputBridge& GetInputBridge() { return m_inputBridge; }
     DirectX::XMFLOAT2 GetSceneViewSize() const { return m_sceneViewSize; }
@@ -197,6 +199,7 @@ public:
     DirectX::XMFLOAT4 GetPlayerPreviewClearColor() const { return m_playerEditorPanel.GetPreviewClearColor(); }
     bool ShouldPlayerPreviewUseSkybox() const { return m_playerEditorPanel.ShouldPreviewUseSkybox(); }
     SceneViewMode GetSceneViewMode() const { return m_sceneViewMode; }
+    void SetSceneViewMode(SceneViewMode mode) { m_sceneViewMode = mode; }
     float GetSceneGridCellSize() const { return m_sceneGridCellSize; }
     int GetSceneGridHalfLineCount() const { return m_sceneGridHalfLineCount; }
     bool ShouldRenderEffectPreview() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }

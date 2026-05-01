@@ -1,0 +1,43 @@
+{
+  "nextNodeId": 3,
+  "nextTransitionId": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Titile",
+      "posX": -111.5,
+      "posY": -89.0,
+      "scenePath": "Data/Scene/Titile.scene",
+      "type": "Scene"
+    },
+    {
+      "id": 2,
+      "name": "test",
+      "posX": 104.5,
+      "posY": -46.0,
+      "scenePath": "Data/Scene/test.scene",
+      "type": "Scene"
+    }
+  ],
+  "startNodeId": 1,
+  "transitions": [
+    {
+      "fromNodeId": 1,
+      "id": 1,
+      "input": {
+        "gamepadButton": -1,
+        "keyboardScancode": 29
+      },
+      "loading": {
+        "blockInput": true,
+        "fadeInSeconds": 0.15000000596046448,
+        "fadeOutSeconds": 0.15000000596046448,
+        "minimumLoadingSeconds": 0.0,
+        "mode": "Immediate"
+      },
+      "name": "Transition",
+      "toNodeId": 2
+    }
+  ],
+  "version": 4
+}

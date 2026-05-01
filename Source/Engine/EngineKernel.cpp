@@ -1768,6 +1768,8 @@
 #include "Input/ResolvedInputStateComponent.h"
 #include "Input/InputResolveSystem.h"
 #include "System/Query.h"
+#include "Asset/PrefabSystem.h"
+#include "Engine/EditorSelection.h"
 
 namespace {
     // DX12 実行時診断の有効フラグ。
@@ -2902,99 +2904,82 @@ void EngineKernel::Update(float rawDt)
     time.unscaledDt = rawDt;
     time.frameCount++;
 
-    // EditorLayer 更新。
-    if (m_editorLayer) m_editorLayer->Update(time);
+    if (m_editorLayer) {
+        m_editorLayer->Update(time);
+    }
 
     const bool stepThisFrame = m_stepFrameRequested;
 
-    // Play 中か Step 中だけ dt を進める。
-    if (mode == EngineMode::Play || stepThisFrame)
+    if (mode == EngineMode::Play || stepThisFrame) {
         time.dt = rawDt * time.timeScale;
-    else
+    }
+    else {
         time.dt = 0.0f;
+    }
 
-    if (m_gameLayer) m_gameLayer->Update(time);
+    bool sceneLoadedByGameLoop = false;
 
-    // ---- GameLoop pipeline (treated as end-of-frame).
     if (m_gameLayer) {
         Registry& gameRegistry = m_gameLayer->GetRegistry();
 
-        // Resolve inputs for the GameLoop persistent owner registry as well.
-        InputResolveSystem::Update(m_gameLoopRegistry, m_inputQueue, time.unscaledDt);
+        SceneFileMetadata transitionMetadata;
+        sceneLoadedByGameLoop = SceneTransitionSystem::UpdateEndOfFrame(
+            m_gameLoopRuntime,
+            gameRegistry,
+            &transitionMetadata);
 
-        // 2D button click hit test using the main camera matrices.
-        // In editor mode, use last frame's game view rect.
-        DirectX::XMFLOAT4 gameViewRect{ 0.0f, 0.0f, 0.0f, 0.0f };
-        if (m_editorLayer) {
-            gameViewRect = m_editorLayer->GetGameViewRect();
-            if (gameViewRect.z <= 1.0f || gameViewRect.w <= 1.0f) {
-                const DirectX::XMFLOAT2 sz = m_editorLayer->GetGameViewSize();
-                gameViewRect = { 0.0f, 0.0f, sz.x, sz.y };
-            }
-        }
-        DirectX::XMFLOAT4X4 cameraView{};
-        DirectX::XMFLOAT4X4 cameraProj{};
-        bool hasCamera = false;
-        {
-            Query<CameraMainTagComponent, CameraMatricesComponent> q(gameRegistry);
-            q.ForEach([&](CameraMainTagComponent&, CameraMatricesComponent& mats) {
-                if (!hasCamera) {
-                    cameraView = mats.view;
-                    cameraProj = mats.projection;
-                    hasCamera = true;
+        if (sceneLoadedByGameLoop) {
+            if (m_editorLayer) {
+                if (transitionMetadata.sceneViewMode == "2D" ||
+                    transitionMetadata.sceneViewMode == "2d") {
+                    m_editorLayer->SetSceneViewMode(EditorLayer::SceneViewMode::Mode2D);
                 }
-            });
+                else {
+                    m_editorLayer->SetSceneViewMode(EditorLayer::SceneViewMode::Mode3D);
+                }
+
+                m_editorLayer->SetSceneViewTexture(nullptr);
+                m_editorLayer->SetGameViewTexture(nullptr);
+                m_editorLayer->SetGBufferDebugTextures(nullptr, nullptr, nullptr, nullptr, nullptr);
+            }
+
+            PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(gameRegistry, true);
+            EditorSelection::Instance().Clear();
         }
-        if (hasCamera) {
-            UIButtonClickSystem::Update(
+    }
+
+    if (m_gameLayer) {
+        m_gameLayer->Update(time);
+    }
+
+    if (m_gameLayer) {
+        Registry& gameRegistry = m_gameLayer->GetRegistry();
+
+        InputResolveSystem::Update(
+            m_gameLoopRegistry,
+            m_inputQueue,
+            time.unscaledDt);
+
+        if (!sceneLoadedByGameLoop) {
+            GameLoopSystem::Update(
+                m_gameLoopAsset,
+                m_gameLoopRuntime,
                 gameRegistry,
+                m_gameLoopRegistry,
                 m_uiButtonClickQueue,
                 m_inputQueue,
-                gameViewRect,
-                cameraView,
-                cameraProj);
+                time.dt);
         }
 
-     
-        GameLoopSystem::Update(
-            m_gameLoopAsset,
-            m_gameLoopRuntime,
-            m_gameLayer->GetRegistry(),
-            m_gameLoopRegistry,
-            m_uiButtonClickQueue,
-            m_inputQueue,
-            time.dt);
-
-        // End-of-frame: consume the scene load.
-        SceneTransitionSystem::UpdateEndOfFrame(m_gameLoopRuntime, gameRegistry);
-
-        // Drop the 1 frame of click events.
         m_uiButtonClickQueue.Clear();
     }
 
-    // AudioWorld 更新。
     if (m_audioWorld && m_gameLayer) {
         m_audioWorld->Update(m_gameLayer->GetRegistry(), mode);
     }
 
-    // PlayerEditor がアクティブな時だけ TimelineShake を editor camera 側へ転写する。
-    if (m_editorLayer) {
-        const bool usePlayerEditorShake =
-            m_gameLayer &&
-            m_editorLayer->IsPlayerWorkspaceActive();
-
-        if (usePlayerEditorShake) {
-            m_editorLayer->SetPlayerEditorCameraShakeOffset(
-                TimelineShakeSystem::GetShakeOffset());
-        }
-        else {
-            m_editorLayer->ClearPlayerEditorCameraShakeOffset();
-        }
-    }
-
     time.totalTime += time.dt;
 
-    // Step 実行後は自動で Pause へ戻す。
     if (stepThisFrame) {
         m_stepFrameRequested = false;
         mode = EngineMode::Pause;

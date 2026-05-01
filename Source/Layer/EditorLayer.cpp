@@ -389,13 +389,11 @@ void EditorLayer::SyncEffectEditorPanelState()
     m_effectEditorPanel.SetSelectedContext(selectedEntity, meshPath);
 }
 
-// PlayerEditor ������ editor camera �ɓK�p���� shake �I�t�Z�b�g��ݒ肷��B
 void EditorLayer::SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset)
 {
     m_editorCameraShakeOffset = offset;
 }
 
-// PlayerEditor �p camera shake �I�t�Z�b�g���N���A����B
 void EditorLayer::ClearPlayerEditorCameraShakeOffset()
 {
     m_editorCameraShakeOffset = { 0.0f, 0.0f, 0.0f };

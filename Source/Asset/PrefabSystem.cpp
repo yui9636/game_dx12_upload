@@ -60,15 +60,12 @@ namespace
 {
     using json = nlohmann::json;
 
-    // �v���~�e�B�u�l�� json �̎w��L�[�֏������ޔėp�⏕�֐��B
     template<typename T>
     void WritePrimitive(json& out, const char* key, const T& value)
     {
         out[key] = value;
     }
 
-    // json �̎w��L�[����v���~�e�B�u�l��ǂݍ��ޔėp�⏕�֐��B
-    // �L�[�������ꍇ�� false ��Ԃ��Avalue �͕ύX���Ȃ��B
     template<typename T>
     bool TryReadPrimitive(const json& in, const char* key, T& value)
     {
@@ -79,37 +76,30 @@ namespace
         return true;
     }
 
-    // EntitySnapshot �� 1 �m�[�h�Ԃ�� json �փV���A���C�Y����B
-    // sourceToLocal �� entity �Q�Ƃ� prefab �����[�J�� ID �ɒu�������邽�߂Ɏg���B
     json SerializeHierarchyNode(const EntitySnapshot::Node& node,
         const std::unordered_map<EntityID, uint32_t>& sourceToLocal)
     {
         json out;
         out["id"] = node.localID;
 
-        // �e������ꍇ���� parent �������B
         if (node.parentLocalID != EntitySnapshot::kInvalidLocalID) {
             out["parent"] = node.parentLocalID;
         }
 
         json components = json::object();
 
-        // component ���� json �l�� components �I�u�W�F�N�g�֒ǉ�����⏕�����_�B
         auto writeComponent = [&](const char* name, const json& value) {
             components[name] = value;
             };
 
-        // HierarchyComponent ��ۑ�����B
         if (const auto& hierarchy = std::get<std::optional<HierarchyComponent>>(node.components); hierarchy.has_value()) {
             writeComponent("HierarchyComponent", json{ {"isActive", hierarchy->isActive} });
         }
 
-        // NameComponent ��ۑ�����B
         if (const auto& name = std::get<std::optional<NameComponent>>(node.components); name.has_value()) {
             writeComponent("NameComponent", json{ {"name", name->name} });
         }
 
-        // TransformComponent ��ۑ�����B
         if (const auto& transform = std::get<std::optional<TransformComponent>>(node.components); transform.has_value()) {
             writeComponent("TransformComponent", json{
                 {"localPosition", transform->localPosition},
@@ -118,7 +108,6 @@ namespace
                 });
         }
 
-        // RectTransformComponent ��ۑ�����B
         if (const auto& rect = std::get<std::optional<RectTransformComponent>>(node.components); rect.has_value()) {
             writeComponent("RectTransformComponent", json{
                 {"anchoredPosition", rect->anchoredPosition},
@@ -131,7 +120,6 @@ namespace
                 });
         }
 
-        // CanvasItemComponent ��ۑ�����B
         if (const auto& canvas = std::get<std::optional<CanvasItemComponent>>(node.components); canvas.has_value()) {
             writeComponent("CanvasItemComponent", json{
                 {"sortingLayer", canvas->sortingLayer},
@@ -143,7 +131,6 @@ namespace
                 });
         }
 
-        // SpriteComponent ��ۑ�����B
         if (const auto& sprite = std::get<std::optional<SpriteComponent>>(node.components); sprite.has_value()) {
             writeComponent("SpriteComponent", json{
                 {"textureAssetPath", sprite->textureAssetPath},
@@ -151,7 +138,6 @@ namespace
                 });
         }
 
-        // UIButtonComponent.
         if (const auto& btn = std::get<std::optional<UIButtonComponent>>(node.components); btn.has_value()) {
             writeComponent("UIButtonComponent", json{
                 {"buttonId", btn->buttonId},
@@ -159,7 +145,6 @@ namespace
                 });
         }
 
-        // ActorTypeComponent.
         if (const auto& actor = std::get<std::optional<ActorTypeComponent>>(node.components); actor.has_value()) {
             writeComponent("ActorTypeComponent", json{
                 {"type",      static_cast<int>(actor->type)},
@@ -167,14 +152,12 @@ namespace
                 });
         }
 
-        // EnemyTagComponent.
         if (const auto& tag = std::get<std::optional<EnemyTagComponent>>(node.components); tag.has_value()) {
             writeComponent("EnemyTagComponent", json{
                 {"enemyKindId", tag->enemyKindId}
                 });
         }
 
-        // TextComponent ��ۑ�����B
         if (const auto& text = std::get<std::optional<TextComponent>>(node.components); text.has_value()) {
             writeComponent("TextComponent", json{
                 {"text", text->text},
@@ -187,7 +170,6 @@ namespace
                 });
         }
 
-        // AudioEmitterComponent ��ۑ�����B
         if (const auto& audioEmitter = std::get<std::optional<AudioEmitterComponent>>(node.components); audioEmitter.has_value()) {
             writeComponent("AudioEmitterComponent", json{
                 {"clipAssetPath", audioEmitter->clipAssetPath},
@@ -204,7 +186,6 @@ namespace
                 });
         }
 
-        // AudioBusSendComponent ��ۑ�����B
         if (const auto& audioBusSend = std::get<std::optional<AudioBusSendComponent>>(node.components); audioBusSend.has_value()) {
             writeComponent("AudioBusSendComponent", json{
                 {"bus", static_cast<int>(audioBusSend->bus)},
@@ -212,7 +193,6 @@ namespace
                 });
         }
 
-        // AudioListenerComponent ��ۑ�����B
         if (const auto& audioListener = std::get<std::optional<AudioListenerComponent>>(node.components); audioListener.has_value()) {
             writeComponent("AudioListenerComponent", json{
                 {"isPrimary", audioListener->isPrimary},
@@ -220,7 +200,6 @@ namespace
                 });
         }
 
-        // AudioSettingsComponent ��ۑ�����B
         if (const auto& audioSettings = std::get<std::optional<AudioSettingsComponent>>(node.components); audioSettings.has_value()) {
             writeComponent("AudioSettingsComponent", json{
                 {"masterVolume", audioSettings->masterVolume},
@@ -232,7 +211,6 @@ namespace
                 });
         }
 
-        // Camera2DComponent ��ۑ�����B
         if (const auto& camera2D = std::get<std::optional<Camera2DComponent>>(node.components); camera2D.has_value()) {
             writeComponent("Camera2DComponent", json{
                 {"orthographicSize", camera2D->orthographicSize},
@@ -243,7 +221,6 @@ namespace
                 });
         }
 
-        // MeshComponent ��ۑ�����B
         if (const auto& mesh = std::get<std::optional<MeshComponent>>(node.components); mesh.has_value()) {
             writeComponent("MeshComponent", json{
                 {"modelFilePath", mesh->modelFilePath},
@@ -253,14 +230,12 @@ namespace
                 });
         }
 
-        // MaterialComponent ��ۑ�����B
         if (const auto& material = std::get<std::optional<MaterialComponent>>(node.components); material.has_value()) {
             writeComponent("MaterialComponent", json{
                 {"materialAssetPath", material->materialAssetPath}
                 });
         }
 
-        // LightComponent ��ۑ�����B
         if (const auto& light = std::get<std::optional<LightComponent>>(node.components); light.has_value()) {
             writeComponent("LightComponent", json{
                 {"type", static_cast<int>(light->type)},
@@ -271,7 +246,6 @@ namespace
                 });
         }
 
-        // EnvironmentComponent ��ۑ�����B
         if (const auto& environment = std::get<std::optional<EnvironmentComponent>>(node.components); environment.has_value()) {
             writeComponent("EnvironmentComponent", json{
                 {"enableSkybox", environment->enableSkybox},
@@ -281,7 +255,6 @@ namespace
                 });
         }
 
-        // GridComponent ��ۑ�����B
         if (const auto& grid = std::get<std::optional<GridComponent>>(node.components); grid.has_value()) {
             writeComponent("GridComponent", json{
                 {"subdivisions", grid->subdivisions},
@@ -291,7 +264,6 @@ namespace
                 });
         }
 
-        // GizmoComponent ��ۑ�����B
         if (const auto& gizmo = std::get<std::optional<GizmoComponent>>(node.components); gizmo.has_value()) {
             writeComponent("GizmoComponent", json{
                 {"shape", static_cast<int>(gizmo->shape)},
@@ -303,7 +275,6 @@ namespace
                 });
         }
 
-        // ShadowSettingsComponent ��ۑ�����B
         if (const auto& shadow = std::get<std::optional<ShadowSettingsComponent>>(node.components); shadow.has_value()) {
             writeComponent("ShadowSettingsComponent", json{
                 {"enableShadow", shadow->enableShadow},
@@ -311,7 +282,6 @@ namespace
                 });
         }
 
-        // PostEffectComponent ��ۑ�����B
         if (const auto& post = std::get<std::optional<PostEffectComponent>>(node.components); post.has_value()) {
             writeComponent("PostEffectComponent", json{
                 {"enableComputeCulling", post->enableComputeCulling},
@@ -341,7 +311,6 @@ namespace
                 });
         }
 
-        // ReflectionProbeComponent ��ۑ�����B
         if (const auto& probe = std::get<std::optional<ReflectionProbeComponent>>(node.components); probe.has_value()) {
             writeComponent("ReflectionProbeComponent", json{
                 {"position", probe->position},
@@ -349,7 +318,6 @@ namespace
                 });
         }
 
-        // FreeCamera ���� component ��ۑ�����B
         if (const auto& freeCam = std::get<std::optional<CameraFreeControlComponent>>(node.components); freeCam.has_value()) {
             writeComponent("CameraFreeControlComponent", json{
                 {"moveSpeed", freeCam->moveSpeed},
@@ -359,8 +327,6 @@ namespace
                 });
         }
 
-        // ThirdPersonCamera ���� component ��ۑ�����B
-        // entity �Q�Ƃ̓��[�J�� ID �ɕϊ����ĕۑ�����B
         if (const auto& tpv = std::get<std::optional<CameraTPVControlComponent>>(node.components); tpv.has_value()) {
             json value{
                 {"distance", tpv->distance},
@@ -376,8 +342,6 @@ namespace
             writeComponent("CameraTPVControlComponent", value);
         }
 
-        // CameraLookAtComponent ��ۑ�����B
-        // entity �Q�Ƃ̓��[�J�� ID �ɕϊ����ĕۑ�����B
         if (const auto& lookAt = std::get<std::optional<CameraLookAtComponent>>(node.components); lookAt.has_value()) {
             json value{
                 {"up", lookAt->up}
@@ -389,7 +353,6 @@ namespace
             writeComponent("CameraLookAtComponent", value);
         }
 
-        // CameraLensComponent ��ۑ�����B
         if (const auto& lens = std::get<std::optional<CameraLensComponent>>(node.components); lens.has_value()) {
             writeComponent("CameraLensComponent", json{
                 {"fovY", lens->fovY},
@@ -399,12 +362,10 @@ namespace
                 });
         }
 
-        // CameraMainTagComponent �͑��݂�����ۑ�����B
         if (const auto& mainTag = std::get<std::optional<CameraMainTagComponent>>(node.components); mainTag.has_value()) {
             writeComponent("CameraMainTagComponent", json::object());
         }
 
-        // CameraShakeComponent ��ۑ�����B
         if (const auto& shake = std::get<std::optional<CameraShakeComponent>>(node.components); shake.has_value()) {
             writeComponent("CameraShakeComponent", json{
                 {"amplitude", shake->amplitude},
@@ -414,7 +375,6 @@ namespace
                 });
         }
 
-        // ColliderComponent ��ۑ�����B
         if (const auto& collider = std::get<std::optional<ColliderComponent>>(node.components); collider.has_value()) {
             json colliderJson;
             colliderJson["enabled"] = collider->enabled;
@@ -438,7 +398,6 @@ namespace
             writeComponent("ColliderComponent", colliderJson);
         }
 
-        // NodeSocketComponent ��ۑ�����B
         if (const auto& sockets = std::get<std::optional<NodeSocketComponent>>(node.components); sockets.has_value()) {
             json value;
             value["sockets"] = json::array();
@@ -454,7 +413,6 @@ namespace
             writeComponent("NodeSocketComponent", value);
         }
 
-        // InputBindingComponent ��ۑ�����B
         if (const auto& inputBinding = std::get<std::optional<InputBindingComponent>>(node.components); inputBinding.has_value()) {
             writeComponent("InputBindingComponent", json{
                 {"bindingProfilePath", inputBinding->bindingProfilePath},
@@ -462,12 +420,10 @@ namespace
                 });
         }
 
-        // InputActionMapComponent ��ۑ�����B
         if (const auto& inputActionMap = std::get<std::optional<InputActionMapComponent>>(node.components); inputActionMap.has_value()) {
             writeComponent("InputActionMapComponent", InputActionMapAsset::ToJson(inputActionMap->asset));
         }
 
-        // InputContextComponent ��ۑ�����B
         if (const auto& inputContext = std::get<std::optional<InputContextComponent>>(node.components); inputContext.has_value()) {
             json value{
                 {"priority", static_cast<int>(inputContext->priority)},
@@ -485,7 +441,6 @@ namespace
             writeComponent("InputContextComponent", value);
         }
 
-        // InputUserComponent ��ۑ�����B
         if (const auto& inputUser = std::get<std::optional<InputUserComponent>>(node.components); inputUser.has_value()) {
             writeComponent("InputUserComponent", json{
                 {"userId", inputUser->userId},
@@ -496,7 +451,6 @@ namespace
                 });
         }
 
-        // CharacterPhysicsComponent ��ۑ�����B
         if (const auto& characterPhysics = std::get<std::optional<CharacterPhysicsComponent>>(node.components); characterPhysics.has_value()) {
             writeComponent("CharacterPhysicsComponent", json{
                 {"gravity", characterPhysics->gravity},
@@ -508,7 +462,6 @@ namespace
                 });
         }
 
-        // HealthComponent ��ۑ�����B
         if (const auto& health = std::get<std::optional<HealthComponent>>(node.components); health.has_value()) {
             writeComponent("HealthComponent", json{
                 {"health", health->health},
@@ -516,7 +469,6 @@ namespace
                 });
         }
 
-        // StaminaComponent ��ۑ�����B
         if (const auto& stamina = std::get<std::optional<StaminaComponent>>(node.components); stamina.has_value()) {
             writeComponent("StaminaComponent", json{
                 {"current", stamina->current},
@@ -527,7 +479,6 @@ namespace
                 });
         }
 
-        // ActionDatabaseComponent ��ۑ�����B
         if (const auto& actionDatabase = std::get<std::optional<ActionDatabaseComponent>>(node.components); actionDatabase.has_value()) {
             json value;
             value["nodeCount"] = actionDatabase->nodeCount;
@@ -552,19 +503,16 @@ namespace
             writeComponent("ActionDatabaseComponent", value);
         }
 
-        // PlayerTagComponent ��ۑ�����B
         if (const auto& playerTag = std::get<std::optional<PlayerTagComponent>>(node.components); playerTag.has_value()) {
             writeComponent("PlayerTagComponent", json{
                 {"playerId", playerTag->playerId}
                 });
         }
 
-        // StateMachineAssetComponent ��ۑ�����B
         if (const auto& stateMachineAsset = std::get<std::optional<StateMachineAssetComponent>>(node.components); stateMachineAsset.has_value()) {
             writeComponent("StateMachineAssetComponent", StateMachineAssetSerializer::ToJson(stateMachineAsset->asset));
         }
 
-        // StateMachineParamsComponent ��ۑ�����B
         if (const auto& stateMachine = std::get<std::optional<StateMachineParamsComponent>>(node.components); stateMachine.has_value()) {
             json value;
             value["params"] = json::array();
@@ -577,7 +525,6 @@ namespace
             writeComponent("StateMachineParamsComponent", value);
         }
 
-        // TimelineLibraryComponent ��ۑ�����B
         if (const auto& timelineLibrary = std::get<std::optional<TimelineLibraryComponent>>(node.components); timelineLibrary.has_value()) {
             json value;
             value["nextTimelineId"] = timelineLibrary->nextTimelineId;
@@ -592,43 +539,37 @@ namespace
         return out;
     }
 
-    // optional<T> �� ComponentStorage ���̑Ή��X���b�g�֐ݒ肷��ėp�⏕�֐��B
     template<typename T>
     void SetOptional(EntitySnapshot::ComponentStorage& storage, T value)
     {
         std::get<std::optional<T>>(storage) = std::move(value);
     }
 
-    // json ���� 1 �m�[�h�Ԃ�� EntitySnapshot::Node �𕜌�����B
     void DeserializeHierarchyNode(const json& in, EntitySnapshot::Node& node)
     {
-        // ���[�J�� ID �Ɛe���[�J�� ID ��ǂݍ��ށB
+
         node.localID = in.at("id").get<uint32_t>();
         node.parentLocalID = in.contains("parent")
             ? in.at("parent").get<uint32_t>()
             : EntitySnapshot::kInvalidLocalID;
 
-        // �����O�̉��\�[�X entity �����[�J�� ID �x�[�X�ō��B
         node.sourceEntity = Entity::Create(node.localID, 0);
         node.externalParent = Entity::NULL_ID;
 
         const json components = in.value("components", json::object());
 
-        // HierarchyComponent �͊�{�I�ɏ�ɗp�ӂ���B
         HierarchyComponent hierarchyComponent{};
         if (components.contains("HierarchyComponent")) {
             hierarchyComponent.isActive = components["HierarchyComponent"].value("isActive", hierarchyComponent.isActive);
         }
         SetOptional(node.components, hierarchyComponent);
 
-        // NameComponent �𕜌�����B
         if (components.contains("NameComponent")) {
             NameComponent component;
             component.name = components["NameComponent"].value("name", "New Entity");
             SetOptional(node.components, component);
         }
 
-        // TransformComponent �𕜌�����B
         if (components.contains("TransformComponent")) {
             TransformComponent component;
             const json& value = components["TransformComponent"];
@@ -640,7 +581,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // RectTransformComponent �𕜌�����B
         if (components.contains("RectTransformComponent")) {
             RectTransformComponent component;
             const json& value = components["RectTransformComponent"];
@@ -654,7 +594,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CanvasItemComponent �𕜌�����B
         if (components.contains("CanvasItemComponent")) {
             CanvasItemComponent component;
             const json& value = components["CanvasItemComponent"];
@@ -667,7 +606,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // SpriteComponent �𕜌�����B
         if (components.contains("SpriteComponent")) {
             SpriteComponent component;
             const json& value = components["SpriteComponent"];
@@ -676,25 +614,22 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // UIButtonComponent.
         if (components.contains("UIButtonComponent")) {
             UIButtonComponent component;
             const json& value = components["UIButtonComponent"];
             component.buttonId = value.value("buttonId", component.buttonId);
-            component.enabled  = value.value("enabled",  component.enabled);
+            component.enabled = value.value("enabled", component.enabled);
             SetOptional(node.components, component);
         }
 
-        // ActorTypeComponent.
         if (components.contains("ActorTypeComponent")) {
             ActorTypeComponent component;
             const json& value = components["ActorTypeComponent"];
-            component.type      = static_cast<ActorType>(value.value("type", static_cast<int>(component.type)));
+            component.type = static_cast<ActorType>(value.value("type", static_cast<int>(component.type)));
             component.factionId = value.value("factionId", component.factionId);
             SetOptional(node.components, component);
         }
 
-        // EnemyTagComponent.
         if (components.contains("EnemyTagComponent")) {
             EnemyTagComponent component;
             const json& value = components["EnemyTagComponent"];
@@ -702,7 +637,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // TextComponent �𕜌�����B
         if (components.contains("TextComponent")) {
             TextComponent component;
             const json& value = components["TextComponent"];
@@ -716,7 +650,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // AudioEmitterComponent �𕜌�����B
         if (components.contains("AudioEmitterComponent")) {
             AudioEmitterComponent component;
             const json& value = components["AudioEmitterComponent"];
@@ -734,7 +667,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // AudioBusSendComponent �𕜌�����B
         if (components.contains("AudioBusSendComponent")) {
             AudioBusSendComponent component;
             const json& value = components["AudioBusSendComponent"];
@@ -743,7 +675,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // AudioListenerComponent �𕜌�����B
         if (components.contains("AudioListenerComponent")) {
             AudioListenerComponent component;
             const json& value = components["AudioListenerComponent"];
@@ -752,7 +683,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // AudioSettingsComponent �𕜌�����B
         if (components.contains("AudioSettingsComponent")) {
             AudioSettingsComponent component;
             const json& value = components["AudioSettingsComponent"];
@@ -765,7 +695,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // Camera2DComponent �𕜌�����B
         if (components.contains("Camera2DComponent")) {
             Camera2DComponent component;
             const json& value = components["Camera2DComponent"];
@@ -777,7 +706,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // MeshComponent �𕜌�����B
         if (components.contains("MeshComponent")) {
             MeshComponent component;
             const json& value = components["MeshComponent"];
@@ -788,14 +716,12 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // MaterialComponent �𕜌�����B
         if (components.contains("MaterialComponent")) {
             MaterialComponent component;
             component.materialAssetPath = components["MaterialComponent"].value("materialAssetPath", component.materialAssetPath);
             SetOptional(node.components, component);
         }
 
-        // LightComponent �𕜌�����B
         if (components.contains("LightComponent")) {
             LightComponent component;
             const json& value = components["LightComponent"];
@@ -807,7 +733,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // EnvironmentComponent �𕜌�����B
         if (components.contains("EnvironmentComponent")) {
             EnvironmentComponent component;
             const json& value = components["EnvironmentComponent"];
@@ -818,7 +743,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // GridComponent �𕜌�����B
         if (components.contains("GridComponent")) {
             GridComponent component;
             const json& value = components["GridComponent"];
@@ -829,7 +753,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // GizmoComponent �𕜌�����B
         if (components.contains("GizmoComponent")) {
             GizmoComponent component;
             const json& value = components["GizmoComponent"];
@@ -842,7 +765,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // ShadowSettingsComponent �𕜌�����B
         if (components.contains("ShadowSettingsComponent")) {
             ShadowSettingsComponent component;
             const json& value = components["ShadowSettingsComponent"];
@@ -851,7 +773,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // PostEffectComponent �𕜌�����B
         if (components.contains("PostEffectComponent")) {
             PostEffectComponent component;
             const json& value = components["PostEffectComponent"];
@@ -882,7 +803,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // ReflectionProbeComponent �𕜌�����B
         if (components.contains("ReflectionProbeComponent")) {
             ReflectionProbeComponent component;
             const json& value = components["ReflectionProbeComponent"];
@@ -892,7 +812,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CameraFreeControlComponent �𕜌�����B
         if (components.contains("CameraFreeControlComponent")) {
             CameraFreeControlComponent component;
             const json& value = components["CameraFreeControlComponent"];
@@ -904,8 +823,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CameraTPVControlComponent �𕜌�����B
-        // �ۑ����Ƀ��[�J�� ID ������ target ���� entity �֖߂��B
         if (components.contains("CameraTPVControlComponent")) {
             CameraTPVControlComponent component;
             const json& value = components["CameraTPVControlComponent"];
@@ -920,8 +837,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CameraLookAtComponent �𕜌�����B
-        // �ۑ����Ƀ��[�J�� ID ������ target ���� entity �֖߂��B
         if (components.contains("CameraLookAtComponent")) {
             CameraLookAtComponent component;
             const json& value = components["CameraLookAtComponent"];
@@ -932,7 +847,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CameraLensComponent �𕜌�����B
         if (components.contains("CameraLensComponent")) {
             CameraLensComponent component;
             const json& value = components["CameraLensComponent"];
@@ -943,13 +857,10 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CameraMainTagComponent �𕜌�����B
         if (components.contains("CameraMainTagComponent")) {
             SetOptional(node.components, CameraMainTagComponent{});
         }
 
-        // CameraShakeComponent �𕜌�����B
-        // runtime ��Ԃ͏����l�֖߂��B
         if (components.contains("CameraShakeComponent")) {
             CameraShakeComponent component;
             const json& value = components["CameraShakeComponent"];
@@ -962,7 +873,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // ColliderComponent �𕜌�����B
         if (components.contains("ColliderComponent")) {
             ColliderComponent component;
             const json& value = components["ColliderComponent"];
@@ -992,7 +902,6 @@ namespace
 
                     element.attribute = static_cast<ColliderAttribute>(elemJson.value("attribute", static_cast<int>(element.attribute)));
 
-                    // runtime ��p�l�͕ۑ������A�������ɏ���������B
                     element.registeredId = 0;
                     element.runtimeTag = 0;
 
@@ -1003,7 +912,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // NodeSocketComponent �𕜌�����B
         if (components.contains("NodeSocketComponent")) {
             NodeSocketComponent component;
             const json& value = components["NodeSocketComponent"];
@@ -1024,7 +932,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // InputBindingComponent �𕜌�����B
         if (components.contains("InputBindingComponent")) {
             InputBindingComponent component;
             const json& value = components["InputBindingComponent"];
@@ -1033,7 +940,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // InputActionMapComponent �𕜌�����B
         if (components.contains("InputActionMapComponent")) {
             InputActionMapComponent component;
             if (InputActionMapAsset::FromJson(components["InputActionMapComponent"], component.asset)) {
@@ -1041,7 +947,6 @@ namespace
             }
         }
 
-        // InputContextComponent �𕜌�����B
         if (components.contains("InputContextComponent")) {
             InputContextComponent component;
             const json& value = components["InputContextComponent"];
@@ -1064,7 +969,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // InputUserComponent �𕜌�����B
         if (components.contains("InputUserComponent")) {
             InputUserComponent component;
             const json& value = components["InputUserComponent"];
@@ -1076,8 +980,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // CharacterPhysicsComponent �𕜌�����B
-        // runtime ��Ԃ͏����l�֖߂��B
         if (components.contains("CharacterPhysicsComponent")) {
             CharacterPhysicsComponent component;
             const json& value = components["CharacterPhysicsComponent"];
@@ -1093,8 +995,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // HealthComponent �𕜌�����B
-        // runtime ��Ԃ͏����l�֖߂��B
         if (components.contains("HealthComponent")) {
             HealthComponent component;
             const json& value = components["HealthComponent"];
@@ -1107,7 +1007,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // StaminaComponent �𕜌�����B
         if (components.contains("StaminaComponent")) {
             StaminaComponent component;
             const json& value = components["StaminaComponent"];
@@ -1120,7 +1019,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // ActionDatabaseComponent �𕜌�����B
         if (components.contains("ActionDatabaseComponent")) {
             ActionDatabaseComponent component;
             const json& value = components["ActionDatabaseComponent"];
@@ -1149,14 +1047,12 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // PlayerTagComponent �𕜌�����B
         if (components.contains("PlayerTagComponent")) {
             PlayerTagComponent component;
             component.playerId = components["PlayerTagComponent"].value("playerId", component.playerId);
             SetOptional(node.components, component);
         }
 
-        // StateMachineAssetComponent �𕜌�����B
         if (components.contains("StateMachineAssetComponent")) {
             StateMachineAssetComponent component;
             if (StateMachineAssetSerializer::FromJson(components["StateMachineAssetComponent"], component.asset)) {
@@ -1164,8 +1060,6 @@ namespace
             }
         }
 
-        // StateMachineParamsComponent �𕜌�����B
-        // runtime ��Ԃ͏����l�֖߂��B
         if (components.contains("StateMachineParamsComponent")) {
             StateMachineParamsComponent component;
             const json& value = components["StateMachineParamsComponent"];
@@ -1188,7 +1082,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // TimelineLibraryComponent �𕜌�����B
         if (components.contains("TimelineLibraryComponent")) {
             TimelineLibraryComponent component;
             const json& value = components["TimelineLibraryComponent"];
@@ -1207,8 +1100,6 @@ namespace
         }
     }
 
-    // Snapshot ���� PrefabInstanceComponent �����ׂĊO���B
-    // prefab �ۑ����� prefab ���^�f�[�^���d�ۑ����Ȃ����߂Ɏg���B
     void StripPrefabMetadata(EntitySnapshot::Snapshot& snapshot)
     {
         for (auto& node : snapshot.nodes) {
@@ -1216,8 +1107,6 @@ namespace
         }
     }
 
-    // Snapshot �̃��[�g�m�[�h�� PrefabInstanceComponent ��t����B
-    // prefab ������ɁA�ǂ� prefab �R������ǐՂł���悤�ɂ���B
     void AttachPrefabMetadata(EntitySnapshot::Snapshot& snapshot, const std::filesystem::path& prefabPath)
     {
         for (auto& node : snapshot.nodes) {
@@ -1233,7 +1122,6 @@ namespace
         }
     }
 
-    // �����d��������A�ۑ���f�B���N�g�����̈�ӂ� prefab �p�X�����B
     std::filesystem::path MakeUniquePrefabPath(const std::filesystem::path& directory, const std::string& baseName)
     {
         std::error_code ec;
@@ -1246,59 +1134,97 @@ namespace
         return path;
     }
 
-    // �V�[�����̃��[�g entity ���W�߂�B
-    // �e���������̂�����Ώۂɂ��A�v���r���[��p entity �͏��O����B
+    bool IsSceneReplaceProtectedEntity(Registry& registry, EntityID entity)
+    {
+        if (registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
+            return true;
+        }
+
+        if (registry.GetComponent<EffectPreviewTagComponent>(entity)) {
+            return true;
+        }
+
+        return false;
+    }
+
     std::vector<EntityID> GatherSceneRoots(Registry& registry)
     {
         std::vector<EntityID> roots;
+
         for (Archetype* archetype : registry.GetAllArchetypes()) {
             const auto& entities = archetype->GetEntities();
+
             for (EntityID entity : entities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+
+                if (IsSceneReplaceProtectedEntity(registry, entity)) {
+                    continue;
+                }
+
                 EntityID parent = Entity::NULL_ID;
 
-                // HierarchyComponent ������΂�������e�����B
                 if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
                     parent = hierarchy->parent;
                 }
-                // ������� TransformComponent �̐e������B
                 else if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
                     parent = transform->parent == 0 ? Entity::NULL_ID : transform->parent;
                 }
 
-                // �e���������̂������[�g���Ƃ���B
-                if (Entity::IsNull(parent)) {
-                    // Sequencer �� EffectPreview �p�̈ꎞ entity �̓V�[���ۑ��Ώۂ��珜�O����B
-                    if (registry.GetComponent<SequencerPreviewCameraComponent>(entity) ||
-                        registry.GetComponent<EffectPreviewTagComponent>(entity)) {
-                        continue;
-                    }
+                const bool hasLiveParent =
+                    !Entity::IsNull(parent) &&
+                    registry.IsAlive(parent);
+
+                if (!hasLiveParent) {
                     roots.push_back(entity);
                 }
             }
         }
+
         return roots;
+    }
+
+    void ClearRegistryForSceneReplace(Registry& registry)
+    {
+        std::vector<EntityID> entities;
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& archetypeEntities = archetype->GetEntities();
+            entities.insert(entities.end(), archetypeEntities.begin(), archetypeEntities.end());
+        }
+
+        for (auto it = entities.rbegin(); it != entities.rend(); ++it) {
+            const EntityID entity = *it;
+
+            if (!registry.IsAlive(entity)) {
+                continue;
+            }
+
+            if (IsSceneReplaceProtectedEntity(registry, entity)) {
+                continue;
+            }
+
+            registry.DestroyEntity(entity);
+        }
     }
 }
 
-// �w�� entity �� prefab �Ƃ��ĕۑ�����B
-// �ۑ���t�@�C������ entity �����玩�����肵�A�d�����͘A�Ԃ�t����B
 bool PrefabSystem::SaveEntityAsPrefab(EntityID root,
     Registry& registry,
     const std::filesystem::path& destinationDir,
     std::filesystem::path* outPath)
 {
-    // ���� entity �⎀�� entity �͕ۑ��ł��Ȃ��B
+
     if (Entity::IsNull(root) || !registry.IsAlive(root)) {
         return false;
     }
 
-    // �f�t�H���g���� NewPrefab�ANameComponent ������΂��̖��O���g���B
     std::string prefabName = "NewPrefab";
     if (auto* name = registry.GetComponent<NameComponent>(root)) {
         prefabName = name->name;
     }
 
-    // �d����������ۑ���p�X�����B
     const std::filesystem::path finalPath = MakeUniquePrefabPath(destinationDir, prefabName);
     if (!SaveEntityToPrefabPath(root, registry, finalPath)) {
         return false;
@@ -1310,26 +1236,22 @@ bool PrefabSystem::SaveEntityAsPrefab(EntityID root,
     return true;
 }
 
-// �w�� entity �� subtree ���w�� prefabPath �֕ۑ�����B
 bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
     Registry& registry,
     const std::filesystem::path& prefabPath)
 {
-    // ���� entity �⎀�� entity �͕ۑ��ł��Ȃ��B
+
     if (Entity::IsNull(root) || !registry.IsAlive(root)) {
         return false;
     }
 
-    // subtree �S�̂� snapshot ������B
     EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(root, registry);
     if (snapshot.nodes.empty()) {
         return false;
     }
 
-    // prefab ���̓�d�ۑ�������邽�߃��^�f�[�^�������B
     StripPrefabMetadata(snapshot);
 
-    // ���[�g�� prefab ���ŏ�ɍŏ�ʈ����ɂ���B
     for (auto& node : snapshot.nodes) {
         if (node.localID == snapshot.rootLocalID) {
             node.parentLocalID = EntitySnapshot::kInvalidLocalID;
@@ -1338,17 +1260,14 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
         }
     }
 
-    // �� entity -> ���[�J�� ID �Ή��\�����B
     std::unordered_map<EntityID, uint32_t> sourceToLocal;
     for (const auto& node : snapshot.nodes) {
         sourceToLocal[node.sourceEntity] = node.localID;
     }
 
-    // �o�͐�f�B���N�g�����m�ۂ���B
     std::error_code ec;
     std::filesystem::create_directories(prefabPath.parent_path(), ec);
 
-    // json �h�L�������g���\�z����B
     json document;
     document["version"] = 1;
     document["rootLocalId"] = snapshot.rootLocalID;
@@ -1358,7 +1277,6 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
         document["nodes"].push_back(SerializeHierarchyNode(node, sourceToLocal));
     }
 
-    // �t�@�C���֕ۑ�����B
     std::ofstream ofs(prefabPath);
     if (!ofs.is_open()) {
         return false;
@@ -1368,18 +1286,16 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
     return true;
 }
 
-// Registry �S�̂� scene �t�@�C���Ƃ��ĕۑ�����B
 bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
     const std::filesystem::path& scenePath,
     const SceneFileMetadata* metadata)
 {
-    // �V�[�����[�g entity ���W�߂�B
+
     std::vector<EntityID> roots = GatherSceneRoots(registry);
     if (roots.empty()) {
         return false;
     }
 
-    // �������[�g�� 1 �� merged snapshot �֓�������B
     EntitySnapshot::Snapshot mergedSnapshot;
     mergedSnapshot.rootLocalID = EntitySnapshot::kInvalidLocalID;
     std::vector<uint32_t> rootLocalIDs;
@@ -1391,15 +1307,12 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
             continue;
         }
 
-        // ���[�g���[�J�� ID ���L�^����B
         rootLocalIDs.push_back(snapshot.rootLocalID + localIdOffset);
 
-        // �ŏ��̃��[�g�� mergedSnapshot.rootLocalID �ɐݒ肷��B
         if (mergedSnapshot.rootLocalID == EntitySnapshot::kInvalidLocalID) {
             mergedSnapshot.rootLocalID = snapshot.rootLocalID + localIdOffset;
         }
 
-        // ���[�J�� ID ���Փ˂��Ȃ��悤�� offset �𑫂��ē�������B
         for (auto& node : snapshot.nodes) {
             node.localID += localIdOffset;
             if (node.parentLocalID != EntitySnapshot::kInvalidLocalID) {
@@ -1407,7 +1320,6 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
             }
             node.externalParent = Entity::NULL_ID;
 
-            // scene �ۑ����� prefab instance ���𗎂Ƃ��B
             std::get<std::optional<PrefabInstanceComponent>>(node.components).reset();
 
             mergedSnapshot.nodes.push_back(std::move(node));
@@ -1420,17 +1332,14 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
         return false;
     }
 
-    // �� entity -> ���[�J�� ID �Ή��\�����B
     std::unordered_map<EntityID, uint32_t> sourceToLocal;
     for (const auto& node : mergedSnapshot.nodes) {
         sourceToLocal[node.sourceEntity] = node.localID;
     }
 
-    // �o�͐�f�B���N�g�����m�ۂ���B
     std::error_code ec;
     std::filesystem::create_directories(scenePath.parent_path(), ec);
 
-    // scene json ���\�z����B
     json document;
     document["version"] = 1;
     document["type"] = "scene";
@@ -1444,7 +1353,6 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
         document["nodes"].push_back(SerializeHierarchyNode(node, sourceToLocal));
     }
 
-    // �t�@�C���֕ۑ�����B
     std::ofstream ofs(scenePath, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
         return false;
@@ -1454,7 +1362,6 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
     return true;
 }
 
-// scene �t�@�C�����J���ARegistry �����̓��e�Œu��������B
 bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
     Registry& registry,
     SceneFileMetadata* outMetadata)
@@ -1474,15 +1381,16 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         return false;
     }
 
-    // editor ���^�f�[�^��Ԃ��B
     if (outMetadata) {
         outMetadata->sceneViewMode = "3D";
         if (document.contains("editor") && document["editor"].is_object()) {
             outMetadata->sceneViewMode = document["editor"].value("sceneViewMode", outMetadata->sceneViewMode);
         }
+        if (outMetadata->sceneViewMode.empty()) {
+            outMetadata->sceneViewMode = "3D";
+        }
     }
 
-    // json ���� snapshot �𕜌�����B
     EntitySnapshot::Snapshot snapshot;
     const json nodes = document.value("nodes", json::array());
     for (const auto& nodeJson : nodes) {
@@ -1496,7 +1404,6 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         return false;
     }
 
-    // rootLocalIds ������ΐ擪�� root �����ɂ���B
     if (document.contains("rootLocalIds") && document["rootLocalIds"].is_array() && !document["rootLocalIds"].empty()) {
         snapshot.rootLocalID = document["rootLocalIds"][0].get<uint32_t>();
     }
@@ -1504,20 +1411,12 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         snapshot.rootLocalID = document.value("rootLocalId", snapshot.nodes.front().localID);
     }
 
-    // �����V�[�����[�g��S�������B
-    std::vector<EntityID> existingRoots = GatherSceneRoots(registry);
-    for (auto it = existingRoots.rbegin(); it != existingRoots.rend(); ++it) {
-        if (registry.IsAlive(*it)) {
-            EntitySnapshot::DestroySubtree(*it, registry);
-        }
-    }
+    ClearRegistryForSceneReplace(registry);
 
-    // snapshot �� Registry �֕�������B
     EntitySnapshot::RestoreSubtree(snapshot, registry);
     return true;
 }
 
-// prefab �t�@�C����ǂ݁AEntitySnapshot �Ƃ��ĕԂ��B
 bool PrefabSystem::LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
     EntitySnapshot::Snapshot& outSnapshot)
 {
@@ -1554,8 +1453,6 @@ bool PrefabSystem::LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
     return true;
 }
 
-// prefab �� Registry �փC���X�^���X������B
-// parentEntity ���w�肳��Ă���΁A���̎q�Ƃ��ĕ�������B
 EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath,
     Registry& registry,
     EntityID parentEntity)
@@ -1565,10 +1462,8 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
         return Entity::NULL_ID;
     }
 
-    // ���[�g�� prefab metadata ��t����B
     AttachPrefabMetadata(snapshot, prefabPath);
 
-    // ���[�g�̊O���e���w��e�֍����ւ���B
     for (auto& node : snapshot.nodes) {
         if (node.localID == snapshot.rootLocalID) {
             node.externalParent = parentEntity;
@@ -1576,10 +1471,8 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
         }
     }
 
-    // subtree �𕜌�����B
     EntitySnapshot::RestoreResult restore = EntitySnapshot::RestoreSubtree(snapshot, registry);
 
-    // Player �p authoring component �����Ȃ� runtime component ��₤�B
     if (!Entity::IsNull(restore.root) && PlayerRuntimeSetup::HasMinimumPlayerAuthoringComponents(registry, restore.root)) {
         PlayerRuntimeSetup::EnsurePlayerPersistentComponents(registry, restore.root);
         PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(registry, restore.root);
@@ -1589,7 +1482,6 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
     return restore.root;
 }
 
-// ���݂� entity ���e�� prefab ���t�@�C���֏㏑���ۑ�����B
 bool PrefabSystem::ApplyPrefab(EntityID root, Registry& registry)
 {
     auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root);
@@ -1605,8 +1497,6 @@ bool PrefabSystem::ApplyPrefab(EntityID root, Registry& registry)
     return true;
 }
 
-// prefab �����t�@�C�����e�ŕ����������B
-// ���݂� entity �������čăC���X�^���X������B
 EntityID PrefabSystem::RevertPrefab(EntityID root, Registry& registry)
 {
     auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root);
@@ -1614,7 +1504,6 @@ EntityID PrefabSystem::RevertPrefab(EntityID root, Registry& registry)
         return Entity::NULL_ID;
     }
 
-    // ���[�g�̐e���o���Ă����B
     EntityID parent = Entity::NULL_ID;
     if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(root)) {
         parent = hierarchy->parent;
@@ -1622,12 +1511,10 @@ EntityID PrefabSystem::RevertPrefab(EntityID root, Registry& registry)
 
     const std::string prefabPath = prefabInstance->prefabAssetPath;
 
-    // ���� subtree ��j�����čăC���X�^���X������B
     EntitySnapshot::DestroySubtree(root, registry);
     return InstantiatePrefab(prefabPath, registry, parent);
 }
 
-// prefab �Ƃ̕R�t���������O���B
 bool PrefabSystem::UnpackPrefab(EntityID root, Registry& registry)
 {
     if (auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root)) {
@@ -1637,8 +1524,6 @@ bool PrefabSystem::UnpackPrefab(EntityID root, Registry& registry)
     return false;
 }
 
-// �w�� entity �������� prefab �̃��[�g��T���B
-// ������� NULL_ID ��Ԃ��B
 EntityID PrefabSystem::FindPrefabRoot(EntityID entity, Registry& registry)
 {
     EntityID current = entity;
@@ -1657,7 +1542,6 @@ EntityID PrefabSystem::FindPrefabRoot(EntityID entity, Registry& registry)
     return Entity::NULL_ID;
 }
 
-// entity �� prefab �z���Ȃ�A���� prefab ���[�g�� override �t���O�𗧂Ă�B
 void PrefabSystem::MarkPrefabOverride(EntityID entity, Registry& registry)
 {
     EntityID root = FindPrefabRoot(entity, registry);
@@ -1670,8 +1554,6 @@ void PrefabSystem::MarkPrefabOverride(EntityID entity, Registry& registry)
     }
 }
 
-// entity �� newParent �̎q�֕t���ւ��Ă悢�����肷��B
-// prefab �����̓r���m�[�h�͈ړ��s�Aprefab �z���ւ̈ړ����s�ɂ���B
 bool PrefabSystem::CanReparent(EntityID entity, EntityID newParent, Registry& registry)
 {
     EntityID entityPrefabRoot = FindPrefabRoot(entity, registry);
@@ -1683,23 +1565,17 @@ bool PrefabSystem::CanReparent(EntityID entity, EntityID newParent, Registry& re
     return Entity::IsNull(parentPrefabRoot);
 }
 
-// parentEntity �̎q��V�K�쐬���Ă悢�����肷��B
-// prefab �z���Ȃ�֎~����B
 bool PrefabSystem::CanCreateChild(EntityID parentEntity, Registry& registry)
 {
     return Entity::IsNull(FindPrefabRoot(parentEntity, registry));
 }
 
-// entity ���폜���Ă悢�����肷��B
-// prefab �z���̓r���m�[�h�폜�͋֎~�A���[�g�폜����������B
 bool PrefabSystem::CanDelete(EntityID entity, Registry& registry)
 {
     EntityID prefabRoot = FindPrefabRoot(entity, registry);
     return Entity::IsNull(prefabRoot) || prefabRoot == entity;
 }
 
-// entity �𕡐����Ă悢�����肷��B
-// prefab �z���̓r���m�[�h�����͋֎~�A���[�g��������������B
 bool PrefabSystem::CanDuplicate(EntityID entity, Registry& registry)
 {
     EntityID prefabRoot = FindPrefabRoot(entity, registry);

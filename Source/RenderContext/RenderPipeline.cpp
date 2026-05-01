@@ -97,7 +97,7 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
             if (!m_dx12RootSig) {
                 m_dx12RootSig = std::make_unique<DX12RootSignature>(g.GetDX12Device());
             }
-            m_commandList = std::make_unique<DX12CommandList>(g.GetDX12Device(), m_dx12RootSig.get());
+            m_commandList = std::make_unique<DX12CommandList>(g.GetDX12Device(), m_dx12RootSig.get(),false);
         } else {
             m_commandList = std::make_unique<DX11CommandList>(g.GetDeviceContext());
         }
