@@ -384,6 +384,7 @@ private:
     bool m_gameViewShowStatsOverlay = false;
     bool m_gameViewShowUIOverlay = true;
     bool m_gameViewShow2DOverlay = true;
+    bool m_gameViewUseSceneViewCameraFallback2D = false;
     bool m_forceDockLayoutReset = false;
     bool m_requestRenamePopup = false;
     char m_renameBuffer[256] = {};

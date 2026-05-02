@@ -370,6 +370,10 @@ void EditorLayer::DrawGameView()
             drawMenuLikeToggle("UI", &m_gameViewShowUIOverlay, "Show UI overlay");
             ImGui::SameLine();
             drawMenuLikeToggle("2D", &m_gameViewShow2DOverlay, "Show 2D overlay");
+            if (m_sceneViewMode == SceneViewMode::Mode2D) {
+                ImGui::SameLine();
+                drawMenuLikeToggle("SceneCam", &m_gameViewUseSceneViewCameraFallback2D, "Use Scene View camera when no active Camera2D exists");
+            }
             ImGui::SameLine();
             if (ImGui::Button("Reset")) {
                 ExecuteGameResetPreview();
@@ -504,17 +508,101 @@ void EditorLayer::DrawGameView()
         if (m_sceneViewMode == SceneViewMode::Mode2D) {
             DirectX::XMFLOAT4X4 gameView{};
             DirectX::XMFLOAT4X4 gameProjection{};
-            if (TryBuildGameView2DViewProjection(gameView, gameProjection)) {
+            const bool hasActiveCamera2D = TryBuildGameView2DViewProjection(gameView, gameProjection);
+            bool usingSceneViewFallback = false;
+            if (!hasActiveCamera2D && m_gameViewUseSceneViewCameraFallback2D) {
+                const float aspect = (m_gameViewRect.w > 0.0f) ? (m_gameViewRect.z / m_gameViewRect.w) : (16.0f / 9.0f);
+                gameView = GetEditorViewMatrix();
+                gameProjection = BuildEditorProjectionMatrix(aspect);
+                usingSceneViewFallback = true;
+            }
+
+            if (hasActiveCamera2D || usingSceneViewFallback) {
                 if (m_gameViewShowUIOverlay) {
                     Draw2DOverlayForRect(m_gameViewRect, gameView, gameProjection, false);
                 }
                 if (m_gameViewShow2DOverlay) {
                     ImDrawList* drawList = ImGui::GetWindowDrawList();
-                    drawList->AddText(ImVec2(imageMin.x + 12.0f, imageMin.y + 12.0f), IM_COL32(190, 220, 255, 220), "2D Preview");
+                    const char* label = usingSceneViewFallback ? "2D Preview (Scene View Camera)" : "2D Preview";
+                    drawList->AddText(ImVec2(imageMin.x + 12.0f, imageMin.y + 12.0f), IM_COL32(190, 220, 255, 220), label);
                 }
             } else if (m_gameViewShow2DOverlay) {
-                ImDrawList* drawList = ImGui::GetWindowDrawList();
-                drawList->AddText(ImVec2(imageMin.x + 16.0f, imageMin.y + 16.0f), IM_COL32(255, 220, 160, 255), "No active 2D camera");
+                auto buildCamera2DStatus = [&]() {
+                    if (!m_gameLayer) {
+                        return std::string("No active 2D camera");
+                    }
+
+                    Registry& registry = m_gameLayer->GetRegistry();
+                    int cameraCount = 0;
+                    int missingTransformCount = 0;
+                    int inactiveCount = 0;
+
+                    for (Archetype* archetype : registry.GetAllArchetypes()) {
+                        const auto& signature = archetype->GetSignature();
+                        if (!signature.test(TypeManager::GetComponentTypeID<Camera2DComponent>())) {
+                            continue;
+                        }
+
+                        const bool hasTransformColumn = signature.test(TypeManager::GetComponentTypeID<TransformComponent>());
+                        const bool hasHierarchyColumn = signature.test(TypeManager::GetComponentTypeID<HierarchyComponent>());
+                        auto* hierarchyColumn = hasHierarchyColumn
+                            ? archetype->GetColumn(TypeManager::GetComponentTypeID<HierarchyComponent>())
+                            : nullptr;
+
+                        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                            ++cameraCount;
+                            if (!hasTransformColumn) {
+                                ++missingTransformCount;
+                                continue;
+                            }
+
+                            auto* hierarchy = hierarchyColumn ? static_cast<HierarchyComponent*>(hierarchyColumn->Get(i)) : nullptr;
+                            if (hierarchy && !hierarchy->isActive) {
+                                ++inactiveCount;
+                            }
+                        }
+                    }
+
+                    if (cameraCount == 0) {
+                        return std::string("No active 2D camera: Camera2D is missing.");
+                    }
+                    if (missingTransformCount == cameraCount) {
+                        return std::string("No active 2D camera: Camera2D needs Transform.");
+                    }
+                    if (inactiveCount == cameraCount) {
+                        return std::string("No active 2D camera: Camera2D entity is inactive.");
+                    }
+                    return std::string("No active 2D camera");
+                };
+
+                const ImVec2 restoreCursor = ImGui::GetCursorScreenPos();
+                const ImVec2 overlayPos(imageMin.x + 16.0f, imageMin.y + 16.0f);
+                const std::string cameraStatus = buildCamera2DStatus();
+                ImGui::SetCursorScreenPos(overlayPos);
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.86f, 0.55f, 1.0f));
+                ImGui::BeginGroup();
+                ImGui::TextUnformatted(cameraStatus.c_str());
+                ImGui::PopStyleColor();
+                if (ImGui::SmallButton("Create 2D Camera")) {
+                    if (m_gameLayer) {
+                        Registry& registry = m_gameLayer->GetRegistry();
+                        auto action = std::make_unique<CreateEntityAction>(
+                            BuildCamera2DSnapshot(),
+                            Entity::NULL_ID,
+                            "Create 2D Camera");
+                        auto* actionPtr = action.get();
+                        UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+                        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
+                            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+                        }
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Use Scene View Camera")) {
+                    m_gameViewUseSceneViewCameraFallback2D = true;
+                }
+                ImGui::EndGroup();
+                ImGui::SetCursorScreenPos(restoreCursor);
             }
         }
 

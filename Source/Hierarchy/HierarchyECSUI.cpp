@@ -49,6 +49,7 @@
 #include "Component/SequencerPreviewCameraComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
+#include "Component/UIButtonComponent.h"
 #include "Component/EnvironmentComponent.h"
 
 #include "System/ResourceManager.h"
@@ -412,6 +413,23 @@ namespace
         return BuildSingleSpriteSnapshot("Sprite", "");
     }
 
+    EntitySnapshot::Snapshot BuildDefaultUIButtonSnapshot()
+    {
+        EntitySnapshot::Snapshot snapshot = BuildSingleSpriteSnapshot("Button", "");
+        if (!snapshot.nodes.empty()) {
+            UIButtonComponent button{};
+            button.buttonId = "Button";
+            button.enabled = true;
+            std::get<std::optional<UIButtonComponent>>(snapshot.nodes[0].components) = button;
+
+            auto& rect = std::get<std::optional<RectTransformComponent>>(snapshot.nodes[0].components);
+            if (rect.has_value()) {
+                rect->sizeDelta = { 180.0f, 64.0f };
+            }
+        }
+        return snapshot;
+    }
+
     // 既定 Text snapshot。
     EntitySnapshot::Snapshot BuildDefaultTextSnapshot()
     {
@@ -665,6 +683,9 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         }
         if (ImGui::MenuItem("Create Sprite")) {
             CreateEntityFromSnapshot(registry, BuildDefaultSpriteSnapshot(), Entity::NULL_ID, "Create Sprite");
+        }
+        if (ImGui::MenuItem("Create UI Button")) {
+            CreateEntityFromSnapshot(registry, BuildDefaultUIButtonSnapshot(), Entity::NULL_ID, "Create UI Button");
         }
         if (ImGui::MenuItem("Create Text")) {
             CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), Entity::NULL_ID, "Create Text");
@@ -1065,6 +1086,15 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             }
             else {
                 CreateEntityFromSnapshot(registry, BuildDefaultSpriteSnapshot(), entity, "Create Sprite Child");
+            }
+        }
+
+        if (ImGui::MenuItem("Create UI Button Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            }
+            else {
+                CreateEntityFromSnapshot(registry, BuildDefaultUIButtonSnapshot(), entity, "Create UI Button Child");
             }
         }
 

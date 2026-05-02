@@ -1784,6 +1784,74 @@ namespace {
     // 診断ログの出力先。
     constexpr const char* kPhase4DiagPath = "C:/Users/yuito/Documents/MyEngine_Workspace/game_dx12_upload/Saved/Logs/phase4_diag.txt";
 
+    bool TryBuildActiveCamera2DViewProjection(Registry& registry,
+                                              const DirectX::XMFLOAT4& viewRect,
+                                              DirectX::XMFLOAT4X4& outView,
+                                              DirectX::XMFLOAT4X4& outProjection)
+    {
+        if (viewRect.z <= 1.0f || viewRect.w <= 1.0f) {
+            return false;
+        }
+
+        using namespace DirectX;
+        TransformComponent* cameraTransform = nullptr;
+        Camera2DComponent* camera2D = nullptr;
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<Camera2DComponent>()) ||
+                !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
+                continue;
+            }
+
+            auto* cameraColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<Camera2DComponent>());
+            auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
+            auto* hierarchyColumn = signature.test(TypeManager::GetComponentTypeID<HierarchyComponent>())
+                ? archetype->GetColumn(TypeManager::GetComponentTypeID<HierarchyComponent>())
+                : nullptr;
+
+            for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                auto* currentCamera = static_cast<Camera2DComponent*>(cameraColumn->Get(i));
+                auto* currentTransform = static_cast<TransformComponent*>(transformColumn->Get(i));
+                auto* hierarchy = hierarchyColumn ? static_cast<HierarchyComponent*>(hierarchyColumn->Get(i)) : nullptr;
+                if (!currentCamera || !currentTransform) {
+                    continue;
+                }
+                if (hierarchy && !hierarchy->isActive) {
+                    continue;
+                }
+
+                cameraTransform = currentTransform;
+                camera2D = currentCamera;
+                break;
+            }
+
+            if (cameraTransform && camera2D) {
+                break;
+            }
+        }
+
+        if (!cameraTransform || !camera2D) {
+            return false;
+        }
+
+        const XMVECTOR eye = XMVectorSet(cameraTransform->worldPosition.x,
+                                         cameraTransform->worldPosition.y,
+                                         cameraTransform->worldPosition.z,
+                                         1.0f);
+        const XMMATRIX view = XMMatrixLookToLH(eye, XMVectorSet(0, 0, 1, 0), XMVectorSet(0, 1, 0, 0));
+        const float aspect = viewRect.w > 0.0f ? (viewRect.z / viewRect.w) : (16.0f / 9.0f);
+        const float zoom = (std::max)(camera2D->zoom, 0.01f);
+        const float orthoSize = (std::max)(camera2D->orthographicSize / zoom, 0.01f);
+        const XMMATRIX projection = XMMatrixOrthographicLH(aspect * orthoSize * 2.0f,
+                                                           orthoSize * 2.0f,
+                                                           camera2D->nearZ,
+                                                           camera2D->farZ);
+        XMStoreFloat4x4(&outView, view);
+        XMStoreFloat4x4(&outProjection, projection);
+        return true;
+    }
+
     // GPU テクスチャ内容の readback 用状態。
     struct TextureSnapshotState {
         Microsoft::WRL::ComPtr<ID3D12Resource> readbackBuffer;
@@ -2961,6 +3029,24 @@ void EngineKernel::Update(float rawDt)
             time.unscaledDt);
 
         if (!sceneLoadedByGameLoop) {
+            if (mode == EngineMode::Play || stepThisFrame) {
+                DirectX::XMFLOAT4X4 uiView{};
+                DirectX::XMFLOAT4X4 uiProjection{};
+                const DirectX::XMFLOAT4 gameViewRect = m_editorLayer
+                    ? m_editorLayer->GetGameViewRect()
+                    : DirectX::XMFLOAT4{ 0.0f, 0.0f, 0.0f, 0.0f };
+
+                if (TryBuildActiveCamera2DViewProjection(gameRegistry, gameViewRect, uiView, uiProjection)) {
+                    UIButtonClickSystem::Update(
+                        gameRegistry,
+                        m_uiButtonClickQueue,
+                        m_inputQueue,
+                        gameViewRect,
+                        uiView,
+                        uiProjection);
+                }
+            }
+
             GameLoopSystem::Update(
                 m_gameLoopAsset,
                 m_gameLoopRuntime,

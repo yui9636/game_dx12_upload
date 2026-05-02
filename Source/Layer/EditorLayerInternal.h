@@ -1066,6 +1066,33 @@ namespace {
         return snapshot;
     }
 
+    EntitySnapshot::Snapshot BuildCamera2DSnapshot()
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        TransformComponent transform{};
+        transform.localPosition = { 0.0f, 0.0f, -100.0f };
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        Camera2DComponent camera2D{};
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ "Camera 2D" };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<Camera2DComponent>>(node.components) = camera2D;
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
     void SyncRectTransformToTransform(RectTransformComponent& rect, TransformComponent& transform)
     {
         using namespace DirectX;

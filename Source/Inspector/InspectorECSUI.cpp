@@ -1650,6 +1650,7 @@
 #include "Component/ShadowSettingsComponent.h"
 #include "Component/SpriteComponent.h"
 #include "Component/TextComponent.h"
+#include "Component/UIButtonComponent.h"
 
 #include "Registry/Registry.h"
 #include "System/UndoSystem.h"
@@ -1662,6 +1663,7 @@
 #include <algorithm>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <unordered_map>
 
@@ -2128,6 +2130,199 @@ namespace {
         return changed;
     }
 
+    template <typename T>
+    void ExecuteImmediateComponentChange(Registry* registry,
+                                         EntityID entity,
+                                         const T& before,
+                                         const T& after)
+    {
+        if (!registry) {
+            return;
+        }
+
+        UndoSystem::Instance().ExecuteAction(
+            std::make_unique<ComponentUndoAction<T>>(entity, before, after),
+            *registry);
+        PrefabSystem::MarkPrefabOverride(entity, *registry);
+    }
+
+    template <typename T>
+    void ExecuteAddComponent(Registry* registry,
+                             EntityID entity,
+                             const T& value,
+                             const char* actionName)
+    {
+        if (!registry || registry->GetComponent<T>(entity)) {
+            return;
+        }
+
+        UndoSystem::Instance().ExecuteAction(
+            std::make_unique<OptionalComponentUndoAction<T>>(
+                entity,
+                std::nullopt,
+                std::optional<T>(value),
+                actionName),
+            *registry);
+        PrefabSystem::MarkPrefabOverride(entity, *registry);
+    }
+
+    bool DrawUndoableColorEdit4(Registry* registry,
+                                EntityID entity,
+                                SpriteComponent& component,
+                                const char* label,
+                                DirectX::XMFLOAT4& value)
+    {
+        const SpriteComponent beforeWidget = component;
+        const bool changed = ImGui::ColorEdit4(label, &value.x);
+
+        auto& sessions = GetEditSessions<SpriteComponent>();
+        const uint64_t key = MakeEditSessionKey<SpriteComponent>(entity);
+        auto it = sessions.find(key);
+
+        if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
+            it = sessions.emplace(key, EditSession<SpriteComponent>{ beforeWidget, false }).first;
+        }
+
+        if (changed && it != sessions.end()) {
+            it->second.dirty = true;
+        }
+
+        if (it != sessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
+            if (it->second.dirty) {
+                ExecuteImmediateComponentChange(registry, entity, it->second.before, component);
+            }
+            sessions.erase(it);
+        }
+
+        return changed;
+    }
+
+    void DrawSpriteComponentInspector(Registry* registry, EntityID entity)
+    {
+        SpriteComponent* sprite = registry ? registry->GetComponent<SpriteComponent>(entity) : nullptr;
+        if (!sprite) {
+            return;
+        }
+
+        if (!ImGui::CollapsingHeader("SpriteComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+
+        TransformComponent* transform = registry->GetComponent<TransformComponent>(entity);
+        RectTransformComponent* rect = registry->GetComponent<RectTransformComponent>(entity);
+        CanvasItemComponent* canvas = registry->GetComponent<CanvasItemComponent>(entity);
+        HierarchyComponent* hierarchy = registry->GetComponent<HierarchyComponent>(entity);
+
+        bool hasBlockingIssue = false;
+        if (!transform || !rect || !canvas) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Sprite preview needs Transform, RectTransform, and CanvasItem.");
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Entity is inactive.");
+        }
+        if (canvas && !canvas->visible) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "CanvasItem visible is off.");
+        }
+        if (sprite->textureAssetPath.empty()) {
+            ImGui::TextDisabled("Texture is empty.");
+        }
+
+        if (hasBlockingIssue) {
+            ImGui::Spacing();
+        }
+
+        bool requestRefresh = false;
+        if (!transform) {
+            if (ImGui::Button("Add Transform")) {
+                TransformComponent value{};
+                value.localScale = { 1.0f, 1.0f, 1.0f };
+                value.isDirty = true;
+                ExecuteAddComponent(registry, entity, value, "Add Transform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!rect) {
+            if (ImGui::Button("Add RectTransform")) {
+                RectTransformComponent value{};
+                value.sizeDelta = { 128.0f, 128.0f };
+                ExecuteAddComponent(registry, entity, value, "Add RectTransform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!canvas) {
+            if (ImGui::Button("Add CanvasItem")) {
+                ExecuteAddComponent(registry, entity, CanvasItemComponent{}, "Add CanvasItem");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (requestRefresh) {
+            return;
+        }
+        if (canvas && !canvas->visible) {
+            if (ImGui::Button("Show CanvasItem")) {
+                const CanvasItemComponent before = *canvas;
+                canvas->visible = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *canvas);
+            }
+            ImGui::SameLine();
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            if (ImGui::Button("Activate Entity")) {
+                const HierarchyComponent before = *hierarchy;
+                hierarchy->isActive = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *hierarchy);
+            }
+            ImGui::SameLine();
+        }
+        if (hasBlockingIssue) {
+            ImGui::NewLine();
+            ImGui::Separator();
+        }
+
+        const SpriteComponent beforeTexture = *sprite;
+        if (DrawTextureSlot("Texture", sprite->textureAssetPath) &&
+            beforeTexture.textureAssetPath != sprite->textureAssetPath) {
+            ExecuteImmediateComponentChange(registry, entity, beforeTexture, *sprite);
+        }
+
+        auto texture = sprite->textureAssetPath.empty()
+            ? nullptr
+            : ResourceManager::Instance().GetTexture(sprite->textureAssetPath);
+
+        if (texture) {
+            ImGui::TextDisabled("Texture Size: %u x %u",
+                texture->GetWidth(),
+                texture->GetHeight());
+        }
+
+        if (texture && rect) {
+            if (ImGui::Button("Use Texture Size")) {
+                const RectTransformComponent before = *rect;
+                rect->sizeDelta = {
+                    static_cast<float>(texture->GetWidth()),
+                    static_cast<float>(texture->GetHeight())
+                };
+                ExecuteImmediateComponentChange(registry, entity, before, *rect);
+                if (auto* updatedTransform = registry->GetComponent<TransformComponent>(entity)) {
+                    updatedTransform->localPosition = { rect->anchoredPosition.x, rect->anchoredPosition.y, 0.0f };
+                    updatedTransform->localScale = { rect->scale2D.x, rect->scale2D.y, 1.0f };
+                    updatedTransform->isDirty = true;
+                }
+            }
+        }
+        else if (!texture && !sprite->textureAssetPath.empty()) {
+            ImGui::TextColored(ImVec4(1.0f, 0.42f, 0.42f, 1.0f), "Texture failed to load.");
+        }
+
+        DrawUndoableColorEdit4(registry, entity, *sprite, "Tint", sprite->tint);
+    }
+
     // ------------------------------------------------------------
     // MaterialAsset の直接編集 UI
     // ------------------------------------------------------------
@@ -2417,8 +2612,9 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<AudioSettingsComponent>(registry, entity);
             DrawComponentIfPresent<RectTransformComponent>(registry, entity);
             DrawComponentIfPresent<CanvasItemComponent>(registry, entity);
-            DrawComponentIfPresent<SpriteComponent>(registry, entity);
+            DrawSpriteComponentInspector(registry, entity);
             DrawComponentIfPresent<TextComponent>(registry, entity);
+            DrawComponentIfPresent<UIButtonComponent>(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
 
             // --------------------------------------------------------
@@ -2645,6 +2841,7 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 TryAddComponent<Camera2DComponent>(registry, entity, "Camera2D");
                 TryAddComponent<SpriteComponent>(registry, entity, "Sprite");
                 TryAddComponent<TextComponent>(registry, entity, "Text");
+                TryAddComponent<UIButtonComponent>(registry, entity, "UIButton");
                 TryAddComponent<CanvasItemComponent>(registry, entity, "CanvasItem");
                 TryAddComponent<RectTransformComponent>(registry, entity, "RectTransform");
 
