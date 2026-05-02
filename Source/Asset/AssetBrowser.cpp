@@ -4,11 +4,27 @@
 #include "Registry/Registry.h"
 #include "ThumbnailGenerator.h"
 #include "Engine/EditorSelection.h"
+#include "Engine/EditorAssetContext.h"
+#include "Engine/Editor2DEntityUtils.h"
 #include "Engine/EngineKernel.h"
+#include "Component/CanvasItemComponent.h"
+#include "Component/HierarchyComponent.h"
+#include "Component/NameComponent.h"
+#include "Component/RectTransformComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/UIButtonComponent.h"
+#include "System/ResourceManager.h"
+#include "System/UndoSystem.h"
+#include "Undo/ComponentUndoAction.h"
+#include "Undo/EntitySnapshot.h"
+#include "Undo/EntityUndoActions.h"
 #include "Graphics.h"
 #include "ImGuiRenderer.h"
 #include <unordered_set>
 #include <cstring>
+#include <optional>
+#include <utility>
 #include <imgui.h>
 
 namespace
@@ -27,6 +43,114 @@ namespace
 
         // 新旧どちらかの拡張子ならシーン扱いとする。
         return path.extension() == ".scene" || isLegacyScene;
+    }
+
+    bool IsTextureAssetType(AssetType type)
+    {
+        return type == AssetType::Texture;
+    }
+
+    EntitySnapshot::Snapshot BuildSpriteSnapshotFromTexture(const std::filesystem::path& path, bool asButton)
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        EntitySnapshot::Node node;
+        node.localID = 0;
+        node.sourceEntity = Entity::NULL_ID;
+        node.parentLocalID = EntitySnapshot::kInvalidLocalID;
+        node.externalParent = Entity::NULL_ID;
+
+        const std::string texturePath = path.string();
+        const std::string stem = path.stem().string();
+        const std::string name = stem.empty() ? (asButton ? "Button" : "Sprite") : stem;
+
+        DirectX::XMFLOAT2 size = asButton
+            ? DirectX::XMFLOAT2{ 180.0f, 64.0f }
+            : DirectX::XMFLOAT2{ 128.0f, 128.0f };
+        if (auto texture = ResourceManager::Instance().GetTexture(texturePath)) {
+            size = {
+                static_cast<float>(texture->GetWidth()),
+                static_cast<float>(texture->GetHeight())
+            };
+        }
+
+        TransformComponent transform{};
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+
+        RectTransformComponent rect{};
+        rect.sizeDelta = size;
+
+        CanvasItemComponent canvas{};
+
+        SpriteComponent sprite{};
+        sprite.textureAssetPath = texturePath;
+
+        std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+        std::get<std::optional<TransformComponent>>(node.components) = transform;
+        std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+        std::get<std::optional<RectTransformComponent>>(node.components) = rect;
+        std::get<std::optional<CanvasItemComponent>>(node.components) = canvas;
+        std::get<std::optional<SpriteComponent>>(node.components) = sprite;
+
+        if (asButton) {
+            UIButtonComponent button{};
+            button.buttonId = name;
+            button.enabled = true;
+            std::get<std::optional<UIButtonComponent>>(node.components) = button;
+        }
+
+        snapshot.nodes.push_back(std::move(node));
+        return snapshot;
+    }
+
+    void CreateSpriteLikeEntityFromTexture(Registry* registry,
+                                           const std::filesystem::path& path,
+                                           bool asButton)
+    {
+        if (!registry || !IsTextureAssetType(EditorAssetContext::GuessAssetType(path.string()))) {
+            return;
+        }
+
+        auto action = std::make_unique<CreateEntityAction>(
+            BuildSpriteSnapshotFromTexture(path, asButton),
+            Entity::NULL_ID,
+            asButton ? "Create UI Button From Texture" : "Create Sprite From Texture");
+        auto* actionPtr = action.get();
+        UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
+
+        const EntityID liveRoot = actionPtr->GetLiveRoot();
+        if (!Entity::IsNull(liveRoot)) {
+            Editor2D::FinalizeCreatedEntity(*registry, liveRoot);
+            EditorSelection::Instance().SelectEntity(liveRoot);
+        }
+    }
+
+    void AssignTextureToSelectedSprite(Registry* registry, const std::filesystem::path& path)
+    {
+        if (!registry || !IsTextureAssetType(EditorAssetContext::GuessAssetType(path.string()))) {
+            return;
+        }
+
+        const EntityID entity = EditorSelection::Instance().GetPrimaryEntity();
+        if (Entity::IsNull(entity) || !registry->IsAlive(entity)) {
+            return;
+        }
+
+        auto* sprite = registry->GetComponent<SpriteComponent>(entity);
+        if (!sprite) {
+            return;
+        }
+
+        const SpriteComponent before = *sprite;
+        sprite->textureAssetPath = path.string();
+        UndoSystem::Instance().ExecuteAction(
+            std::make_unique<ComponentUndoAction<SpriteComponent>>(entity, before, *sprite),
+            *registry);
+        Editor2D::FinalizeCreatedEntity(*registry, entity);
+        PrefabSystem::MarkPrefabOverride(entity, *registry);
+        EditorSelection::Instance().SelectEntity(entity);
     }
 }
 
@@ -286,7 +410,10 @@ void AssetBrowser::RenderContentGrid() {
 
         // 選択状態を確認する。
         auto& selection = EditorSelection::Instance();
-        bool isSelected = (selection.GetType() == SelectionType::Asset && selection.GetAssetPath() == asset.path.string());
+        EditorAssetContext& assetContext = EditorAssetContext::Instance();
+        const bool isAssetSelection = selection.GetType() == SelectionType::Asset && selection.GetAssetPath() == asset.path.string();
+        const bool isActiveAsset = assetContext.GetActiveAssetPath() == asset.path.string();
+        bool isSelected = isAssetSelection || isActiveAsset;
 
         // 選択中なら背景ハイライトを描画する。
         if (isSelected) {
@@ -333,6 +460,32 @@ void AssetBrowser::RenderContentGrid() {
 
         // 右クリックメニューを表示する。
         if (ImGui::BeginPopupContextItem()) {
+            if (ImGui::MenuItem(ICON_FA_CIRCLE_INFO " Inspect Asset")) {
+                assetContext.SetActiveAsset(asset.path.string(), asset.type);
+                selection.SelectAsset(asset.path.string());
+            }
+            if (asset.type == AssetType::Texture) {
+                ImGui::Separator();
+                if (ImGui::MenuItem("Create Sprite")) {
+                    assetContext.SetActiveAsset(asset.path.string(), asset.type);
+                    CreateSpriteLikeEntityFromTexture(m_registry, asset.path, false);
+                }
+                if (ImGui::MenuItem("Create UI Button")) {
+                    assetContext.SetActiveAsset(asset.path.string(), asset.type);
+                    CreateSpriteLikeEntityFromTexture(m_registry, asset.path, true);
+                }
+                const EntityID selectedEntity = selection.GetPrimaryEntity();
+                const bool canAssignToSprite =
+                    m_registry &&
+                    selection.GetType() == SelectionType::Entity &&
+                    !Entity::IsNull(selectedEntity) &&
+                    m_registry->GetComponent<SpriteComponent>(selectedEntity) != nullptr;
+                if (ImGui::MenuItem("Assign to Selected Sprite", nullptr, false, canAssignToSprite)) {
+                    assetContext.SetActiveAsset(asset.path.string(), asset.type);
+                    AssignTextureToSelectedSprite(m_registry, asset.path);
+                }
+            }
+            ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_SCISSORS " Cut", "Ctrl+X")) {
                 m_clipboardPath = asset.path;
                 m_isCut = true;
@@ -386,8 +539,10 @@ void AssetBrowser::RenderContentGrid() {
             }
         }
         else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-            // 単クリックなら選択だけ行う。
-            selection.SelectAsset(asset.path.string());
+            assetContext.SetActiveAsset(asset.path.string(), asset.type);
+            if (selection.GetType() != SelectionType::Entity) {
+                selection.SelectAsset(asset.path.string());
+            }
         }
 
         // フォルダにはドラッグ&ドロップの受け皿を付ける。

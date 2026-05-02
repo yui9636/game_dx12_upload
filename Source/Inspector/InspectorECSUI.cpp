@@ -1652,6 +1652,8 @@
 #include "Component/TextComponent.h"
 #include "Component/UIButtonComponent.h"
 
+#include "Engine/Editor2DEntityUtils.h"
+#include "Engine/EditorAssetContext.h"
 #include "Registry/Registry.h"
 #include "System/UndoSystem.h"
 #include "Undo/ComponentUndoAction.h"
@@ -2289,6 +2291,19 @@ namespace {
         if (DrawTextureSlot("Texture", sprite->textureAssetPath) &&
             beforeTexture.textureAssetPath != sprite->textureAssetPath) {
             ExecuteImmediateComponentChange(registry, entity, beforeTexture, *sprite);
+            Editor2D::FinalizeCreatedEntity(*registry, entity);
+            return;
+        }
+
+        const auto& activeAsset = EditorAssetContext::Instance();
+        if (activeAsset.IsActiveTexture() && activeAsset.GetActiveAssetPath() != sprite->textureAssetPath) {
+            if (ImGui::Button("Use Active Texture")) {
+                const SpriteComponent before = *sprite;
+                sprite->textureAssetPath = activeAsset.GetActiveAssetPath();
+                ExecuteImmediateComponentChange(registry, entity, before, *sprite);
+                Editor2D::FinalizeCreatedEntity(*registry, entity);
+                return;
+            }
         }
 
         auto texture = sprite->textureAssetPath.empty()
@@ -2309,11 +2324,8 @@ namespace {
                     static_cast<float>(texture->GetHeight())
                 };
                 ExecuteImmediateComponentChange(registry, entity, before, *rect);
-                if (auto* updatedTransform = registry->GetComponent<TransformComponent>(entity)) {
-                    updatedTransform->localPosition = { rect->anchoredPosition.x, rect->anchoredPosition.y, 0.0f };
-                    updatedTransform->localScale = { rect->scale2D.x, rect->scale2D.y, 1.0f };
-                    updatedTransform->isDirty = true;
-                }
+                Editor2D::FinalizeCreatedEntity(*registry, entity);
+                return;
             }
         }
         else if (!texture && !sprite->textureAssetPath.empty()) {

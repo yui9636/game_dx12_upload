@@ -649,6 +649,13 @@ void EditorLayer::DrawTransformGizmo()
         return;
     }
 
+    if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
+        Editor2D::SyncRectTransformToTransform(*rectTransform, *transform);
+        HierarchySystem::MarkDirtyRecursive(entity, registry);
+        HierarchySystem hierarchySystem;
+        hierarchySystem.Update(registry);
+    }
+
     using namespace DirectX;
     XMFLOAT4X4 view = GetEditorViewMatrix();
     const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
@@ -665,6 +672,7 @@ void EditorLayer::DrawTransformGizmo()
             selection.SetEntitySelection(duplicatedRoots, duplicatedRoots.back());
             entity = selection.GetEntity();
             transform = registry.GetComponent<TransformComponent>(entity);
+            rectTransform = registry.GetComponent<RectTransformComponent>(entity);
             if (!transform) {
                 m_gizmoWasUsing = false;
                 m_hasGizmoBeforeTransform = false;
@@ -1002,6 +1010,17 @@ void EditorLayer::HandleSceneAssetDrop()
     }
 
     Registry& registry = m_gameLayer->GetRegistry();
+    auto selectCreated2DEntity = [&](EntityID liveRoot) {
+        if (Entity::IsNull(liveRoot)) {
+            return;
+        }
+        Editor2D::FinalizeCreatedEntity(registry, liveRoot);
+        EditorSelection::Instance().SelectEntity(liveRoot);
+        m_gizmoOperation = GizmoOperation::Translate;
+        m_scenePickPending = false;
+        m_scenePickBlockedByGizmo = true;
+        RequestWindowFocus(WindowFocusTarget::SceneView);
+    };
 
     if (ext == ".prefab") {
         EntitySnapshot::Snapshot snapshot;
@@ -1027,9 +1046,7 @@ void EditorLayer::HandleSceneAssetDrop()
         auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Sprite");
         auto* actionPtr = action.get();
         UndoSystem::Instance().ExecuteAction(std::move(action), registry);
-        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
-            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
-        }
+        selectCreated2DEntity(actionPtr->GetLiveRoot());
     } else if (m_sceneViewMode == SceneViewMode::Mode2D && IsSupportedFontAsset(assetPath)) {
         EntitySnapshot::Snapshot snapshot = BuildSingleTextSnapshot(
             assetPath.stem().string(),
@@ -1038,9 +1055,7 @@ void EditorLayer::HandleSceneAssetDrop()
         auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Text");
         auto* actionPtr = action.get();
         UndoSystem::Instance().ExecuteAction(std::move(action), registry);
-        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
-            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
-        }
+        selectCreated2DEntity(actionPtr->GetLiveRoot());
     } else if (IsSupportedModelAsset(assetPath)) {
         MeshComponent meshComp;
         meshComp.modelFilePath = assetPath.string();

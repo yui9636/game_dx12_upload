@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "EditorLayer.h"
+#include "Engine/Editor2DEntityUtils.h"
 #include "Engine/EngineKernel.h" // カーネルの機能(Play/Stop)を呼ぶため
 #include "Icon/IconFontManager.h"
 #include "Engine/EditorSelection.h" // 選択状態の管理
@@ -1095,12 +1096,7 @@ namespace {
 
     void SyncRectTransformToTransform(RectTransformComponent& rect, TransformComponent& transform)
     {
-        using namespace DirectX;
-        transform.localPosition = { rect.anchoredPosition.x, rect.anchoredPosition.y, 0.0f };
-        const XMVECTOR q = XMQuaternionRotationRollPitchYaw(0.0f, 0.0f, XMConvertToRadians(rect.rotationZ));
-        XMStoreFloat4(&transform.localRotation, q);
-        transform.localScale = { rect.scale2D.x, rect.scale2D.y, 1.0f };
-        transform.isDirty = true;
+        Editor2D::SyncRectTransformToTransform(rect, transform);
     }
 
     void SyncRectTransforms(Registry& registry)

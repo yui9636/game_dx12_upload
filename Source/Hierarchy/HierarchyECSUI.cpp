@@ -1,6 +1,8 @@
 ﻿#include "HierarchyECSUI.h"
 #include "Engine/EngineKernel.h"
 #include "Registry/Registry.h"
+#include "Engine/Editor2DEntityUtils.h"
+#include "Engine/EditorAssetContext.h"
 #include "Engine/EditorSelection.h"
 #include "Icon/IconFontManager.h"
 #include "Hierarchy/HierarchySystem.h"
@@ -413,15 +415,61 @@ namespace
         return BuildSingleSpriteSnapshot("Sprite", "");
     }
 
-    EntitySnapshot::Snapshot BuildDefaultUIButtonSnapshot()
+    EntitySnapshot::Snapshot BuildUIButtonSnapshot(const std::string& name, const std::string& texturePath)
     {
-        EntitySnapshot::Snapshot snapshot = BuildSingleSpriteSnapshot("Button", "");
+        EntitySnapshot::Snapshot snapshot = BuildSingleSpriteSnapshot(name, texturePath);
         if (!snapshot.nodes.empty()) {
             UIButtonComponent button{};
-            button.buttonId = "Button";
+            button.buttonId = name;
             button.enabled = true;
             std::get<std::optional<UIButtonComponent>>(snapshot.nodes[0].components) = button;
 
+            if (texturePath.empty()) {
+                auto& rect = std::get<std::optional<RectTransformComponent>>(snapshot.nodes[0].components);
+                if (rect.has_value()) {
+                    rect->sizeDelta = { 180.0f, 64.0f };
+                }
+            } else {
+                TryApplyTextureSize(snapshot, texturePath);
+            }
+        }
+        return snapshot;
+    }
+
+    EntitySnapshot::Snapshot BuildDefaultUIButtonSnapshot()
+    {
+        return BuildUIButtonSnapshot("Button", "");
+    }
+
+    bool Has2DComponents(Registry& registry, EntityID entity)
+    {
+        return !Entity::IsNull(entity) &&
+            registry.IsAlive(entity) &&
+            (registry.GetComponent<RectTransformComponent>(entity) ||
+             registry.GetComponent<CanvasItemComponent>(entity) ||
+             registry.GetComponent<SpriteComponent>(entity) ||
+             registry.GetComponent<TextComponent>(entity) ||
+             registry.GetComponent<UIButtonComponent>(entity));
+    }
+
+    bool CanCreateChildOrWarn(Registry* registry, EntityID parentEntity)
+    {
+        if (!registry || PrefabSystem::CanCreateChild(parentEntity, *registry)) {
+            return true;
+        }
+        LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+        return false;
+    }
+
+    EntitySnapshot::Snapshot BuildSpriteFromTextureSnapshot(const std::string& texturePath, bool asButton)
+    {
+        const std::string stem = std::filesystem::path(texturePath).stem().string();
+        const std::string name = stem.empty() ? (asButton ? "Button" : "Sprite") : stem;
+        auto snapshot = asButton
+            ? BuildUIButtonSnapshot(name, texturePath)
+            : BuildSingleSpriteSnapshot(name, texturePath);
+        TryApplyTextureSize(snapshot, texturePath);
+        if (asButton && texturePath.empty() && !snapshot.nodes.empty()) {
             auto& rect = std::get<std::optional<RectTransformComponent>>(snapshot.nodes[0].components);
             if (rect.has_value()) {
                 rect->sizeDelta = { 180.0f, 64.0f };
@@ -584,7 +632,11 @@ namespace
         auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), parentEntity, actionName);
         auto* actionPtr = action.get();
         UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-        EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+        const EntityID liveRoot = actionPtr->GetLiveRoot();
+        if (Has2DComponents(*registry, liveRoot)) {
+            Editor2D::FinalizeCreatedEntity(*registry, liveRoot);
+        }
+        EditorSelection::Instance().SelectEntity(liveRoot);
         return true;
     }
 }
@@ -736,6 +788,25 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 auto snapshot = BuildSingleSpriteSnapshot(name, selection.GetAssetPath());
                 TryApplyTextureSize(snapshot, selection.GetAssetPath());
                 CreateEntityFromSnapshot(registry, std::move(snapshot), Entity::NULL_ID, "Create Sprite");
+            }
+        }
+
+        const auto& activeAsset = EditorAssetContext::Instance();
+        if (activeAsset.IsActiveTexture()) {
+            const std::string& texturePath = activeAsset.GetActiveAssetPath();
+            if (ImGui::MenuItem("Create Sprite From Active Texture")) {
+                CreateEntityFromSnapshot(
+                    registry,
+                    BuildSpriteFromTextureSnapshot(texturePath, false),
+                    Entity::NULL_ID,
+                    "Create Sprite From Texture");
+            }
+            if (ImGui::MenuItem("Create UI Button From Active Texture")) {
+                CreateEntityFromSnapshot(
+                    registry,
+                    BuildSpriteFromTextureSnapshot(texturePath, true),
+                    Entity::NULL_ID,
+                    "Create UI Button From Texture");
             }
         }
 
@@ -1179,6 +1250,29 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             }
         }
 
+        const auto& activeAsset = EditorAssetContext::Instance();
+        if (activeAsset.IsActiveTexture()) {
+            const std::string& texturePath = activeAsset.GetActiveAssetPath();
+            if (ImGui::MenuItem("Create Sprite Child From Active Texture")) {
+                if (CanCreateChildOrWarn(registry, entity)) {
+                    CreateEntityFromSnapshot(
+                        registry,
+                        BuildSpriteFromTextureSnapshot(texturePath, false),
+                        entity,
+                        "Create Sprite Child From Texture");
+                }
+            }
+            if (ImGui::MenuItem("Create UI Button Child From Active Texture")) {
+                if (CanCreateChildOrWarn(registry, entity)) {
+                    CreateEntityFromSnapshot(
+                        registry,
+                        BuildSpriteFromTextureSnapshot(texturePath, true),
+                        entity,
+                        "Create UI Button Child From Texture");
+                }
+            }
+        }
+
         if (selection.GetType() == SelectionType::Asset && IsSupportedFontAsset(selection.GetAssetPath())) {
             if (ImGui::MenuItem("Create Text Child From Selected Font")) {
                 if (!PrefabSystem::CanCreateChild(entity, *registry)) {
@@ -1365,17 +1459,9 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                     return;
                 }
 
-                auto action = std::make_unique<CreateEntityAction>(
-                    [&, sourcePathStr]() {
-                        auto snapshot = BuildSingleSpriteSnapshot(path.stem().string(), sourcePathStr);
-                        TryApplyTextureSize(snapshot, sourcePathStr);
-                        return snapshot;
-                    }(),
-                        parentEntity,
-                        "Create Sprite From Asset");
-                auto* actionPtr = action.get();
-                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+                auto snapshot = BuildSingleSpriteSnapshot(path.stem().string(), sourcePathStr);
+                TryApplyTextureSize(snapshot, sourcePathStr);
+                CreateEntityFromSnapshot(registry, std::move(snapshot), parentEntity, "Create Sprite From Asset");
             }
             // Font asset は Text entity を生成する。
             else if (IsSupportedFontAsset(sourcePathStr)) {
@@ -1385,13 +1471,11 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                     return;
                 }
 
-                auto action = std::make_unique<CreateEntityAction>(
+                CreateEntityFromSnapshot(
+                    registry,
                     BuildSingleTextSnapshot(path.stem().string(), sourcePathStr),
                     parentEntity,
                     "Create Text From Asset");
-                auto* actionPtr = action.get();
-                UndoSystem::Instance().ExecuteAction(std::move(action), *registry);
-                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
             }
             // Audio asset は AudioEmitter entity を生成する。
             else if (IsSupportedAudioAsset(sourcePathStr)) {
