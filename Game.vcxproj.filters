@@ -1108,6 +1108,15 @@
     <ClInclude Include="Source\Gameplay\DamageSystem.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Gameplay\LockOnSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\BattleFlowSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UI\HUDBindingSystem.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h">
@@ -1357,6 +1366,15 @@
     </ClCompile>
     <ClCompile Include="Source\Gameplay\DamageSystem.cpp">
       <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\LockOnSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\BattleFlowSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UI\HUDBindingSystem.cpp">
+      <Filter>Source\UI</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\LocomotionSystem.cpp">
       <Filter>Source\Gameplay</Filter>

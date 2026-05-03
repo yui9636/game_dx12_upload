@@ -32,7 +32,10 @@
 #include "Gameplay/DamageSystem.h"
 #include "Gameplay/DamageEventComponent.h"
 #include "Gameplay/BattleFlowComponent.h"
+#include "Gameplay/BattleFlowSystem.h"
+#include "Gameplay/LockOnSystem.h"
 #include "Gameplay/HealthSystem.h"
+#include "UI/HUDBindingSystem.h"
 #include "Gameplay/CharacterPhysicsSystem.h"
 #include "Gameplay/PlaybackSystem.h"
 #include "Gameplay/StateMachineSystem.h"
@@ -173,6 +176,9 @@ void GameLayer::Update(const EngineTime& time)
     EffectPreviewSystem::Update(m_registry, previewDt);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
+    // Lock-on selects/clears the camera target before the third-person follow
+    // pulls a position from CameraTPVControlComponent.target.
+    LockOnSystem::Update(m_registry, time.dt);
     ThirdPersonCameraSystem::Update(m_registry, time.dt);
 
     TransformSystem transformSys;
@@ -202,6 +208,9 @@ void GameLayer::Update(const EngineTime& time)
 
     DamageSystem::Update(m_registry);
     HealthSystem::Update(m_registry, time.dt);
+
+    HUDBindingSystem::Update(m_registry);
+    BattleFlowSystem::Update(m_registry, time.dt);
 
     CameraFinalizeSystem::Update(m_registry);
 }

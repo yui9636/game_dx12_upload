@@ -237,6 +237,9 @@
     <ClInclude Include="Source\Gameplay\LockOnTargetComponent.h" />
     <ClInclude Include="Source\Gameplay\BattleFlowComponent.h" />
     <ClInclude Include="Source\Gameplay\DamageSystem.h" />
+    <ClInclude Include="Source\Gameplay\LockOnSystem.h" />
+    <ClInclude Include="Source\Gameplay\BattleFlowSystem.h" />
+    <ClInclude Include="Source\UI\HUDBindingSystem.h" />
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h" />
     <ClInclude Include="Source\GameLoop\GameLoopRuntime.h" />
@@ -601,6 +604,9 @@
     <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp" />
     <ClCompile Include="Source\Gameplay\DamageSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\LockOnSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\BattleFlowSystem.cpp" />
+    <ClCompile Include="Source\UI\HUDBindingSystem.cpp" />
     <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp" />
     <ClCompile Include="Source\Gameplay\PlayerRuntimeSetup.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />

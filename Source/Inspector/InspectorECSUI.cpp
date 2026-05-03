@@ -1595,6 +1595,7 @@
 #include "Generated/ComponentMeta.generated.h"
 #include "Icon/IconsFontAwesome7.h"
 #include "Component/NameComponent.h"
+#include "System/Query.h"
 
 // Gameplay components
 #include "Gameplay/PlayerTagComponent.h"
@@ -1691,7 +1692,7 @@ namespace {
     // 値が変更されたら true を返す。
     // ------------------------------------------------------------
     template <typename T>
-    bool DrawValueWidget(const char* label, T& value) {
+    bool DrawValueWidget(const char* label, T& value, Registry* registry = nullptr) {
         ImGui::PushID(label);
 
         ImGui::AlignTextToFramePadding();
@@ -1743,7 +1744,51 @@ namespace {
 
         }
         else if constexpr (std::is_same_v<T, EntityID>) {
-            ImGui::Text("%llu", static_cast<unsigned long long>(value));
+            // Entity reference: show the target's NameComponent if reachable,
+            // accept Hierarchy drag-drop, and offer a popup picker over all
+            // named entities. Falls back to a raw id when no registry is
+            // available.
+            const char* labelText = "<None>";
+            if (!Entity::IsNull(value)) {
+                if (registry && registry->IsAlive(value)) {
+                    if (auto* name = registry->GetComponent<NameComponent>(value)) {
+                        labelText = name->name.empty() ? "<Unnamed>" : name->name.c_str();
+                    } else {
+                        labelText = "<Unnamed>";
+                    }
+                } else {
+                    labelText = "<Stale>";
+                }
+            }
+            if (ImGui::Button(labelText, ImVec2(-1, 0))) {
+                ImGui::OpenPopup("EntityPicker");
+            }
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
+                    value = *static_cast<const EntityID*>(p->Data);
+                    changed = true;
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (ImGui::BeginPopup("EntityPicker")) {
+                if (ImGui::Selectable("<None>")) {
+                    value = Entity::NULL_ID;
+                    changed = true;
+                }
+                if (registry) {
+                    Query<NameComponent> q(*registry);
+                    q.ForEachWithEntity([&](EntityID e, NameComponent& n) {
+                        ImGui::PushID(static_cast<int>(Entity::GetIndex(e)));
+                        const char* itemLabel = n.name.empty() ? "<Unnamed>" : n.name.c_str();
+                        if (ImGui::Selectable(itemLabel)) {
+                            value = e;
+                            changed = true;
+                        }
+                        ImGui::PopID();
+                    });
+                }
+                ImGui::EndPopup();
+            }
 
         }
         else if constexpr (std::is_enum_v<T>) {
@@ -1809,7 +1854,7 @@ namespace {
     template <typename TComponent, typename TValue>
     bool DrawUndoableValueWidget(Registry* registry, EntityID entity, TComponent& component, const char* label, TValue& value) {
         const TComponent beforeWidget = component;
-        const bool changed = DrawValueWidget(label, value);
+        const bool changed = DrawValueWidget(label, value, registry);
 
         auto& sessions = GetEditSessions<TComponent>();
         const uint64_t key = MakeEditSessionKey<TComponent>(entity);

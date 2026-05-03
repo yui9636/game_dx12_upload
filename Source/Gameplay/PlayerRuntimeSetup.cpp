@@ -47,9 +47,12 @@ namespace
     constexpr uint32_t kScancodeW = 26;
     constexpr uint32_t kScancodeJ = 13;
     constexpr uint32_t kScancodeSpace = 44;
+    constexpr uint32_t kScancodeTab = 43;
     constexpr uint8_t kMouseButtonLeft = 1;
+    constexpr uint8_t kMouseButtonMiddle = 3;
     constexpr uint8_t kGamepadButtonX = 2;
     constexpr uint8_t kGamepadButtonB = 1;
+    constexpr uint8_t kGamepadButtonR3 = 8;
     constexpr uint8_t kGamepadAxisLeftX = 0;
     constexpr uint8_t kGamepadAxisLeftY = 1;
 
@@ -209,8 +212,10 @@ namespace
         EnsureAxisBinding(map, "MoveY", kScancodeW, kScancodeS, kGamepadAxisLeftY);
         EnsureActionBinding(map, "Attack", kScancodeJ, kMouseButtonLeft, kGamepadButtonX);
         EnsureActionBinding(map, "Dodge", kScancodeSpace, 0, kGamepadButtonB);
+        EnsureActionBinding(map, "LockOn", kScancodeTab, kMouseButtonMiddle, kGamepadButtonR3);
         MoveActionBindingTo(map, "Attack", 0);
         MoveActionBindingTo(map, "Dodge", 1);
+        MoveActionBindingTo(map, "LockOn", 2);
         MoveAxisBindingTo(map, "MoveX", 0);
         MoveAxisBindingTo(map, "MoveY", 1);
     }
