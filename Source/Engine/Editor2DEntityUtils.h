@@ -29,6 +29,21 @@ namespace Editor2D
         transform.isDirty = true;
     }
 
+    inline void SyncRectTransformFromTransform(const TransformComponent& transform, RectTransformComponent& rect)
+    {
+        using namespace DirectX;
+        rect.anchoredPosition = { transform.localPosition.x, transform.localPosition.y };
+
+        const XMFLOAT4& qf = transform.localRotation;
+        const float sinyCosp = 2.0f * (qf.w * qf.z + qf.x * qf.y);
+        const float cosyCosp = 1.0f - 2.0f * (qf.y * qf.y + qf.z * qf.z);
+        rect.rotationZ = XMConvertToDegrees(std::atan2(sinyCosp, cosyCosp));
+        rect.scale2D = {
+            (std::max)(std::fabs(transform.localScale.x), 0.001f),
+            (std::max)(std::fabs(transform.localScale.y), 0.001f)
+        };
+    }
+
     inline bool FinalizeCreatedEntity(Registry& registry, EntityID entity)
     {
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {

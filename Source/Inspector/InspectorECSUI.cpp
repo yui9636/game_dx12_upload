@@ -1653,7 +1653,7 @@
 #include "Component/UIButtonComponent.h"
 
 #include "Engine/Editor2DEntityUtils.h"
-#include "Engine/EditorAssetContext.h"
+#include "Hierarchy/HierarchySystem.h"
 #include "Registry/Registry.h"
 #include "System/UndoSystem.h"
 #include "Undo/ComponentUndoAction.h"
@@ -1791,6 +1791,12 @@ namespace {
         return (static_cast<uint64_t>(Entity::GetIndex(entity)) << 32) | Entity::GetGeneration(entity);
     }
 
+    std::unordered_map<uint64_t, RectTransformComponent>& GetTransformRectBeforeSessions()
+    {
+        static std::unordered_map<uint64_t, RectTransformComponent> sessions;
+        return sessions;
+    }
+
     // ------------------------------------------------------------
     // Undo 対応版の値描画ウィジェット
     // 編集開始時に before を記録し、編集終了時に UndoAction を積む。
@@ -1807,20 +1813,57 @@ namespace {
         // 編集開始または値変化時にセッションを開始する。
         if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
             it = sessions.emplace(key, EditSession<TComponent>{ beforeWidget, false }).first;
+            if constexpr (std::is_same_v<TComponent, TransformComponent>) {
+                it->second.before.isDirty = true;
+                if (registry) {
+                    if (auto* rect = registry->GetComponent<RectTransformComponent>(entity)) {
+                        GetTransformRectBeforeSessions()[key] = *rect;
+                    }
+                }
+            }
         }
 
         // 値変化があれば dirty にする。
         if (changed && it != sessions.end()) {
             it->second.dirty = true;
+            if constexpr (std::is_same_v<TComponent, TransformComponent>) {
+                component.isDirty = true;
+                if (registry) {
+                    if (auto* rect = registry->GetComponent<RectTransformComponent>(entity)) {
+                        Editor2D::SyncRectTransformFromTransform(component, *rect);
+                    }
+                    HierarchySystem::MarkDirtyRecursive(entity, *registry);
+                    HierarchySystem hierarchySystem;
+                    hierarchySystem.Update(*registry);
+                }
+            }
         }
 
         // 編集完了後に差分があれば Undo を積む。
         if (it != sessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
             if (it->second.dirty) {
-                UndoSystem::Instance().ExecuteAction(
-                    std::make_unique<ComponentUndoAction<TComponent>>(entity, it->second.before, component),
-                    *registry);
+                if constexpr (std::is_same_v<TComponent, TransformComponent>) {
+                    component.isDirty = true;
+                    auto composite = std::make_unique<CompositeUndoAction>("Transform Change");
+                    composite->Add(std::make_unique<ComponentUndoAction<TComponent>>(entity, it->second.before, component));
+
+                    auto& rectSessions = GetTransformRectBeforeSessions();
+                    auto rectIt = rectSessions.find(key);
+                    auto* rect = registry ? registry->GetComponent<RectTransformComponent>(entity) : nullptr;
+                    if (rect && rectIt != rectSessions.end()) {
+                        composite->Add(std::make_unique<ComponentUndoAction<RectTransformComponent>>(entity, rectIt->second, *rect));
+                    }
+
+                    UndoSystem::Instance().ExecuteAction(std::move(composite), *registry);
+                    rectSessions.erase(key);
+                } else {
+                    UndoSystem::Instance().ExecuteAction(
+                        std::make_unique<ComponentUndoAction<TComponent>>(entity, it->second.before, component),
+                        *registry);
+                }
                 PrefabSystem::MarkPrefabOverride(entity, *registry);
+            } else if constexpr (std::is_same_v<TComponent, TransformComponent>) {
+                GetTransformRectBeforeSessions().erase(key);
             }
             sessions.erase(it);
         }
@@ -2000,7 +2043,7 @@ namespace {
     // Material editor 用テクスチャスロット描画
     // D&D / ポップアップ選択 / クリアに対応。
     // ------------------------------------------------------------
-    bool DrawTextureSlot(const char* label, std::string& texPath) {
+    bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker = true) {
         ImGui::PushID(label);
 
         bool changed = false;
@@ -2051,14 +2094,14 @@ namespace {
             ImGui::EndDragDropTarget();
         }
 
-        // クリックで texture picker を開く。
-        if (clicked) {
+        // Material editor keeps the popup picker; SpriteComponent uses AssetBrowser D&D only.
+        if (clicked && allowPicker) {
             s_texCache.EnsureBuilt();
             ImGui::OpenPopup("##texPicker");
         }
 
         // texture picker popup
-        if (ImGui::BeginPopup("##texPicker")) {
+        if (allowPicker && ImGui::BeginPopup("##texPicker")) {
             static char filterBuf[128] = "";
             ImGui::InputText("Filter", filterBuf, sizeof(filterBuf));
 
@@ -2288,22 +2331,11 @@ namespace {
         }
 
         const SpriteComponent beforeTexture = *sprite;
-        if (DrawTextureSlot("Texture", sprite->textureAssetPath) &&
+        if (DrawTextureSlot("Texture", sprite->textureAssetPath, false) &&
             beforeTexture.textureAssetPath != sprite->textureAssetPath) {
             ExecuteImmediateComponentChange(registry, entity, beforeTexture, *sprite);
             Editor2D::FinalizeCreatedEntity(*registry, entity);
             return;
-        }
-
-        const auto& activeAsset = EditorAssetContext::Instance();
-        if (activeAsset.IsActiveTexture() && activeAsset.GetActiveAssetPath() != sprite->textureAssetPath) {
-            if (ImGui::Button("Use Active Texture")) {
-                const SpriteComponent before = *sprite;
-                sprite->textureAssetPath = activeAsset.GetActiveAssetPath();
-                ExecuteImmediateComponentChange(registry, entity, before, *sprite);
-                Editor2D::FinalizeCreatedEntity(*registry, entity);
-                return;
-            }
         }
 
         auto texture = sprite->textureAssetPath.empty()

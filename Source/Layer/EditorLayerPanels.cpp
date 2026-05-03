@@ -575,34 +575,9 @@ void EditorLayer::DrawGameView()
                     return std::string("No active 2D camera");
                 };
 
-                const ImVec2 restoreCursor = ImGui::GetCursorScreenPos();
                 const ImVec2 overlayPos(imageMin.x + 16.0f, imageMin.y + 16.0f);
                 const std::string cameraStatus = buildCamera2DStatus();
-                ImGui::SetCursorScreenPos(overlayPos);
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.86f, 0.55f, 1.0f));
-                ImGui::BeginGroup();
-                ImGui::TextUnformatted(cameraStatus.c_str());
-                ImGui::PopStyleColor();
-                if (ImGui::SmallButton("Create 2D Camera")) {
-                    if (m_gameLayer) {
-                        Registry& registry = m_gameLayer->GetRegistry();
-                        auto action = std::make_unique<CreateEntityAction>(
-                            BuildCamera2DSnapshot(),
-                            Entity::NULL_ID,
-                            "Create 2D Camera");
-                        auto* actionPtr = action.get();
-                        UndoSystem::Instance().ExecuteAction(std::move(action), registry);
-                        if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
-                            EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
-                        }
-                    }
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Use Scene View Camera")) {
-                    m_gameViewUseSceneViewCameraFallback2D = true;
-                }
-                ImGui::EndGroup();
-                ImGui::SetCursorScreenPos(restoreCursor);
+                ImGui::GetWindowDrawList()->AddText(overlayPos, IM_COL32(255, 219, 140, 230), cameraStatus.c_str());
             }
         }
 
