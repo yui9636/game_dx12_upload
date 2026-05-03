@@ -63,7 +63,7 @@ void UIDamagePopup::Render(const RenderContext& rc)
     float drawScale = 0.5f;
 
     FontManager::Instance().DrawFormat(
-        rc.commandList->GetNativeContext(),
+        rc.commandList,
         "ComboFont",
         screenPos.x, screenPos.y,
         color,

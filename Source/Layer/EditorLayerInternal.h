@@ -1055,6 +1055,7 @@ namespace {
         TextComponent text{};
         text.text = name;
         text.fontAssetPath = fontPath;
+        text.alignment = TextAlignment::Center;
 
         std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
         std::get<std::optional<TransformComponent>>(node.components) = transform;

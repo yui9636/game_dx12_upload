@@ -1,542 +1,565 @@
-#include "System/Misc.h"
 #include "Font.h"
-#include "GpuResourceUtils.h"
+
+#include "Console/Logger.h"
+#include "Graphics.h"
+#include "RHI/IBuffer.h"
+#include "RHI/ICommandList.h"
+#include "RHI/IResourceFactory.h"
+#include "RHI/IShader.h"
+#include "RenderContext/RenderState.h"
+#include "System/PathResolver.h"
+#include "System/ResourceManager.h"
+
+#include <algorithm>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <filesystem>
 
 using namespace DirectX;
 
-// フォント描画に必要なシェーダ・バッファ・状態オブジェクトを作成し、
-// .fnt ファイルを読み込んで文字情報とテクスチャを初期化する。
-Font::Font(ID3D11Device* device, const char* filename, int maxSpriteCount)
+namespace
 {
-    HRESULT hr = S_OK;
+    constexpr const char* kFontVS = "Data\\Shader\\Font_VS.cso";
+    constexpr const char* kFontPS = "Data\\Shader\\Font_PS.cso";
 
-    // 頂点レイアウトを定義する。
-    D3D11_INPUT_ELEMENT_DESC inputElementDesc[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,       0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+    bool IsValidPageIndex(int page, size_t count)
+    {
+        return page >= 0 && static_cast<size_t>(page) < count;
+    }
+}
+
+Font::Font(IResourceFactory* factory, const char* filename, int maxSpriteCount)
+    : m_maxSpriteCount((std::max)(1, maxSpriteCount))
+{
+    XMStoreFloat4x4(&m_currentWorld, XMMatrixIdentity());
+    XMStoreFloat4x4(&m_currentView, XMMatrixIdentity());
+    XMStoreFloat4x4(&m_currentProj, XMMatrixIdentity());
+
+    if (!factory || !filename || filename[0] == '\0') {
+        LOG_WARN("[Font] Invalid font initialization request.");
+        return;
+    }
+
+    m_vertexShader = factory->CreateShader(ShaderType::Vertex, kFontVS);
+    m_pixelShader = factory->CreateShader(ShaderType::Pixel, kFontPS);
+    if (!m_vertexShader || !m_pixelShader) {
+        LOG_WARN("[Font] Failed to create font shaders.");
+        return;
+    }
+
+    const InputLayoutElement inputElements[] = {
+        { "POSITION", 0, TextureFormat::R32G32B32_FLOAT,    0, static_cast<uint32_t>(offsetof(Vertex, position)) },
+        { "COLOR",    0, TextureFormat::R32G32B32A32_FLOAT, 0, static_cast<uint32_t>(offsetof(Vertex, color)) },
+        { "TEXCOORD", 0, TextureFormat::R32G32_FLOAT,       0, static_cast<uint32_t>(offsetof(Vertex, texcoord)) },
     };
-
-    // フォント描画用シェーダを読み込む。
-    GpuResourceUtils::LoadVertexShader(device, "Data\\Shader\\Font_VS.cso", inputElementDesc, ARRAYSIZE(inputElementDesc), inputLayout.GetAddressOf(), vertexShader.GetAddressOf());
-    GpuResourceUtils::LoadPixelShader(device, "Data\\Shader\\Font_PS.cso", pixelShader.GetAddressOf());
-
-    // SDF パラメータ用定数バッファを作成する。
-    {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(SDFData);
-        desc.Usage = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        hr = device->CreateBuffer(&desc, nullptr, sdfConstantBuffer.GetAddressOf());
+    const InputLayoutDesc inputLayoutDesc{
+        inputElements,
+        static_cast<uint32_t>(sizeof(inputElements) / sizeof(inputElements[0]))
+    };
+    m_inputLayout = factory->CreateInputLayout(inputLayoutDesc, m_vertexShader.get());
+    if (!m_inputLayout) {
+        LOG_WARN("[Font] Failed to create font input layout.");
+        return;
     }
 
-    // αブレンド用ステートを作成する。
-    {
-        D3D11_BLEND_DESC desc = {};
-        desc.RenderTarget[0].BlendEnable = TRUE;
-        desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
-        desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
-        desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
-        desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-        desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
-        desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
-        desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        device->CreateBlendState(&desc, blendState.GetAddressOf());
+    m_vertices.resize(static_cast<size_t>(m_maxSpriteCount) * 4u);
+    m_vertexBuffer = factory->CreateBuffer(
+        static_cast<uint32_t>(sizeof(Vertex) * m_vertices.size()),
+        BufferType::Vertex);
+
+    std::vector<uint32_t> indices(static_cast<size_t>(m_maxSpriteCount) * 6u);
+    uint32_t* indexWrite = indices.data();
+    for (uint32_t i = 0; i < static_cast<uint32_t>(m_maxSpriteCount) * 4u; i += 4u) {
+        indexWrite[0] = i + 0u;
+        indexWrite[1] = i + 1u;
+        indexWrite[2] = i + 2u;
+        indexWrite[3] = i + 2u;
+        indexWrite[4] = i + 1u;
+        indexWrite[5] = i + 3u;
+        indexWrite += 6;
+    }
+    m_indexBuffer = factory->CreateBuffer(
+        static_cast<uint32_t>(sizeof(uint32_t) * indices.size()),
+        BufferType::Index,
+        indices.data());
+
+    m_sdfConstantBuffer = factory->CreateBuffer(sizeof(SDFData), BufferType::Constant);
+    m_matrixBuffer = factory->CreateBuffer(sizeof(CBMatrix), BufferType::Constant);
+
+    if (!m_vertexBuffer || !m_indexBuffer || !m_sdfConstantBuffer || !m_matrixBuffer) {
+        LOG_WARN("[Font] Failed to create font buffers.");
+        return;
     }
 
-    // 深度無効の DepthStencilState を作成する。
-    {
-        D3D11_DEPTH_STENCIL_DESC desc = {};
-        desc.DepthEnable = FALSE;
-        desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-        desc.DepthFunc = D3D11_COMPARISON_ALWAYS;
-        device->CreateDepthStencilState(&desc, depthStencilState.GetAddressOf());
+    m_isValid = LoadFontData(factory, filename);
+}
+
+bool Font::LoadFontData(IResourceFactory* /*factory*/, const char* filename)
+{
+    const std::string resolvedFilename = PathResolver::Resolve(filename);
+
+    FILE* fp = nullptr;
+    fopen_s(&fp, resolvedFilename.c_str(), "rb");
+    if (!fp) {
+        LOG_WARN("[Font] FNT file not found: %s", resolvedFilename.c_str());
+        return false;
     }
 
-    // カリング無しのラスタライザステートを作成する。
-    {
-        D3D11_RASTERIZER_DESC desc = {};
-        desc.FrontCounterClockwise = TRUE;
-        desc.FillMode = D3D11_FILL_SOLID;
-        desc.CullMode = D3D11_CULL_NONE;
-        device->CreateRasterizerState(&desc, rasterizerState.GetAddressOf());
-    }
-
-    // 線形サンプラを作成する。
-    {
-        D3D11_SAMPLER_DESC desc = {};
-        desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-        desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-        desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-        desc.MaxLOD = D3D11_FLOAT32_MAX;
-        device->CreateSamplerState(&desc, samplerState.GetAddressOf());
-    }
-
-    // ワールド・ビュー・射影行列用の定数バッファを作成する。
-    {
-        D3D11_BUFFER_DESC desc = {};
-        desc.ByteWidth = sizeof(CBMatrix);
-        desc.Usage = D3D11_USAGE_DYNAMIC;
-        desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        hr = device->CreateBuffer(&desc, nullptr, matrixBuffer.GetAddressOf());
-    }
-
-    // 動的頂点バッファを作成する。
-    {
-        D3D11_BUFFER_DESC bufferDesc = {};
-        bufferDesc.ByteWidth = static_cast<UINT>(sizeof(Vertex) * maxSpriteCount * 4);
-        bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-        bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-        device->CreateBuffer(&bufferDesc, nullptr, vertexBuffer.GetAddressOf());
-    }
-
-    // インデックスバッファを作成する。
-    // 1文字 = 4頂点 / 6インデックス の固定構造にしておく。
-    {
-        std::unique_ptr<UINT[]> indices = std::make_unique<UINT[]>(maxSpriteCount * 6);
-        UINT* p = indices.get();
-        for (int i = 0; i < maxSpriteCount * 4; i += 4) {
-            p[0] = i + 0; p[1] = i + 1; p[2] = i + 2;
-            p[3] = i + 2; p[4] = i + 1; p[5] = i + 3;
-            p += 6;
-        }
-
-        D3D11_BUFFER_DESC bufferDesc = {};
-        bufferDesc.ByteWidth = static_cast<UINT>(sizeof(UINT) * maxSpriteCount * 6);
-        bufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-        bufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-        D3D11_SUBRESOURCE_DATA initData = { indices.get(), 0, 0 };
-        device->CreateBuffer(&bufferDesc, &initData, indexBuffer.GetAddressOf());
-    }
-
-    // ---------------------------------------------------
-    // .fnt ファイルを読み込んで文字情報を構築する。
-    // ---------------------------------------------------
-    {
-        FILE* fp = nullptr;
-        fopen_s(&fp, filename, "rb");
-        _ASSERT_EXPR_A(fp, "FNT File not found");
-
-        // ファイル全体をメモリへ読み込む。
-        fseek(fp, 0, SEEK_END);
-        long fntSize = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-
-        std::unique_ptr<char[]> fntData = std::make_unique<char[]>(fntSize + 1);
-        fread(fntData.get(), fntSize, 1, fp);
-        fntData[fntSize] = '\0';
+    fseek(fp, 0, SEEK_END);
+    const long fntSize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    if (fntSize <= 0) {
         fclose(fp);
+        LOG_WARN("[Font] Empty FNT file: %s", resolvedFilename.c_str());
+        return false;
+    }
 
-        // フォント画像への相対パス解決用にディレクトリ名を抜き出す。
-        char dirname[256];
-        _splitpath_s(filename, nullptr, 0, dirname, 256, nullptr, 0, nullptr, 0);
+    std::vector<char> fntData(static_cast<size_t>(fntSize) + 1u, '\0');
+    fread(fntData.data(), static_cast<size_t>(fntSize), 1, fp);
+    fclose(fp);
 
-        // 文字索引テーブルを初期化する。
-        characterInfos.resize(0xFFFF);
-        characterIndices.resize(0xFFFF);
-        memset(characterIndices.data(), 0, sizeof(WORD) * characterIndices.size());
+    const std::filesystem::path fontPath(resolvedFilename);
+    const std::filesystem::path fontDir = fontPath.parent_path();
 
-        char* lineContext = nullptr;
-        char* line = strtok_s(fntData.get(), "\r\n", &lineContext);
+    m_characterInfos.assign(0x10000, CharacterInfo{});
+    m_characterIndices.assign(0x10000, CharacterInfo::NonCode);
 
-        int charInfoIndex = 1;
-        float scaleW = 1.0f;
-        float scaleH = 1.0f;
+    char* lineContext = nullptr;
+    char* line = strtok_s(fntData.data(), "\r\n", &lineContext);
 
-        while (line)
+    int charInfoIndex = 1;
+    float scaleW = 1.0f;
+    float scaleH = 1.0f;
+
+    while (line)
+    {
+        if (strncmp(line, "common", 6) == 0)
         {
-            // common 行: フォント全体の基本情報を取得する。
-            if (strncmp(line, "common", 6) == 0)
+            char* tokenCtx = nullptr;
+            char* token = strtok_s(line, " ", &tokenCtx);
+            int pages = 0;
+
+            while (token)
             {
-                char* tokenCtx = nullptr;
-                char* token = strtok_s(line, " ", &tokenCtx);
-                int pages = 0;
-
-                while (token)
-                {
-                    if (strncmp(token, "lineHeight=", 11) == 0) fontHeight = (float)atoi(token + 11);
-                    else if (strncmp(token, "scaleW=", 7) == 0) scaleW = (float)atoi(token + 7);
-                    else if (strncmp(token, "scaleH=", 7) == 0) scaleH = (float)atoi(token + 7);
-                    else if (strncmp(token, "pages=", 6) == 0)  pages = atoi(token + 6);
-
-                    token = strtok_s(nullptr, " ", &tokenCtx);
+                if (strncmp(token, "lineHeight=", 11) == 0) {
+                    m_fontHeight = static_cast<float>(atoi(token + 11));
+                } else if (strncmp(token, "scaleW=", 7) == 0) {
+                    scaleW = static_cast<float>(atoi(token + 7));
+                } else if (strncmp(token, "scaleH=", 7) == 0) {
+                    scaleH = static_cast<float>(atoi(token + 7));
+                } else if (strncmp(token, "pages=", 6) == 0) {
+                    pages = atoi(token + 6);
                 }
 
-                fontWidth = scaleW;
-                textureCount = pages;
-                shaderResourceViews.resize(pages);
+                token = strtok_s(nullptr, " ", &tokenCtx);
             }
-            // page 行: 各ページ画像を読み込む。
-            else if (strncmp(line, "page", 4) == 0)
+
+            m_fontWidth = scaleW;
+            m_textureCount = pages;
+            m_textures.assign(static_cast<size_t>((std::max)(0, pages)), nullptr);
+        }
+        else if (strncmp(line, "page", 4) == 0)
+        {
+            int id = 0;
+            char* pId = strstr(line, "id=");
+            if (pId) {
+                id = atoi(pId + 3);
+            }
+
+            char* pFile = strstr(line, "file=\"");
+            if (pFile && IsValidPageIndex(id, m_textures.size()))
             {
-                int id = 0;
-                char fname[256] = {};
-
-                char* pId = strstr(line, "id=");
-                if (pId) id = atoi(pId + 3);
-
-                char* pFile = strstr(line, "file=\"");
-                if (pFile)
+                pFile += 6;
+                char* pQuote = strchr(pFile, '\"');
+                if (pQuote)
                 {
-                    pFile += 6;
-                    char* pQuote = strchr(pFile, '\"');
-                    if (pQuote)
-                    {
-                        *pQuote = '\0';
-                        char fullpath[256];
-                        _makepath_s(fullpath, 256, nullptr, dirname, pFile, nullptr);
-
-                        hr = GpuResourceUtils::LoadTexture(device, fullpath, shaderResourceViews.at(id).GetAddressOf());
-                        _ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
+                    *pQuote = '\0';
+                    std::filesystem::path pagePath = fontDir / pFile;
+                    pagePath = pagePath.lexically_normal();
+                    m_textures[static_cast<size_t>(id)] = ResourceManager::Instance().GetTexture(pagePath.string());
+                    if (!m_textures[static_cast<size_t>(id)]) {
+                        LOG_WARN("[Font] Failed to load font texture page: %s", pagePath.string().c_str());
                     }
                 }
             }
-            // chars 行: 総文字数を取得する。
-            else if (strncmp(line, "chars", 5) == 0)
+        }
+        else if (strncmp(line, "chars", 5) == 0)
+        {
+            char* pCount = strstr(line, "count=");
+            if (pCount)
             {
-                char* pCount = strstr(line, "count=");
-                if (pCount)
-                {
-                    int count = atoi(pCount + 6);
-                    characterCount = count + 1;
-                    characterInfos.resize(characterCount);
-                }
+                const int count = atoi(pCount + 6);
+                m_characterCount = count + 1;
+                m_characterInfos.assign(static_cast<size_t>((std::max)(1, m_characterCount)), CharacterInfo{});
             }
-            // char 行: 各文字の矩形とオフセット情報を取り込む。
-            else if (strncmp(line, "char", 4) == 0)
+        }
+        else if (strncmp(line, "char", 4) == 0)
+        {
+            int id = 0;
+            int x = 0;
+            int y = 0;
+            int width = 0;
+            int height = 0;
+            int xoffset = 0;
+            int yoffset = 0;
+            int xadvance = 0;
+            int page = 0;
+
+            char* tokenCtx = nullptr;
+            char* token = strtok_s(line, " ", &tokenCtx);
+
+            while (token)
             {
-                int id = 0, x = 0, y = 0, width = 0, height = 0;
-                int xoffset = 0, yoffset = 0, xadvance = 0, page = 0;
-
-                char* tokenCtx = nullptr;
-                char* token = strtok_s(line, " ", &tokenCtx);
-
-                while (token)
-                {
-                    if (strncmp(token, "id=", 3) == 0)       id = atoi(token + 3);
-                    else if (strncmp(token, "x=", 2) == 0)   x = atoi(token + 2);
-                    else if (strncmp(token, "y=", 2) == 0)   y = atoi(token + 2);
-                    else if (strncmp(token, "width=", 6) == 0)  width = atoi(token + 6);
-                    else if (strncmp(token, "height=", 7) == 0) height = atoi(token + 7);
-                    else if (strncmp(token, "xoffset=", 8) == 0) xoffset = atoi(token + 8);
-                    else if (strncmp(token, "yoffset=", 8) == 0) yoffset = atoi(token + 8);
-                    else if (strncmp(token, "xadvance=", 9) == 0) xadvance = atoi(token + 9);
-                    else if (strncmp(token, "page=", 5) == 0) page = atoi(token + 5);
-
-                    token = strtok_s(nullptr, " ", &tokenCtx);
+                if (strncmp(token, "id=", 3) == 0) {
+                    id = atoi(token + 3);
+                } else if (strncmp(token, "x=", 2) == 0) {
+                    x = atoi(token + 2);
+                } else if (strncmp(token, "y=", 2) == 0) {
+                    y = atoi(token + 2);
+                } else if (strncmp(token, "width=", 6) == 0) {
+                    width = atoi(token + 6);
+                } else if (strncmp(token, "height=", 7) == 0) {
+                    height = atoi(token + 7);
+                } else if (strncmp(token, "xoffset=", 8) == 0) {
+                    xoffset = atoi(token + 8);
+                } else if (strncmp(token, "yoffset=", 8) == 0) {
+                    yoffset = atoi(token + 8);
+                } else if (strncmp(token, "xadvance=", 9) == 0) {
+                    xadvance = atoi(token + 9);
+                } else if (strncmp(token, "page=", 5) == 0) {
+                    page = atoi(token + 5);
                 }
 
-                if (id > 0 && id < 0x10000 && charInfoIndex < characterInfos.size())
-                {
-                    characterIndices.at(id) = static_cast<WORD>(charInfoIndex);
-                    CharacterInfo& info = characterInfos.at(charInfoIndex);
-
-                    info.left = static_cast<float>(x) / scaleW;
-                    info.top = static_cast<float>(y) / scaleH;
-                    info.right = static_cast<float>(x + width) / scaleW;
-                    info.bottom = static_cast<float>(y + height) / scaleH;
-                    info.xoffset = static_cast<float>(xoffset);
-                    info.yoffset = static_cast<float>(yoffset);
-                    info.xadvance = static_cast<float>(xadvance);
-                    info.width = static_cast<float>(width);
-                    info.height = static_cast<float>(height);
-                    info.page = page;
-                    info.ascii = (id < 0x100);
-
-                    charInfoIndex++;
-                }
+                token = strtok_s(nullptr, " ", &tokenCtx);
             }
 
-            line = strtok_s(nullptr, "\r\n", &lineContext);
+            if (id > 0 && id < static_cast<int>(m_characterIndices.size()) &&
+                charInfoIndex < static_cast<int>(m_characterInfos.size()))
+            {
+                m_characterIndices[static_cast<size_t>(id)] = static_cast<uint16_t>(charInfoIndex);
+                CharacterInfo& info = m_characterInfos[static_cast<size_t>(charInfoIndex)];
+
+                info.left = scaleW != 0.0f ? static_cast<float>(x) / scaleW : 0.0f;
+                info.top = scaleH != 0.0f ? static_cast<float>(y) / scaleH : 0.0f;
+                info.right = scaleW != 0.0f ? static_cast<float>(x + width) / scaleW : 0.0f;
+                info.bottom = scaleH != 0.0f ? static_cast<float>(y + height) / scaleH : 0.0f;
+                info.xoffset = static_cast<float>(xoffset);
+                info.yoffset = static_cast<float>(yoffset);
+                info.xadvance = static_cast<float>(xadvance);
+                info.width = static_cast<float>(width);
+                info.height = static_cast<float>(height);
+                info.page = page;
+                info.ascii = (id < 0x100);
+
+                ++charInfoIndex;
+            }
         }
 
-        // 特殊コードを予約登録する。
-        characterIndices.at(0x00) = CharacterInfo::EndCode;
-        characterIndices.at(0x0a) = CharacterInfo::ReturnCode;
-        characterIndices.at(0x09) = CharacterInfo::TabCode;
-        characterIndices.at(0x20) = CharacterInfo::SpaceCode;
+        line = strtok_s(nullptr, "\r\n", &lineContext);
     }
+
+    m_characterIndices[0x00] = CharacterInfo::EndCode;
+    m_characterIndices[0x0a] = CharacterInfo::ReturnCode;
+    m_characterIndices[0x09] = CharacterInfo::TabCode;
+    m_characterIndices[0x20] = CharacterInfo::SpaceCode;
+
+    return !m_textures.empty() &&
+        std::any_of(m_textures.begin(), m_textures.end(), [](const std::shared_ptr<ITexture>& texture) {
+            return texture != nullptr;
+        });
 }
 
-// SDF フォント描画用のしきい値とぼかし量を設定する。
 void Font::SetSDFParams(float threshold, float softness)
 {
-    sdfThreshold = threshold;
-    sdfSoftness = softness;
+    m_sdfThreshold = threshold;
+    m_sdfSoftness = softness;
 }
 
-// 描画開始。
-// SDF 定数を更新し、頂点バッファを Map して書き込み開始状態にする。
-void Font::Begin(ID3D11DeviceContext* context)
+void Font::Begin(ICommandList* /*commandList*/, float viewportWidth, float viewportHeight)
 {
-    D3D11_VIEWPORT viewport;
-    UINT num_viewports = 1;
-    context->RSGetViewports(&num_viewports, &viewport);
-    screenWidth = viewport.Width;
-    screenHeight = viewport.Height;
-
-    // SDF パラメータを GPU へ反映する。
-    D3D11_MAPPED_SUBRESOURCE ms;
-    if (SUCCEEDED(context->Map(sdfConstantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
-    {
-        SDFData* data = reinterpret_cast<SDFData*>(ms.pData);
-        data->Color = fontColor;
-        data->Threshold = sdfThreshold;
-        data->Softness = sdfSoftness;
-        context->Unmap(sdfConstantBuffer.Get(), 0);
+    if (!m_isValid || m_vertices.empty()) {
+        return;
     }
 
-    // 頂点バッファを開いて書き込み開始位置を設定する。
-    context->Map(vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms);
-    currentVertex = reinterpret_cast<Vertex*>(ms.pData);
-    currentIndexCount = 0;
-    currentPage = -1;
-    subsets.clear();
-
-    is3DMode = false;
+    m_screenWidth = viewportWidth;
+    m_screenHeight = viewportHeight;
+    m_currentVertex = m_vertices.data();
+    m_currentIndexCount = 0;
+    m_currentPage = -1;
+    m_subsets.clear();
+    m_is3DMode = false;
 }
 
-// 2D テキストを描画キューへ積む。
-// 実際の DrawIndexed は End でまとめて行う。
+void Font::PushSubsetIfNeeded(int page)
+{
+    if (m_currentPage == page) {
+        return;
+    }
+
+    m_currentPage = page;
+    Subset subset;
+    if (IsValidPageIndex(page, m_textures.size()) && m_textures[static_cast<size_t>(page)]) {
+        subset.texture = m_textures[static_cast<size_t>(page)].get();
+    }
+    subset.startIndex = m_currentIndexCount;
+    subset.indexCount = 0;
+    m_subsets.emplace_back(subset);
+}
+
+void Font::AddGlyphQuad(float x, float y, const CharacterInfo& info, bool ndc2D)
+{
+    if (!m_currentVertex) {
+        return;
+    }
+    if (m_currentIndexCount + 6u > static_cast<uint32_t>(m_maxSpriteCount) * 6u) {
+        return;
+    }
+
+    const float positionX = x + info.xoffset * m_scaleX;
+    const float positionY = ndc2D ? y + info.yoffset * m_scaleY : y - info.yoffset * m_scaleY;
+    const float width = info.width * m_scaleX;
+    const float height = info.height * m_scaleY;
+
+    if (ndc2D)
+    {
+        m_currentVertex[0].position = { positionX,         positionY,          0.0f };
+        m_currentVertex[1].position = { positionX + width, positionY,          0.0f };
+        m_currentVertex[2].position = { positionX,         positionY + height, 0.0f };
+        m_currentVertex[3].position = { positionX + width, positionY + height, 0.0f };
+    }
+    else
+    {
+        m_currentVertex[0].position = { positionX,         positionY,          0.0f };
+        m_currentVertex[1].position = { positionX + width, positionY,          0.0f };
+        m_currentVertex[2].position = { positionX,         positionY - height, 0.0f };
+        m_currentVertex[3].position = { positionX + width, positionY - height, 0.0f };
+    }
+
+    m_currentVertex[0].texcoord = { info.left,  info.top };
+    m_currentVertex[1].texcoord = { info.right, info.top };
+    m_currentVertex[2].texcoord = { info.left,  info.bottom };
+    m_currentVertex[3].texcoord = { info.right, info.bottom };
+
+    for (int j = 0; j < 4; ++j)
+    {
+        m_currentVertex[j].color = DirectX::XMFLOAT4(1, 1, 1, 1);
+
+        if (ndc2D && m_screenWidth > 0.0f && m_screenHeight > 0.0f)
+        {
+            m_currentVertex[j].position.x = 2.0f * m_currentVertex[j].position.x / m_screenWidth - 1.0f;
+            m_currentVertex[j].position.y = 1.0f - 2.0f * m_currentVertex[j].position.y / m_screenHeight;
+        }
+    }
+
+    m_currentVertex += 4;
+    m_currentIndexCount += 6;
+}
+
 void Font::Draw(float x, float y, const wchar_t* string)
 {
-    size_t length = wcslen(string);
-    float start_x = x;
+    if (!m_isValid || !string) {
+        return;
+    }
 
-    float space = 20.0f * scaleX;
+    const size_t length = wcslen(string);
+    const float startX = x;
+    const float space = 20.0f * m_scaleX;
 
     for (size_t i = 0; i < length; ++i)
     {
-        WORD word = static_cast<WORD>(string[i]);
-        if (word >= characterIndices.size()) continue;
-        WORD code = characterIndices.at(word);
-
-        // 特殊文字処理。
-        if (code == CharacterInfo::EndCode) break;
-        else if (code == CharacterInfo::ReturnCode) { x = start_x; y += fontHeight * scaleY; continue; }
-        else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
-        else if (code == CharacterInfo::SpaceCode) { x += space; continue; }
-
-        if (code == 0) continue;
-
-        const CharacterInfo& info = characterInfos.at(code);
-
-        float positionX = x + info.xoffset * scaleX;
-        float positionY = y + info.yoffset * scaleY;
-        float width = info.width * scaleX;
-        float height = info.height * scaleY;
-
-        // 4頂点分の矩形を組み立てる。
-        currentVertex[0].position = { positionX,         positionY,          0.0f };
-        currentVertex[1].position = { positionX + width, positionY,          0.0f };
-        currentVertex[2].position = { positionX,         positionY + height, 0.0f };
-        currentVertex[3].position = { positionX + width, positionY + height, 0.0f };
-
-        currentVertex[0].texcoord = { info.left,  info.top };
-        currentVertex[1].texcoord = { info.right, info.top };
-        currentVertex[2].texcoord = { info.left,  info.bottom };
-        currentVertex[3].texcoord = { info.right, info.bottom };
-
-        // 2D はスクリーン座標から NDC へ変換する。
-        for (int j = 0; j < 4; ++j)
-        {
-            currentVertex[j].color = DirectX::XMFLOAT4(1, 1, 1, 1);
-
-            currentVertex[j].position.x = 2.0f * currentVertex[j].position.x / screenWidth - 1.0f;
-            currentVertex[j].position.y = 1.0f - 2.0f * currentVertex[j].position.y / screenHeight;
+        const uint16_t word = static_cast<uint16_t>(string[i]);
+        if (word >= m_characterIndices.size()) {
+            continue;
         }
 
-        currentVertex += 4;
-        x += info.xadvance * scaleX;
-
-        // ページが切り替わったら新しい subset を作る。
-        if (currentPage != info.page)
-        {
-            currentPage = info.page;
-            Subset subset;
-            subset.shaderResourceView = shaderResourceViews.at(info.page).Get();
-            subset.startIndex = currentIndexCount;
-            subset.indexCount = 0;
-            subsets.emplace_back(subset);
+        const uint16_t code = m_characterIndices[word];
+        if (code == CharacterInfo::EndCode) {
+            break;
+        }
+        if (code == CharacterInfo::ReturnCode) {
+            x = startX;
+            y += m_fontHeight * m_scaleY;
+            continue;
+        }
+        if (code == CharacterInfo::TabCode) {
+            x += space * 4.0f;
+            continue;
+        }
+        if (code == CharacterInfo::SpaceCode) {
+            x += space;
+            continue;
+        }
+        if (code == CharacterInfo::NonCode || code >= m_characterInfos.size()) {
+            continue;
         }
 
-        currentIndexCount += 6;
+        const CharacterInfo& info = m_characterInfos[code];
+        PushSubsetIfNeeded(info.page);
+        AddGlyphQuad(x, y, info, true);
+        x += info.xadvance * m_scaleX;
     }
 }
 
-// 3D 空間上のテキストを描画キューへ積む。
 void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CXMMATRIX projection, const wchar_t* string)
 {
-    is3DMode = true;
+    if (!m_isValid || !string) {
+        return;
+    }
 
-    XMStoreFloat4x4(&currentWorld, XMMatrixTranspose(world));
-    XMStoreFloat4x4(&currentView, XMMatrixTranspose(view));
-    XMStoreFloat4x4(&currentProj, XMMatrixTranspose(projection));
+    m_is3DMode = true;
+    XMStoreFloat4x4(&m_currentWorld, XMMatrixTranspose(world));
+    XMStoreFloat4x4(&m_currentView, XMMatrixTranspose(view));
+    XMStoreFloat4x4(&m_currentProj, XMMatrixTranspose(projection));
 
-    size_t length = wcslen(string);
+    const size_t length = wcslen(string);
     float x = 0.0f;
     float y = 0.0f;
-    float start_x = x;
-    float space = 20.0f * scaleX;
+    const float startX = x;
+    const float space = 20.0f * m_scaleX;
 
     for (size_t i = 0; i < length; ++i)
     {
-        WORD word = static_cast<WORD>(string[i]);
-        if (word >= characterIndices.size()) continue;
-        WORD code = characterIndices.at(word);
-
-        // 特殊文字処理。
-        if (code == CharacterInfo::EndCode) break;
-        else if (code == CharacterInfo::ReturnCode) { x = start_x; y -= fontHeight * scaleY; continue; }
-        else if (code == CharacterInfo::TabCode) { x += space * 4; continue; }
-        else if (code == CharacterInfo::SpaceCode) { x += space; continue; }
-
-        if (code == 0) continue;
-
-        const CharacterInfo& info = characterInfos.at(code);
-
-        float positionX = x + info.xoffset * scaleX;
-        float positionY = y - info.yoffset * scaleY;
-
-        float width = info.width * scaleX;
-        float height = info.height * scaleY;
-
-        // 3D 空間用の矩形を組み立てる。
-        currentVertex[0].position = { positionX,         positionY,          0.0f };
-        currentVertex[1].position = { positionX + width, positionY,          0.0f };
-        currentVertex[2].position = { positionX,         positionY - height, 0.0f };
-        currentVertex[3].position = { positionX + width, positionY - height, 0.0f };
-
-        currentVertex[0].texcoord = { info.left,  info.top };
-        currentVertex[1].texcoord = { info.right, info.top };
-        currentVertex[2].texcoord = { info.left,  info.bottom };
-        currentVertex[3].texcoord = { info.right, info.bottom };
-
-        for (int j = 0; j < 4; ++j)
-        {
-            currentVertex[j].color = DirectX::XMFLOAT4(1, 1, 1, 1);
+        const uint16_t word = static_cast<uint16_t>(string[i]);
+        if (word >= m_characterIndices.size()) {
+            continue;
         }
 
-        currentVertex += 4;
-        x += info.xadvance * scaleX;
-
-        // ページごとに subset を分ける。
-        if (currentPage != info.page)
-        {
-            currentPage = info.page;
-            Subset subset;
-            subset.shaderResourceView = shaderResourceViews.at(info.page).Get();
-            subset.startIndex = currentIndexCount;
-            subset.indexCount = 0;
-            subsets.emplace_back(subset);
+        const uint16_t code = m_characterIndices[word];
+        if (code == CharacterInfo::EndCode) {
+            break;
+        }
+        if (code == CharacterInfo::ReturnCode) {
+            x = startX;
+            y -= m_fontHeight * m_scaleY;
+            continue;
+        }
+        if (code == CharacterInfo::TabCode) {
+            x += space * 4.0f;
+            continue;
+        }
+        if (code == CharacterInfo::SpaceCode) {
+            x += space;
+            continue;
+        }
+        if (code == CharacterInfo::NonCode || code >= m_characterInfos.size()) {
+            continue;
         }
 
-        currentIndexCount += 6;
+        const CharacterInfo& info = m_characterInfos[code];
+        PushSubsetIfNeeded(info.page);
+        AddGlyphQuad(x, y, info, false);
+        x += info.xadvance * m_scaleX;
     }
 }
 
-// 文字列の横幅を概算で返す。
-float Font::GetTextWidth(const wchar_t* string)
+float Font::GetTextWidth(const wchar_t* string) const
 {
+    if (!string) {
+        return 0.0f;
+    }
+
     float width = 0.0f;
-    size_t length = wcslen(string);
+    const size_t length = wcslen(string);
 
     for (size_t i = 0; i < length; ++i)
     {
-        WORD word = static_cast<WORD>(string[i]);
-        if (word >= characterIndices.size()) continue;
-        WORD code = characterIndices.at(word);
+        const uint16_t word = static_cast<uint16_t>(string[i]);
+        if (word >= m_characterIndices.size()) {
+            continue;
+        }
 
-        if (code == CharacterInfo::SpaceCode) { width += 20.0f; continue; }
-        if (code == CharacterInfo::TabCode) { width += 80.0f; continue; }
-        if (code == 0 || code >= CharacterInfo::ReturnCode) continue;
+        const uint16_t code = m_characterIndices[word];
+        if (code == CharacterInfo::SpaceCode) {
+            width += 20.0f;
+            continue;
+        }
+        if (code == CharacterInfo::TabCode) {
+            width += 80.0f;
+            continue;
+        }
+        if (code == CharacterInfo::NonCode || code >= CharacterInfo::ReturnCode || code >= m_characterInfos.size()) {
+            continue;
+        }
 
-        const CharacterInfo& info = characterInfos.at(code);
-        width += info.xadvance;
+        width += m_characterInfos[code].xadvance;
     }
+
     return width;
 }
 
-// 描画終了。
-// 頂点バッファを Unmap し、subset ごとに SRV を切り替えながら DrawIndexed する。
-void Font::End(ID3D11DeviceContext* context)
+void Font::End(ICommandList* commandList)
 {
-    context->Unmap(vertexBuffer.Get(), 0);
+    if (!m_isValid || !commandList || m_currentIndexCount == 0) {
+        m_currentVertex = nullptr;
+        return;
+    }
 
-    // subset ごとの indexCount を確定する。
-    if (!subsets.empty())
+    if (!m_subsets.empty())
     {
-        size_t size = subsets.size();
+        const size_t size = m_subsets.size();
         for (size_t i = 1; i < size; ++i)
         {
-            subsets.at(i - 1).indexCount = subsets.at(i).startIndex - subsets.at(i - 1).startIndex;
+            m_subsets[i - 1].indexCount = m_subsets[i].startIndex - m_subsets[i - 1].startIndex;
         }
-        subsets.back().indexCount = currentIndexCount - subsets.back().startIndex;
+        m_subsets.back().indexCount = m_currentIndexCount - m_subsets.back().startIndex;
     }
 
-    // シェーダと入力レイアウトを設定する。
-    context->VSSetShader(vertexShader.Get(), nullptr, 0);
-    context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->IASetInputLayout(inputLayout.Get());
+    const uint32_t vertexCount = (m_currentIndexCount / 6u) * 4u;
+    commandList->UpdateBuffer(m_vertexBuffer.get(), m_vertices.data(), vertexCount * static_cast<uint32_t>(sizeof(Vertex)));
 
-    // SDF 定数バッファを PS に渡す。
-    context->PSSetConstantBuffers(0, 1, sdfConstantBuffer.GetAddressOf());
+    SDFData sdfData{};
+    sdfData.Color = m_fontColor;
+    sdfData.Threshold = m_sdfThreshold;
+    sdfData.Softness = m_sdfSoftness;
+    commandList->UpdateBuffer(m_sdfConstantBuffer.get(), &sdfData, sizeof(sdfData));
 
-    // 2D / 3D に応じた行列を設定する。
-    D3D11_MAPPED_SUBRESOURCE ms;
-    if (SUCCEEDED(context->Map(matrixBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &ms)))
+    CBMatrix matrixData{};
+    if (m_is3DMode)
     {
-        CBMatrix* data = reinterpret_cast<CBMatrix*>(ms.pData);
-
-        if (is3DMode)
-        {
-            data->World = currentWorld;
-            data->View = currentView;
-            data->Projection = currentProj;
-        }
-        else
-        {
-            XMMATRIX I = XMMatrixIdentity();
-            XMFLOAT4X4 identity;
-            XMStoreFloat4x4(&identity, XMMatrixTranspose(I));
-
-            data->World = identity;
-            data->View = identity;
-            data->Projection = identity;
-        }
-
-        context->Unmap(matrixBuffer.Get(), 0);
+        matrixData.World = m_currentWorld;
+        matrixData.View = m_currentView;
+        matrixData.Projection = m_currentProj;
     }
-    context->VSSetConstantBuffers(1, 1, matrixBuffer.GetAddressOf());
-
-    // 描画ステートを設定する。
-    const float blend_factor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    context->OMSetBlendState(blendState.Get(), blend_factor, 0xFFFFFFFF);
-    context->OMSetDepthStencilState(depthStencilState.Get(), 0);
-    context->RSSetState(rasterizerState.Get());
-    context->PSSetSamplers(0, 1, samplerState.GetAddressOf());
-
-    UINT stride = sizeof(Vertex);
-    UINT offset = 0;
-    context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
-    context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
-    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    // subset 単位でテクスチャを切り替えて描画する。
-    for (const auto& subset : subsets)
+    else
     {
-        if (subset.shaderResourceView)
+        XMFLOAT4X4 identity;
+        XMStoreFloat4x4(&identity, XMMatrixTranspose(XMMatrixIdentity()));
+        matrixData.World = identity;
+        matrixData.View = identity;
+        matrixData.Projection = identity;
+    }
+    commandList->UpdateBuffer(m_matrixBuffer.get(), &matrixData, sizeof(matrixData));
+
+    commandList->VSSetShader(m_vertexShader.get());
+    commandList->PSSetShader(m_pixelShader.get());
+    commandList->SetInputLayout(m_inputLayout.get());
+    commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleList);
+    commandList->SetVertexBuffer(0, m_vertexBuffer.get(), sizeof(Vertex), 0);
+    commandList->SetIndexBuffer(m_indexBuffer.get(), IndexFormat::Uint32, 0);
+    commandList->PSSetConstantBuffer(0, m_sdfConstantBuffer.get());
+    commandList->VSSetConstantBuffer(1, m_matrixBuffer.get());
+
+    if (RenderState* renderState = Graphics::Instance().GetRenderState())
+    {
+        const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        commandList->SetBlendState(renderState->GetBlendState(BlendState::Transparency), blendFactor, 0xFFFFFFFF);
+        commandList->SetDepthStencilState(renderState->GetDepthStencilState(DepthState::NoTestNoWrite), 0);
+        commandList->SetRasterizerState(renderState->GetRasterizerState(RasterizerState::SolidCullNone));
+        commandList->PSSetSampler(0, renderState->GetSamplerState(SamplerState::LinearWrap));
+    }
+
+    for (const auto& subset : m_subsets)
+    {
+        if (subset.texture && subset.indexCount > 0)
         {
-            context->PSSetShaderResources(0, 1, &subset.shaderResourceView);
-            context->DrawIndexed(subset.indexCount, subset.startIndex, 0);
+            commandList->PSSetTexture(0, subset.texture);
+            commandList->DrawIndexed(subset.indexCount, subset.startIndex, 0);
         }
     }
+
+    commandList->PSSetTexture(0, nullptr);
+    m_currentVertex = nullptr;
 }

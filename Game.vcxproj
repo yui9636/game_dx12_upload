@@ -217,6 +217,8 @@
     <ClInclude Include="Source\Font\FontManager.h" />
     <ClInclude Include="Source\FrameBuffer.h" />
     <ClInclude Include="Source\Component\UIButtonComponent.h" />
+    <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h" />
+    <ClInclude Include="Source\GameLoop\GameLoopScenePicker.h" />
     <ClInclude Include="Source\Generated\ComponentMeta.generated.h" />
     <ClInclude Include="Source\AI\AggroComponent.h" />
     <ClInclude Include="Source\AI\BehaviorTreeAsset.h" />
@@ -537,6 +539,14 @@
     <ClCompile Include="Source\Collision\CollisionManager.cpp" />
     <ClCompile Include="Source\Collision\CollisionSystem.cpp" />
     <ClCompile Include="Source\Component\ComponentColumn.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelCommands.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelGraph.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInput.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInspector.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInternal.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelPicker.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelUtility.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopScenePicker.cpp" />
     <ClCompile Include="Source\Transform\NodeAttachmentSystem.cpp" />
     <ClCompile Include="Source\Transform\NodeAttachmentUtils.cpp" />
     <ClCompile Include="Source\Console\Console.cpp" />
@@ -1178,5 +1188,3 @@
     <Error Condition="!Exists('packages\directxtk_desktop_win10.2025.3.21.2\build\native\directxtk_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\directxtk_desktop_win10.2025.3.21.2\build\native\directxtk_desktop_win10.targets'))" />
   </Target>
 </Project>
-
-

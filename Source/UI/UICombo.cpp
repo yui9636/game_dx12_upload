@@ -63,7 +63,7 @@ void UICombo::Render(const RenderContext& rc)
     float numberScale = 1.5f;
 
     FontManager::Instance().DrawFormat(
-        rc.commandList->GetNativeContext(),
+        rc.commandList,
         "ComboFont",
         drawX, drawY,
         color,
@@ -75,7 +75,7 @@ void UICombo::Render(const RenderContext& rc)
     // ---------------------------------------------------
     // ---------------------------------------------------
     FontManager::Instance().DrawFormat(
-        rc.commandList->GetNativeContext(),
+        rc.commandList,
         "ComboFont",
         drawX + 5.0f, drawY + 60.0f,
         { 1.0f, 1.0f, 1.0f, alpha * 0.8f },

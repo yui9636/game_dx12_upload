@@ -1584,6 +1584,7 @@
 #include "Engine/EditorSelection.h"
 #include "Engine/EngineKernel.h"
 #include "System/ResourceManager.h"
+#include "Font/FontManager.h"
 #include "Material/MaterialPreviewStudio.h"
 #include "Material/MaterialAsset.h"
 #include "Asset/ThumbnailGenerator.h"
@@ -1663,11 +1664,15 @@
 #include <imgui.h>
 #include <filesystem>
 #include <algorithm>
+#include <cctype>
+#include <cfloat>
+#include <cstring>
 #include <fstream>
 #include <memory>
 #include <optional>
 #include <type_traits>
 #include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -2211,21 +2216,22 @@ namespace {
         PrefabSystem::MarkPrefabOverride(entity, *registry);
     }
 
+    template <typename TComponent>
     bool DrawUndoableColorEdit4(Registry* registry,
                                 EntityID entity,
-                                SpriteComponent& component,
+                                TComponent& component,
                                 const char* label,
                                 DirectX::XMFLOAT4& value)
     {
-        const SpriteComponent beforeWidget = component;
+        const TComponent beforeWidget = component;
         const bool changed = ImGui::ColorEdit4(label, &value.x);
 
-        auto& sessions = GetEditSessions<SpriteComponent>();
-        const uint64_t key = MakeEditSessionKey<SpriteComponent>(entity);
+        auto& sessions = GetEditSessions<TComponent>();
+        const uint64_t key = MakeEditSessionKey<TComponent>(entity);
         auto it = sessions.find(key);
 
         if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
-            it = sessions.emplace(key, EditSession<SpriteComponent>{ beforeWidget, false }).first;
+            it = sessions.emplace(key, EditSession<TComponent>{ beforeWidget, false }).first;
         }
 
         if (changed && it != sessions.end()) {
@@ -2239,6 +2245,200 @@ namespace {
             sessions.erase(it);
         }
 
+        return changed;
+    }
+
+    template <typename TComponent>
+    bool DrawUndoableDragFloat(Registry* registry,
+                               EntityID entity,
+                               TComponent& component,
+                               const char* label,
+                               float& value,
+                               float speed,
+                               float minValue,
+                               float maxValue,
+                               const char* format = "%.3f")
+    {
+        const TComponent beforeWidget = component;
+        bool changed = ImGui::DragFloat(label, &value, speed, minValue, maxValue, format);
+        if (changed) {
+            value = (std::clamp)(value, minValue, maxValue);
+        }
+
+        auto& sessions = GetEditSessions<TComponent>();
+        const uint64_t key = MakeEditSessionKey<TComponent>(entity);
+        auto it = sessions.find(key);
+
+        if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
+            it = sessions.emplace(key, EditSession<TComponent>{ beforeWidget, false }).first;
+        }
+
+        if (changed && it != sessions.end()) {
+            it->second.dirty = true;
+        }
+
+        if (it != sessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
+            if (it->second.dirty) {
+                ExecuteImmediateComponentChange(registry, entity, it->second.before, component);
+            }
+            sessions.erase(it);
+        }
+
+        return changed;
+    }
+
+    bool IsSupportedFontAssetPath(const std::string& path)
+    {
+        std::string ext = std::filesystem::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return ext == ".ttf" || ext == ".otf" || ext == ".fnt";
+    }
+
+    const char* TextAlignmentLabel(TextAlignment alignment)
+    {
+        switch (alignment) {
+        case TextAlignment::Center:
+            return "Center";
+        case TextAlignment::Right:
+            return "Right";
+        case TextAlignment::Left:
+        default:
+            return "Left";
+        }
+    }
+
+    int CountTextLines(const std::string& text)
+    {
+        if (text.empty()) {
+            return 1;
+        }
+
+        int lines = 1;
+        for (char c : text) {
+            if (c == '\n') {
+                ++lines;
+            }
+        }
+        return lines;
+    }
+
+    ImVec2 MeasureTextComponentBounds(const TextComponent& text,
+                                      const RectTransformComponent* rect)
+    {
+        ImFont* font = ImGui::GetFont();
+        if (!text.fontAssetPath.empty()) {
+            if (ImFont* previewFont = FontManager::Instance().GetEditorPreviewFont(text.fontAssetPath)) {
+                font = previewFont;
+            }
+            else if (IsSupportedFontAssetPath(text.fontAssetPath)) {
+                FontManager::Instance().QueueEditorPreviewFont(text.fontAssetPath, text.fontSize);
+            }
+        }
+
+        const float fontSize = (std::max)(1.0f, text.fontSize);
+        const float wrapWidth = (text.wrapping && rect)
+            ? (std::max)(1.0f, rect->sizeDelta.x)
+            : 0.0f;
+        ImVec2 size = font->CalcTextSizeA(
+            fontSize,
+            FLT_MAX,
+            wrapWidth,
+            text.text.c_str());
+
+        if (text.lineSpacing != 1.0f) {
+            const int lineCount = CountTextLines(text.text);
+            if (lineCount > 1) {
+                size.y += static_cast<float>(lineCount - 1) * fontSize * (text.lineSpacing - 1.0f);
+            }
+        }
+
+        size.x = (std::max)(1.0f, size.x);
+        size.y = (std::max)(1.0f, size.y);
+        return size;
+    }
+
+    bool DrawUndoableTextBody(Registry* registry,
+                              EntityID entity,
+                              TextComponent& component)
+    {
+        const TextComponent beforeWidget = component;
+        const size_t bufferSize = (std::max)(
+            static_cast<size_t>(4096),
+            component.text.size() + static_cast<size_t>(1024));
+        std::vector<char> buffer(bufferSize, '\0');
+        strncpy_s(buffer.data(), buffer.size(), component.text.c_str(), _TRUNCATE);
+
+        const int visibleLines = (std::clamp)(CountTextLines(component.text) + 1, 3, 8);
+        const float height = (std::clamp)(
+            ImGui::GetTextLineHeightWithSpacing() * static_cast<float>(visibleLines) + 18.0f,
+            72.0f,
+            160.0f);
+
+        const bool changed = ImGui::InputTextMultiline(
+            "##TextBody",
+            buffer.data(),
+            buffer.size(),
+            ImVec2(-1.0f, height));
+
+        auto& sessions = GetEditSessions<TextComponent>();
+        const uint64_t key = MakeEditSessionKey<TextComponent>(entity);
+        auto it = sessions.find(key);
+
+        if ((ImGui::IsItemActivated() || changed) && it == sessions.end()) {
+            it = sessions.emplace(key, EditSession<TextComponent>{ beforeWidget, false }).first;
+        }
+
+        if (changed && it != sessions.end()) {
+            component.text = buffer.data();
+            it->second.dirty = true;
+        }
+
+        if (it != sessions.end() && ImGui::IsItemDeactivatedAfterEdit()) {
+            if (it->second.dirty) {
+                ExecuteImmediateComponentChange(registry, entity, it->second.before, component);
+            }
+            sessions.erase(it);
+        }
+
+        return changed;
+    }
+
+    bool DrawFontSlot(const char* label, std::string& fontPath)
+    {
+        ImGui::PushID(label);
+        ImGui::Text("%s", label);
+
+        const std::string filename = fontPath.empty()
+            ? std::string()
+            : std::filesystem::path(fontPath).filename().string();
+        const std::string slotLabel = fontPath.empty()
+            ? std::string("Drop font asset here")
+            : filename;
+
+        ImGui::Button(slotLabel.c_str(), ImVec2(-1.0f, 38.0f));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Drag .ttf, .otf, or .fnt from Asset Browser.");
+        }
+
+        bool changed = false;
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+                std::string dropped(static_cast<const char*>(payload->Data));
+                if (IsSupportedFontAssetPath(dropped)) {
+                    fontPath = dropped;
+                    changed = true;
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+
+        if (!fontPath.empty()) {
+            ImGui::TextWrapped("%s", fontPath.c_str());
+        }
+
+        ImGui::PopID();
         return changed;
     }
 
@@ -2365,6 +2565,167 @@ namespace {
         }
 
         DrawUndoableColorEdit4(registry, entity, *sprite, "Tint", sprite->tint);
+    }
+
+    void DrawTextComponentInspector(Registry* registry, EntityID entity)
+    {
+        TextComponent* text = registry ? registry->GetComponent<TextComponent>(entity) : nullptr;
+        if (!text) {
+            return;
+        }
+
+        if (!ImGui::CollapsingHeader("TextComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+
+        TransformComponent* transform = registry->GetComponent<TransformComponent>(entity);
+        HierarchyComponent* hierarchy = registry->GetComponent<HierarchyComponent>(entity);
+        RectTransformComponent* rect = registry->GetComponent<RectTransformComponent>(entity);
+        CanvasItemComponent* canvas = registry->GetComponent<CanvasItemComponent>(entity);
+
+        bool hasBlockingIssue = false;
+        if (!transform || !hierarchy || !rect || !canvas) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Text preview needs Transform, Hierarchy, RectTransform, and CanvasItem.");
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Entity is inactive.");
+        }
+        if (canvas && !canvas->visible) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "CanvasItem visible is off.");
+        }
+
+        bool requestRefresh = false;
+        if (!transform) {
+            if (ImGui::Button("Add Transform")) {
+                TransformComponent value{};
+                value.localScale = { 1.0f, 1.0f, 1.0f };
+                value.isDirty = true;
+                ExecuteAddComponent(registry, entity, value, "Add Transform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!hierarchy) {
+            if (ImGui::Button("Add Hierarchy")) {
+                ExecuteAddComponent(registry, entity, HierarchyComponent{}, "Add Hierarchy");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!rect) {
+            if (ImGui::Button("Add RectTransform")) {
+                RectTransformComponent value{};
+                value.sizeDelta = { 320.0f, 80.0f };
+                ExecuteAddComponent(registry, entity, value, "Add RectTransform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!canvas) {
+            if (ImGui::Button("Add CanvasItem")) {
+                ExecuteAddComponent(registry, entity, CanvasItemComponent{}, "Add CanvasItem");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (requestRefresh) {
+            return;
+        }
+
+        if (canvas && !canvas->visible) {
+            if (ImGui::Button("Show CanvasItem")) {
+                const CanvasItemComponent before = *canvas;
+                canvas->visible = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *canvas);
+            }
+            ImGui::SameLine();
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            if (ImGui::Button("Activate Entity")) {
+                const HierarchyComponent before = *hierarchy;
+                hierarchy->isActive = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *hierarchy);
+            }
+            ImGui::SameLine();
+        }
+        if (hasBlockingIssue) {
+            ImGui::NewLine();
+            ImGui::Separator();
+        }
+
+        ImGui::Text("Text");
+        DrawUndoableTextBody(registry, entity, *text);
+
+        ImGui::Spacing();
+        const TextComponent beforeFont = *text;
+        if (DrawFontSlot("Font", text->fontAssetPath) &&
+            beforeFont.fontAssetPath != text->fontAssetPath) {
+            ExecuteImmediateComponentChange(registry, entity, beforeFont, *text);
+            FontManager::Instance().QueueEditorPreviewFont(text->fontAssetPath, text->fontSize);
+            return;
+        }
+
+        if (text->fontAssetPath.empty()) {
+            ImGui::TextDisabled("Font Status: default editor font.");
+        }
+        else if (!IsSupportedFontAssetPath(text->fontAssetPath)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.42f, 0.42f, 1.0f), "Font Status: unsupported font asset.");
+        }
+        else {
+            std::error_code ec;
+            const bool exists = std::filesystem::exists(text->fontAssetPath, ec);
+            std::string ext = std::filesystem::path(text->fontAssetPath).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            if (!exists) {
+                ImGui::TextColored(ImVec4(1.0f, 0.42f, 0.42f, 1.0f), "Font Status: file not found.");
+            }
+            else if (ext == ".fnt") {
+                ImGui::TextDisabled("Font Status: bitmap font assigned.");
+            }
+            else if (FontManager::Instance().GetEditorPreviewFont(text->fontAssetPath)) {
+                ImGui::TextDisabled("Font Status: loaded.");
+            }
+            else {
+                FontManager::Instance().QueueEditorPreviewFont(text->fontAssetPath, text->fontSize);
+                ImGui::TextDisabled("Font Status: queued for preview.");
+            }
+        }
+
+        DrawUndoableDragFloat(registry, entity, *text, "Font Size", text->fontSize, 1.0f, 1.0f, 512.0f, "%.1f");
+        DrawUndoableColorEdit4(registry, entity, *text, "Color", text->color);
+
+        const char* alignmentLabels[] = { "Left", "Center", "Right" };
+        int alignmentIndex = static_cast<int>(text->alignment);
+        alignmentIndex = (std::clamp)(alignmentIndex, 0, 2);
+        const TextComponent beforeAlignment = *text;
+        if (ImGui::Combo("Alignment", &alignmentIndex, alignmentLabels, IM_ARRAYSIZE(alignmentLabels))) {
+            text->alignment = static_cast<TextAlignment>(alignmentIndex);
+            ExecuteImmediateComponentChange(registry, entity, beforeAlignment, *text);
+            return;
+        }
+        ImGui::TextDisabled("Current: %s", TextAlignmentLabel(text->alignment));
+
+        const TextComponent beforeWrapping = *text;
+        if (ImGui::Checkbox("Wrapping", &text->wrapping)) {
+            ExecuteImmediateComponentChange(registry, entity, beforeWrapping, *text);
+            return;
+        }
+
+        DrawUndoableDragFloat(registry, entity, *text, "Line Spacing", text->lineSpacing, 0.01f, 0.5f, 3.0f, "%.2f");
+
+        if (rect && ImGui::Button("Use Text Size")) {
+            const RectTransformComponent before = *rect;
+            const ImVec2 bounds = MeasureTextComponentBounds(*text, rect);
+            rect->sizeDelta = { bounds.x, bounds.y };
+            ExecuteImmediateComponentChange(registry, entity, before, *rect);
+            Editor2D::FinalizeCreatedEntity(*registry, entity);
+            return;
+        }
     }
 
     // ------------------------------------------------------------
@@ -2657,7 +3018,7 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<RectTransformComponent>(registry, entity);
             DrawComponentIfPresent<CanvasItemComponent>(registry, entity);
             DrawSpriteComponentInspector(registry, entity);
-            DrawComponentIfPresent<TextComponent>(registry, entity);
+            DrawTextComponentInspector(registry, entity);
             DrawComponentIfPresent<UIButtonComponent>(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
 

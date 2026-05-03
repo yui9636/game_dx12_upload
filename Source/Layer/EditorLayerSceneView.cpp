@@ -501,20 +501,26 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
                 }
             }
             const float fontSize = (std::max)(8.0f, text->fontSize);
-            const float wrapWidth = text->wrapping ? (std::max)(0.0f, rect->sizeDelta.x) : 0.0f;
+            const float minScreenX = (std::min)((std::min)(p0.x, p1.x), (std::min)(p2.x, p3.x));
+            const float maxScreenX = (std::max)((std::max)(p0.x, p1.x), (std::max)(p2.x, p3.x));
+            const float minScreenY = (std::min)((std::min)(p0.y, p1.y), (std::min)(p2.y, p3.y));
+            const float maxScreenY = (std::max)((std::max)(p0.y, p1.y), (std::max)(p2.y, p3.y));
+            const float screenWidth = (std::max)(1.0f, maxScreenX - minScreenX);
+            const float screenHeight = (std::max)(1.0f, maxScreenY - minScreenY);
+            const float wrapWidth = text->wrapping ? screenWidth : 0.0f;
             const ImVec2 textSize = font->CalcTextSizeA(
                 fontSize,
                 (std::numeric_limits<float>::max)(),
                 wrapWidth,
                 text->text.c_str());
 
-            ImVec2 textPos = p0;
+            ImVec2 textPos(minScreenX, minScreenY);
             if (text->alignment == TextAlignment::Center) {
-                textPos.x += (rect->sizeDelta.x - textSize.x) * 0.5f;
+                textPos.x += (screenWidth - textSize.x) * 0.5f;
             } else if (text->alignment == TextAlignment::Right) {
-                textPos.x += rect->sizeDelta.x - textSize.x;
+                textPos.x += screenWidth - textSize.x;
             }
-            textPos.y += (std::max)(0.0f, (rect->sizeDelta.y - textSize.y) * 0.5f);
+            textPos.y += (std::max)(0.0f, (screenHeight - textSize.y) * 0.5f);
             if (canvas->pixelSnap) {
                 textPos.x = std::round(textPos.x);
                 textPos.y = std::round(textPos.y);
@@ -526,7 +532,9 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
                 text->color.z,
                 text->color.w));
 
+            drawList->PushClipRect(ImVec2(minScreenX, minScreenY), ImVec2(maxScreenX, maxScreenY), true);
             drawList->AddText(font, fontSize, textPos, textColor, text->text.c_str(), nullptr, wrapWidth);
+            drawList->PopClipRect();
         }
 
           if (drawSelection && m_showSceneSelectionOutline) {

@@ -30,7 +30,7 @@ void UIHPNumber::Render(const RenderContext& rc)
     float scale = 0.055f;
 
     FontManager::Instance().DrawFormat3D(
-        rc.commandList->GetNativeContext(),  // DC
+        rc.commandList,
         view,
         projection,
         "ComboFont",

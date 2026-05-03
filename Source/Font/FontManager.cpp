@@ -1,20 +1,57 @@
 #include "FontManager.h"
+
+#include "Graphics.h"
 #include "ImGuiRenderer.h"
+#include "RHI/DX11/DX11CommandList.h"
+#include "RHI/ICommandList.h"
+#include "RHI/IResourceFactory.h"
+
+#include <algorithm>
 #include <cstdarg>
 #include <filesystem>
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <algorithm>
 #include <vector>
-
 
 using namespace DirectX;
 
 namespace
 {
+    constexpr const char* kDefaultBitmapFontPath = "Data/Font/Unnamed-1.fnt";
+
     std::string NormalizeFontAssetPath(const std::string& path)
     {
         return std::filesystem::path(path).lexically_normal().string();
+    }
+
+    std::vector<wchar_t> FormatWideString(const wchar_t* format, va_list args)
+    {
+        if (!format) {
+            return { L'\0' };
+        }
+
+        va_list countArgs;
+        va_copy(countArgs, args);
+        const int len = _vscwprintf(format, countArgs);
+        va_end(countArgs);
+
+        if (len <= 0) {
+            return { L'\0' };
+        }
+
+        std::vector<wchar_t> buffer(static_cast<size_t>(len) + 1u);
+        vswprintf_s(buffer.data(), buffer.size(), format, args);
+        return buffer;
+    }
+
+    float GetFallbackViewportWidth()
+    {
+        return (std::max)(1.0f, Graphics::Instance().GetScreenWidth());
+    }
+
+    float GetFallbackViewportHeight()
+    {
+        return (std::max)(1.0f, Graphics::Instance().GetScreenHeight());
     }
 }
 
@@ -23,10 +60,22 @@ void FontManager::Clear()
     fonts.clear();
 }
 
-void FontManager::Load(ID3D11Device* device, const std::string& key, const char* filename)
+void FontManager::Load(ID3D11Device* /*device*/, const std::string& key, const char* filename)
 {
-    if (fonts.find(key) != fonts.end()) return;
-    auto font = std::make_shared<Font>(device, filename);
+    Load(Graphics::Instance().GetResourceFactory(), key, filename);
+}
+
+void FontManager::Load(IResourceFactory* factory, const std::string& key, const char* filename)
+{
+    if (key.empty() || fonts.find(key) != fonts.end()) {
+        return;
+    }
+
+    auto font = std::make_shared<Font>(factory, filename);
+    if (!font->IsValid()) {
+        return;
+    }
+
     fonts[key] = font;
 }
 
@@ -34,6 +83,59 @@ std::shared_ptr<Font> FontManager::Get(const std::string& key)
 {
     auto it = fonts.find(key);
     return (it != fonts.end()) ? it->second : nullptr;
+}
+
+std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)
+{
+    auto font = Get(key);
+    if (font) {
+        return font;
+    }
+
+    Load(Graphics::Instance().GetResourceFactory(), key, kDefaultBitmapFontPath);
+    return Get(key);
+}
+
+void FontManager::DrawFormat(
+    ICommandList* commandList,
+    const std::string& key,
+    float x, float y,
+    const DirectX::XMFLOAT4& color,
+    float scale,
+    FontAlign align,
+    const wchar_t* format,
+    ...)
+{
+    if (!commandList) {
+        return;
+    }
+
+    auto font = GetOrLoadDefault(key);
+    if (!font) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
+    va_end(args);
+
+    float drawX = x;
+    if (align != FontAlign::Left)
+    {
+        const float width = font->GetTextWidth(buffer.data()) * scale;
+        if (align == FontAlign::Center) {
+            drawX -= width * 0.5f;
+        } else if (align == FontAlign::Right) {
+            drawX -= width;
+        }
+    }
+
+    font->SetColor(color);
+    font->SetScale(scale, scale);
+    font->Begin(commandList, GetFallbackViewportWidth(), GetFallbackViewportHeight());
+    font->Draw(drawX, y, buffer.data());
+    font->End(commandList);
 }
 
 void FontManager::DrawFormat(
@@ -46,45 +148,99 @@ void FontManager::DrawFormat(
     const wchar_t* format,
     ...)
 {
-    auto font = Get(key);
-    if (!font) return;
+    if (!dc) {
+        return;
+    }
+
+    DX11CommandList commandList(dc);
 
     va_list args;
     va_start(args, format);
-    int len = _vscwprintf(format, args) + 1;
-    std::vector<wchar_t> buffer(len);
-    vswprintf_s(buffer.data(), len, format, args);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
     va_end(args);
 
-    float drawX = x;
-    if (align != FontAlign::Left)
-    {
-        float width = font->GetTextWidth(buffer.data()) * scale;
+    DrawFormat(&commandList, key, x, y, color, scale, align, L"%s", buffer.data());
+}
 
-        if (align == FontAlign::Center)
-            drawX -= width * 0.5f;
-        else if (align == FontAlign::Right)
-            drawX -= width;
-    }
+void FontManager::DrawFormat(ICommandList* commandList, const std::string& key, float x, float y, const wchar_t* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
+    va_end(args);
 
-    font->SetColor(color);
-    font->SetScale(scale, scale);
-
-    font->Begin(dc);
-    font->Draw(drawX, y, buffer.data());
-    font->End(dc);
+    DrawFormat(commandList, key, x, y, { 1, 1, 1, 1 }, 1.0f, FontAlign::Left, L"%s", buffer.data());
 }
 
 void FontManager::DrawFormat(ID3D11DeviceContext* dc, const std::string& key, float x, float y, const wchar_t* format, ...)
 {
+    if (!dc) {
+        return;
+    }
+
+    DX11CommandList commandList(dc);
+
     va_list args;
     va_start(args, format);
-    int len = _vscwprintf(format, args) + 1;
-    std::vector<wchar_t> buffer(len);
-    vswprintf_s(buffer.data(), len, format, args);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
     va_end(args);
 
-    DrawFormat(dc, key, x, y, { 1,1,1,1 }, 1.0f, FontAlign::Left, L"%s", buffer.data());
+    DrawFormat(&commandList, key, x, y, { 1, 1, 1, 1 }, 1.0f, FontAlign::Left, L"%s", buffer.data());
+}
+
+void FontManager::DrawFormat3D(
+    ICommandList* commandList,
+    const DirectX::XMMATRIX& view,
+    const DirectX::XMMATRIX& projection,
+    const std::string& key,
+    const DirectX::XMFLOAT3& position,
+    const DirectX::XMFLOAT3& rotation,
+    float scale,
+    const DirectX::XMFLOAT4& color,
+    FontAlign align,
+    const wchar_t* format,
+    ...)
+{
+    if (!commandList) {
+        return;
+    }
+
+    auto font = GetOrLoadDefault(key);
+    if (!font) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
+    va_end(args);
+
+    float offsetX = 0.0f;
+    if (align != FontAlign::Left)
+    {
+        const float width = font->GetTextWidth(buffer.data());
+        if (align == FontAlign::Center) {
+            offsetX = -width * 0.5f;
+        } else if (align == FontAlign::Right) {
+            offsetX = -width;
+        }
+    }
+
+    const XMMATRIX offsetMatrix = XMMatrixTranslation(offsetX, 0.0f, 0.0f);
+    const float worldScale = scale * 0.02f;
+    const XMMATRIX scaleMatrix = XMMatrixScaling(worldScale, worldScale, 1.0f);
+    const XMMATRIX rotationMatrix = XMMatrixRotationRollPitchYaw(
+        XMConvertToRadians(rotation.x),
+        XMConvertToRadians(rotation.y),
+        XMConvertToRadians(rotation.z));
+    const XMMATRIX translationMatrix = XMMatrixTranslation(position.x, position.y, position.z);
+    const XMMATRIX world = offsetMatrix * scaleMatrix * rotationMatrix * translationMatrix;
+
+    font->SetColor(color);
+    font->SetScale(1.0f, 1.0f);
+    font->Begin(commandList, GetFallbackViewportWidth(), GetFallbackViewportHeight());
+    font->Draw3D(world, view, projection, buffer.data());
+    font->End(commandList);
 }
 
 void FontManager::DrawFormat3D(
@@ -98,49 +254,20 @@ void FontManager::DrawFormat3D(
     const DirectX::XMFLOAT4& color,
     FontAlign align,
     const wchar_t* format,
-    ...
-)
+    ...)
 {
-    auto font = Get(key);
-    if (!font) return;
+    if (!dc) {
+        return;
+    }
+
+    DX11CommandList commandList(dc);
 
     va_list args;
     va_start(args, format);
-    int len = _vscwprintf(format, args) + 1;
-    std::vector<wchar_t> buffer(len);
-    vswprintf_s(buffer.data(), len, format, args);
+    std::vector<wchar_t> buffer = FormatWideString(format, args);
     va_end(args);
 
-    float offsetX = 0.0f;
-    if (align != FontAlign::Left)
-    {
-        float width = font->GetTextWidth(buffer.data());
-        if (align == FontAlign::Center) offsetX = -width * 0.5f;
-        else if (align == FontAlign::Right) offsetX = -width;
-    }
-
-    XMMATRIX MOffset = XMMatrixTranslation(offsetX, 0.0f, 0.0f);
-
-    float worldScale = scale * 0.02f;
-    XMMATRIX MScale = XMMatrixScaling(worldScale, worldScale, 1.0f);
-
-    XMMATRIX MRot = XMMatrixRotationRollPitchYaw(
-        XMConvertToRadians(rotation.x),
-        XMConvertToRadians(rotation.y),
-        XMConvertToRadians(rotation.z)
-    );
-
-    XMMATRIX MTrans = XMMatrixTranslation(position.x, position.y, position.z);
-
-    XMMATRIX World = MOffset * MScale * MRot * MTrans;
-
-    font->SetColor(color);
-
-    font->SetScale(1.0f, 1.0f);
-
-    font->Begin(dc);
-    font->Draw3D(World, view, projection, buffer.data());
-    font->End(dc);
+    DrawFormat3D(&commandList, view, projection, key, position, rotation, scale, color, align, L"%s", buffer.data());
 }
 
 void FontManager::QueueEditorPreviewFont(const std::string& assetPath, float previewSize)

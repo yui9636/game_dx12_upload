@@ -397,6 +397,7 @@ namespace
         TextComponent text{};
         text.text = name;
         text.fontAssetPath = fontPath;
+        text.alignment = TextAlignment::Center;
 
         std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
         std::get<std::optional<TransformComponent>>(node.components) = transform;
@@ -807,6 +808,17 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                     BuildSpriteFromTextureSnapshot(texturePath, true),
                     Entity::NULL_ID,
                     "Create UI Button From Texture");
+            }
+        }
+        if (activeAsset.IsActiveFont()) {
+            const std::string& fontPath = activeAsset.GetActiveAssetPath();
+            if (ImGui::MenuItem("Create Text From Active Font")) {
+                const std::string name = std::filesystem::path(fontPath).stem().string();
+                CreateEntityFromSnapshot(
+                    registry,
+                    BuildSingleTextSnapshot(name.empty() ? "Text" : name, fontPath),
+                    Entity::NULL_ID,
+                    "Create Text From Font");
             }
         }
 
@@ -1268,7 +1280,20 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
                         registry,
                         BuildSpriteFromTextureSnapshot(texturePath, true),
                         entity,
-                        "Create UI Button Child From Texture");
+                    "Create UI Button Child From Texture");
+                }
+            }
+        }
+        if (activeAsset.IsActiveFont()) {
+            const std::string& fontPath = activeAsset.GetActiveAssetPath();
+            if (ImGui::MenuItem("Create Text Child From Active Font")) {
+                if (CanCreateChildOrWarn(registry, entity)) {
+                    const std::string name = std::filesystem::path(fontPath).stem().string();
+                    CreateEntityFromSnapshot(
+                        registry,
+                        BuildSingleTextSnapshot(name.empty() ? "Text" : name, fontPath),
+                        entity,
+                        "Create Text Child From Font");
                 }
             }
         }

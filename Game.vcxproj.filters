@@ -1057,17 +1057,47 @@
     <ClInclude Include="Source\GameLoop\UIButtonClickSystem.h">
       <Filter>Source\GameLoop</Filter>
     </ClInclude>
-    <ClInclude Include="Source\AI\AggroComponent.h">                  <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BehaviorTreeAsset.h">               <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h">      <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h">    <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BehaviorTreeSystem.h">              <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\BlackboardComponent.h">             <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\EnemyConfigAsset.h">                <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\EnemyRuntimeSetup.h">               <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\PerceptionComponent.h">             <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\AI\PerceptionSystem.h">                <Filter>Source\AI</Filter></ClInclude>
-    <ClInclude Include="Source\Gameplay\EnemyTagComponent.h">         <Filter>Source\Gameplay</Filter></ClInclude>
+    <ClInclude Include="Source\AI\AggroComponent.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeAsset.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeAssetComponent.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeRuntimeComponent.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\BehaviorTreeSystem.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\BlackboardComponent.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\EnemyConfigAsset.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\EnemyRuntimeSetup.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\PerceptionComponent.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\AI\PerceptionSystem.h">
+      <Filter>Source\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\EnemyTagComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
+    <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
+    <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GameLoop\GameLoopScenePicker.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="External\FSR2\dx11\ffx_fsr2_dx11.cpp">
@@ -1805,11 +1835,52 @@
     <ClCompile Include="Source\GameLoop\UIButtonClickSystem.cpp">
       <Filter>Source\GameLoop</Filter>
     </ClCompile>
-    <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp">       <Filter>Source\AI</Filter></ClCompile>
-    <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp">      <Filter>Source\AI</Filter></ClCompile>
-    <ClCompile Include="Source\AI\EnemyConfigAsset.cpp">        <Filter>Source\AI</Filter></ClCompile>
-    <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp">       <Filter>Source\AI</Filter></ClCompile>
-    <ClCompile Include="Source\AI\PerceptionSystem.cpp">        <Filter>Source\AI</Filter></ClCompile>
+    <ClCompile Include="Source\AI\BehaviorTreeAsset.cpp">
+      <Filter>Source\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\AI\BehaviorTreeSystem.cpp">
+      <Filter>Source\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\AI\EnemyConfigAsset.cpp">
+      <Filter>Source\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\AI\EnemyRuntimeSetup.cpp">
+      <Filter>Source\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\AI\PerceptionSystem.cpp">
+      <Filter>Source\AI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\EffectEditor\EffectEditorTemplates.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorAssetPicker.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorDocument.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorRuntimeOverride.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorGraphPanel.cpp" />
+    <ClCompile Include="Source\EffectEditor\EffectEditorTimelinePanel.cpp" />
+    <ClCompile Include="Source\ShaderClass\EffectMeshShader.cpp" />
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelCommands.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelGraph.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInput.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInspector.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelInternal.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelPicker.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopEditorPanelUtility.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GameLoop\GameLoopScenePicker.cpp">
+      <Filter>Source\GameLoop</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shader\BloomPS.hlsl">
@@ -1995,6 +2066,8 @@
     <FxCompile Include="Shader\VolumetricFogPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
+    <FxCompile Include="Shader\EffectMeshUberVS.hlsl" />
+    <FxCompile Include="Shader\EffectMeshUberPS.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -1,51 +1,39 @@
 #pragma once
 
-#include <vector>
-#include <memory>
-#include <wrl.h>
-#include <d3d11.h>
 #include <DirectXMath.h>
+#include <cstdint>
+#include <memory>
 #include <string>
+#include <vector>
+
+#include "RHI/IBuffer.h"
+#include "RHI/IShader.h"
+#include "RHI/IState.h"
+
+class ICommandList;
+class IResourceFactory;
+class ITexture;
 
 class Font
 {
 public:
-    Font(ID3D11Device* device, const char* filename, int maxSpriteCount = 2048);
+    Font(IResourceFactory* factory, const char* filename, int maxSpriteCount = 2048);
     virtual ~Font() = default;
 
-    void Begin(ID3D11DeviceContext* context);
+    bool IsValid() const { return m_isValid; }
 
+    void Begin(ICommandList* commandList, float viewportWidth, float viewportHeight);
     void Draw(float x, float y, const wchar_t* string);
-
     void Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CXMMATRIX projection, const wchar_t* string);
+    void End(ICommandList* commandList);
 
-    float GetTextWidth(const wchar_t* string);
+    float GetTextWidth(const wchar_t* string) const;
 
-    void End(ID3D11DeviceContext* context);
-
-    void SetScale(float x, float y) { scaleX = x; scaleY = y; }
-    void SetColor(const DirectX::XMFLOAT4& color) { fontColor = color; }
-
+    void SetScale(float x, float y) { m_scaleX = x; m_scaleY = y; }
+    void SetColor(const DirectX::XMFLOAT4& color) { m_fontColor = color; }
     void SetSDFParams(float threshold = 0.5f, float softness = 0.5f);
 
 private:
-    Microsoft::WRL::ComPtr<ID3D11VertexShader>       vertexShader;
-    Microsoft::WRL::ComPtr<ID3D11PixelShader>        pixelShader;
-    Microsoft::WRL::ComPtr<ID3D11InputLayout>        inputLayout;
-    Microsoft::WRL::ComPtr<ID3D11Buffer>             vertexBuffer;
-    Microsoft::WRL::ComPtr<ID3D11Buffer>             indexBuffer;
-
-    Microsoft::WRL::ComPtr<ID3D11Buffer>             sdfConstantBuffer;
-
-    Microsoft::WRL::ComPtr<ID3D11Buffer>             matrixBuffer;
-
-    Microsoft::WRL::ComPtr<ID3D11BlendState>         blendState;
-    Microsoft::WRL::ComPtr<ID3D11RasterizerState>    rasterizerState;
-    Microsoft::WRL::ComPtr<ID3D11DepthStencilState>  depthStencilState;
-    Microsoft::WRL::ComPtr<ID3D11SamplerState>       samplerState;
-
-    std::vector<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>> shaderResourceViews;
-
     struct Vertex
     {
         DirectX::XMFLOAT3 position;
@@ -56,7 +44,7 @@ private:
     struct SDFData
     {
         DirectX::XMFLOAT4 Color;
-        float Threshold;            // 臒l
+        float Threshold;
         float Softness;
         float Padding[2];
     };
@@ -68,55 +56,75 @@ private:
         DirectX::XMFLOAT4X4 Projection;
     };
 
-    
     struct CharacterInfo
     {
-        static const WORD NonCode = 0;
-        static const WORD EndCode = 0xFFFF;
-        static const WORD ReturnCode = 0xFFFE;
-        static const WORD TabCode = 0xFFFD;
-        static const WORD SpaceCode = 0xFFFC;
+        static const uint16_t NonCode = 0;
+        static const uint16_t EndCode = 0xFFFF;
+        static const uint16_t ReturnCode = 0xFFFE;
+        static const uint16_t TabCode = 0xFFFD;
+        static const uint16_t SpaceCode = 0xFFFC;
 
-        float left, top, right, bottom;
-        float xoffset, yoffset, xadvance;
-        float width, height;
-        int   page;
-        bool  ascii;
+        float left = 0.0f;
+        float top = 0.0f;
+        float right = 0.0f;
+        float bottom = 0.0f;
+        float xoffset = 0.0f;
+        float yoffset = 0.0f;
+        float xadvance = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        int page = 0;
+        bool ascii = false;
     };
 
     struct Subset
     {
-        ID3D11ShaderResourceView* shaderResourceView;
-        UINT startIndex;
-        UINT indexCount;
+        ITexture* texture = nullptr;
+        uint32_t startIndex = 0;
+        uint32_t indexCount = 0;
     };
 
-    float fontWidth;
-    float fontHeight;
-    int   textureCount;
-    int   characterCount;
+    bool LoadFontData(IResourceFactory* factory, const char* filename);
+    void AddGlyphQuad(float x, float y, const CharacterInfo& info, bool ndc2D);
+    void PushSubsetIfNeeded(int page);
 
-    std::vector<CharacterInfo> characterInfos;
-    std::vector<WORD>          characterIndices;
-    std::vector<Subset>        subsets;
+    std::unique_ptr<IShader> m_vertexShader;
+    std::unique_ptr<IShader> m_pixelShader;
+    std::unique_ptr<IInputLayout> m_inputLayout;
+    std::unique_ptr<IBuffer> m_vertexBuffer;
+    std::unique_ptr<IBuffer> m_indexBuffer;
+    std::unique_ptr<IBuffer> m_sdfConstantBuffer;
+    std::unique_ptr<IBuffer> m_matrixBuffer;
 
-    Vertex* currentVertex = nullptr;
-    UINT    currentIndexCount = 0;
-    int     currentPage = -1;
+    std::vector<std::shared_ptr<ITexture>> m_textures;
+    std::vector<CharacterInfo> m_characterInfos;
+    std::vector<uint16_t> m_characterIndices;
+    std::vector<Subset> m_subsets;
+    std::vector<Vertex> m_vertices;
 
-    float screenWidth = 0.0f;
-    float screenHeight = 0.0f;
+    Vertex* m_currentVertex = nullptr;
+    uint32_t m_currentIndexCount = 0;
+    int m_currentPage = -1;
+    int m_maxSpriteCount = 0;
 
-    float scaleX = 1.0f;
-    float scaleY = 1.0f;
-    DirectX::XMFLOAT4 fontColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+    float m_fontWidth = 0.0f;
+    float m_fontHeight = 0.0f;
+    int m_textureCount = 0;
+    int m_characterCount = 0;
 
-    float sdfThreshold = 0.5f;
-    float sdfSoftness = 0.5f;
+    float m_screenWidth = 0.0f;
+    float m_screenHeight = 0.0f;
+    float m_scaleX = 1.0f;
+    float m_scaleY = 1.0f;
+    DirectX::XMFLOAT4 m_fontColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-    bool is3DMode = false;
-    
-    DirectX::XMFLOAT4X4 currentWorld;
-    DirectX::XMFLOAT4X4 currentView;
-    DirectX::XMFLOAT4X4 currentProj;
+    float m_sdfThreshold = 0.5f;
+    float m_sdfSoftness = 0.5f;
+
+    bool m_is3DMode = false;
+    bool m_isValid = false;
+
+    DirectX::XMFLOAT4X4 m_currentWorld;
+    DirectX::XMFLOAT4X4 m_currentView;
+    DirectX::XMFLOAT4X4 m_currentProj;
 };

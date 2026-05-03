@@ -13,10 +13,10 @@ enum class TextAlignment
 struct TextComponent
 {
     std::string text = "Text";
-    std::string fontAssetPath;
+    std::string fontAssetPath = "Data/Font/ArialUni.ttf";
     float fontSize = 32.0f;
     DirectX::XMFLOAT4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    TextAlignment alignment = TextAlignment::Left;
+    TextAlignment alignment = TextAlignment::Center;
     float lineSpacing = 1.0f;
     bool wrapping = false;
 };
