@@ -11,6 +11,7 @@
 #include "System/ResourceManager.h"
 #include <Camera\FreeCameraSystem.h>
 #include <Camera\CameraFinalizeSystem.h>
+#include <Camera\ThirdPersonCameraSystem.h>
 #include "Model/ModelUpdateSystem.h"
 #include <Component\CameraBehaviorComponent.h>
 #include "Input/InputContextSystem.h"
@@ -28,6 +29,9 @@
 #include "Gameplay/DodgeSystem.h"
 #include "Gameplay/LocomotionSystem.h"
 #include "Gameplay/StaminaSystem.h"
+#include "Gameplay/DamageSystem.h"
+#include "Gameplay/DamageEventComponent.h"
+#include "Gameplay/BattleFlowComponent.h"
 #include "Gameplay/HealthSystem.h"
 #include "Gameplay/CharacterPhysicsSystem.h"
 #include "Gameplay/PlaybackSystem.h"
@@ -38,6 +42,7 @@
 #include "Gameplay/TimelineAudioSystem.h"
 #include "Gameplay/TimelineShakeSystem.h"
 #include "Gameplay/HitboxTrackingSystem.h"
+#include "Collision/CollisionSystem.h"
 #include "DebugRender/DebugRenderSystem.h"
 #include "EffectRuntime/EffectService.h"
 #include "EffectRuntime/EffectSystems.h"
@@ -106,6 +111,15 @@ void GameLayer::Initialize()
     EntityID audioSettingsEntity = m_registry.CreateEntity();
     m_registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
     m_registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
+
+    // 1v1 boss battle infrastructure singletons.
+    EntityID damageEventEntity = m_registry.CreateEntity();
+    m_registry.AddComponent(damageEventEntity, NameComponent{ "_DamageEventQueue" });
+    m_registry.AddComponent(damageEventEntity, DamageEventComponent{});
+
+    EntityID battleFlowEntity = m_registry.CreateEntity();
+    m_registry.AddComponent(battleFlowEntity, NameComponent{ "_BattleFlow" });
+    m_registry.AddComponent(battleFlowEntity, BattleFlowComponent{});
 }
 
 void GameLayer::Finalize()
@@ -144,7 +158,8 @@ void GameLayer::Update(const EngineTime& time)
     StateMachineSystem::Update(m_registry, time.dt);
     LocomotionSystem::Update(m_registry, time.dt);
     StaminaSystem::Update(m_registry, time.dt);
-    HealthSystem::Update(m_registry, time.dt);
+    // HealthSystem moved below — it must run after DamageSystem so events
+    // produced this frame are applied the same frame.
     DodgeSystem::Update(m_registry, time.dt);
     CharacterPhysicsSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
@@ -158,6 +173,7 @@ void GameLayer::Update(const EngineTime& time)
     EffectPreviewSystem::Update(m_registry, previewDt);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
+    ThirdPersonCameraSystem::Update(m_registry, time.dt);
 
     TransformSystem transformSys;
 
@@ -177,6 +193,15 @@ void GameLayer::Update(const EngineTime& time)
     EffectAttachmentSystem::Update(m_registry, time.dt);
     TrailSystem::Update(m_registry, time.dt);
     HitboxTrackingSystem::Update(m_registry);
+
+    // Body colliders are synced to the manager here. TimelineHitboxSystem
+    // already pushed the active Attack colliders above, so once we sync the
+    // bodies the (Attack vs Body) pairs are visible to ComputeAllContacts.
+    CollisionSystem collisionSystem;
+    collisionSystem.Update(m_registry);
+
+    DamageSystem::Update(m_registry);
+    HealthSystem::Update(m_registry, time.dt);
 
     CameraFinalizeSystem::Update(m_registry);
 }

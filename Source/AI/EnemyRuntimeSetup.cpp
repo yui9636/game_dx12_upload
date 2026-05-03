@@ -14,9 +14,11 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitStopComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
+#include "Gameplay/HUDLinkComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/TeamComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
 #include "PlayerEditor/StateMachineAsset.h"
@@ -64,6 +66,14 @@ namespace EnemyRuntimeSetup
         EnsureComponent<ActionStateComponent>(registry, entity);
         EnsureComponent<DodgeStateComponent>(registry, entity);
         EnsureComponent<StateMachineParamsComponent>(registry, entity);
+
+        if (auto* team = EnsureComponent<TeamComponent>(registry, entity)) {
+            team->teamId = 1;
+        }
+        if (auto* hudLink = EnsureComponent<HUDLinkComponent>(registry, entity)) {
+            hudLink->asBossHUD    = true;
+            hudLink->asWorldFloat = false;
+        }
 
         if (auto* loco = EnsureComponent<LocomotionStateComponent>(registry, entity)) {
             // AI writes world-space x/z directly; bypass camera transform.

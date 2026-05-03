@@ -231,6 +231,12 @@
     <ClInclude Include="Source\AI\PerceptionComponent.h" />
     <ClInclude Include="Source\AI\PerceptionSystem.h" />
     <ClInclude Include="Source\Gameplay\EnemyTagComponent.h" />
+    <ClInclude Include="Source\Gameplay\TeamComponent.h" />
+    <ClInclude Include="Source\Gameplay\DamageEventComponent.h" />
+    <ClInclude Include="Source\Gameplay\HUDLinkComponent.h" />
+    <ClInclude Include="Source\Gameplay\LockOnTargetComponent.h" />
+    <ClInclude Include="Source\Gameplay\BattleFlowComponent.h" />
+    <ClInclude Include="Source\Gameplay\DamageSystem.h" />
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h" />
     <ClInclude Include="Source\GameLoop\GameLoopRuntime.h" />
@@ -594,6 +600,7 @@
     <ClCompile Include="Source\Gameplay\TimelineAudioSystem.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\DamageSystem.cpp" />
     <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp" />
     <ClCompile Include="Source\Gameplay\PlayerRuntimeSetup.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />

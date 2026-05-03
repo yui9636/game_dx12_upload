@@ -12,13 +12,16 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitStopComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
+#include "Gameplay/HUDLinkComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/LockOnTargetComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/PlayerTagComponent.h"
 #include "Component/ActorTypeComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StaminaComponent.h"
+#include "Gameplay/TeamComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
@@ -365,6 +368,14 @@ namespace PlayerRuntimeSetup
         EnsureComponent<CharacterPhysicsComponent>(registry, entity);
         EnsureComponent<HealthComponent>(registry, entity);
         EnsureComponent<StaminaComponent>(registry, entity);
+        if (auto* team = EnsureComponent<TeamComponent>(registry, entity)) {
+            team->teamId = 0;
+        }
+        if (auto* hudLink = EnsureComponent<HUDLinkComponent>(registry, entity)) {
+            hudLink->asPlayerHUD = true;
+            hudLink->asWorldFloat = false;
+        }
+        EnsureComponent<LockOnTargetComponent>(registry, entity);
         ActionDatabaseComponent* actionDatabase = EnsureComponent<ActionDatabaseComponent>(registry, entity);
         if (actionDatabase) {
             EnsureDefaultActionDatabase(registry, entity, *actionDatabase);

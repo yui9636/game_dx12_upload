@@ -74,12 +74,16 @@ struct ComponentMeta;
 #include "Gameplay/ActionDatabaseComponent.h"
 #include "Gameplay/ActionStateComponent.h"
 #include "Gameplay/AnimatorComponent.h"
+#include "Gameplay/BattleFlowComponent.h"
 #include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/DamageEventComponent.h"
 #include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/HitStopComponent.h"
+#include "Gameplay/HUDLinkComponent.h"
+#include "Gameplay/LockOnTargetComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlaybackRangeComponent.h"
@@ -89,6 +93,7 @@ struct ComponentMeta;
 #include "Gameplay/StaminaComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/TeamComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
 #include "AI/AggroComponent.h"
@@ -762,6 +767,17 @@ struct ComponentMeta<AnimatorComponent> {
 };
 
 template <>
+struct ComponentMeta<BattleFlowComponent> {
+    static constexpr std::string_view Name = "BattleFlowComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("phase", &BattleFlowComponent::phase),
+        MakeField("phaseTimer", &BattleFlowComponent::phaseTimer),
+        MakeField("encounterRadius", &BattleFlowComponent::encounterRadius),
+        MakeField("introDuration", &BattleFlowComponent::introDuration)
+    );
+};
+
+template <>
 struct ComponentMeta<CharacterPhysicsComponent> {
     static constexpr std::string_view Name = "CharacterPhysicsComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -774,6 +790,14 @@ struct ComponentMeta<CharacterPhysicsComponent> {
         MakeField("isGround", &CharacterPhysicsComponent::isGround),
         MakeField("height", &CharacterPhysicsComponent::height),
         MakeField("stepOffset", &CharacterPhysicsComponent::stepOffset)
+    );
+};
+
+template <>
+struct ComponentMeta<DamageEventComponent> {
+    static constexpr std::string_view Name = "DamageEventComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("events", &DamageEventComponent::events)
     );
 };
 
@@ -826,6 +850,27 @@ struct ComponentMeta<HitStopComponent> {
     static constexpr auto Fields = std::make_tuple(
         MakeField("timer", &HitStopComponent::timer),
         MakeField("speedScale", &HitStopComponent::speedScale)
+    );
+};
+
+template <>
+struct ComponentMeta<HUDLinkComponent> {
+    static constexpr std::string_view Name = "HUDLinkComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("asPlayerHUD", &HUDLinkComponent::asPlayerHUD),
+        MakeField("asBossHUD", &HUDLinkComponent::asBossHUD),
+        MakeField("asWorldFloat", &HUDLinkComponent::asWorldFloat),
+        MakeField("worldOffsetY", &HUDLinkComponent::worldOffsetY)
+    );
+};
+
+template <>
+struct ComponentMeta<LockOnTargetComponent> {
+    static constexpr std::string_view Name = "LockOnTargetComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("maxRange", &LockOnTargetComponent::maxRange),
+        MakeField("fovRadians", &LockOnTargetComponent::fovRadians),
+        MakeField("sticky", &LockOnTargetComponent::sticky)
     );
 };
 
@@ -936,6 +981,14 @@ struct ComponentMeta<StateMachineParamsComponent> {
         MakeField("currentStateId", &StateMachineParamsComponent::currentStateId),
         MakeField("stateTimer", &StateMachineParamsComponent::stateTimer),
         MakeField("animFinished", &StateMachineParamsComponent::animFinished)
+    );
+};
+
+template <>
+struct ComponentMeta<TeamComponent> {
+    static constexpr std::string_view Name = "TeamComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("teamId", &TeamComponent::teamId)
     );
 };
 
@@ -1075,12 +1128,16 @@ using AllComponentTypes = std::tuple<
     ActionDatabaseComponent,
     ActionStateComponent,
     AnimatorComponent,
+    BattleFlowComponent,
     CharacterPhysicsComponent,
+    DamageEventComponent,
     DodgeStateComponent,
     EnemyTagComponent,
     HealthComponent,
     HitboxTrackingComponent,
     HitStopComponent,
+    HUDLinkComponent,
+    LockOnTargetComponent,
     LocomotionStateComponent,
     PlaybackComponent,
     PlaybackRangeComponent,
@@ -1090,6 +1147,7 @@ using AllComponentTypes = std::tuple<
     StaminaComponent,
     StateMachineAssetComponent,
     StateMachineParamsComponent,
+    TeamComponent,
     TimelineComponent,
     TimelineLibraryComponent,
     AggroComponent,

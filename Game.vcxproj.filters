@@ -1090,6 +1090,24 @@
     <ClInclude Include="Source\Gameplay\EnemyTagComponent.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Gameplay\TeamComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\DamageEventComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\HUDLinkComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\LockOnTargetComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\BattleFlowComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\DamageSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h">
@@ -1335,6 +1353,9 @@
       <Filter>Source\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\DamageSystem.cpp">
       <Filter>Source\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\LocomotionSystem.cpp">
