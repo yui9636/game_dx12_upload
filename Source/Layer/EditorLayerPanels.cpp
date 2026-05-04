@@ -505,6 +505,31 @@ void EditorLayer::DrawGameView()
             drawList->AddText(ImVec2(imageMin.x + 16.0f, imageMin.y + 16.0f), IM_COL32(220, 220, 220, 255), "No preview texture");
         }
 
+        {
+            const GameLoopRuntime& flowRuntime = EngineKernel::Instance().GetGameLoopRuntime();
+            const bool showLoading = flowRuntime.loadingOverlayVisible && imageSize.x > 1.0f && imageSize.y > 1.0f;
+            const bool showFade = flowRuntime.fadeAlpha > 0.001f && imageSize.x > 1.0f && imageSize.y > 1.0f;
+            if (showLoading || showFade) {
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const ImVec2 overlayMin = imageMin;
+                const ImVec2 overlayMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
+                const int overlayAlpha = showFade
+                    ? static_cast<int>((std::min)(flowRuntime.fadeAlpha, 1.0f) * 190.0f)
+                    : 120;
+                drawList->AddRectFilled(overlayMin, overlayMax, IM_COL32(0, 0, 0, overlayAlpha));
+                if (showLoading) {
+                    const std::string message = flowRuntime.loadingMessage.empty()
+                        ? std::string("Loading...")
+                        : flowRuntime.loadingMessage;
+                    const ImVec2 textSize = ImGui::CalcTextSize(message.c_str());
+                    const ImVec2 textPos(
+                        overlayMin.x + (imageSize.x - textSize.x) * 0.5f,
+                        overlayMin.y + (imageSize.y - textSize.y) * 0.5f);
+                    drawList->AddText(textPos, IM_COL32(245, 248, 255, 235), message.c_str());
+                }
+            }
+        }
+
         if (m_sceneViewMode == SceneViewMode::Mode2D) {
             DirectX::XMFLOAT4X4 gameView{};
             DirectX::XMFLOAT4X4 gameProjection{};

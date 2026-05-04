@@ -15,7 +15,12 @@ public:
     void Push(const std::string& name, const std::string& value = std::string{})
     {
         if (name.empty()) return;
-        m_events.push_back({ name, value });
+        FlowEvent event{ name, value };
+        m_events.push_back(event);
+        m_recentEvents.push_back(event);
+        if (m_recentEvents.size() > 64) {
+            m_recentEvents.erase(m_recentEvents.begin(), m_recentEvents.begin() + (m_recentEvents.size() - 64));
+        }
     }
 
     bool Contains(const std::string& name, const std::string& value = std::string{}) const
@@ -34,7 +39,9 @@ public:
     }
 
     const std::vector<FlowEvent>& GetEvents() const { return m_events; }
+    const std::vector<FlowEvent>& GetRecentEvents() const { return m_recentEvents; }
 
 private:
     std::vector<FlowEvent> m_events;
+    std::vector<FlowEvent> m_recentEvents;
 };

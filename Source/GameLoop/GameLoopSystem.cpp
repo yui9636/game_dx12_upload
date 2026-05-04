@@ -107,7 +107,14 @@ namespace
         runtime.forceReload = (toNode.id == runtime.currentNodeId);
     }
 
-    bool ExecuteAction(
+    enum class ActionResult
+    {
+        Continue,
+        Blocked,
+        SceneRequested,
+    };
+
+    ActionResult ExecuteAction(
         const GameFlowAction& action,
         const GameLoopNode& toNode,
         GameLoopRuntime& runtime,
@@ -116,40 +123,131 @@ namespace
         switch (action.type) {
         case GameFlowActionType::LoadScene:
             RequestSceneTransition(runtime, toNode, action.target);
-            return runtime.sceneTransitionRequested;
+            return runtime.sceneTransitionRequested ? ActionResult::SceneRequested : ActionResult::Continue;
 
         case GameFlowActionType::SetCurrentNode:
             runtime.previousNodeId = runtime.currentNodeId;
             runtime.currentNodeId = toNode.id;
             runtime.nodeTimer = 0.0f;
-            return false;
+            return ActionResult::Continue;
 
         case GameFlowActionType::EmitEvent:
             flowEvents.Push(action.target, action.value);
-            return false;
+            return ActionResult::Continue;
 
         case GameFlowActionType::SetFlag:
             if (!action.target.empty()) runtime.flags[action.target] = action.boolValue;
-            return false;
+            flowEvents.Push("flow.flag.changed", action.target);
+            return ActionResult::Continue;
 
         case GameFlowActionType::ClearFlag:
             if (!action.target.empty()) runtime.flags[action.target] = false;
-            return false;
+            flowEvents.Push("flow.flag.changed", action.target);
+            return ActionResult::Continue;
 
         case GameFlowActionType::StartBattleFlow:
             BattleFlowSystem::Start(action.target);
-            return false;
+            flowEvents.Push("battle.start.requested", action.target);
+            return ActionResult::Continue;
 
         case GameFlowActionType::ResetBattleFlow:
             BattleFlowSystem::Reset();
-            return false;
+            flowEvents.Push("battle.reset.requested", action.target);
+            return ActionResult::Continue;
 
         case GameFlowActionType::Fade:
+            runtime.fadeDuration = (std::max)(0.0f, action.seconds);
+            runtime.fadeRemaining = runtime.fadeDuration;
+            runtime.fadeAlpha = runtime.fadeDuration > 0.0f ? 1.0f : 0.0f;
+            flowEvents.Push("flow.fade.started", action.target);
+            if (runtime.fadeRemaining > 0.0f) {
+                return ActionResult::Blocked;
+            }
+            return ActionResult::Continue;
+
         case GameFlowActionType::Wait:
-            return false;
+            runtime.actionWaitRemaining = (std::max)(0.0f, action.seconds);
+            flowEvents.Push("flow.wait.started", action.target);
+            if (runtime.actionWaitRemaining > 0.0f) {
+                return ActionResult::Blocked;
+            }
+            return ActionResult::Continue;
+
+        case GameFlowActionType::ShowLoadingOverlay:
+            runtime.loadingOverlayVisible = true;
+            runtime.loadingMessage = !action.message.empty() ? action.message :
+                (!action.value.empty() ? action.value : std::string{ "Loading..." });
+            flowEvents.Push("loading.overlay.shown", runtime.loadingMessage);
+            return ActionResult::Continue;
+
+        case GameFlowActionType::HideLoadingOverlay:
+            runtime.loadingOverlayVisible = false;
+            runtime.loadingMessage.clear();
+            flowEvents.Push("loading.overlay.hidden", action.target);
+            return ActionResult::Continue;
         }
 
-        return false;
+        return ActionResult::Continue;
+    }
+
+    void EnqueueTransitionActions(
+        const GameLoopTransition& transition,
+        const GameLoopNode& toNode,
+        GameLoopRuntime& runtime)
+    {
+        if (transition.actions.empty()) {
+            GameFlowAction action;
+            action.type = toNode.scenePath.empty()
+                ? GameFlowActionType::SetCurrentNode
+                : GameFlowActionType::LoadScene;
+            action.target = toNode.scenePath;
+            runtime.pendingActions.push_back({ action, toNode.id });
+            return;
+        }
+
+        for (const GameFlowAction& action : transition.actions) {
+            runtime.pendingActions.push_back({ action, toNode.id });
+        }
+    }
+
+    ActionResult ProcessQueuedActions(
+        const GameLoopAsset& asset,
+        GameLoopRuntime& runtime,
+        FlowEventQueue& flowEvents,
+        float dt)
+    {
+        if (runtime.actionWaitRemaining > 0.0f) {
+            runtime.actionWaitRemaining = (std::max)(0.0f, runtime.actionWaitRemaining - dt);
+            return ActionResult::Blocked;
+        }
+
+        if (runtime.fadeRemaining > 0.0f) {
+            runtime.fadeRemaining = (std::max)(0.0f, runtime.fadeRemaining - dt);
+            if (runtime.fadeDuration > 0.0f) {
+                runtime.fadeAlpha = runtime.fadeRemaining / runtime.fadeDuration;
+            }
+            else {
+                runtime.fadeAlpha = 0.0f;
+            }
+            return ActionResult::Blocked;
+        }
+
+        while (!runtime.pendingActions.empty()) {
+            QueuedGameFlowAction queued = runtime.pendingActions.front();
+            runtime.pendingActions.erase(runtime.pendingActions.begin());
+
+            const GameLoopNode* toNode = asset.FindNode(queued.toNodeId);
+            if (!toNode) {
+                continue;
+            }
+
+            const ActionResult result = ExecuteAction(queued.action, *toNode, runtime, flowEvents);
+            if (result != ActionResult::Continue) {
+                return result;
+            }
+        }
+
+        return ActionResult::Continue;
     }
 }
 
@@ -172,6 +270,10 @@ void GameLoopSystem::Update(
 
     runtime.nodeTimer += dt;
 
+    if (ProcessQueuedActions(asset, runtime, flowEvents, dt) != ActionResult::Continue) {
+        return;
+    }
+
     const GameLoopTransition* selectedTransition = nullptr;
     for (const GameLoopTransition& transition : asset.transitions) {
         if (transition.fromNodeId != runtime.currentNodeId) continue;
@@ -187,12 +289,6 @@ void GameLoopSystem::Update(
     const GameLoopNode* toNode = asset.FindNode(selectedTransition->toNodeId);
     if (!toNode) return;
 
-    bool requestedScene = false;
-    for (const GameFlowAction& action : selectedTransition->actions) {
-        requestedScene = ExecuteAction(action, *toNode, runtime, flowEvents) || requestedScene;
-    }
-
-    if (!requestedScene && !toNode->scenePath.empty()) {
-        RequestSceneTransition(runtime, *toNode, std::string{});
-    }
+    EnqueueTransitionActions(*selectedTransition, *toNode, runtime);
+    ProcessQueuedActions(asset, runtime, flowEvents, dt);
 }

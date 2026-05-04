@@ -13,7 +13,10 @@ constexpr uint8_t kGameFlowUnboundGamepadButton = 0xFF;
 enum class GameLoopNodeType : uint8_t
 {
     Scene = 0,
-    Flow = 1,
+    State = 1,
+    Event = 2,
+    Action = 3,
+    Battle = 4,
 };
 
 enum class GameFlowConditionMode : uint8_t
@@ -44,6 +47,8 @@ enum class GameFlowActionType : uint8_t
     ResetBattleFlow = 6,
     Fade = 7,
     Wait = 8,
+    ShowLoadingOverlay = 9,
+    HideLoadingOverlay = 10,
 };
 
 struct GameFlowCondition
@@ -64,6 +69,7 @@ struct GameFlowAction
     std::string value;
     bool boolValue = true;
     float seconds = 0.0f;
+    std::string message;
 };
 
 struct GameLoopNode
@@ -85,6 +91,12 @@ struct GameLoopTransition
     GameFlowConditionMode conditionMode = GameFlowConditionMode::All;
     std::vector<GameFlowCondition> conditions;
     std::vector<GameFlowAction> actions;
+};
+
+struct QueuedGameFlowAction
+{
+    GameFlowAction action;
+    uint32_t toNodeId = 0;
 };
 
 struct GameLoopAsset

@@ -2,8 +2,11 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <DirectXMath.h>
+
+#include "GameLoopAsset.h"
 
 // Runtime state for the GameLoop. Persistent across scene loads.
 // Owned by EngineKernel (NOT by any Registry).
@@ -41,6 +44,14 @@ struct GameLoopRuntime
 
     // RuntimeFlag / CustomEvent flag table.
     std::unordered_map<std::string, bool> flags;
+
+    std::vector<QueuedGameFlowAction> pendingActions;
+    float actionWaitRemaining = 0.0f;
+    float fadeRemaining = 0.0f;
+    float fadeDuration = 0.0f;
+    float fadeAlpha = 0.0f;
+    bool loadingOverlayVisible = false;
+    std::string loadingMessage;
 
     // True while GameLoop is running (Play in progress).
     bool isActive = false;

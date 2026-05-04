@@ -1866,6 +1866,25 @@ namespace {
         }
     }
 
+    void PushResolvedActionEventsToGameFlow(FlowEventQueue& flowEvents, Registry& inputRegistry)
+    {
+        Query<InputActionMapComponent, ResolvedInputStateComponent> q(inputRegistry);
+        q.ForEach([&](InputActionMapComponent& actionMap, ResolvedInputStateComponent& resolved) {
+            const size_t count = (std::min)(
+                static_cast<size_t>(resolved.actionCount),
+                actionMap.asset.actions.size());
+            for (size_t i = 0; i < count; ++i) {
+                if (!resolved.actions[i].pressed) {
+                    continue;
+                }
+                const std::string& actionName = actionMap.asset.actions[i].actionName;
+                if (!actionName.empty()) {
+                    flowEvents.Push("input.action.pressed", actionName);
+                }
+            }
+        });
+    }
+
     void PushUIButtonEventsToGameFlow(FlowEventQueue& flowEvents, const UIButtonClickEventQueue& clickQueue)
     {
         for (const std::string& buttonId : clickQueue.GetAll()) {
@@ -3053,6 +3072,7 @@ void EngineKernel::Update(float rawDt)
             time.unscaledDt);
 
         PushInputEventsToGameFlow(m_flowEventQueue, m_inputQueue);
+        PushResolvedActionEventsToGameFlow(m_flowEventQueue, m_gameLoopRegistry);
 
         if (!sceneLoadedByGameLoop) {
             if (mode == EngineMode::Play || stepThisFrame) {

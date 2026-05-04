@@ -19,6 +19,7 @@ void GameLoopEditorPanelInternal::Draw(bool* p_open, bool* outFocused)
     if (outFocused) *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
     DrawToolbar();
+    DrawFileDialogBar();
     DrawMainLayout();
     DrawScenePickerPopup();
 
@@ -50,12 +51,14 @@ void GameLoopEditorPanelInternal::DrawToolbar()
         }
         if (ImGui::MenuItem("Load")) {
             std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
-            ImGui::OpenPopup("LoadGameFlow");
+            m_fileDialogMode = FileDialogMode::Load;
+            m_statusMessage.clear();
         }
         if (ImGui::MenuItem("Save")) Save();
         if (ImGui::MenuItem("Save As")) {
             std::strncpy(m_saveAsPath, m_currentPath.string().c_str(), sizeof(m_saveAsPath) - 1);
-            ImGui::OpenPopup("SaveGameFlowAs");
+            m_fileDialogMode = FileDialogMode::SaveAs;
+            m_statusMessage.clear();
         }
         ImGui::EndMenu();
     }
@@ -72,28 +75,48 @@ void GameLoopEditorPanelInternal::DrawToolbar()
     ImGui::TextDisabled("%s%s", m_dirty ? "*" : "", m_currentPath.filename().string().c_str());
 
     ImGui::EndMenuBar();
+}
 
-    if (ImGui::BeginPopupModal("LoadGameFlow", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::InputText("Path", m_loadPath, sizeof(m_loadPath));
-        if (ImGui::Button("Load")) {
-            Load(m_loadPath);
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
+void GameLoopEditorPanelInternal::DrawFileDialogBar()
+{
+    if (!m_statusMessage.empty()) {
+        ImGui::TextDisabled("%s", m_statusMessage.c_str());
     }
 
-    if (ImGui::BeginPopupModal("SaveGameFlowAs", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::InputText("Path", m_saveAsPath, sizeof(m_saveAsPath));
-        if (ImGui::Button("Save")) {
-            m_currentPath = m_saveAsPath;
-            Save();
-            ImGui::CloseCurrentPopup();
+    if (m_fileDialogMode == FileDialogMode::Load) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Load GameFlow");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth((std::max)(260.0f, ImGui::GetContentRegionAvail().x - 150.0f));
+        ImGui::InputText("##LoadGameFlowPath", m_loadPath, sizeof(m_loadPath));
+        ImGui::SameLine();
+        if (ImGui::Button("Load##GameFlowFile")) {
+            Load(m_loadPath);
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
-        ImGui::EndPopup();
+        if (ImGui::Button("Cancel##LoadGameFlowFile")) {
+            m_fileDialogMode = FileDialogMode::None;
+        }
+        ImGui::Separator();
+        return;
+    }
+
+    if (m_fileDialogMode == FileDialogMode::SaveAs) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Save GameFlow As");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth((std::max)(260.0f, ImGui::GetContentRegionAvail().x - 150.0f));
+        ImGui::InputText("##SaveGameFlowPath", m_saveAsPath, sizeof(m_saveAsPath));
+        ImGui::SameLine();
+        if (ImGui::Button("Save##GameFlowFile")) {
+            m_currentPath = m_saveAsPath;
+            Save();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel##SaveGameFlowFile")) {
+            m_fileDialogMode = FileDialogMode::None;
+        }
+        ImGui::Separator();
     }
 }
 

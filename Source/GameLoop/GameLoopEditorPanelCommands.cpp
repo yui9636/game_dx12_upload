@@ -163,8 +163,17 @@ void GameLoopEditorPanelInternal::Validate()
 void GameLoopEditorPanelInternal::Save()
 {
     Validate();
-    if (m_validateResult.HasError()) return;
-    if (m_asset.SaveToFile(m_currentPath)) m_dirty = false;
+    if (m_asset.SaveToFile(m_currentPath)) {
+        m_dirty = false;
+        m_fileDialogMode = FileDialogMode::None;
+        m_statusMessage = "Saved: " + m_currentPath.string();
+        if (m_validateResult.HasError()) {
+            m_statusMessage += " (with validation errors)";
+        }
+    }
+    else {
+        m_statusMessage = "Save failed: " + m_currentPath.string();
+    }
 }
 
 void GameLoopEditorPanelInternal::Load(const std::filesystem::path& path)
@@ -176,5 +185,10 @@ void GameLoopEditorPanelInternal::Load(const std::filesystem::path& path)
         m_fitRequested = true;
         m_dirty = false;
         m_validated = false;
+        m_fileDialogMode = FileDialogMode::None;
+        m_statusMessage = "Loaded: " + m_currentPath.string();
+    }
+    else {
+        m_statusMessage = "Load failed: " + path.string();
     }
 }

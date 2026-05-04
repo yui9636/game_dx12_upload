@@ -14,5 +14,12 @@ void GameLoopRuntime::Reset()
     observedActorStartPosition = { 0.0f, 0.0f, 0.0f };
     observedActorPositionInitialized = false;
     flags.clear();
+    pendingActions.clear();
+    actionWaitRemaining = 0.0f;
+    fadeRemaining = 0.0f;
+    fadeDuration = 0.0f;
+    fadeAlpha = 0.0f;
+    loadingOverlayVisible = false;
+    loadingMessage.clear();
     isActive = false;
 }

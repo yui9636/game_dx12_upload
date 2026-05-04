@@ -137,6 +137,7 @@ public:
 private:
     enum class SelectionKind { None, Node, Transition };
     enum class PickerMode { None, CreateNode, ReplaceNode, CreateNodeAndTransition };
+    enum class FileDialogMode { None, Load, SaveAs };
 
     struct NodeView
     {
@@ -145,6 +146,7 @@ private:
     };
 
     void DrawToolbar();
+    void DrawFileDialogBar();
     void DrawMainLayout();
     void DrawGraph(const ImVec2& size);
     void DrawInspector();
@@ -221,6 +223,8 @@ private:
     GameLoopValidateResult m_validateResult;
     bool m_validated = false;
     bool m_dirty = false;
+    FileDialogMode m_fileDialogMode = FileDialogMode::None;
+    std::string m_statusMessage;
     char m_loadPath[512] = {};
     char m_saveAsPath[512] = {};
 };

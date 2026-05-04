@@ -19,14 +19,21 @@ namespace
     {
         switch (t) {
         case GameLoopNodeType::Scene: return "Scene";
-        case GameLoopNodeType::Flow:  return "Flow";
+        case GameLoopNodeType::State: return "State";
+        case GameLoopNodeType::Event: return "Event";
+        case GameLoopNodeType::Action:return "Action";
+        case GameLoopNodeType::Battle:return "Battle";
         }
         return "Scene";
     }
 
     GameLoopNodeType NodeTypeFromString(const std::string& s)
     {
-        if (s == "Flow") return GameLoopNodeType::Flow;
+        if (s == "State") return GameLoopNodeType::State;
+        if (s == "Event") return GameLoopNodeType::Event;
+        if (s == "Action") return GameLoopNodeType::Action;
+        if (s == "Battle") return GameLoopNodeType::Battle;
+        if (s == "Flow") return GameLoopNodeType::State;
         return GameLoopNodeType::Scene;
     }
 
@@ -82,6 +89,8 @@ namespace
         case GameFlowActionType::ResetBattleFlow: return "ResetBattleFlow";
         case GameFlowActionType::Fade:            return "Fade";
         case GameFlowActionType::Wait:            return "Wait";
+        case GameFlowActionType::ShowLoadingOverlay:return "ShowLoadingOverlay";
+        case GameFlowActionType::HideLoadingOverlay:return "HideLoadingOverlay";
         }
         return "LoadScene";
     }
@@ -96,6 +105,8 @@ namespace
         if (s == "ResetBattleFlow") return GameFlowActionType::ResetBattleFlow;
         if (s == "Fade") return GameFlowActionType::Fade;
         if (s == "Wait") return GameFlowActionType::Wait;
+        if (s == "ShowLoadingOverlay") return GameFlowActionType::ShowLoadingOverlay;
+        if (s == "HideLoadingOverlay") return GameFlowActionType::HideLoadingOverlay;
         return GameFlowActionType::LoadScene;
     }
 
@@ -138,6 +149,7 @@ namespace
         if (!action.value.empty()) j["value"] = action.value;
         j["boolValue"] = action.boolValue;
         if (action.seconds != 0.0f) j["seconds"] = action.seconds;
+        if (!action.message.empty()) j["message"] = action.message;
         return j;
     }
 
@@ -149,6 +161,7 @@ namespace
         action.value = j.value("value", std::string{});
         action.boolValue = j.value("boolValue", true);
         action.seconds = j.value("seconds", 0.0f);
+        action.message = j.value("message", std::string{});
         return action;
     }
 
