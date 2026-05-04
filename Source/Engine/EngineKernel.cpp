@@ -3012,6 +3012,11 @@ void EngineKernel::Update(float rawDt)
     time.unscaledDt = rawDt;
     time.frameCount++;
 
+    if (m_stopRequested) {
+        m_stopRequested = false;
+        StopImmediate();
+    }
+
     if (m_editorLayer) {
         m_editorLayer->Update(time);
     }
@@ -3130,6 +3135,13 @@ void EngineKernel::Update(float rawDt)
 // 描画本体。
 void EngineKernel::Render()
 {
+    m_renderInProgress = true;
+    struct RenderInProgressGuard
+    {
+        bool& flag;
+        ~RenderInProgressGuard() { flag = false; }
+    } renderInProgressGuard{ m_renderInProgress };
+
     // DX12 の deferred free を処理する。
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
@@ -3818,6 +3830,17 @@ void EngineKernel::Play()
 
 // Play / Pause -> Editor へ戻る。
 void EngineKernel::Stop()
+{
+    if (m_renderInProgress) {
+        m_stopRequested = true;
+        m_stepFrameRequested = false;
+        return;
+    }
+
+    StopImmediate();
+}
+
+void EngineKernel::StopImmediate()
 {
     if (mode == EngineMode::Play || mode == EngineMode::Pause) {
         mode = EngineMode::Editor;

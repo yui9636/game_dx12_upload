@@ -105,6 +105,7 @@ private:
 
     // PlayerEditor �p�̃v���r���[�� offscreen �`�悷��B
     void RenderPlayerPreviewOffscreen();
+    void StopImmediate();
 
     // ���ԊǗ����B
     EngineTime time;
@@ -114,6 +115,8 @@ private:
 
     // Pause ���� 1 �t���[�������i�߂�v���t���O�B
     bool m_stepFrameRequested = false;
+    bool m_stopRequested = false;
+    bool m_renderInProgress = false;
 
     // �`��p�C�v���C���{�́B
     std::unique_ptr<RenderPipeline> m_renderPipeline;
