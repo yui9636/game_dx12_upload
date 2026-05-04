@@ -3,7 +3,8 @@
 #include <string>
 #include "Entity/Entity.h"
 
-// Singleton ("_BattleFlow"). Drives the 1v1 encounter state machine.
+// Legacy serialized component. BattleFlow is now driven by BattleFlowSystem's
+// runtime state and should not be placed as a Hierarchy singleton.
 struct BattleFlowComponent {
     enum class Phase : uint8_t {
         Idle      = 0,

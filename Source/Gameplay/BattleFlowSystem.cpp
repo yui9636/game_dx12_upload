@@ -36,55 +36,9 @@ namespace
     BattleFlowRuntime g_runtime;
     std::vector<FlowEvent> g_pendingEvents;
 
-    BattleFlowComponent* FindFlow(Registry& registry)
-    {
-        BattleFlowComponent* found = nullptr;
-        Query<BattleFlowComponent> q(registry);
-        q.ForEach([&](BattleFlowComponent& flow) {
-            if (!found) found = &flow;
-        });
-        return found;
-    }
-
     void PushBattleEvent(const std::string& name, const std::string& value)
     {
         g_pendingEvents.push_back({ name, value });
-    }
-
-    void SyncAuthoringConfig(Registry& registry, BattleFlowComponent* flow)
-    {
-        if (!flow) return;
-
-        if (!Entity::IsNull(flow->playerEntity) && registry.IsAlive(flow->playerEntity)) {
-            g_runtime.playerEntity = flow->playerEntity;
-        }
-        if (!Entity::IsNull(flow->bossEntity) && registry.IsAlive(flow->bossEntity)) {
-            g_runtime.bossEntity = flow->bossEntity;
-        }
-        if (!Entity::IsNull(flow->arenaEntity) && registry.IsAlive(flow->arenaEntity)) {
-            g_runtime.arenaEntity = flow->arenaEntity;
-        }
-        g_runtime.encounterRadius = flow->encounterRadius;
-        g_runtime.introDuration = flow->introDuration;
-        if (!flow->battleId.empty()) {
-            g_runtime.battleId = flow->battleId;
-        }
-        if (flow->autoStartOnPlayerEnter && !g_runtime.active) {
-            g_runtime.active = true;
-        }
-    }
-
-    void MirrorRuntimeToComponent(BattleFlowComponent* flow)
-    {
-        if (!flow) return;
-        flow->phase = g_runtime.phase;
-        flow->phaseTimer = g_runtime.phaseTimer;
-        flow->playerEntity = g_runtime.playerEntity;
-        flow->bossEntity = g_runtime.bossEntity;
-        flow->arenaEntity = g_runtime.arenaEntity;
-        flow->encounterRadius = g_runtime.encounterRadius;
-        flow->introDuration = g_runtime.introDuration;
-        flow->battleId = g_runtime.battleId;
     }
 
     void AutoBindEntities(Registry& registry)
@@ -196,11 +150,7 @@ void BattleFlowSystem::DrainEvents(FlowEventQueue& outEvents)
 
 void BattleFlowSystem::Update(Registry& registry, float dt)
 {
-    BattleFlowComponent* flow = FindFlow(registry);
-    SyncAuthoringConfig(registry, flow);
-
     if (!g_runtime.active) {
-        MirrorRuntimeToComponent(flow);
         return;
     }
 
@@ -238,5 +188,4 @@ void BattleFlowSystem::Update(Registry& registry, float dt)
         break;
     }
 
-    MirrorRuntimeToComponent(flow);
 }

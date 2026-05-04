@@ -3,8 +3,7 @@
 class Registry;
 
 // Reads the per-frame contact list from CollisionManager and converts
-// (Attack vs Body) hits into DamageEventComponent::Event records on the
-// "_DamageEventQueue" singleton entity.
+// (Attack vs Body) hits into DamageEventRuntimeQueue records.
 //
 // HealthSystem consumes those events the same frame and clears the queue.
 //

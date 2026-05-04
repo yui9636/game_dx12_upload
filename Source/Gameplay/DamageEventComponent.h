@@ -6,8 +6,8 @@
 
 #include "Entity/Entity.h"
 
-// Per-frame damage event queue. Lives on a singleton entity ("_DamageEventQueue").
-// DamageSystem pushes events; HealthSystem consumes and clears them in the same frame.
+// Legacy serialized component. Runtime damage events are now stored in
+// DamageEventRuntimeQueue so no "_DamageEventQueue" entity is required.
 struct DamageEventComponent {
     struct Event {
         EntityID attacker = Entity::NULL_ID;
@@ -26,4 +26,32 @@ struct DamageEventComponent {
         std::string hitSfxPath;
     };
     std::vector<Event> events;
+};
+
+class DamageEventRuntimeQueue
+{
+public:
+    using Event = DamageEventComponent::Event;
+
+    static void Push(const Event& event)
+    {
+        Events().push_back(event);
+    }
+
+    static const std::vector<Event>& GetAll()
+    {
+        return Events();
+    }
+
+    static void Clear()
+    {
+        Events().clear();
+    }
+
+private:
+    static std::vector<Event>& Events()
+    {
+        static std::vector<Event> events;
+        return events;
+    }
 };

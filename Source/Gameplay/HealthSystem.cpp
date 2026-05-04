@@ -12,7 +12,6 @@
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
-#include "System/Query.h"
 #include "UI/DamageTextManager.h"
 
 #include <algorithm>
@@ -47,14 +46,8 @@ namespace
 
     void ApplyDamageEvents(Registry& registry)
     {
-        DamageEventComponent* queue = nullptr;
-        Query<DamageEventComponent> q(registry);
-        q.ForEach([&](DamageEventComponent& deq) {
-            if (!queue) queue = &deq;
-        });
-        if (!queue) return;
-
-        for (const auto& ev : queue->events) {
+        const auto& events = DamageEventRuntimeQueue::GetAll();
+        for (const auto& ev : events) {
             HealthComponent* vh = registry.GetComponent<HealthComponent>(ev.victim);
             if (!vh) continue;
             if (vh->isDead || vh->isInvincible) continue;
@@ -110,7 +103,7 @@ namespace
             }
         }
 
-        queue->events.clear();
+        DamageEventRuntimeQueue::Clear();
     }
 }
 

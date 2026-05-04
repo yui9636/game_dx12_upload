@@ -11,7 +11,6 @@
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/TeamComponent.h"
 #include "Registry/Registry.h"
-#include "System/Query.h"
 
 #include <DirectXMath.h>
 #include <cmath>
@@ -22,16 +21,6 @@ namespace
     EntityID UserPtrToEntity(void* userPtr)
     {
         return static_cast<EntityID>(reinterpret_cast<uintptr_t>(userPtr));
-    }
-
-    DamageEventComponent* FindDamageEventQueue(Registry& registry)
-    {
-        DamageEventComponent* found = nullptr;
-        Query<DamageEventComponent> q(registry);
-        q.ForEach([&](DamageEventComponent& deq) {
-            if (!found) found = &deq;
-        });
-        return found;
     }
 
     bool AlreadyHit(const HitboxTrackingComponent& track, EntityID victim)
@@ -101,9 +90,6 @@ namespace
 
 void DamageSystem::Update(Registry& registry)
 {
-    DamageEventComponent* queue = FindDamageEventQueue(registry);
-    if (!queue) return;
-
     auto& cm = CollisionManager::Instance();
     std::vector<CollisionContact> contacts;
     cm.ComputeAllContacts(contacts);
@@ -170,7 +156,7 @@ void DamageSystem::Update(Registry& registry)
             ev.hitSfxPath = victimBody->hitSfxPath;
         }
 
-        queue->events.push_back(ev);
+        DamageEventRuntimeQueue::Push(ev);
         if (track) RecordHit(*track, victim);
     }
 }

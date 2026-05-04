@@ -59,9 +59,62 @@
 #include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
 #include "RHI/DX11/DX11Texture.h"
+#include <algorithm>
+#include <vector>
+
+namespace
+{
+    bool IsLegacyRuntimeSingletonName(const std::string& name)
+    {
+        return name == "_DamageEventQueue" || name == "_BattleFlow";
+    }
+
+    void AddUniqueEntity(std::vector<EntityID>& entities, EntityID entity)
+    {
+        if (Entity::IsNull(entity)) {
+            return;
+        }
+        if (std::find(entities.begin(), entities.end(), entity) == entities.end()) {
+            entities.push_back(entity);
+        }
+    }
+
+    void RemoveLegacyRuntimeSingletonEntities(Registry& registry)
+    {
+        std::vector<EntityID> toDestroy;
+
+        {
+            Query<DamageEventComponent> q(registry);
+            q.ForEachWithEntity([&](EntityID entity, DamageEventComponent&) {
+                AddUniqueEntity(toDestroy, entity);
+            });
+        }
+        {
+            Query<BattleFlowComponent> q(registry);
+            q.ForEachWithEntity([&](EntityID entity, BattleFlowComponent&) {
+                AddUniqueEntity(toDestroy, entity);
+            });
+        }
+        {
+            Query<NameComponent> q(registry);
+            q.ForEachWithEntity([&](EntityID entity, NameComponent& name) {
+                if (IsLegacyRuntimeSingletonName(name.name)) {
+                    AddUniqueEntity(toDestroy, entity);
+                }
+            });
+        }
+
+        for (EntityID entity : toDestroy) {
+            registry.DestroyEntity(entity);
+        }
+    }
+}
 
 void GameLayer::Initialize()
 {
+    DamageEventRuntimeQueue::Clear();
+    BattleFlowSystem::Reset();
+
     // エディタ起動直後でも最低限の描画情報が成立するように、
     // デフォルトのカメラ・ライト・反射プローブを作っておく。
     EntityID cameraEntity = m_registry.CreateEntity();
@@ -115,14 +168,7 @@ void GameLayer::Initialize()
     m_registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
     m_registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
 
-    // 1v1 boss battle infrastructure singletons.
-    EntityID damageEventEntity = m_registry.CreateEntity();
-    m_registry.AddComponent(damageEventEntity, NameComponent{ "_DamageEventQueue" });
-    m_registry.AddComponent(damageEventEntity, DamageEventComponent{});
-
-    EntityID battleFlowEntity = m_registry.CreateEntity();
-    m_registry.AddComponent(battleFlowEntity, NameComponent{ "_BattleFlow" });
-    m_registry.AddComponent(battleFlowEntity, BattleFlowComponent{});
+    RemoveLegacyRuntimeSingletonEntities(m_registry);
 }
 
 void GameLayer::Finalize()
@@ -132,6 +178,8 @@ void GameLayer::Finalize()
 
 void GameLayer::Update(const EngineTime& time)
 {
+    RemoveLegacyRuntimeSingletonEntities(m_registry);
+
     EffectService::Instance().SetRegistry(&m_registry);
     AnimatorService::Instance().SetRegistry(&m_registry);
     CinematicService::Instance().SetRegistry(&m_registry);
