@@ -2,6 +2,7 @@
 
 #include "Collision/Collision.h"
 #include "Collision/CollisionManager.h"
+#include "Component/ColliderComponent.h"
 #include "Component/TransformComponent.h"
 #include "Gameplay/ActionDatabaseComponent.h"
 #include "Gameplay/ActionStateComponent.h"
@@ -9,7 +10,9 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/TeamComponent.h"
+#include "Gameplay/TimelineItemBuffer.h"
 #include "Registry/Registry.h"
+#include "Storage/GameplayAsset.h"
 #include "System/Query.h"
 
 #include <DirectXMath.h>
@@ -75,6 +78,37 @@ namespace
         const int dmg = ad->nodes[idx].damageVal;
         return dmg > 0 ? dmg : 1;
     }
+
+    // The Attack collider element on the attacker carries a runtimeTag set by
+    // TimelineHitboxSystem to (item_index + 1). Map that back to the source
+    // GESequencerItem so we can read its hit feedback paths.
+    const GESequencerItem* ResolveActiveHitboxItem(
+        Registry& registry,
+        EntityID attacker,
+        uint32_t attackColliderId)
+    {
+        if (attackColliderId == 0) return nullptr;
+        auto* collider = registry.GetComponent<ColliderComponent>(attacker);
+        if (!collider) return nullptr;
+
+        int runtimeTag = 0;
+        for (const auto& elem : collider->elements) {
+            if (elem.registeredId == attackColliderId) {
+                runtimeTag = elem.runtimeTag;
+                break;
+            }
+        }
+        if (runtimeTag <= 0) return nullptr;
+
+        auto* buffer = registry.GetComponent<TimelineItemBuffer>(attacker);
+        if (!buffer) return nullptr;
+
+        const int itemIndex = runtimeTag - 1;
+        if (itemIndex < 0 || itemIndex >= static_cast<int>(buffer->items.size())) {
+            return nullptr;
+        }
+        return &buffer->items[itemIndex];
+    }
 }
 
 void DamageSystem::Update(Registry& registry)
@@ -96,10 +130,11 @@ void DamageSystem::Update(Registry& registry)
         // Need exactly one Attack and one Body.
         const Collider* attackCol = nullptr;
         const Collider* bodyCol   = nullptr;
+        uint32_t attackColliderId = 0;
         if (a->attribute == ColliderAttribute::Attack && b->attribute == ColliderAttribute::Body) {
-            attackCol = a; bodyCol = b;
+            attackCol = a; bodyCol = b; attackColliderId = contact.idA;
         } else if (a->attribute == ColliderAttribute::Body && b->attribute == ColliderAttribute::Attack) {
-            attackCol = b; bodyCol = a;
+            attackCol = b; bodyCol = a; attackColliderId = contact.idB;
         } else {
             continue;
         }
@@ -136,6 +171,14 @@ void DamageSystem::Update(Registry& registry)
         ev.knockbackPower = 0.0f; // v1: reaction-driven, no positional shove
         ev.hitStopSec     = 0.08f;
         ev.reactionKind   = 0;
+
+        // Hit feedback paths come from the Hitbox item that produced this
+        // collider. Empty strings mean the authoring side left them blank,
+        // which HealthSystem treats as silent / no VFX.
+        if (const GESequencerItem* item = ResolveActiveHitboxItem(registry, attacker, attackColliderId)) {
+            ev.hitVfxPath = item->hb.hitVfxPath;
+            ev.hitSfxPath = item->hb.hitSfxPath;
+        }
 
         queue->events.push_back(ev);
         if (track) RecordHit(*track, victim);

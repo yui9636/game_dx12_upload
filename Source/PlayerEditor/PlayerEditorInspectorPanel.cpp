@@ -203,6 +203,27 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                     timelineRuntimeChanged = true;
                 }
             }
+            // Hit feedback paths. HealthSystem fires these at the contact
+            // point when this hitbox window's Attack collider lands on a
+            // Body. Empty = silent / no VFX, which is the safe default.
+            ImGui::Separator();
+            ImGui::TextDisabled("Hit Feedback (fires on Body x Attack)");
+            {
+                char vfxBuf[256] = {};
+                strncpy_s(vfxBuf, item.hitbox.hitVfxPath.c_str(), _TRUNCATE);
+                if (ImGui::InputText("Hit VFX", vfxBuf, sizeof(vfxBuf))) {
+                    item.hitbox.hitVfxPath = vfxBuf;
+                    m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
+                }
+                char sfxBuf[260] = {};
+                strncpy_s(sfxBuf, item.hitbox.hitSfxPath.c_str(), _TRUNCATE);
+                if (ImGui::InputText("Hit SFX", sfxBuf, sizeof(sfxBuf))) {
+                    item.hitbox.hitSfxPath = sfxBuf;
+                    m_timelineDirty = true;
+                    timelineRuntimeChanged = true;
+                }
+            }
             break;
 
         case TimelineTrackType::VFX:

@@ -4,7 +4,10 @@
 #include "HitStopComponent.h"
 #include "StateMachineParamsComponent.h"
 #include "CharacterPhysicsComponent.h"
+#include "Audio/AudioWorldSystem.h"
 #include "Component/TransformComponent.h"
+#include "EffectRuntime/EffectService.h"
+#include "Engine/EngineKernel.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
@@ -86,6 +89,25 @@ namespace
 
             // Floating damage number. Safe no-op if the pool wasn't initialized.
             DamageTextManager::Instance().Spawn(ev.hitPoint, ev.amount);
+
+            // Hit VFX. Spawn at the contact point in world space if the
+            // authoring side specified a path on the Hitbox item.
+            if (!ev.hitVfxPath.empty()) {
+                EffectPlayDesc desc;
+                desc.assetPath = ev.hitVfxPath;
+                desc.position  = ev.hitPoint;
+                desc.rotation  = { 0.0f, 0.0f, 0.0f, 1.0f };
+                desc.scale     = { 1.0f, 1.0f, 1.0f };
+                desc.loop      = false;
+                desc.debugName = "Hit VFX";
+                EffectService::Instance().PlayWorld(registry, desc);
+            }
+
+            // Hit SE. Always 3D-positional so distance attenuation works.
+            if (!ev.hitSfxPath.empty()) {
+                auto& audio = EngineKernel::Instance().GetAudioWorld();
+                audio.PlayTransient3D(ev.hitSfxPath, ev.hitPoint, 1.0f, 1.0f, false);
+            }
         }
 
         queue->events.clear();

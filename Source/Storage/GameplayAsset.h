@@ -19,8 +19,31 @@ struct GEHitboxPayload
     float                 radius = 30.0f;
     unsigned int          rgba = 0x40FF0000;
 
-    NLOHMANN_DEFINE_TYPE_INTRUSIVE(GEHitboxPayload, nodeIndex, offsetLocal, radius, rgba)
+    // Optional asset paths fired by HealthSystem on a successful hit
+    // (Body x Attack contact). Empty = no VFX / SE for this hitbox.
+    std::string           hitVfxPath;
+    std::string           hitSfxPath;
 };
+
+inline void to_json(nlohmann::json& j, const GEHitboxPayload& p) {
+    j = nlohmann::json{
+        {"nodeIndex", p.nodeIndex},
+        {"offsetLocal", p.offsetLocal},
+        {"radius", p.radius},
+        {"rgba", p.rgba},
+        {"hitVfxPath", p.hitVfxPath},
+        {"hitSfxPath", p.hitSfxPath}
+    };
+}
+inline void from_json(const nlohmann::json& j, GEHitboxPayload& p) {
+    p.nodeIndex   = j.value("nodeIndex", 0);
+    p.offsetLocal = j.value("offsetLocal", DirectX::XMFLOAT3{ 0.0f, 0.0f, 0.0f });
+    p.radius      = j.value("radius", 30.0f);
+    p.rgba        = j.value("rgba", 0x40FF0000u);
+    // Backwards-compat: assets saved before this field existed default to "".
+    p.hitVfxPath  = j.value("hitVfxPath", std::string{});
+    p.hitSfxPath  = j.value("hitSfxPath", std::string{});
+}
 
 struct GEVfxPayload
 {

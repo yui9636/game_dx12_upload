@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cstdint>
+#include <string>
 #include <DirectXMath.h>
 
 #include "Entity/Entity.h"
@@ -17,6 +18,12 @@ struct DamageEventComponent {
         float    knockbackPower = 0.0f;
         float    hitStopSec     = 0.08f;
         uint8_t  reactionKind   = 0; // 0=light, 1=heavy, 2=launch (v1 = light only)
+
+        // Snapshot of the active Hitbox item's hit feedback paths (resolved
+        // by DamageSystem at the moment the event is created). HealthSystem
+        // uses these to spawn VFX / SE at hitPoint. Empty = silent / no VFX.
+        std::string hitVfxPath;
+        std::string hitSfxPath;
     };
     std::vector<Event> events;
 };

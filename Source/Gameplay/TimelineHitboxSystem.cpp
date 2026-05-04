@@ -170,6 +170,8 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         ownerEntity,
                         tx,
                         item.hb.nodeIndex);
+                    void* const ownerUserPtr =
+                        reinterpret_cast<void*>(static_cast<uintptr_t>(ownerEntity));
                     if (found) {
                         // Update existing
                         found->radius = item.hb.radius;
@@ -179,6 +181,9 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         if (found->registeredId) {
                             cm.UpdateSphere(found->registeredId, { center, scaledRadius });
                             cm.SetEnabled(found->registeredId, true);
+                            // userPtr survives Update*, but defensively re-bind so DamageSystem
+                            // can always recover the attacker EntityID from a contact.
+                            cm.SetUserPtr(found->registeredId, ownerUserPtr);
                         }
                     } else {
                         // Create new attack sphere
@@ -190,7 +195,7 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         elem.nodeIndex = item.hb.nodeIndex;
                         elem.runtimeTag = tag;
                         elem.enabled = true;
-                        elem.registeredId = cm.AddSphere({ center, scaledRadius }, nullptr, ColliderAttribute::Attack);
+                        elem.registeredId = cm.AddSphere({ center, scaledRadius }, ownerUserPtr, ColliderAttribute::Attack);
                         col.elements.push_back(elem);
                     }
                 } else if (found) {
