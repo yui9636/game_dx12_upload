@@ -88,6 +88,9 @@ public:
     // Registry that owns the GameLoop persistent input owner entity.
     Registry& GetGameLoopRegistry() { return m_gameLoopRegistry; }
 
+    Registry* GetGameRegistry();
+    const Registry* GetGameRegistry() const;
+
     // Per-frame UI button click queue (cleared at end of frame).
     UIButtonClickEventQueue& GetUIButtonClickQueue() { return m_uiButtonClickQueue; }
 

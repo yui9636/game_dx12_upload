@@ -2786,6 +2786,16 @@ EngineKernel& EngineKernel::Instance()
     return instance;
 }
 
+Registry* EngineKernel::GetGameRegistry()
+{
+    return m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr;
+}
+
+const Registry* EngineKernel::GetGameRegistry() const
+{
+    return m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr;
+}
+
 // PlayerEditor 用のプレビューを offscreen 描画する。
 void EngineKernel::RenderPlayerPreviewOffscreen()
 {

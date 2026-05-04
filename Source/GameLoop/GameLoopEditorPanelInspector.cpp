@@ -1,5 +1,9 @@
 #include "GameLoopEditorPanelInternal.h"
 
+#include "Component/HierarchyComponent.h"
+#include "Component/NameComponent.h"
+#include "Component/UIButtonComponent.h"
+#include "Engine/EditorSelection.h"
 #include "Engine/EngineKernel.h"
 
 namespace
@@ -20,6 +24,15 @@ namespace
     {
         const char* value;
         const char* label;
+    };
+
+    struct UIButtonOption
+    {
+        EntityID entity = Entity::NULL_ID;
+        std::string label;
+        std::string buttonId;
+        bool enabled = true;
+        bool active = true;
     };
 
     const char* NodeTypeLabel(GameLoopNodeType type)
@@ -111,6 +124,89 @@ namespace
             { "Pause", "Pause" },
         };
         outCount = sizeof(options) / sizeof(options[0]);
+        return options;
+    }
+
+    std::string BuildEntityLabel(Registry* registry, EntityID entity)
+    {
+        if (registry) {
+            if (auto* name = registry->GetComponent<NameComponent>(entity)) {
+                if (!name->name.empty()) {
+                    return name->name;
+                }
+            }
+        }
+        return "Entity " + std::to_string(Entity::GetIndex(entity));
+    }
+
+    std::vector<UIButtonOption> CollectUIButtonOptions(Registry* registry)
+    {
+        std::vector<UIButtonOption> options;
+        if (!registry) {
+            return options;
+        }
+
+        const ComponentTypeID buttonType = TypeManager::GetComponentTypeID<UIButtonComponent>();
+        const ComponentTypeID nameType = TypeManager::GetComponentTypeID<NameComponent>();
+        const ComponentTypeID hierarchyType = TypeManager::GetComponentTypeID<HierarchyComponent>();
+
+        for (Archetype* archetype : registry->GetAllArchetypes()) {
+            if (!archetype) {
+                continue;
+            }
+            const Signature signature = archetype->GetSignature();
+            if (!signature.test(buttonType)) {
+                continue;
+            }
+
+            ComponentColumn* buttonColumn = archetype->GetColumn(buttonType);
+            ComponentColumn* nameColumn = signature.test(nameType) ? archetype->GetColumn(nameType) : nullptr;
+            ComponentColumn* hierarchyColumn = signature.test(hierarchyType) ? archetype->GetColumn(hierarchyType) : nullptr;
+            if (!buttonColumn) {
+                continue;
+            }
+
+            const auto& entities = archetype->GetEntities();
+            for (size_t i = 0; i < archetype->GetEntityCount() && i < entities.size(); ++i) {
+                auto* button = static_cast<UIButtonComponent*>(buttonColumn->Get(i));
+                if (!button) {
+                    continue;
+                }
+
+                std::string entityName = "Entity " + std::to_string(Entity::GetIndex(entities[i]));
+                if (nameColumn) {
+                    auto* name = static_cast<NameComponent*>(nameColumn->Get(i));
+                    if (name && !name->name.empty()) {
+                        entityName = name->name;
+                    }
+                }
+
+                bool active = true;
+                if (hierarchyColumn) {
+                    auto* hierarchy = static_cast<HierarchyComponent*>(hierarchyColumn->Get(i));
+                    active = !hierarchy || hierarchy->isActive;
+                }
+
+                UIButtonOption option;
+                option.entity = entities[i];
+                option.buttonId = button->buttonId;
+                option.enabled = button->enabled;
+                option.active = active;
+                option.label = entityName + "  ->  " + (button->buttonId.empty() ? std::string{ "(empty event)" } : button->buttonId);
+                if (!button->enabled) {
+                    option.label += " [disabled]";
+                }
+                if (!active) {
+                    option.label += " [inactive]";
+                }
+                options.push_back(std::move(option));
+            }
+        }
+
+        std::sort(options.begin(), options.end(),
+            [](const UIButtonOption& a, const UIButtonOption& b) {
+                return a.label < b.label;
+            });
         return options;
     }
 
@@ -607,8 +703,81 @@ void GameLoopEditorPanelInternal::DrawConditionEditor(GameFlowCondition& conditi
         break;
 
     case GameFlowConditionType::UIButtonClick:
-        ImGui::TextDisabled("Consumes ui.button.clicked with this button id.");
-        if (DrawStringInput("Button Id", condition.value)) m_dirty = true;
+        {
+            Registry* registry = EngineKernel::Instance().GetGameRegistry();
+            std::vector<UIButtonOption> buttons = CollectUIButtonOptions(registry);
+            const char* preview = condition.value.empty() ? "(select UIButton)" : condition.value.c_str();
+
+            ImGui::TextDisabled("Consumes UIButtonComponent Event Name emitted as ui.button.clicked.");
+            if (ImGui::BeginCombo("Scene UIButton", preview)) {
+                if (buttons.empty()) {
+                    ImGui::TextDisabled("No UIButtonComponent in the current scene.");
+                }
+                for (const UIButtonOption& button : buttons) {
+                    const bool selectable = !button.buttonId.empty();
+                    const bool selected = !condition.value.empty() && condition.value == button.buttonId;
+                    if (!selectable) {
+                        ImGui::BeginDisabled();
+                    }
+                    if (ImGui::Selectable(button.label.c_str(), selected)) {
+                        condition.value = button.buttonId;
+                        m_dirty = true;
+                    }
+                    if (!selectable) {
+                        ImGui::EndDisabled();
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
+            EntityID selectedEntity = EditorSelection::Instance().GetPrimaryEntity();
+            UIButtonComponent* selectedButton = registry && !Entity::IsNull(selectedEntity)
+                ? registry->GetComponent<UIButtonComponent>(selectedEntity)
+                : nullptr;
+            const bool canUseSelected = selectedButton && !selectedButton->buttonId.empty();
+            if (!canUseSelected) {
+                ImGui::BeginDisabled();
+            }
+            if (ImGui::Button("Use Selected Hierarchy UIButton")) {
+                condition.value = selectedButton->buttonId;
+                m_dirty = true;
+            }
+            if (!canUseSelected) {
+                ImGui::EndDisabled();
+            }
+
+            if (selectedButton) {
+                ImGui::TextDisabled("Selected: %s -> %s",
+                    BuildEntityLabel(registry, selectedEntity).c_str(),
+                    selectedButton->buttonId.empty() ? "(empty event)" : selectedButton->buttonId.c_str());
+            }
+            else {
+                ImGui::TextDisabled("Select a UIButton entity in Hierarchy to attach it here.");
+            }
+
+            if (condition.value.empty()) {
+                ImGui::BeginDisabled();
+            }
+            if (ImGui::Button("Select Matching Button")) {
+                for (const UIButtonOption& button : buttons) {
+                    if (!condition.value.empty() && condition.value == button.buttonId) {
+                        EditorSelection::Instance().SelectEntity(button.entity);
+                        break;
+                    }
+                }
+            }
+            if (condition.value.empty()) {
+                ImGui::EndDisabled();
+            }
+
+            if (condition.value.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f),
+                    "Pick a UIButton from the current scene.");
+            }
+        }
         break;
 
     case GameFlowConditionType::TimerElapsed:
