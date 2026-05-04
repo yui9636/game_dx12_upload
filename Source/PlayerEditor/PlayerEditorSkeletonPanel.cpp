@@ -493,6 +493,27 @@ void PlayerEditorPanel::DrawPersistentColliderInspector()
         m_colliderDirty = true;
     }
 
+    // Body-only: VFX / SE asset paths fired by HealthSystem when this
+    // body element is struck. DamageSystem reads these from the matching
+    // Element after a Body x Attack contact and forwards them in the
+    // DamageEvent. Empty path = silent. Attack elements ignore these.
+    if (element.attribute == ColliderAttribute::Body) {
+        ImGui::Separator();
+        ImGui::TextDisabled("Hit Reaction (this body's material)");
+        char vfxBuf[256] = {};
+        strncpy_s(vfxBuf, element.hitVfxPath.c_str(), _TRUNCATE);
+        if (ImGui::InputText("Hit VFX", vfxBuf, sizeof(vfxBuf))) {
+            element.hitVfxPath = vfxBuf;
+            m_colliderDirty = true;
+        }
+        char sfxBuf[260] = {};
+        strncpy_s(sfxBuf, element.hitSfxPath.c_str(), _TRUNCATE);
+        if (ImGui::InputText("Hit SFX", sfxBuf, sizeof(sfxBuf))) {
+            element.hitSfxPath = sfxBuf;
+            m_colliderDirty = true;
+        }
+    }
+
     ImGui::Separator();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.15f, 0.15f, 1.0f));
     if (ImGui::Button(ICON_FA_TRASH " Delete Collider")) {

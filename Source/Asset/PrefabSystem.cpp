@@ -391,7 +391,9 @@ namespace
                     {"height", element.height},
                     {"size", DirectX::XMFLOAT3{ element.size.x, element.size.y, element.size.z }},
                     {"color", DirectX::XMFLOAT4{ element.color.x, element.color.y, element.color.z, element.color.w }},
-                    {"attribute", static_cast<int>(element.attribute)}
+                    {"attribute", static_cast<int>(element.attribute)},
+                    {"hitVfxPath", element.hitVfxPath},
+                    {"hitSfxPath", element.hitSfxPath}
                     });
             }
 
@@ -901,6 +903,11 @@ namespace
                     element.color = { color.x, color.y, color.z, color.w };
 
                     element.attribute = static_cast<ColliderAttribute>(elemJson.value("attribute", static_cast<int>(element.attribute)));
+
+                    // Backwards-compat: assets saved before these existed
+                    // load with empty strings (no VFX / SE).
+                    element.hitVfxPath = elemJson.value("hitVfxPath", std::string{});
+                    element.hitSfxPath = elemJson.value("hitSfxPath", std::string{});
 
                     element.registeredId = 0;
                     element.runtimeTag = 0;

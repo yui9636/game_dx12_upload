@@ -10,9 +10,7 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/TeamComponent.h"
-#include "Gameplay/TimelineItemBuffer.h"
 #include "Registry/Registry.h"
-#include "Storage/GameplayAsset.h"
 #include "System/Query.h"
 
 #include <DirectXMath.h>
@@ -79,35 +77,25 @@ namespace
         return dmg > 0 ? dmg : 1;
     }
 
-    // The Attack collider element on the attacker carries a runtimeTag set by
-    // TimelineHitboxSystem to (item_index + 1). Map that back to the source
-    // GESequencerItem so we can read its hit feedback paths.
-    const GESequencerItem* ResolveActiveHitboxItem(
+    // The Body collider element on the victim carries the per-material
+    // hit feedback paths. Look up the element by its CollisionManager
+    // registeredId so we pick the right body part (head / torso / leg
+    // can each have their own VFX / SE).
+    const ColliderComponent::Element* ResolveVictimBodyElement(
         Registry& registry,
-        EntityID attacker,
-        uint32_t attackColliderId)
+        EntityID victim,
+        uint32_t bodyColliderId)
     {
-        if (attackColliderId == 0) return nullptr;
-        auto* collider = registry.GetComponent<ColliderComponent>(attacker);
+        if (bodyColliderId == 0) return nullptr;
+        auto* collider = registry.GetComponent<ColliderComponent>(victim);
         if (!collider) return nullptr;
 
-        int runtimeTag = 0;
         for (const auto& elem : collider->elements) {
-            if (elem.registeredId == attackColliderId) {
-                runtimeTag = elem.runtimeTag;
-                break;
+            if (elem.registeredId == bodyColliderId) {
+                return &elem;
             }
         }
-        if (runtimeTag <= 0) return nullptr;
-
-        auto* buffer = registry.GetComponent<TimelineItemBuffer>(attacker);
-        if (!buffer) return nullptr;
-
-        const int itemIndex = runtimeTag - 1;
-        if (itemIndex < 0 || itemIndex >= static_cast<int>(buffer->items.size())) {
-            return nullptr;
-        }
-        return &buffer->items[itemIndex];
+        return nullptr;
     }
 }
 
@@ -130,11 +118,11 @@ void DamageSystem::Update(Registry& registry)
         // Need exactly one Attack and one Body.
         const Collider* attackCol = nullptr;
         const Collider* bodyCol   = nullptr;
-        uint32_t attackColliderId = 0;
+        uint32_t bodyColliderId = 0;
         if (a->attribute == ColliderAttribute::Attack && b->attribute == ColliderAttribute::Body) {
-            attackCol = a; bodyCol = b; attackColliderId = contact.idA;
+            attackCol = a; bodyCol = b; bodyColliderId = contact.idB;
         } else if (a->attribute == ColliderAttribute::Body && b->attribute == ColliderAttribute::Attack) {
-            attackCol = b; bodyCol = a; attackColliderId = contact.idB;
+            attackCol = b; bodyCol = a; bodyColliderId = contact.idA;
         } else {
             continue;
         }
@@ -172,12 +160,14 @@ void DamageSystem::Update(Registry& registry)
         ev.hitStopSec     = 0.08f;
         ev.reactionKind   = 0;
 
-        // Hit feedback paths come from the Hitbox item that produced this
-        // collider. Empty strings mean the authoring side left them blank,
-        // which HealthSystem treats as silent / no VFX.
-        if (const GESequencerItem* item = ResolveActiveHitboxItem(registry, attacker, attackColliderId)) {
-            ev.hitVfxPath = item->hb.hitVfxPath;
-            ev.hitSfxPath = item->hb.hitSfxPath;
+        // Hit feedback paths come from the victim's Body collider element
+        // (i.e. the receiver's material). Authoring lives in the Skeleton
+        // panel where Body colliders are placed. Empty strings mean the
+        // authoring side left them blank, which HealthSystem treats as
+        // silent / no VFX.
+        if (const auto* victimBody = ResolveVictimBodyElement(registry, victim, bodyColliderId)) {
+            ev.hitVfxPath = victimBody->hitVfxPath;
+            ev.hitSfxPath = victimBody->hitSfxPath;
         }
 
         queue->events.push_back(ev);

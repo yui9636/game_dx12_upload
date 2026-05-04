@@ -5,7 +5,7 @@
 #include "Collision/Collision.h" //
 
 /**
- * @brief ・ｽ・ｽ・ｽ・ｽ・ｽ阡ｻ・ｽ・ｽﾌ設抵ｿｽf・ｽ[・ｽ^
+ * @brief 繧ｳ繝ｩ繧､繝繝ｼ隕∫ｴ縺ｮ險ｭ螳壹ョ繝ｼ繧ｿ
  */
 struct ColliderComponent {
     struct Element {
@@ -18,6 +18,12 @@ struct ColliderComponent {
         DirectX::SimpleMath::Vector3 size{ 1.0f, 1.0f, 1.0f };
         DirectX::SimpleMath::Vector4 color{ 1.0f, 0.0f, 0.0f, 0.35f };
         ColliderAttribute attribute = ColliderAttribute::Body; //
+
+        // Body-only hit feedback. Read by DamageSystem when this element is
+        // hit by an Attack collider; HealthSystem then plays the VFX/SE at
+        // the contact point. Attack elements ignore these.
+        std::string hitVfxPath;
+        std::string hitSfxPath;
 
         uint32_t registeredId = 0;
         int runtimeTag = 0;
