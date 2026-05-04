@@ -1,5 +1,7 @@
 #include "GameLoopEditorPanelInternal.h"
 
+#include "Engine/EngineKernel.h"
+
 namespace
 {
     struct ScancodeOption
@@ -14,15 +16,33 @@ namespace
         const char* label;
     };
 
+    struct StringOption
+    {
+        const char* value;
+        const char* label;
+    };
+
+    const char* NodeTypeLabel(GameLoopNodeType type)
+    {
+        switch (type) {
+        case GameLoopNodeType::Scene: return "Scene";
+        case GameLoopNodeType::State: return "State";
+        case GameLoopNodeType::Event: return "Event";
+        case GameLoopNodeType::Action:return "Action";
+        case GameLoopNodeType::Battle:return "Battle";
+        }
+        return "State";
+    }
+
     std::string BuildInspectorSceneName(const GameLoopNode& node)
     {
-        if (!node.scenePath.empty()) {
+        if (node.type == GameLoopNodeType::Scene && !node.scenePath.empty()) {
             return GameLoopScenePicker::BuildNodeNameFromScenePath(node.scenePath);
         }
         if (!node.name.empty()) {
             return node.name;
         }
-        return "Scene";
+        return NodeTypeLabel(node.type);
     }
 
     void DrawReadOnlyScenePath(const GameLoopNode& node)
@@ -49,6 +69,46 @@ namespace
             { 79, "Right" }, { 80, "Left" }, { 81, "Down" }, { 82, "Up" },
             { 224, "LCtrl" }, { 225, "LShift" }, { 226, "LAlt" },
             { 228, "RCtrl" }, { 229, "RShift" }, { 230, "RAlt" },
+        };
+        outCount = sizeof(options) / sizeof(options[0]);
+        return options;
+    }
+
+    const StringOption* GetEventCatalog(int& outCount)
+    {
+        static const StringOption options[] = {
+            { "ui.button.clicked", "ui.button.clicked" },
+            { "input.action.pressed", "input.action.pressed" },
+            { "input.keyboard.down", "input.keyboard.down" },
+            { "input.gamepad.down", "input.gamepad.down" },
+            { "scene.loaded", "scene.loaded" },
+            { "battle.start.requested", "battle.start.requested" },
+            { "battle.reset.requested", "battle.reset.requested" },
+            { "battle.ended", "battle.ended" },
+            { "battle.result", "battle.result" },
+            { "battle.victory", "battle.victory" },
+            { "battle.defeat", "battle.defeat" },
+            { "flow.flag.changed", "flow.flag.changed" },
+            { "flow.wait.started", "flow.wait.started" },
+            { "flow.fade.started", "flow.fade.started" },
+            { "loading.overlay.shown", "loading.overlay.shown" },
+            { "loading.overlay.hidden", "loading.overlay.hidden" },
+            { "flow.custom", "flow.custom" },
+        };
+        outCount = sizeof(options) / sizeof(options[0]);
+        return options;
+    }
+
+    const StringOption* GetInputActionCatalog(int& outCount)
+    {
+        static const StringOption options[] = {
+            { "Submit", "Submit" },
+            { "Cancel", "Cancel" },
+            { "Attack", "Attack" },
+            { "Jump", "Jump" },
+            { "Dash", "Dash" },
+            { "Interact", "Interact" },
+            { "Pause", "Pause" },
         };
         outCount = sizeof(options) / sizeof(options[0]);
         return options;
@@ -151,6 +211,51 @@ namespace
         return false;
     }
 
+    bool DrawStringCatalogCombo(const char* label, std::string& value, const StringOption* options, int count)
+    {
+        bool changed = false;
+        const char* preview = value.empty() ? "(select)" : value.c_str();
+        if (ImGui::BeginCombo(label, preview)) {
+            for (int i = 0; i < count; ++i) {
+                const bool selected = value == options[i].value;
+                if (ImGui::Selectable(options[i].label, selected)) {
+                    value = options[i].value;
+                    changed = true;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        return changed;
+    }
+
+    bool DrawNodeTypeCombo(GameLoopNodeType& type)
+    {
+        static const GameLoopNodeType types[] = {
+            GameLoopNodeType::Scene,
+            GameLoopNodeType::State,
+            GameLoopNodeType::Event,
+            GameLoopNodeType::Action,
+            GameLoopNodeType::Battle,
+        };
+
+        bool changed = false;
+        if (ImGui::BeginCombo("Type", NodeTypeLabel(type))) {
+            for (GameLoopNodeType candidate : types) {
+                const bool selected = candidate == type;
+                if (ImGui::Selectable(NodeTypeLabel(candidate), selected)) {
+                    type = candidate;
+                    changed = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        return changed;
+    }
+
     const char* ConditionTypeLabel(GameFlowConditionType type)
     {
         switch (type) {
@@ -177,6 +282,8 @@ namespace
         case GameFlowActionType::ResetBattleFlow: return "Reset BattleFlow";
         case GameFlowActionType::Fade: return "Fade";
         case GameFlowActionType::Wait: return "Wait";
+        case GameFlowActionType::ShowLoadingOverlay: return "Show Loading";
+        case GameFlowActionType::HideLoadingOverlay: return "Hide Loading";
         }
         return "Load Scene";
     }
@@ -220,6 +327,8 @@ namespace
             GameFlowActionType::ResetBattleFlow,
             GameFlowActionType::Fade,
             GameFlowActionType::Wait,
+            GameFlowActionType::ShowLoadingOverlay,
+            GameFlowActionType::HideLoadingOverlay,
         };
 
         bool changed = false;
@@ -250,21 +359,39 @@ void GameLoopEditorPanelInternal::DrawInspector()
         ImGui::TextUnformatted("Node");
         ImGui::Separator();
 
-        const std::string sceneName = BuildInspectorSceneName(*node);
-        ImGui::Text("Scene: %s", sceneName.c_str());
-        DrawReadOnlyScenePath(*node);
+        if (DrawNodeTypeCombo(node->type)) {
+            if (node->type != GameLoopNodeType::Scene) {
+                node->scenePath.clear();
+                if (node->name.empty()) {
+                    node->name = NodeTypeLabel(node->type);
+                }
+            }
+            m_dirty = true;
+        }
+
+        if (DrawStringInput("Name", node->name)) {
+            m_dirty = true;
+        }
+
+        const std::string displayName = BuildInspectorSceneName(*node);
+        ImGui::Text("Display: %s", displayName.c_str());
         ImGui::Text("Id: %u", node->id);
         ImGui::Text("Start: %s", node->id == m_asset.startNodeId ? "Yes" : "No");
 
-        std::string dropped;
-        if (m_scenePicker.AcceptSceneAssetDragDrop(dropped)) {
-            ReplaceNodeScene(node->id, dropped);
+        if (node->type == GameLoopNodeType::Scene) {
+            DrawReadOnlyScenePath(*node);
+
+            std::string dropped;
+            if (m_scenePicker.AcceptSceneAssetDragDrop(dropped)) {
+                ReplaceNodeScene(node->id, dropped);
+            }
+
+            if (ImGui::Button("Replace Scene")) {
+                OpenPickerForReplace(node->id);
+            }
+            ImGui::SameLine();
         }
 
-        if (ImGui::Button("Replace Scene")) {
-            OpenPickerForReplace(node->id);
-        }
-        ImGui::SameLine();
         if (ImGui::Button("Set Start")) {
             m_asset.startNodeId = node->id;
             m_dirty = true;
@@ -371,7 +498,14 @@ void GameLoopEditorPanelInternal::DrawInspector()
             if (ImGui::Button("Add Load Scene")) {
                 GameFlowAction action;
                 action.type = GameFlowActionType::LoadScene;
-                if (toNode) action.target = toNode->scenePath;
+                if (toNode && toNode->type == GameLoopNodeType::Scene) action.target = toNode->scenePath;
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Set Node")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::SetCurrentNode;
                 transition->actions.push_back(action);
                 m_dirty = true;
             }
@@ -382,11 +516,42 @@ void GameLoopEditorPanelInternal::DrawInspector()
                 transition->actions.push_back(action);
                 m_dirty = true;
             }
+            if (ImGui::Button("Add Wait")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::Wait;
+                action.seconds = 0.5f;
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Fade")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::Fade;
+                action.seconds = 0.5f;
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
             ImGui::SameLine();
             if (ImGui::Button("Add Battle Start")) {
                 GameFlowAction action;
                 action.type = GameFlowActionType::StartBattleFlow;
-                action.target = "default";
+                action.target = toNode && toNode->type == GameLoopNodeType::Battle && !toNode->name.empty()
+                    ? toNode->name
+                    : "default";
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            if (ImGui::Button("Add Show Loading")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::ShowLoadingOverlay;
+                action.message = "Loading...";
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Hide Loading")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::HideLoadingOverlay;
                 transition->actions.push_back(action);
                 m_dirty = true;
             }
@@ -421,6 +586,11 @@ void GameLoopEditorPanelInternal::DrawConditionEditor(GameFlowCondition& conditi
 
     switch (condition.type) {
     case GameFlowConditionType::Event:
+        {
+            int count = 0;
+            const StringOption* options = GetEventCatalog(count);
+            if (DrawStringCatalogCombo("Known Event", condition.name, options, count)) m_dirty = true;
+        }
         if (DrawStringInput("Event Name", condition.name)) m_dirty = true;
         if (DrawStringInput("Value", condition.value)) m_dirty = true;
         break;
@@ -428,11 +598,17 @@ void GameLoopEditorPanelInternal::DrawConditionEditor(GameFlowCondition& conditi
     case GameFlowConditionType::InputAction:
         if (DrawKeyboardCombo(condition.keyboardScancode)) m_dirty = true;
         if (DrawGamepadCombo(condition.gamepadButton)) m_dirty = true;
+        {
+            int count = 0;
+            const StringOption* options = GetInputActionCatalog(count);
+            if (DrawStringCatalogCombo("Known Action", condition.value, options, count)) m_dirty = true;
+        }
         if (DrawStringInput("Action Name", condition.value)) m_dirty = true;
         break;
 
     case GameFlowConditionType::UIButtonClick:
-        if (DrawStringInput("Button Event", condition.value)) m_dirty = true;
+        ImGui::TextDisabled("Consumes ui.button.clicked with this button id.");
+        if (DrawStringInput("Button Id", condition.value)) m_dirty = true;
         break;
 
     case GameFlowConditionType::TimerElapsed:
@@ -470,7 +646,7 @@ void GameLoopEditorPanelInternal::DrawActionEditor(GameFlowAction& action, int i
     switch (action.type) {
     case GameFlowActionType::LoadScene:
         if (DrawStringInput("Scene Path", action.target)) m_dirty = true;
-        if (toNode && ImGui::Button("Use To Node Scene")) {
+        if (toNode && toNode->type == GameLoopNodeType::Scene && ImGui::Button("Use To Node Scene")) {
             action.target = toNode->scenePath;
             m_dirty = true;
         }
@@ -481,6 +657,11 @@ void GameLoopEditorPanelInternal::DrawActionEditor(GameFlowAction& action, int i
         break;
 
     case GameFlowActionType::EmitEvent:
+        {
+            int count = 0;
+            const StringOption* options = GetEventCatalog(count);
+            if (DrawStringCatalogCombo("Known Event", action.target, options, count)) m_dirty = true;
+        }
         if (DrawStringInput("Event Name", action.target)) m_dirty = true;
         if (DrawStringInput("Value", action.value)) m_dirty = true;
         break;
@@ -506,13 +687,45 @@ void GameLoopEditorPanelInternal::DrawActionEditor(GameFlowAction& action, int i
     case GameFlowActionType::Wait:
         if (ImGui::DragFloat("Seconds", &action.seconds, 0.01f, 0.0f, 60.0f, "%.2f")) m_dirty = true;
         break;
+
+    case GameFlowActionType::ShowLoadingOverlay:
+        if (DrawStringInput("Message", action.message)) m_dirty = true;
+        break;
+
+    case GameFlowActionType::HideLoadingOverlay:
+        ImGui::TextDisabled("No parameters.");
+        break;
     }
 }
 
 void GameLoopEditorPanelInternal::DrawValidateSummary()
 {
+    const auto drawRecentEvents = []() {
+        if (ImGui::TreeNode("Recent Events")) {
+            const auto& events = EngineKernel::Instance().GetFlowEventQueue().GetRecentEvents();
+            if (events.empty()) {
+                ImGui::TextDisabled("(none)");
+            }
+            else {
+                const int total = static_cast<int>(events.size());
+                const int first = total > 16 ? total - 16 : 0;
+                for (int i = first; i < total; ++i) {
+                    const FlowEvent& event = events[static_cast<size_t>(i)];
+                    if (event.value.empty()) {
+                        ImGui::Text("%s", event.name.c_str());
+                    }
+                    else {
+                        ImGui::Text("%s : %s", event.name.c_str(), event.value.c_str());
+                    }
+                }
+            }
+            ImGui::TreePop();
+        }
+    };
+
     if (!m_validated) {
         ImGui::TextDisabled("Validate has not been run.");
+        drawRecentEvents();
         return;
     }
 
@@ -524,4 +737,6 @@ void GameLoopEditorPanelInternal::DrawValidateSummary()
         }
         ImGui::TreePop();
     }
+
+    drawRecentEvents();
 }

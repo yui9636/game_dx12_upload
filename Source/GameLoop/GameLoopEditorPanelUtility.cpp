@@ -188,6 +188,7 @@ std::string GameLoopEditorPanelInternal::Ellipsis(const std::string& text, float
 
 int GameLoopEditorPanelInternal::SceneStatus(const GameLoopNode& node) const
 {
+    if (node.type != GameLoopNodeType::Scene) return 0;
     if (node.scenePath.empty()) return 2;
     if (!GameLoopScenePicker::IsSceneAssetPath(node.scenePath)) return 2;
 

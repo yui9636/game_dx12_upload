@@ -539,6 +539,9 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
                 }
             }
         }
+        else if (!n.scenePath.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, "non-scene node has scenePath; it will be ignored (" + nodeLabel + ")" });
+        }
         if (!std::isfinite(n.graphPos.x) || !std::isfinite(n.graphPos.y)) {
             r.messages.push_back({ GameLoopValidateSeverity::Warning, "node graphPos is not finite (" + nodeLabel + ")" });
         }
@@ -551,6 +554,8 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         const auto& t = asset.transitions[i];
         const std::string label = "transition[" + std::to_string(i) + "]";
         const GameLoopNode* toNode = asset.FindNode(t.toNodeId);
+        const bool targetsBattleNode = toNode && toNode->type == GameLoopNodeType::Battle;
+        bool hasStartBattleFlowAction = false;
         if (asset.FindNode(t.fromNodeId) == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId not found" });
         }
@@ -573,11 +578,14 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         }
 
         if (t.actions.empty()) {
-            r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " has no actions; toNode scene will be loaded as fallback" });
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " has no actions; GameFlow runtime will use the to-node fallback" });
         }
         for (size_t ai = 0; ai < t.actions.size(); ++ai) {
             const GameFlowAction& action = t.actions[ai];
             const std::string actionLabel = label + ".actions[" + std::to_string(ai) + "]";
+            if (action.type == GameFlowActionType::StartBattleFlow) {
+                hasStartBattleFlowAction = true;
+            }
             if ((action.type == GameFlowActionType::Fade || action.type == GameFlowActionType::Wait) && action.seconds < 0.0f) {
                 r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " seconds must be >= 0" });
             }
@@ -585,14 +593,24 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
                  action.type == GameFlowActionType::EmitEvent) && action.target.empty()) {
                 r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target is empty" });
             }
-            if (action.type == GameFlowActionType::LoadScene && !action.target.empty()) {
-                const std::string normalized = NormalizeGameLoopScenePath(action.target);
-                if (normalized.empty()) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene must be under Data/" });
+            if (action.type == GameFlowActionType::StartBattleFlow && action.target.empty()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " battle id is empty" });
+            }
+            if (action.type == GameFlowActionType::LoadScene) {
+                if (action.target.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene is empty" });
+                }
+                else {
+                    const std::string normalized = NormalizeGameLoopScenePath(action.target);
+                    if (normalized.empty()) {
+                        r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene must be under Data/" });
+                    }
                 }
             }
         }
-        (void)toNode;
+        if (targetsBattleNode && !hasStartBattleFlowAction) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " targets a Battle node but has no StartBattleFlow action" });
+        }
     }
 
     {

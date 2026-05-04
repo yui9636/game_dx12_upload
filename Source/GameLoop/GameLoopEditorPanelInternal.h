@@ -164,6 +164,7 @@ private:
     void OpenPickerForReplace(uint32_t nodeId);
     void OpenPickerForConnection(uint32_t fromNodeId, const DirectX::XMFLOAT2& pos);
     void AddSceneNode(const std::string& scenePath, const DirectX::XMFLOAT2& pos);
+    void AddFlowNode(GameLoopNodeType type, const std::string& name, const DirectX::XMFLOAT2& pos);
     void ReplaceNodeScene(uint32_t nodeId, const std::string& scenePath);
     void AddTransition(uint32_t fromNodeId, uint32_t toNodeId);
 

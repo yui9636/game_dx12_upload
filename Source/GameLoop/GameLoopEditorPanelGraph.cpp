@@ -7,6 +7,18 @@ namespace
     
     uint32_t g_draggingGameLoopNodeId = 0;
 
+    const char* NodeTypeLabel(GameLoopNodeType type)
+    {
+        switch (type) {
+        case GameLoopNodeType::Scene: return "Scene";
+        case GameLoopNodeType::State: return "State";
+        case GameLoopNodeType::Event: return "Event";
+        case GameLoopNodeType::Action:return "Action";
+        case GameLoopNodeType::Battle:return "Battle";
+        }
+        return "State";
+    }
+
     
     float CalcSafeGraphTextFontSize(float zoom)
     {
@@ -146,7 +158,7 @@ namespace
     
     std::string BuildSceneDisplayName(const GameLoopNode& node)
     {
-        if (!node.scenePath.empty()) {
+        if (node.type == GameLoopNodeType::Scene && !node.scenePath.empty()) {
             std::filesystem::path scenePath(node.scenePath);
             const std::string stem = scenePath.stem().string();
             if (!stem.empty()) {
@@ -156,7 +168,7 @@ namespace
         if (!node.name.empty()) {
             return node.name;
         }
-        return "Scene";
+        return NodeTypeLabel(node.type);
     }
 }
 
@@ -339,6 +351,8 @@ void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& ori
         DrawSafeTextScaled(dl, ImVec2(pos.x + 12.0f * m_graphZoom, max.y - 24.0f * m_graphZoom), IM_COL32(110, 175, 255, 255), "START", m_graphZoom);
     }
 
+    DrawSafeTextScaled(dl, ImVec2(pos.x + 12.0f * m_graphZoom, pos.y + 10.0f * m_graphZoom), IM_COL32(160, 172, 195, 255), NodeTypeLabel(node.type), m_graphZoom);
+
     const ImVec2 mousePos = ImGui::GetIO().MousePos;
     const bool bodyHovered = ImGui::IsMouseHoveringRect(pos, max, true);
     const bool outputPinHovered = PointInCircle(mousePos, outputPin, pin + 8.0f);
@@ -395,7 +409,7 @@ void GameLoopEditorPanelInternal::DrawNode(GameLoopNode& node, const ImVec2& ori
         }
     }
 
-    if (bodyHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    if (node.type == GameLoopNodeType::Scene && bodyHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
         OpenPickerForReplace(node.id);
         g_draggingGameLoopNodeId = 0;
     }
@@ -478,6 +492,18 @@ void GameLoopEditorPanelInternal::DrawGraphContextMenu()
         if (ImGui::MenuItem("Add Scene Node")) {
             OpenPickerForCreate(m_contextGraphPos);
         }
+        if (ImGui::MenuItem("Add State Node")) {
+            AddFlowNode(GameLoopNodeType::State, "State", m_contextGraphPos);
+        }
+        if (ImGui::MenuItem("Add Event Node")) {
+            AddFlowNode(GameLoopNodeType::Event, "Event", m_contextGraphPos);
+        }
+        if (ImGui::MenuItem("Add Action Node")) {
+            AddFlowNode(GameLoopNodeType::Action, "Action", m_contextGraphPos);
+        }
+        if (ImGui::MenuItem("Add Battle Node")) {
+            AddFlowNode(GameLoopNodeType::Battle, "Battle", m_contextGraphPos);
+        }
         ImGui::EndPopup();
     }
 }
@@ -486,7 +512,7 @@ void GameLoopEditorPanelInternal::DrawGraphContextMenu()
 void GameLoopEditorPanelInternal::DrawNodeContextMenu(GameLoopNode& node)
 {
     if (ImGui::BeginPopup("NodeContext")) {
-        if (ImGui::MenuItem("Replace Scene")) {
+        if (node.type == GameLoopNodeType::Scene && ImGui::MenuItem("Replace Scene")) {
             OpenPickerForReplace(node.id);
         }
         if (ImGui::MenuItem("Set Start")) {

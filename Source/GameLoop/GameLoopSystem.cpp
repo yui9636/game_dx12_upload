@@ -197,10 +197,12 @@ namespace
     {
         if (transition.actions.empty()) {
             GameFlowAction action;
-            action.type = toNode.scenePath.empty()
-                ? GameFlowActionType::SetCurrentNode
-                : GameFlowActionType::LoadScene;
-            action.target = toNode.scenePath;
+            action.type = (toNode.type == GameLoopNodeType::Scene && !toNode.scenePath.empty())
+                ? GameFlowActionType::LoadScene
+                : GameFlowActionType::SetCurrentNode;
+            if (action.type == GameFlowActionType::LoadScene) {
+                action.target = toNode.scenePath;
+            }
             runtime.pendingActions.push_back({ action, toNode.id });
             return;
         }
