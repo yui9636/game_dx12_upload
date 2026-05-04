@@ -492,18 +492,6 @@ void GameLoopEditorPanelInternal::DrawGraphContextMenu()
         if (ImGui::MenuItem("Add Scene Node")) {
             OpenPickerForCreate(m_contextGraphPos);
         }
-        if (ImGui::MenuItem("Add State Node")) {
-            AddFlowNode(GameLoopNodeType::State, "State", m_contextGraphPos);
-        }
-        if (ImGui::MenuItem("Add Event Node")) {
-            AddFlowNode(GameLoopNodeType::Event, "Event", m_contextGraphPos);
-        }
-        if (ImGui::MenuItem("Add Action Node")) {
-            AddFlowNode(GameLoopNodeType::Action, "Action", m_contextGraphPos);
-        }
-        if (ImGui::MenuItem("Add Battle Node")) {
-            AddFlowNode(GameLoopNodeType::Battle, "Battle", m_contextGraphPos);
-        }
         ImGui::EndPopup();
     }
 }

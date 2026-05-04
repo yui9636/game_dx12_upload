@@ -136,7 +136,7 @@ public:
 
 private:
     enum class SelectionKind { None, Node, Transition };
-    enum class PickerMode { None, CreateNode, ReplaceNode, CreateNodeAndTransition };
+    enum class PickerMode { None, CreateNode, ReplaceNode, CreateNodeAndTransition, SelectLoadingScene };
     enum class FileDialogMode { None, Load, SaveAs };
 
     struct NodeView
@@ -163,6 +163,7 @@ private:
     void OpenPickerForCreate(const DirectX::XMFLOAT2& pos);
     void OpenPickerForReplace(uint32_t nodeId);
     void OpenPickerForConnection(uint32_t fromNodeId, const DirectX::XMFLOAT2& pos);
+    void OpenPickerForLoadingScene(int transitionIndex);
     void AddSceneNode(const std::string& scenePath, const DirectX::XMFLOAT2& pos);
     void AddFlowNode(GameLoopNodeType type, const std::string& name, const DirectX::XMFLOAT2& pos);
     void ReplaceNodeScene(uint32_t nodeId, const std::string& scenePath);
@@ -219,6 +220,7 @@ private:
     PickerMode m_pickerMode = PickerMode::None;
     uint32_t m_pickerTargetNodeId = 0;
     uint32_t m_pickerFromNodeId = 0;
+    int m_pickerTargetTransitionIndex = -1;
     DirectX::XMFLOAT2 m_pickerGraphPos = { 0.0f, 0.0f };
 
     GameLoopValidateResult m_validateResult;

@@ -89,6 +89,8 @@ struct GameLoopTransition
     std::string name;
     int priority = 0;
     GameFlowConditionMode conditionMode = GameFlowConditionMode::All;
+    std::string loadingScenePath;
+    float loadingMinimumSeconds = 0.0f;
     std::vector<GameFlowCondition> conditions;
     std::vector<GameFlowAction> actions;
 };

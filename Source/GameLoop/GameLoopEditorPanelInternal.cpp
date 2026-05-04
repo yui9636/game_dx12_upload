@@ -124,8 +124,8 @@ void GameLoopEditorPanelInternal::DrawMainLayout()
 {
     ImVec2 avail = ImGui::GetContentRegionAvail();
 
-    float inspectW = 340.0f;
-    float validateH = 92.0f;
+    float inspectW = 390.0f;
+    float validateH = 110.0f;
     float topH = MaxF(260.0f, avail.y - validateH - 8.0f);
     float graphW = MaxF(260.0f, avail.x - inspectW - 8.0f);
 

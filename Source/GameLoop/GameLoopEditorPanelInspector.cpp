@@ -64,7 +64,7 @@ namespace
             ImGui::TextDisabled("Path: (no scene)");
             return;
         }
-        ImGui::TextDisabled("Path: %s", node.scenePath.c_str());
+        ImGui::TextWrapped("Path: %s", node.scenePath.c_str());
     }
 
     const ScancodeOption* GetScancodeOptions(int& outCount)
@@ -369,7 +369,7 @@ namespace
     const char* ActionTypeLabel(GameFlowActionType type)
     {
         switch (type) {
-        case GameFlowActionType::LoadScene: return "Load Scene";
+        case GameFlowActionType::LoadScene: return "Load Target Scene";
         case GameFlowActionType::SetCurrentNode: return "Set Current Node";
         case GameFlowActionType::EmitEvent: return "Emit Event";
         case GameFlowActionType::SetFlag: return "Set Flag";
@@ -414,8 +414,6 @@ namespace
     bool DrawActionTypeCombo(GameFlowActionType& type)
     {
         static const GameFlowActionType types[] = {
-            GameFlowActionType::LoadScene,
-            GameFlowActionType::SetCurrentNode,
             GameFlowActionType::EmitEvent,
             GameFlowActionType::SetFlag,
             GameFlowActionType::ClearFlag,
@@ -423,8 +421,6 @@ namespace
             GameFlowActionType::ResetBattleFlow,
             GameFlowActionType::Fade,
             GameFlowActionType::Wait,
-            GameFlowActionType::ShowLoadingOverlay,
-            GameFlowActionType::HideLoadingOverlay,
         };
 
         bool changed = false;
@@ -452,18 +448,8 @@ void GameLoopEditorPanelInternal::DrawInspector()
             return;
         }
 
-        ImGui::TextUnformatted("Node");
+        ImGui::TextUnformatted("Scene Node");
         ImGui::Separator();
-
-        if (DrawNodeTypeCombo(node->type)) {
-            if (node->type != GameLoopNodeType::Scene) {
-                node->scenePath.clear();
-                if (node->name.empty()) {
-                    node->name = NodeTypeLabel(node->type);
-                }
-            }
-            m_dirty = true;
-        }
 
         if (DrawStringInput("Name", node->name)) {
             m_dirty = true;
@@ -474,7 +460,11 @@ void GameLoopEditorPanelInternal::DrawInspector()
         ImGui::Text("Id: %u", node->id);
         ImGui::Text("Start: %s", node->id == m_asset.startNodeId ? "Yes" : "No");
 
-        if (node->type == GameLoopNodeType::Scene) {
+        if (node->type != GameLoopNodeType::Scene) {
+            ImGui::TextDisabled("Legacy node type: %s", NodeTypeLabel(node->type));
+        }
+
+        {
             DrawReadOnlyScenePath(*node);
 
             std::string dropped;
@@ -482,18 +472,17 @@ void GameLoopEditorPanelInternal::DrawInspector()
                 ReplaceNodeScene(node->id, dropped);
             }
 
-            if (ImGui::Button("Replace Scene")) {
+            if (ImGui::Button("Replace Scene", ImVec2(-1.0f, 0.0f))) {
                 OpenPickerForReplace(node->id);
             }
-            ImGui::SameLine();
         }
 
-        if (ImGui::Button("Set Start")) {
+        if (ImGui::Button("Set Start", ImVec2((ImGui::GetContentRegionAvail().x - 6.0f) * 0.5f, 0.0f))) {
             m_asset.startNodeId = node->id;
             m_dirty = true;
         }
-
-        if (ImGui::Button("Delete")) {
+        ImGui::SameLine();
+        if (ImGui::Button("Delete", ImVec2(-1.0f, 0.0f))) {
             DeleteNode(node->id);
         }
         return;
@@ -513,19 +502,43 @@ void GameLoopEditorPanelInternal::DrawInspector()
 
         ImGui::TextUnformatted("Transition");
         ImGui::Separator();
-        ImGui::Text("From: %s", fromName.c_str());
-        ImGui::Text("To: %s", toName.c_str());
-        ImGui::Text("Id: %u", transition->id);
-
-        if (ImGui::InputInt("Priority", &transition->priority)) {
-            m_dirty = true;
-        }
+        ImGui::TextWrapped("%s  ->  %s", fromName.c_str(), toName.c_str());
+        ImGui::TextDisabled("Id: %u", transition->id);
 
         int mode = transition->conditionMode == GameFlowConditionMode::Any ? 1 : 0;
         const char* modes[] = { "All", "Any" };
         if (ImGui::Combo("Condition Mode", &mode, modes, 2)) {
             transition->conditionMode = mode == 1 ? GameFlowConditionMode::Any : GameFlowConditionMode::All;
             m_dirty = true;
+        }
+
+        if (ImGui::CollapsingHeader("Loading Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const bool hasLoadingScene = !transition->loadingScenePath.empty();
+            ImGui::TextWrapped("Scene: %s", hasLoadingScene ? transition->loadingScenePath.c_str() : "(none)");
+
+            std::string dropped;
+            if (m_scenePicker.AcceptSceneAssetDragDrop(dropped)) {
+                transition->loadingScenePath = dropped;
+                m_dirty = true;
+            }
+
+            if (ImGui::Button(hasLoadingScene ? "Replace Loading Scene" : "Set Loading Scene", ImVec2(-1.0f, 0.0f))) {
+                OpenPickerForLoadingScene(m_selectedTransitionIndex);
+            }
+            if (hasLoadingScene) {
+                if (ImGui::Button("Clear Loading Scene", ImVec2(-1.0f, 0.0f))) {
+                    transition->loadingScenePath.clear();
+                    transition->loadingMinimumSeconds = 0.0f;
+                    m_dirty = true;
+                }
+            }
+
+            if (ImGui::DragFloat("Minimum Seconds", &transition->loadingMinimumSeconds, 0.01f, 0.0f, 60.0f, "%.2f")) {
+                if (transition->loadingMinimumSeconds < 0.0f) {
+                    transition->loadingMinimumSeconds = 0.0f;
+                }
+                m_dirty = true;
+            }
         }
 
         ImGui::Spacing();
@@ -573,6 +586,9 @@ void GameLoopEditorPanelInternal::DrawInspector()
 
         ImGui::Spacing();
         if (ImGui::CollapsingHeader("Actions", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (toNode && toNode->type == GameLoopNodeType::Scene && !toNode->scenePath.empty()) {
+                ImGui::TextWrapped("Target Scene: %s", toNode->scenePath.c_str());
+            }
             int removeIndex = -1;
             for (int i = 0; i < static_cast<int>(transition->actions.size()); ++i) {
                 ImGui::PushID(i);
@@ -591,21 +607,6 @@ void GameLoopEditorPanelInternal::DrawInspector()
                 m_dirty = true;
             }
 
-            if (ImGui::Button("Add Load Scene")) {
-                GameFlowAction action;
-                action.type = GameFlowActionType::LoadScene;
-                if (toNode && toNode->type == GameLoopNodeType::Scene) action.target = toNode->scenePath;
-                transition->actions.push_back(action);
-                m_dirty = true;
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Add Set Node")) {
-                GameFlowAction action;
-                action.type = GameFlowActionType::SetCurrentNode;
-                transition->actions.push_back(action);
-                m_dirty = true;
-            }
-            ImGui::SameLine();
             if (ImGui::Button("Add Event")) {
                 GameFlowAction action;
                 action.type = GameFlowActionType::EmitEvent;
@@ -631,24 +632,21 @@ void GameLoopEditorPanelInternal::DrawInspector()
             if (ImGui::Button("Add Battle Start")) {
                 GameFlowAction action;
                 action.type = GameFlowActionType::StartBattleFlow;
-                action.target = toNode && toNode->type == GameLoopNodeType::Battle && !toNode->name.empty()
-                    ? toNode->name
-                    : "default";
-                transition->actions.push_back(action);
-                m_dirty = true;
-            }
-            if (ImGui::Button("Add Show Loading")) {
-                GameFlowAction action;
-                action.type = GameFlowActionType::ShowLoadingOverlay;
-                action.message = "Loading...";
+                action.target = "default";
                 transition->actions.push_back(action);
                 m_dirty = true;
             }
             ImGui::SameLine();
-            if (ImGui::Button("Add Hide Loading")) {
+            if (ImGui::Button("Add Battle Reset")) {
                 GameFlowAction action;
-                action.type = GameFlowActionType::HideLoadingOverlay;
+                action.type = GameFlowActionType::ResetBattleFlow;
                 transition->actions.push_back(action);
+                m_dirty = true;
+            }
+        }
+
+        if (ImGui::CollapsingHeader("Advanced")) {
+            if (ImGui::InputInt("Priority", &transition->priority)) {
                 m_dirty = true;
             }
         }
@@ -800,7 +798,35 @@ void GameLoopEditorPanelInternal::DrawConditionEditor(GameFlowCondition& conditi
     }
 
     case GameFlowConditionType::SceneLoaded:
-        if (DrawStringInput("Scene Path", condition.value)) m_dirty = true;
+        {
+            const char* preview = condition.value.empty() ? "(select scene)" : condition.value.c_str();
+            if (ImGui::BeginCombo("Scene", preview)) {
+                bool hasScene = false;
+                for (const GameLoopNode& node : m_asset.nodes) {
+                    if (node.type != GameLoopNodeType::Scene || node.scenePath.empty()) {
+                        continue;
+                    }
+                    hasScene = true;
+                    const bool selected = condition.value == node.scenePath;
+                    const std::string label = BuildInspectorSceneName(node) + "  ->  " + node.scenePath;
+                    if (ImGui::Selectable(label.c_str(), selected)) {
+                        condition.value = node.scenePath;
+                        m_dirty = true;
+                    }
+                    if (selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                if (!hasScene) {
+                    ImGui::TextDisabled("No Scene nodes.");
+                }
+                ImGui::EndCombo();
+            }
+            if (!condition.value.empty() && ImGui::Button("Clear Scene")) {
+                condition.value.clear();
+                m_dirty = true;
+            }
+        }
         break;
     }
 }
@@ -814,10 +840,15 @@ void GameLoopEditorPanelInternal::DrawActionEditor(GameFlowAction& action, int i
 
     switch (action.type) {
     case GameFlowActionType::LoadScene:
-        if (DrawStringInput("Scene Path", action.target)) m_dirty = true;
-        if (toNode && toNode->type == GameLoopNodeType::Scene && ImGui::Button("Use To Node Scene")) {
-            action.target = toNode->scenePath;
-            m_dirty = true;
+        if (toNode && toNode->type == GameLoopNodeType::Scene && !toNode->scenePath.empty()) {
+            if (action.target != toNode->scenePath) {
+                action.target = toNode->scenePath;
+                m_dirty = true;
+            }
+            ImGui::TextWrapped("Scene: %s", toNode->scenePath.c_str());
+        }
+        else {
+            ImGui::TextDisabled("No target Scene node.");
         }
         break;
 

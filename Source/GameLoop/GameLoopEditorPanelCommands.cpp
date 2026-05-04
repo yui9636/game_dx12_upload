@@ -22,10 +22,6 @@ namespace
     void AddDefaultActionsForNode(const GameLoopNode& toNode, std::vector<GameFlowAction>& actions)
     {
         if (toNode.type == GameLoopNodeType::Scene) {
-            GameFlowAction action;
-            action.type = GameFlowActionType::LoadScene;
-            action.target = toNode.scenePath;
-            actions.push_back(action);
             return;
         }
 

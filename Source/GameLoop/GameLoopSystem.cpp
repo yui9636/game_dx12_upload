@@ -107,6 +107,43 @@ namespace
         runtime.forceReload = (toNode.id == runtime.currentNodeId);
     }
 
+    bool HasLoadSceneAction(const GameLoopTransition& transition)
+    {
+        for (const GameFlowAction& action : transition.actions) {
+            if (action.type == GameFlowActionType::LoadScene) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void EnqueueLoadSceneAction(
+        GameLoopRuntime& runtime,
+        const GameLoopNode& toNode,
+        const std::string& scenePath)
+    {
+        if (scenePath.empty()) {
+            return;
+        }
+
+        GameFlowAction action;
+        action.type = GameFlowActionType::LoadScene;
+        action.target = scenePath;
+        runtime.pendingActions.push_back({ action, toNode.id });
+    }
+
+    void EnqueueWaitAction(GameLoopRuntime& runtime, const GameLoopNode& toNode, float seconds)
+    {
+        if (seconds <= 0.0f) {
+            return;
+        }
+
+        GameFlowAction action;
+        action.type = GameFlowActionType::Wait;
+        action.seconds = seconds;
+        runtime.pendingActions.push_back({ action, toNode.id });
+    }
+
     enum class ActionResult
     {
         Continue,
@@ -195,20 +232,37 @@ namespace
         const GameLoopNode& toNode,
         GameLoopRuntime& runtime)
     {
+        if (!transition.loadingScenePath.empty()) {
+            EnqueueLoadSceneAction(runtime, toNode, transition.loadingScenePath);
+            EnqueueWaitAction(runtime, toNode, transition.loadingMinimumSeconds);
+        }
+
         if (transition.actions.empty()) {
-            GameFlowAction action;
-            action.type = (toNode.type == GameLoopNodeType::Scene && !toNode.scenePath.empty())
-                ? GameFlowActionType::LoadScene
-                : GameFlowActionType::SetCurrentNode;
-            if (action.type == GameFlowActionType::LoadScene) {
-                action.target = toNode.scenePath;
+            if (toNode.type == GameLoopNodeType::Scene && !toNode.scenePath.empty()) {
+                EnqueueLoadSceneAction(runtime, toNode, toNode.scenePath);
             }
-            runtime.pendingActions.push_back({ action, toNode.id });
+            else {
+                GameFlowAction action;
+                action.type = GameFlowActionType::SetCurrentNode;
+                runtime.pendingActions.push_back({ action, toNode.id });
+            }
             return;
         }
 
+        if (toNode.type == GameLoopNodeType::Scene &&
+            !toNode.scenePath.empty() &&
+            !HasLoadSceneAction(transition)) {
+            EnqueueLoadSceneAction(runtime, toNode, toNode.scenePath);
+        }
+
         for (const GameFlowAction& action : transition.actions) {
-            runtime.pendingActions.push_back({ action, toNode.id });
+            GameFlowAction queuedAction = action;
+            if (queuedAction.type == GameFlowActionType::LoadScene &&
+                toNode.type == GameLoopNodeType::Scene &&
+                !toNode.scenePath.empty()) {
+                queuedAction.target = toNode.scenePath;
+            }
+            runtime.pendingActions.push_back({ queuedAction, toNode.id });
         }
     }
 

@@ -359,6 +359,10 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
         t.name = tj.value("name", std::string{});
         t.priority = tj.value("priority", 0);
         t.conditionMode = ConditionModeFromString(tj.value("conditionMode", std::string{ "All" }));
+        const std::string rawLoadingScenePath = tj.value("loadingScenePath", std::string{});
+        const std::string normalizedLoadingScenePath = NormalizeGameLoopScenePath(rawLoadingScenePath);
+        t.loadingScenePath = normalizedLoadingScenePath.empty() ? rawLoadingScenePath : normalizedLoadingScenePath;
+        t.loadingMinimumSeconds = tj.value("loadingMinimumSeconds", 0.0f);
         if (tj.contains("conditions") && tj["conditions"].is_array()) {
             for (const auto& cj : tj["conditions"]) {
                 if (cj.is_object()) {
@@ -422,6 +426,13 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
         tj["name"] = t.name;
         tj["priority"] = t.priority;
         tj["conditionMode"] = ConditionModeToString(t.conditionMode);
+        if (!t.loadingScenePath.empty()) {
+            const std::string normalizedLoadingScenePath = NormalizeGameLoopScenePath(t.loadingScenePath);
+            tj["loadingScenePath"] = normalizedLoadingScenePath.empty() ? t.loadingScenePath : normalizedLoadingScenePath;
+        }
+        if (t.loadingMinimumSeconds > 0.0f) {
+            tj["loadingMinimumSeconds"] = t.loadingMinimumSeconds;
+        }
 
         nlohmann::json conditionsJson = nlohmann::json::array();
         for (const auto& condition : t.conditions) {
@@ -562,6 +573,21 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
         if (toNode == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId not found" });
         }
+        if (!t.loadingScenePath.empty()) {
+            const std::string normalizedLoadingScenePath = NormalizeGameLoopScenePath(t.loadingScenePath);
+            if (normalizedLoadingScenePath.empty()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loadingScenePath must be a scene under Data/" });
+            }
+            else {
+                std::error_code ec;
+                if (!std::filesystem::exists(PathResolver::Resolve(normalizedLoadingScenePath), ec)) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " loading scene file not found: " + normalizedLoadingScenePath });
+                }
+            }
+        }
+        if (t.loadingMinimumSeconds < 0.0f) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loadingMinimumSeconds must be >= 0" });
+        }
 
         if (t.conditions.empty()) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " has no conditions" });
@@ -577,7 +603,7 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
             }
         }
 
-        if (t.actions.empty()) {
+        if (t.actions.empty() && (!toNode || toNode->type != GameLoopNodeType::Scene || toNode->scenePath.empty())) {
             r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " has no actions; GameFlow runtime will use the to-node fallback" });
         }
         for (size_t ai = 0; ai < t.actions.size(); ++ai) {
@@ -597,11 +623,16 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
                 r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " battle id is empty" });
             }
             if (action.type == GameFlowActionType::LoadScene) {
-                if (action.target.empty()) {
+                const std::string targetScene = action.target.empty() &&
+                    toNode &&
+                    toNode->type == GameLoopNodeType::Scene
+                    ? toNode->scenePath
+                    : action.target;
+                if (targetScene.empty()) {
                     r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene is empty" });
                 }
                 else {
-                    const std::string normalized = NormalizeGameLoopScenePath(action.target);
+                    const std::string normalized = NormalizeGameLoopScenePath(targetScene);
                     if (normalized.empty()) {
                         r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene must be under Data/" });
                     }
