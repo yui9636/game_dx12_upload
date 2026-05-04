@@ -12,6 +12,7 @@
 #include "Input/InputEventQueue.h"
 #include "Registry/Registry.h"
 #include "GameLoop/GameLoopAsset.h"
+#include "GameLoop/FlowEventQueue.h"
 #include "GameLoop/GameLoopRuntime.h"
 #include "GameLoop/UIButtonClickEventQueue.h"
 #include <memory>
@@ -90,6 +91,8 @@ public:
     // Per-frame UI button click queue (cleared at end of frame).
     UIButtonClickEventQueue& GetUIButtonClickQueue() { return m_uiButtonClickQueue; }
 
+    FlowEventQueue& GetFlowEventQueue() { return m_flowEventQueue; }
+
     // ���t���[�����W�������̓C�x���g�L���[��Ԃ��B
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
@@ -157,6 +160,9 @@ private:
 
     // Per-frame UI button click queue.
     UIButtonClickEventQueue m_uiButtonClickQueue;
+
+    // Per-frame GameFlow event queue.
+    FlowEventQueue m_flowEventQueue;
 
     // True once GameLoop input owner entity has been created.
     bool m_gameLoopInputOwnerInitialized = false;

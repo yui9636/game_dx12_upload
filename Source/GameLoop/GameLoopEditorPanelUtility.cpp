@@ -128,20 +128,48 @@ int GameLoopEditorPanelInternal::SelectedTransitionIndex() const
 
 std::string GameLoopEditorPanelInternal::TransitionLabel(const GameLoopTransition& t) const
 {
-    const bool hasKeyboard = t.input.keyboardScancode != 0;
-    const bool hasGamepad = t.input.gamepadButton != 0xFF;
-
-    if (!hasKeyboard && !hasGamepad) return "Unbound";
+    if (t.conditions.empty()) return "No Condition";
 
     std::string label;
-    if (hasKeyboard) {
-        label += GetScancodeLabel(t.input.keyboardScancode);
+    for (const GameFlowCondition& condition : t.conditions) {
+        if (!label.empty()) label += t.conditionMode == GameFlowConditionMode::Any ? " | " : " + ";
+
+        switch (condition.type) {
+        case GameFlowConditionType::Event:
+            label += condition.name.empty() ? "Event" : condition.name;
+            break;
+        case GameFlowConditionType::InputAction:
+            if (condition.keyboardScancode != 0) {
+                label += GetScancodeLabel(condition.keyboardScancode);
+            }
+            else if (condition.gamepadButton != kGameFlowUnboundGamepadButton) {
+                label += GetGamepadButtonLabel(condition.gamepadButton);
+            }
+            else {
+                label += condition.value.empty() ? "Input" : condition.value;
+            }
+            break;
+        case GameFlowConditionType::UIButtonClick:
+            label += "UI:";
+            label += condition.value.empty() ? "(button)" : condition.value;
+            break;
+        case GameFlowConditionType::TimerElapsed:
+            label += "Timer";
+            break;
+        case GameFlowConditionType::FlagEquals:
+            label += "Flag:";
+            label += condition.name.empty() ? "(flag)" : condition.name;
+            break;
+        case GameFlowConditionType::BattleResult:
+            label += "Battle:";
+            label += condition.value.empty() ? "(result)" : condition.value;
+            break;
+        case GameFlowConditionType::SceneLoaded:
+            label += "SceneLoaded";
+            break;
+        }
     }
-    if (hasGamepad) {
-        if (!label.empty()) label += " / ";
-        label += GetGamepadButtonLabel(t.input.gamepadButton);
-    }
-    return label;
+    return label.empty() ? "No Condition" : label;
 }
 
 std::string GameLoopEditorPanelInternal::Ellipsis(const std::string& text, float width) const

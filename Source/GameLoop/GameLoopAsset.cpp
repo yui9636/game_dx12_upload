@@ -15,80 +15,141 @@
 
 namespace
 {
-    const char* LoadingModeToString(GameLoopLoadingMode mode)
-    {
-        switch (mode) {
-        case GameLoopLoadingMode::Immediate:      return "Immediate";
-        case GameLoopLoadingMode::FadeOnly:       return "FadeOnly";
-        case GameLoopLoadingMode::LoadingOverlay: return "LoadingOverlay";
-        }
-        return "Immediate";
-    }
-
-    GameLoopLoadingMode LoadingModeFromString(const std::string& s)
-    {
-        if (s == "FadeOnly") return GameLoopLoadingMode::FadeOnly;
-        if (s == "LoadingOverlay") return GameLoopLoadingMode::LoadingOverlay;
-        return GameLoopLoadingMode::Immediate;
-    }
-
     const char* NodeTypeToString(GameLoopNodeType t)
     {
         switch (t) {
         case GameLoopNodeType::Scene: return "Scene";
+        case GameLoopNodeType::Flow:  return "Flow";
         }
         return "Scene";
     }
 
     GameLoopNodeType NodeTypeFromString(const std::string& s)
     {
-        (void)s;
+        if (s == "Flow") return GameLoopNodeType::Flow;
         return GameLoopNodeType::Scene;
     }
 
-    nlohmann::json InputToJson(const GameLoopTransitionInput& input)
+    const char* ConditionModeToString(GameFlowConditionMode mode)
     {
-        nlohmann::json j;
-        j["keyboardScancode"] = input.keyboardScancode;
-        j["gamepadButton"] = input.gamepadButton == 0xFF ? -1 : static_cast<int>(input.gamepadButton);
-        return j;
-    }
-
-    GameLoopTransitionInput InputFromJson(const nlohmann::json& j)
-    {
-        GameLoopTransitionInput input;
-        input.keyboardScancode = j.value("keyboardScancode", 0u);
-        int gamepadButton = j.value("gamepadButton", -1);
-        if (gamepadButton < 0) input.gamepadButton = 0xFF;
-        else if (gamepadButton > 254) input.gamepadButton = 254;
-        else input.gamepadButton = static_cast<uint8_t>(gamepadButton);
-        return input;
-    }
-
-    nlohmann::json LoadingPolicyToJson(const GameLoopLoadingPolicy& p)
-    {
-        nlohmann::json j;
-        j["mode"] = LoadingModeToString(p.mode);
-        j["fadeOutSeconds"] = p.fadeOutSeconds;
-        j["fadeInSeconds"] = p.fadeInSeconds;
-        j["minimumLoadingSeconds"] = p.minimumLoadingSeconds;
-        if (!p.loadingMessage.empty()) {
-            j["loadingMessage"] = p.loadingMessage;
+        switch (mode) {
+        case GameFlowConditionMode::All: return "All";
+        case GameFlowConditionMode::Any: return "Any";
         }
-        j["blockInput"] = p.blockInput;
+        return "All";
+    }
+
+    GameFlowConditionMode ConditionModeFromString(const std::string& s)
+    {
+        if (s == "Any") return GameFlowConditionMode::Any;
+        return GameFlowConditionMode::All;
+    }
+
+    const char* ConditionTypeToString(GameFlowConditionType type)
+    {
+        switch (type) {
+        case GameFlowConditionType::Event:        return "Event";
+        case GameFlowConditionType::InputAction:  return "InputAction";
+        case GameFlowConditionType::UIButtonClick:return "UIButtonClick";
+        case GameFlowConditionType::TimerElapsed: return "TimerElapsed";
+        case GameFlowConditionType::FlagEquals:   return "FlagEquals";
+        case GameFlowConditionType::BattleResult: return "BattleResult";
+        case GameFlowConditionType::SceneLoaded:  return "SceneLoaded";
+        }
+        return "Event";
+    }
+
+    GameFlowConditionType ConditionTypeFromString(const std::string& s)
+    {
+        if (s == "InputAction") return GameFlowConditionType::InputAction;
+        if (s == "UIButtonClick") return GameFlowConditionType::UIButtonClick;
+        if (s == "TimerElapsed") return GameFlowConditionType::TimerElapsed;
+        if (s == "FlagEquals") return GameFlowConditionType::FlagEquals;
+        if (s == "BattleResult") return GameFlowConditionType::BattleResult;
+        if (s == "SceneLoaded") return GameFlowConditionType::SceneLoaded;
+        return GameFlowConditionType::Event;
+    }
+
+    const char* ActionTypeToString(GameFlowActionType type)
+    {
+        switch (type) {
+        case GameFlowActionType::LoadScene:       return "LoadScene";
+        case GameFlowActionType::SetCurrentNode:  return "SetCurrentNode";
+        case GameFlowActionType::EmitEvent:       return "EmitEvent";
+        case GameFlowActionType::SetFlag:         return "SetFlag";
+        case GameFlowActionType::ClearFlag:       return "ClearFlag";
+        case GameFlowActionType::StartBattleFlow: return "StartBattleFlow";
+        case GameFlowActionType::ResetBattleFlow: return "ResetBattleFlow";
+        case GameFlowActionType::Fade:            return "Fade";
+        case GameFlowActionType::Wait:            return "Wait";
+        }
+        return "LoadScene";
+    }
+
+    GameFlowActionType ActionTypeFromString(const std::string& s)
+    {
+        if (s == "SetCurrentNode") return GameFlowActionType::SetCurrentNode;
+        if (s == "EmitEvent") return GameFlowActionType::EmitEvent;
+        if (s == "SetFlag") return GameFlowActionType::SetFlag;
+        if (s == "ClearFlag") return GameFlowActionType::ClearFlag;
+        if (s == "StartBattleFlow") return GameFlowActionType::StartBattleFlow;
+        if (s == "ResetBattleFlow") return GameFlowActionType::ResetBattleFlow;
+        if (s == "Fade") return GameFlowActionType::Fade;
+        if (s == "Wait") return GameFlowActionType::Wait;
+        return GameFlowActionType::LoadScene;
+    }
+
+    nlohmann::json ConditionToJson(const GameFlowCondition& condition)
+    {
+        nlohmann::json j;
+        j["type"] = ConditionTypeToString(condition.type);
+        if (!condition.name.empty()) j["name"] = condition.name;
+        if (!condition.value.empty()) j["value"] = condition.value;
+        if (condition.keyboardScancode != 0) j["keyboardScancode"] = condition.keyboardScancode;
+        if (condition.gamepadButton != kGameFlowUnboundGamepadButton) {
+            j["gamepadButton"] = static_cast<int>(condition.gamepadButton);
+        }
+        if (condition.seconds != 0.0f) j["seconds"] = condition.seconds;
+        j["expectedFlagValue"] = condition.expectedFlagValue;
         return j;
     }
 
-    GameLoopLoadingPolicy LoadingPolicyFromJson(const nlohmann::json& j)
+    GameFlowCondition ConditionFromJson(const nlohmann::json& j)
     {
-        GameLoopLoadingPolicy p;
-        p.mode = LoadingModeFromString(j.value("mode", std::string{ "Immediate" }));
-        p.fadeOutSeconds = j.value("fadeOutSeconds", 0.15f);
-        p.fadeInSeconds = j.value("fadeInSeconds", 0.15f);
-        p.minimumLoadingSeconds = j.value("minimumLoadingSeconds", 0.0f);
-        p.loadingMessage = j.value("loadingMessage", std::string{});
-        p.blockInput = j.value("blockInput", true);
-        return p;
+        GameFlowCondition condition;
+        condition.type = ConditionTypeFromString(j.value("type", std::string{ "Event" }));
+        condition.name = j.value("name", std::string{});
+        condition.value = j.value("value", std::string{});
+        condition.keyboardScancode = j.value("keyboardScancode", 0u);
+        const int gamepadButton = j.value("gamepadButton", -1);
+        if (gamepadButton < 0) condition.gamepadButton = kGameFlowUnboundGamepadButton;
+        else if (gamepadButton > 254) condition.gamepadButton = 254;
+        else condition.gamepadButton = static_cast<uint8_t>(gamepadButton);
+        condition.seconds = j.value("seconds", 0.0f);
+        condition.expectedFlagValue = j.value("expectedFlagValue", true);
+        return condition;
+    }
+
+    nlohmann::json ActionToJson(const GameFlowAction& action)
+    {
+        nlohmann::json j;
+        j["type"] = ActionTypeToString(action.type);
+        if (!action.target.empty()) j["target"] = action.target;
+        if (!action.value.empty()) j["value"] = action.value;
+        j["boolValue"] = action.boolValue;
+        if (action.seconds != 0.0f) j["seconds"] = action.seconds;
+        return j;
+    }
+
+    GameFlowAction ActionFromJson(const nlohmann::json& j)
+    {
+        GameFlowAction action;
+        action.type = ActionTypeFromString(j.value("type", std::string{ "LoadScene" }));
+        action.target = j.value("target", std::string{});
+        action.value = j.value("value", std::string{});
+        action.boolValue = j.value("boolValue", true);
+        action.seconds = j.value("seconds", 0.0f);
+        return action;
     }
 
     bool IsAbsolutePathString(const std::string& path)
@@ -123,9 +184,25 @@ namespace
         return dataPos;
     }
 
-    bool HasTransitionInputBinding(const GameLoopTransitionInput& input)
+    bool IsTransitionConditionBound(const GameFlowCondition& condition)
     {
-        return input.keyboardScancode != 0 || input.gamepadButton != 0xFF;
+        switch (condition.type) {
+        case GameFlowConditionType::Event:
+            return !condition.name.empty();
+        case GameFlowConditionType::InputAction:
+            return condition.keyboardScancode != 0 ||
+                condition.gamepadButton != kGameFlowUnboundGamepadButton ||
+                !condition.value.empty();
+        case GameFlowConditionType::UIButtonClick:
+        case GameFlowConditionType::BattleResult:
+        case GameFlowConditionType::SceneLoaded:
+            return !condition.value.empty();
+        case GameFlowConditionType::TimerElapsed:
+            return condition.seconds >= 0.0f;
+        case GameFlowConditionType::FlagEquals:
+            return !condition.name.empty();
+        }
+        return false;
     }
 }
 
@@ -204,7 +281,7 @@ uint32_t GameLoopAsset::AllocateTransitionId()
 GameLoopAsset GameLoopAsset::CreateDefault()
 {
     GameLoopAsset asset;
-    asset.version = 4;
+    asset.version = kGameFlowAssetVersion;
     return asset;
 }
 
@@ -227,7 +304,7 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
     }
 
     const int fileVersion = j.value("version", 0);
-    if (fileVersion != 4) {
+    if (fileVersion != kGameFlowAssetVersion) {
         return false;
     }
     if (!j.contains("nodes") || !j["nodes"].is_array()) {
@@ -238,7 +315,7 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
     }
 
     GameLoopAsset out;
-    out.version = 4;
+    out.version = kGameFlowAssetVersion;
     out.startNodeId = j.value("startNodeId", 0u);
     out.nextNodeId = j.value("nextNodeId", 1u);
     out.nextTransitionId = j.value("nextTransitionId", 1u);
@@ -267,11 +344,21 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
         t.fromNodeId = tj.value("fromNodeId", 0u);
         t.toNodeId = tj.value("toNodeId", 0u);
         t.name = tj.value("name", std::string{});
-        if (tj.contains("input") && tj["input"].is_object()) {
-            t.input = InputFromJson(tj["input"]);
+        t.priority = tj.value("priority", 0);
+        t.conditionMode = ConditionModeFromString(tj.value("conditionMode", std::string{ "All" }));
+        if (tj.contains("conditions") && tj["conditions"].is_array()) {
+            for (const auto& cj : tj["conditions"]) {
+                if (cj.is_object()) {
+                    t.conditions.push_back(ConditionFromJson(cj));
+                }
+            }
         }
-        if (tj.contains("loading") && tj["loading"].is_object()) {
-            t.loadingPolicy = LoadingPolicyFromJson(tj["loading"]);
+        if (tj.contains("actions") && tj["actions"].is_array()) {
+            for (const auto& aj : tj["actions"]) {
+                if (aj.is_object()) {
+                    t.actions.push_back(ActionFromJson(aj));
+                }
+            }
         }
         out.transitions.push_back(t);
     }
@@ -294,7 +381,7 @@ bool GameLoopAsset::LoadFromFile(const std::filesystem::path& path)
 bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
 {
     nlohmann::json j;
-    j["version"] = 4;
+    j["version"] = kGameFlowAssetVersion;
     j["startNodeId"] = startNodeId;
     j["nextNodeId"] = nextNodeId;
     j["nextTransitionId"] = nextTransitionId;
@@ -320,8 +407,20 @@ bool GameLoopAsset::SaveToFile(const std::filesystem::path& path) const
         tj["fromNodeId"] = t.fromNodeId;
         tj["toNodeId"] = t.toNodeId;
         tj["name"] = t.name;
-        tj["input"] = InputToJson(t.input);
-        tj["loading"] = LoadingPolicyToJson(t.loadingPolicy);
+        tj["priority"] = t.priority;
+        tj["conditionMode"] = ConditionModeToString(t.conditionMode);
+
+        nlohmann::json conditionsJson = nlohmann::json::array();
+        for (const auto& condition : t.conditions) {
+            conditionsJson.push_back(ConditionToJson(condition));
+        }
+        tj["conditions"] = conditionsJson;
+
+        nlohmann::json actionsJson = nlohmann::json::array();
+        for (const auto& action : t.actions) {
+            actionsJson.push_back(ActionToJson(action));
+        }
+        tj["actions"] = actionsJson;
         transitionsJson.push_back(tj);
     }
     j["transitions"] = transitionsJson;
@@ -367,8 +466,8 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
 {
     GameLoopValidateResult r;
 
-    if (asset.version != 4) {
-        r.messages.push_back({ GameLoopValidateSeverity::Error, "GameLoopAsset version must be 4" });
+    if (asset.version != kGameFlowAssetVersion) {
+        r.messages.push_back({ GameLoopValidateSeverity::Error, "GameFlowAsset version must be 1" });
     }
 
     if (asset.nodes.empty()) {
@@ -403,25 +502,27 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
 
     for (const auto& n : asset.nodes) {
         const std::string nodeLabel = n.name.empty() ? ("id=" + std::to_string(n.id)) : n.name;
-        if (n.scenePath.empty()) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath empty (" + nodeLabel + ")" });
-        }
-        else {
-            if (IsAbsolutePathString(n.scenePath)) {
-                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not be absolute (" + nodeLabel + ")" });
-            }
-            if (ContainsParentTraversal(n.scenePath)) {
-                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not contain parent traversal (" + nodeLabel + ")" });
-            }
-
-            const std::string normalized = NormalizeGameLoopScenePath(n.scenePath);
-            if (normalized.empty()) {
-                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must be under Data/ (" + nodeLabel + ")" });
+        if (n.type == GameLoopNodeType::Scene) {
+            if (n.scenePath.empty()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath empty (" + nodeLabel + ")" });
             }
             else {
-                std::error_code ec;
-                if (!std::filesystem::exists(PathResolver::Resolve(normalized), ec)) {
-                    r.messages.push_back({ GameLoopValidateSeverity::Warning, "scene file not found: " + normalized });
+                if (IsAbsolutePathString(n.scenePath)) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not be absolute (" + nodeLabel + ")" });
+                }
+                if (ContainsParentTraversal(n.scenePath)) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must not contain parent traversal (" + nodeLabel + ")" });
+                }
+
+                const std::string normalized = NormalizeGameLoopScenePath(n.scenePath);
+                if (normalized.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, "node scenePath must be under Data/ (" + nodeLabel + ")" });
+                }
+                else {
+                    std::error_code ec;
+                    if (!std::filesystem::exists(PathResolver::Resolve(normalized), ec)) {
+                        r.messages.push_back({ GameLoopValidateSeverity::Warning, "scene file not found: " + normalized });
+                    }
                 }
             }
         }
@@ -436,24 +537,49 @@ GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset)
     for (size_t i = 0; i < asset.transitions.size(); ++i) {
         const auto& t = asset.transitions[i];
         const std::string label = "transition[" + std::to_string(i) + "]";
+        const GameLoopNode* toNode = asset.FindNode(t.toNodeId);
         if (asset.FindNode(t.fromNodeId) == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " fromNodeId not found" });
         }
-        if (asset.FindNode(t.toNodeId) == nullptr) {
+        if (toNode == nullptr) {
             r.messages.push_back({ GameLoopValidateSeverity::Error, label + " toNodeId not found" });
         }
-        if (!HasTransitionInputBinding(t.input)) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " input is unbound" });
+
+        if (t.conditions.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " has no conditions" });
         }
-        if (t.loadingPolicy.fadeOutSeconds < 0.0f) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading fadeOutSeconds must be >= 0" });
+        for (size_t ci = 0; ci < t.conditions.size(); ++ci) {
+            const GameFlowCondition& condition = t.conditions[ci];
+            const std::string conditionLabel = label + ".conditions[" + std::to_string(ci) + "]";
+            if (!IsTransitionConditionBound(condition)) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, conditionLabel + " is unbound" });
+            }
+            if (condition.type == GameFlowConditionType::TimerElapsed && condition.seconds < 0.0f) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, conditionLabel + " seconds must be >= 0" });
+            }
         }
-        if (t.loadingPolicy.fadeInSeconds < 0.0f) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading fadeInSeconds must be >= 0" });
+
+        if (t.actions.empty()) {
+            r.messages.push_back({ GameLoopValidateSeverity::Warning, label + " has no actions; toNode scene will be loaded as fallback" });
         }
-        if (t.loadingPolicy.minimumLoadingSeconds < 0.0f) {
-            r.messages.push_back({ GameLoopValidateSeverity::Error, label + " loading minimumLoadingSeconds must be >= 0" });
+        for (size_t ai = 0; ai < t.actions.size(); ++ai) {
+            const GameFlowAction& action = t.actions[ai];
+            const std::string actionLabel = label + ".actions[" + std::to_string(ai) + "]";
+            if ((action.type == GameFlowActionType::Fade || action.type == GameFlowActionType::Wait) && action.seconds < 0.0f) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " seconds must be >= 0" });
+            }
+            if ((action.type == GameFlowActionType::SetFlag || action.type == GameFlowActionType::ClearFlag ||
+                 action.type == GameFlowActionType::EmitEvent) && action.target.empty()) {
+                r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target is empty" });
+            }
+            if (action.type == GameFlowActionType::LoadScene && !action.target.empty()) {
+                const std::string normalized = NormalizeGameLoopScenePath(action.target);
+                if (normalized.empty()) {
+                    r.messages.push_back({ GameLoopValidateSeverity::Error, actionLabel + " target scene must be under Data/" });
+                }
+            }
         }
+        (void)toNode;
     }
 
     {

@@ -57,7 +57,7 @@ namespace
     const GamepadButtonOption* GetGamepadButtonOptions(int& outCount)
     {
         static const GamepadButtonOption options[] = {
-            { 0xFF, "Unbound" },
+            { kGameFlowUnboundGamepadButton, "Unbound" },
             { 0, "A / Cross" },
             { 1, "B / Circle" },
             { 2, "X / Square" },
@@ -150,6 +150,92 @@ namespace
         }
         return false;
     }
+
+    const char* ConditionTypeLabel(GameFlowConditionType type)
+    {
+        switch (type) {
+        case GameFlowConditionType::Event: return "Event";
+        case GameFlowConditionType::InputAction: return "Input Action";
+        case GameFlowConditionType::UIButtonClick: return "UI Button Click";
+        case GameFlowConditionType::TimerElapsed: return "Timer Elapsed";
+        case GameFlowConditionType::FlagEquals: return "Flag Equals";
+        case GameFlowConditionType::BattleResult: return "Battle Result";
+        case GameFlowConditionType::SceneLoaded: return "Scene Loaded";
+        }
+        return "Event";
+    }
+
+    const char* ActionTypeLabel(GameFlowActionType type)
+    {
+        switch (type) {
+        case GameFlowActionType::LoadScene: return "Load Scene";
+        case GameFlowActionType::SetCurrentNode: return "Set Current Node";
+        case GameFlowActionType::EmitEvent: return "Emit Event";
+        case GameFlowActionType::SetFlag: return "Set Flag";
+        case GameFlowActionType::ClearFlag: return "Clear Flag";
+        case GameFlowActionType::StartBattleFlow: return "Start BattleFlow";
+        case GameFlowActionType::ResetBattleFlow: return "Reset BattleFlow";
+        case GameFlowActionType::Fade: return "Fade";
+        case GameFlowActionType::Wait: return "Wait";
+        }
+        return "Load Scene";
+    }
+
+    bool DrawConditionTypeCombo(GameFlowConditionType& type)
+    {
+        static const GameFlowConditionType types[] = {
+            GameFlowConditionType::Event,
+            GameFlowConditionType::InputAction,
+            GameFlowConditionType::UIButtonClick,
+            GameFlowConditionType::TimerElapsed,
+            GameFlowConditionType::FlagEquals,
+            GameFlowConditionType::BattleResult,
+            GameFlowConditionType::SceneLoaded,
+        };
+
+        bool changed = false;
+        if (ImGui::BeginCombo("Type", ConditionTypeLabel(type))) {
+            for (GameFlowConditionType candidate : types) {
+                const bool selected = candidate == type;
+                if (ImGui::Selectable(ConditionTypeLabel(candidate), selected)) {
+                    type = candidate;
+                    changed = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        return changed;
+    }
+
+    bool DrawActionTypeCombo(GameFlowActionType& type)
+    {
+        static const GameFlowActionType types[] = {
+            GameFlowActionType::LoadScene,
+            GameFlowActionType::SetCurrentNode,
+            GameFlowActionType::EmitEvent,
+            GameFlowActionType::SetFlag,
+            GameFlowActionType::ClearFlag,
+            GameFlowActionType::StartBattleFlow,
+            GameFlowActionType::ResetBattleFlow,
+            GameFlowActionType::Fade,
+            GameFlowActionType::Wait,
+        };
+
+        bool changed = false;
+        if (ImGui::BeginCombo("Type", ActionTypeLabel(type))) {
+            for (GameFlowActionType candidate : types) {
+                const bool selected = candidate == type;
+                if (ImGui::Selectable(ActionTypeLabel(candidate), selected)) {
+                    type = candidate;
+                    changed = true;
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        return changed;
+    }
 }
 
 void GameLoopEditorPanelInternal::DrawInspector()
@@ -208,14 +294,102 @@ void GameLoopEditorPanelInternal::DrawInspector()
         ImGui::Text("To: %s", toName.c_str());
         ImGui::Text("Id: %u", transition->id);
 
-        ImGui::Spacing();
-        ImGui::TextUnformatted("Input");
-        ImGui::Separator();
-        if (DrawKeyboardCombo(transition->input.keyboardScancode)) {
+        if (ImGui::InputInt("Priority", &transition->priority)) {
             m_dirty = true;
         }
-        if (DrawGamepadCombo(transition->input.gamepadButton)) {
+
+        int mode = transition->conditionMode == GameFlowConditionMode::Any ? 1 : 0;
+        const char* modes[] = { "All", "Any" };
+        if (ImGui::Combo("Condition Mode", &mode, modes, 2)) {
+            transition->conditionMode = mode == 1 ? GameFlowConditionMode::Any : GameFlowConditionMode::All;
             m_dirty = true;
+        }
+
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Conditions", ImGuiTreeNodeFlags_DefaultOpen)) {
+            int removeIndex = -1;
+            for (int i = 0; i < static_cast<int>(transition->conditions.size()); ++i) {
+                ImGui::PushID(i);
+                GameFlowCondition& condition = transition->conditions[i];
+                if (ImGui::TreeNodeEx("Condition", ImGuiTreeNodeFlags_DefaultOpen, "Condition %d: %s", i + 1, ConditionTypeLabel(condition.type))) {
+                    DrawConditionEditor(condition, i);
+                    if (ImGui::Button("Remove Condition")) {
+                        removeIndex = i;
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (removeIndex >= 0) {
+                transition->conditions.erase(transition->conditions.begin() + removeIndex);
+                m_dirty = true;
+            }
+
+            if (ImGui::Button("Add UI Button")) {
+                GameFlowCondition condition;
+                condition.type = GameFlowConditionType::UIButtonClick;
+                transition->conditions.push_back(condition);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Input")) {
+                GameFlowCondition condition;
+                condition.type = GameFlowConditionType::InputAction;
+                transition->conditions.push_back(condition);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Battle")) {
+                GameFlowCondition condition;
+                condition.type = GameFlowConditionType::BattleResult;
+                condition.value = "Victory";
+                transition->conditions.push_back(condition);
+                m_dirty = true;
+            }
+        }
+
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Actions", ImGuiTreeNodeFlags_DefaultOpen)) {
+            int removeIndex = -1;
+            for (int i = 0; i < static_cast<int>(transition->actions.size()); ++i) {
+                ImGui::PushID(i);
+                GameFlowAction& action = transition->actions[i];
+                if (ImGui::TreeNodeEx("Action", ImGuiTreeNodeFlags_DefaultOpen, "Action %d: %s", i + 1, ActionTypeLabel(action.type))) {
+                    DrawActionEditor(action, i, toNode);
+                    if (ImGui::Button("Remove Action")) {
+                        removeIndex = i;
+                    }
+                    ImGui::TreePop();
+                }
+                ImGui::PopID();
+            }
+            if (removeIndex >= 0) {
+                transition->actions.erase(transition->actions.begin() + removeIndex);
+                m_dirty = true;
+            }
+
+            if (ImGui::Button("Add Load Scene")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::LoadScene;
+                if (toNode) action.target = toNode->scenePath;
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Event")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::EmitEvent;
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add Battle Start")) {
+                GameFlowAction action;
+                action.type = GameFlowActionType::StartBattleFlow;
+                action.target = "default";
+                transition->actions.push_back(action);
+                m_dirty = true;
+            }
         }
 
         ImGui::Spacing();
@@ -232,45 +406,106 @@ void GameLoopEditorPanelInternal::DrawInspector()
             DeleteTransition(m_selectedTransitionIndex);
             return;
         }
-
-        ImGui::Spacing();
-        if (ImGui::CollapsingHeader("Loading Policy", ImGuiTreeNodeFlags_DefaultOpen)) {
-            DrawLoadingPolicyEditor(*transition);
-        }
         return;
     }
 
     ImGui::TextDisabled("No Selection");
 }
 
-void GameLoopEditorPanelInternal::DrawLoadingPolicyEditor(GameLoopTransition& transition)
+void GameLoopEditorPanelInternal::DrawConditionEditor(GameFlowCondition& condition, int index)
 {
-    GameLoopLoadingPolicy& policy = transition.loadingPolicy;
+    (void)index;
+    if (DrawConditionTypeCombo(condition.type)) {
+        m_dirty = true;
+    }
 
-    int mode = 0;
-    if (policy.mode == GameLoopLoadingMode::FadeOnly) mode = 1;
-    else if (policy.mode == GameLoopLoadingMode::LoadingOverlay) mode = 2;
+    switch (condition.type) {
+    case GameFlowConditionType::Event:
+        if (DrawStringInput("Event Name", condition.name)) m_dirty = true;
+        if (DrawStringInput("Value", condition.value)) m_dirty = true;
+        break;
 
-    const char* modes[] = { "Immediate", "Fade Only", "Loading Overlay" };
-    if (ImGui::Combo("Mode", &mode, modes, 3)) {
-        policy.mode = mode == 1 ? GameLoopLoadingMode::FadeOnly :
-            (mode == 2 ? GameLoopLoadingMode::LoadingOverlay : GameLoopLoadingMode::Immediate);
+    case GameFlowConditionType::InputAction:
+        if (DrawKeyboardCombo(condition.keyboardScancode)) m_dirty = true;
+        if (DrawGamepadCombo(condition.gamepadButton)) m_dirty = true;
+        if (DrawStringInput("Action Name", condition.value)) m_dirty = true;
+        break;
+
+    case GameFlowConditionType::UIButtonClick:
+        if (DrawStringInput("Button Event", condition.value)) m_dirty = true;
+        break;
+
+    case GameFlowConditionType::TimerElapsed:
+        if (ImGui::DragFloat("Seconds", &condition.seconds, 0.01f, 0.0f, 3600.0f, "%.2f")) m_dirty = true;
+        break;
+
+    case GameFlowConditionType::FlagEquals:
+        if (DrawStringInput("Flag", condition.name)) m_dirty = true;
+        if (ImGui::Checkbox("Expected", &condition.expectedFlagValue)) m_dirty = true;
+        break;
+
+    case GameFlowConditionType::BattleResult: {
+        const char* results[] = { "Victory", "Defeat" };
+        int result = condition.value == "Defeat" ? 1 : 0;
+        if (ImGui::Combo("Result", &result, results, 2)) {
+            condition.value = results[result];
+            m_dirty = true;
+        }
+        break;
+    }
+
+    case GameFlowConditionType::SceneLoaded:
+        if (DrawStringInput("Scene Path", condition.value)) m_dirty = true;
+        break;
+    }
+}
+
+void GameLoopEditorPanelInternal::DrawActionEditor(GameFlowAction& action, int index, const GameLoopNode* toNode)
+{
+    (void)index;
+    if (DrawActionTypeCombo(action.type)) {
         m_dirty = true;
     }
-    if (ImGui::DragFloat("Fade Out", &policy.fadeOutSeconds, 0.01f, 0.0f, 30.0f, "%.2f")) {
-        m_dirty = true;
-    }
-    if (ImGui::DragFloat("Fade In", &policy.fadeInSeconds, 0.01f, 0.0f, 30.0f, "%.2f")) {
-        m_dirty = true;
-    }
-    if (ImGui::DragFloat("Min Loading", &policy.minimumLoadingSeconds, 0.01f, 0.0f, 60.0f, "%.2f")) {
-        m_dirty = true;
-    }
-    if (DrawStringInput("Message", policy.loadingMessage)) {
-        m_dirty = true;
-    }
-    if (ImGui::Checkbox("Block Input", &policy.blockInput)) {
-        m_dirty = true;
+
+    switch (action.type) {
+    case GameFlowActionType::LoadScene:
+        if (DrawStringInput("Scene Path", action.target)) m_dirty = true;
+        if (toNode && ImGui::Button("Use To Node Scene")) {
+            action.target = toNode->scenePath;
+            m_dirty = true;
+        }
+        break;
+
+    case GameFlowActionType::SetCurrentNode:
+        ImGui::TextDisabled("Uses this transition's To node.");
+        break;
+
+    case GameFlowActionType::EmitEvent:
+        if (DrawStringInput("Event Name", action.target)) m_dirty = true;
+        if (DrawStringInput("Value", action.value)) m_dirty = true;
+        break;
+
+    case GameFlowActionType::SetFlag:
+        if (DrawStringInput("Flag", action.target)) m_dirty = true;
+        if (ImGui::Checkbox("Value", &action.boolValue)) m_dirty = true;
+        break;
+
+    case GameFlowActionType::ClearFlag:
+        if (DrawStringInput("Flag", action.target)) m_dirty = true;
+        break;
+
+    case GameFlowActionType::StartBattleFlow:
+        if (DrawStringInput("Battle Id", action.target)) m_dirty = true;
+        break;
+
+    case GameFlowActionType::ResetBattleFlow:
+        ImGui::TextDisabled("No parameters.");
+        break;
+
+    case GameFlowActionType::Fade:
+    case GameFlowActionType::Wait:
+        if (ImGui::DragFloat("Seconds", &action.seconds, 0.01f, 0.0f, 60.0f, "%.2f")) m_dirty = true;
+        break;
     }
 }
 

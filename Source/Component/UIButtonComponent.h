@@ -7,7 +7,7 @@
 // in a Hierarchy. Click detection is done by UIButtonClickSystem.
 struct UIButtonComponent
 {
-    // Unique id. Must match GameLoopCondition::UIButtonClicked.targetName.
+    // Event-style id emitted when the button completes a click.
     std::string buttonId;
 
     // While false, no click event is emitted for this button.

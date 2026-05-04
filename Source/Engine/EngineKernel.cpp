@@ -1753,9 +1753,11 @@
 #include <fstream>
 #include "Gameplay/TimelineShakeSystem.h"
 #include "GameLoop/GameLoopSystem.h"
+#include "GameLoop/FlowEventQueue.h"
 #include "GameLoop/SceneTransitionSystem.h"
 #include "GameLoop/UIButtonClickSystem.h"
 #include "GameLoop/UIButtonClickEventQueue.h"
+#include "Gameplay/BattleFlowSystem.h"
 #include "Component/CameraComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/TransformComponent.h"
@@ -1850,6 +1852,25 @@ namespace {
         XMStoreFloat4x4(&outView, view);
         XMStoreFloat4x4(&outProjection, projection);
         return true;
+    }
+
+    void PushInputEventsToGameFlow(FlowEventQueue& flowEvents, const InputEventQueue& inputQueue)
+    {
+        for (const InputEvent& event : inputQueue.GetEvents()) {
+            if (event.type == InputEventType::KeyDown && !event.key.repeat) {
+                flowEvents.Push("input.keyboard.down", std::to_string(event.key.scancode));
+            }
+            else if (event.type == InputEventType::GamepadButtonDown) {
+                flowEvents.Push("input.gamepad.down", std::to_string(static_cast<unsigned int>(event.gamepadButton.button)));
+            }
+        }
+    }
+
+    void PushUIButtonEventsToGameFlow(FlowEventQueue& flowEvents, const UIButtonClickEventQueue& clickQueue)
+    {
+        for (const std::string& buttonId : clickQueue.GetAll()) {
+            flowEvents.Push("ui.button.clicked", buttonId);
+        }
     }
 
     // GPU テクスチャ内容の readback 用状態。
@@ -2860,19 +2881,19 @@ void EngineKernel::Initialize()
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
-    // Load default GameLoop asset (or build the default loop if missing).
+    // Load default GameFlow asset (or build an empty flow if missing).
     {
-        const std::filesystem::path gameLoopPath = "Data/GameLoop/Main.gameloop";
+        const std::filesystem::path gameLoopPath = "Data/GameFlow/Main.gameflow";
         if (!m_gameLoopAsset.LoadFromFile(gameLoopPath)) {
-            LOG_WARN("[GameLoop] %s not found, using default loop", gameLoopPath.string().c_str());
+            LOG_WARN("[GameFlow] %s not found, using empty flow", gameLoopPath.string().c_str());
             m_gameLoopAsset = GameLoopAsset::CreateDefault();
         }
     }
 
-    // Create the GameLoop persistent input owner entity (kept across scene loads).
+    // Create the GameFlow persistent input owner entity (kept across scene loads).
     if (!m_gameLoopInputOwnerInitialized) {
         EntityID owner = m_gameLoopRegistry.CreateEntity();
-        m_gameLoopRegistry.AddComponent(owner, NameComponent{ "GameLoopInputOwner" });
+        m_gameLoopRegistry.AddComponent(owner, NameComponent{ "GameFlowInputOwner" });
 
         InputUserComponent userComp{};
         userComp.userId = 0;
@@ -2887,7 +2908,7 @@ void EngineKernel::Initialize()
         m_gameLoopRegistry.AddComponent(owner, ctx);
 
         InputActionMapComponent mapComp{};
-        mapComp.asset.name = "GameLoop";
+        mapComp.asset.name = "GameFlow";
         // Index 0 = Confirm.
         {
             ActionBinding b;
@@ -2997,6 +3018,8 @@ void EngineKernel::Update(float rawDt)
             &transitionMetadata);
 
         if (sceneLoadedByGameLoop) {
+            m_flowEventQueue.Push("scene.loaded", m_gameLoopRuntime.currentScenePath);
+
             if (m_editorLayer) {
                 if (transitionMetadata.sceneViewMode == "2D" ||
                     transitionMetadata.sceneViewMode == "2d") {
@@ -3018,6 +3041,7 @@ void EngineKernel::Update(float rawDt)
 
     if (m_gameLayer) {
         m_gameLayer->Update(time);
+        BattleFlowSystem::DrainEvents(m_flowEventQueue);
     }
 
     if (m_gameLayer) {
@@ -3027,6 +3051,8 @@ void EngineKernel::Update(float rawDt)
             m_gameLoopRegistry,
             m_inputQueue,
             time.unscaledDt);
+
+        PushInputEventsToGameFlow(m_flowEventQueue, m_inputQueue);
 
         if (!sceneLoadedByGameLoop) {
             if (mode == EngineMode::Play || stepThisFrame) {
@@ -3044,20 +3070,29 @@ void EngineKernel::Update(float rawDt)
                         gameViewRect,
                         uiView,
                         uiProjection);
+                } else {
+                    UIButtonClickSystem::ResetCapture();
                 }
             }
+            else {
+                UIButtonClickSystem::ResetCapture();
+            }
+
+            PushUIButtonEventsToGameFlow(m_flowEventQueue, m_uiButtonClickQueue);
 
             GameLoopSystem::Update(
                 m_gameLoopAsset,
                 m_gameLoopRuntime,
                 gameRegistry,
                 m_gameLoopRegistry,
-                m_uiButtonClickQueue,
-                m_inputQueue,
+                m_flowEventQueue,
                 time.dt);
         }
 
         m_uiButtonClickQueue.Clear();
+        if (!sceneLoadedByGameLoop) {
+            m_flowEventQueue.Clear();
+        }
     }
 
     if (m_audioWorld && m_gameLayer) {
@@ -3729,10 +3764,12 @@ void EngineKernel::Play()
             m_savedEditorScenePath = m_editorLayer->GetCurrentScenePath();
         }
 
-        // Start GameLoop. The startNode's scene is loaded at end-of-frame.
+        // Start GameFlow. The startNode's scene is loaded at end-of-frame.
         GameLoopRuntime& rt = m_gameLoopRuntime;
         rt.Reset();
         rt.isActive = true;
+        m_flowEventQueue.Clear();
+        BattleFlowSystem::Reset();
 
         if (!m_gameLoopAsset.nodes.empty()) {
             const GameLoopNode* startNode = m_gameLoopAsset.FindNode(m_gameLoopAsset.startNodeId);
@@ -3743,12 +3780,12 @@ void EngineKernel::Play()
                 rt.forceReload              = true;
             }
             else {
-                LOG_ERROR("[GameLoop] startNodeId %u not found in asset", m_gameLoopAsset.startNodeId);
+                LOG_ERROR("[GameFlow] startNodeId %u not found in asset", m_gameLoopAsset.startNodeId);
                 rt.isActive = false;
             }
         }
         else {
-            LOG_WARN("[GameLoop] asset has no nodes; GameLoop disabled");
+            LOG_WARN("[GameFlow] asset has no nodes; GameFlow disabled");
             rt.isActive = false;
         }
     }
@@ -3768,9 +3805,11 @@ void EngineKernel::Stop()
             m_editorLayer->GetInputBridge().OnPlayStopped(m_gameLayer->GetRegistry());
         }
 
-        // Reset GameLoop runtime.
+        // Reset GameFlow runtime.
         m_gameLoopRuntime.Reset();
         m_uiButtonClickQueue.Clear();
+        m_flowEventQueue.Clear();
+        BattleFlowSystem::Reset();
 
         // Restore the editor scene we had open before Play.
         if (m_editorLayer && !m_savedEditorScenePath.empty()) {

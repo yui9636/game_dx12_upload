@@ -2612,6 +2612,195 @@ namespace {
         DrawUndoableColorEdit4(registry, entity, *sprite, "Tint", sprite->tint);
     }
 
+    void DrawUIButtonComponentInspector(Registry* registry, EntityID entity)
+    {
+        UIButtonComponent* button = registry ? registry->GetComponent<UIButtonComponent>(entity) : nullptr;
+        if (!button) {
+            return;
+        }
+
+        if (!ImGui::CollapsingHeader("UIButtonComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+
+        TransformComponent* transform = registry->GetComponent<TransformComponent>(entity);
+        HierarchyComponent* hierarchy = registry->GetComponent<HierarchyComponent>(entity);
+        RectTransformComponent* rect = registry->GetComponent<RectTransformComponent>(entity);
+        CanvasItemComponent* canvas = registry->GetComponent<CanvasItemComponent>(entity);
+        SpriteComponent* sprite = registry->GetComponent<SpriteComponent>(entity);
+
+        bool requestRefresh = false;
+        bool hasBlockingIssue = false;
+        if (!transform || !hierarchy || !rect || !canvas || !sprite) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f),
+                "Button needs Transform, Hierarchy, RectTransform, CanvasItem, and Sprite.");
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Entity is inactive.");
+        }
+        if (canvas && !canvas->visible) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "CanvasItem visible is off.");
+        }
+        if (canvas && !canvas->interactable) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "CanvasItem interactable is off.");
+        }
+        if (!button->enabled) {
+            ImGui::TextDisabled("Button is disabled.");
+        }
+        if (button->buttonId.empty()) {
+            hasBlockingIssue = true;
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Event Name is empty.");
+        }
+
+        if (!transform) {
+            if (ImGui::Button("Add Transform")) {
+                TransformComponent value{};
+                value.localScale = { 1.0f, 1.0f, 1.0f };
+                value.isDirty = true;
+                ExecuteAddComponent(registry, entity, value, "Add Transform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!hierarchy) {
+            if (ImGui::Button("Add Hierarchy")) {
+                ExecuteAddComponent(registry, entity, HierarchyComponent{}, "Add Hierarchy");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!rect) {
+            if (ImGui::Button("Add RectTransform")) {
+                RectTransformComponent value{};
+                value.sizeDelta = { 180.0f, 64.0f };
+                ExecuteAddComponent(registry, entity, value, "Add RectTransform");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!canvas) {
+            if (ImGui::Button("Add CanvasItem")) {
+                ExecuteAddComponent(registry, entity, CanvasItemComponent{}, "Add CanvasItem");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (!sprite) {
+            if (ImGui::Button("Add Sprite")) {
+                ExecuteAddComponent(registry, entity, SpriteComponent{}, "Add Sprite");
+                requestRefresh = true;
+            }
+            ImGui::SameLine();
+        }
+        if (requestRefresh) {
+            return;
+        }
+
+        if (hasBlockingIssue) {
+            ImGui::NewLine();
+            ImGui::Separator();
+        }
+
+        if (ImGui::BeginTable("UIButtonFields", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextColumn();
+
+            DrawUndoableValueWidget(registry, entity, *button, "Event Name", button->buttonId);
+            DrawUndoableValueWidget(registry, entity, *button, "Enabled", button->enabled);
+            if (canvas) {
+                DrawUndoableValueWidget(registry, entity, *canvas, "Interactable", canvas->interactable);
+                DrawUndoableValueWidget(registry, entity, *canvas, "Visible", canvas->visible);
+            }
+
+            ImGui::EndTable();
+        }
+
+        if (button->buttonId.empty()) {
+            ImGui::Spacing();
+            if (auto* name = registry->GetComponent<NameComponent>(entity)) {
+                if (!name->name.empty() && ImGui::Button("Use Entity Name as Event")) {
+                    const UIButtonComponent before = *button;
+                    button->buttonId = name->name;
+                    ExecuteImmediateComponentChange(registry, entity, before, *button);
+                    return;
+                }
+            }
+        }
+
+        if (canvas && !canvas->visible) {
+            if (ImGui::Button("Show CanvasItem")) {
+                const CanvasItemComponent before = *canvas;
+                canvas->visible = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *canvas);
+                return;
+            }
+            ImGui::SameLine();
+        }
+        if (canvas && !canvas->interactable) {
+            if (ImGui::Button("Enable Interactable")) {
+                const CanvasItemComponent before = *canvas;
+                canvas->interactable = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *canvas);
+                return;
+            }
+            ImGui::SameLine();
+        }
+        if (hierarchy && !hierarchy->isActive) {
+            if (ImGui::Button("Activate Entity")) {
+                const HierarchyComponent before = *hierarchy;
+                hierarchy->isActive = true;
+                ExecuteImmediateComponentChange(registry, entity, before, *hierarchy);
+                return;
+            }
+        }
+
+        if (sprite) {
+            ImGui::Spacing();
+            ImGui::Separator();
+
+            const SpriteComponent beforeTexture = *sprite;
+            if (DrawTextureSlot("Sprite Texture", sprite->textureAssetPath, false) &&
+                beforeTexture.textureAssetPath != sprite->textureAssetPath) {
+                ExecuteImmediateComponentChange(registry, entity, beforeTexture, *sprite);
+                Editor2D::FinalizeCreatedEntity(*registry, entity);
+                return;
+            }
+
+            auto texture = sprite->textureAssetPath.empty()
+                ? nullptr
+                : ResourceManager::Instance().GetTexture(sprite->textureAssetPath);
+
+            if (texture) {
+                ImGui::TextDisabled("Texture Size: %u x %u",
+                    texture->GetWidth(),
+                    texture->GetHeight());
+            }
+
+            if (texture && rect) {
+                if (ImGui::Button("Use Texture Size")) {
+                    const RectTransformComponent before = *rect;
+                    rect->sizeDelta = {
+                        static_cast<float>(texture->GetWidth()),
+                        static_cast<float>(texture->GetHeight())
+                    };
+                    ExecuteImmediateComponentChange(registry, entity, before, *rect);
+                    Editor2D::FinalizeCreatedEntity(*registry, entity);
+                    return;
+                }
+            }
+            else if (!texture && !sprite->textureAssetPath.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.42f, 0.42f, 1.0f), "Texture failed to load.");
+            }
+
+            DrawUndoableColorEdit4(registry, entity, *sprite, "Tint", sprite->tint);
+        }
+    }
+
     void DrawTextComponentInspector(Registry* registry, EntityID entity)
     {
         TextComponent* text = registry ? registry->GetComponent<TextComponent>(entity) : nullptr;
@@ -3062,9 +3251,12 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<AudioSettingsComponent>(registry, entity);
             DrawComponentIfPresent<RectTransformComponent>(registry, entity);
             DrawComponentIfPresent<CanvasItemComponent>(registry, entity);
-            DrawSpriteComponentInspector(registry, entity);
+            if (registry->GetComponent<UIButtonComponent>(entity)) {
+                DrawUIButtonComponentInspector(registry, entity);
+            } else {
+                DrawSpriteComponentInspector(registry, entity);
+            }
             DrawTextComponentInspector(registry, entity);
-            DrawComponentIfPresent<UIButtonComponent>(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
 
             // --------------------------------------------------------

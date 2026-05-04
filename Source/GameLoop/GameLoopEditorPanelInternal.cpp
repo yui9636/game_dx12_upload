@@ -4,13 +4,13 @@ GameLoopEditorPanelInternal::GameLoopEditorPanelInternal()
 {
     std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
     std::strncpy(m_saveAsPath, m_currentPath.string().c_str(), sizeof(m_saveAsPath) - 1);
-    m_asset.version = 4;
+    m_asset.version = kGameFlowAssetVersion;
 }
 
 void GameLoopEditorPanelInternal::Draw(bool* p_open, bool* outFocused)
 {
     ImGui::SetNextWindowSize(ImVec2(1180, 720), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("GameLoop Editor", p_open, ImGuiWindowFlags_MenuBar)) {
+    if (!ImGui::Begin("GameFlow Editor", p_open, ImGuiWindowFlags_MenuBar)) {
         if (outFocused) *outFocused = false;
         ImGui::End();
         return;
@@ -42,7 +42,7 @@ void GameLoopEditorPanelInternal::DrawToolbar()
     if (ImGui::BeginMenu("File")) {
         if (ImGui::MenuItem("New Empty")) {
             m_asset = GameLoopAsset{};
-            m_asset.version = 4;
+            m_asset.version = kGameFlowAssetVersion;
             m_nodeViews.clear();
             ClearSelection();
             m_fitRequested = true;
@@ -50,12 +50,12 @@ void GameLoopEditorPanelInternal::DrawToolbar()
         }
         if (ImGui::MenuItem("Load")) {
             std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
-            ImGui::OpenPopup("LoadGameLoop");
+            ImGui::OpenPopup("LoadGameFlow");
         }
         if (ImGui::MenuItem("Save")) Save();
         if (ImGui::MenuItem("Save As")) {
             std::strncpy(m_saveAsPath, m_currentPath.string().c_str(), sizeof(m_saveAsPath) - 1);
-            ImGui::OpenPopup("SaveGameLoopAs");
+            ImGui::OpenPopup("SaveGameFlowAs");
         }
         ImGui::EndMenu();
     }
@@ -73,7 +73,7 @@ void GameLoopEditorPanelInternal::DrawToolbar()
 
     ImGui::EndMenuBar();
 
-    if (ImGui::BeginPopupModal("LoadGameLoop", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("LoadGameFlow", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Path", m_loadPath, sizeof(m_loadPath));
         if (ImGui::Button("Load")) {
             Load(m_loadPath);
@@ -84,7 +84,7 @@ void GameLoopEditorPanelInternal::DrawToolbar()
         ImGui::EndPopup();
     }
 
-    if (ImGui::BeginPopupModal("SaveGameLoopAs", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("SaveGameFlowAs", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Path", m_saveAsPath, sizeof(m_saveAsPath));
         if (ImGui::Button("Save")) {
             m_currentPath = m_saveAsPath;

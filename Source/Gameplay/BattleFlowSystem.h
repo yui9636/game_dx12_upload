@@ -1,9 +1,13 @@
 #pragma once
 
+#include <string>
+
+class FlowEventQueue;
 class Registry;
 
-// Drives the 1v1 encounter state machine via the singleton
-// BattleFlowComponent (created by GameLayer::Initialize).
+// Drives the 1v1 encounter state machine through a runtime service.
+// BattleFlowComponent is authoring/config data; the live phase survives
+// scene replacement and can be started/reset from GameFlow actions.
 //
 // Phases:
 //   Idle      -> Encounter when the player enters the arena radius
@@ -16,4 +20,7 @@ class Registry;
 class BattleFlowSystem {
 public:
     static void Update(Registry& registry, float dt);
+    static void Start(const std::string& battleId = std::string{});
+    static void Reset();
+    static void DrainEvents(FlowEventQueue& outEvents);
 };

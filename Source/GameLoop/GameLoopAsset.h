@@ -7,32 +7,63 @@
 
 #include <DirectXMath.h>
 
-struct GameLoopTransitionInput
-{
-    uint32_t keyboardScancode = 0;
-    uint8_t gamepadButton = 0xFF;
-};
-
-enum class GameLoopLoadingMode : uint8_t
-{
-    Immediate = 0,
-    FadeOnly,
-    LoadingOverlay,
-};
-
-struct GameLoopLoadingPolicy
-{
-    GameLoopLoadingMode mode = GameLoopLoadingMode::Immediate;
-    float fadeOutSeconds = 0.15f;
-    float fadeInSeconds = 0.15f;
-    float minimumLoadingSeconds = 0.0f;
-    std::string loadingMessage;
-    bool blockInput = true;
-};
+constexpr int kGameFlowAssetVersion = 1;
+constexpr uint8_t kGameFlowUnboundGamepadButton = 0xFF;
 
 enum class GameLoopNodeType : uint8_t
 {
     Scene = 0,
+    Flow = 1,
+};
+
+enum class GameFlowConditionMode : uint8_t
+{
+    All = 0,
+    Any = 1,
+};
+
+enum class GameFlowConditionType : uint8_t
+{
+    Event = 0,
+    InputAction = 1,
+    UIButtonClick = 2,
+    TimerElapsed = 3,
+    FlagEquals = 4,
+    BattleResult = 5,
+    SceneLoaded = 6,
+};
+
+enum class GameFlowActionType : uint8_t
+{
+    LoadScene = 0,
+    SetCurrentNode = 1,
+    EmitEvent = 2,
+    SetFlag = 3,
+    ClearFlag = 4,
+    StartBattleFlow = 5,
+    ResetBattleFlow = 6,
+    Fade = 7,
+    Wait = 8,
+};
+
+struct GameFlowCondition
+{
+    GameFlowConditionType type = GameFlowConditionType::UIButtonClick;
+    std::string name;
+    std::string value;
+    uint32_t keyboardScancode = 0;
+    uint8_t gamepadButton = kGameFlowUnboundGamepadButton;
+    float seconds = 0.0f;
+    bool expectedFlagValue = true;
+};
+
+struct GameFlowAction
+{
+    GameFlowActionType type = GameFlowActionType::LoadScene;
+    std::string target;
+    std::string value;
+    bool boolValue = true;
+    float seconds = 0.0f;
 };
 
 struct GameLoopNode
@@ -50,13 +81,15 @@ struct GameLoopTransition
     uint32_t fromNodeId = 0;
     uint32_t toNodeId = 0;
     std::string name;
-    GameLoopTransitionInput input;
-    GameLoopLoadingPolicy loadingPolicy;
+    int priority = 0;
+    GameFlowConditionMode conditionMode = GameFlowConditionMode::All;
+    std::vector<GameFlowCondition> conditions;
+    std::vector<GameFlowAction> actions;
 };
 
 struct GameLoopAsset
 {
-    int version = 4;
+    int version = kGameFlowAssetVersion;
     uint32_t startNodeId = 0;
     uint32_t nextNodeId = 1;
     uint32_t nextTransitionId = 1;
@@ -100,3 +133,8 @@ struct GameLoopValidateResult
 
 GameLoopValidateResult ValidateGameLoopAsset(const GameLoopAsset& asset);
 std::string NormalizeGameLoopScenePath(const std::string& path);
+
+using GameFlowAsset = GameLoopAsset;
+using GameFlowNode = GameLoopNode;
+using GameFlowTransition = GameLoopTransition;
+using GameFlowValidateResult = GameLoopValidateResult;

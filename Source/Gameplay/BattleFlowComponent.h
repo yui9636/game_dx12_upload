@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 #include "Entity/Entity.h"
 
 // Singleton ("_BattleFlow"). Drives the 1v1 encounter state machine.
@@ -19,4 +20,6 @@ struct BattleFlowComponent {
     EntityID arenaEntity     = Entity::NULL_ID;
     float    encounterRadius = 18.0f;
     float    introDuration   = 1.5f;
+    std::string battleId     = "default";
+    bool     autoStartOnPlayerEnter = true;
 };

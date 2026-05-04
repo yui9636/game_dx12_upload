@@ -278,7 +278,7 @@ void GameLoopEditorPanelInternal::DrawGraph(const ImVec2& sizeIn)
     }
 
     if (m_asset.nodes.empty()) {
-        dl->AddText(ImVec2(origin.x + 20.0f, origin.y + 20.0f), IM_COL32(160, 170, 190, 255), "Empty Scene Flow: right click or drop .scene file.");
+        dl->AddText(ImVec2(origin.x + 20.0f, origin.y + 20.0f), IM_COL32(160, 170, 190, 255), "Empty GameFlow: right click or drop .scene file.");
     }
 
     DrawGraphContextMenu();

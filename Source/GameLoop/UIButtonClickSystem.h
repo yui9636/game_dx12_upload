@@ -11,6 +11,8 @@ class InputEventQueue;
 class UIButtonClickSystem
 {
 public:
+    static void ResetCapture();
+
     static void Update(
         Registry&                  gameRegistry,
         UIButtonClickEventQueue&   outQueue,

@@ -773,7 +773,9 @@ struct ComponentMeta<BattleFlowComponent> {
         MakeField("phase", &BattleFlowComponent::phase),
         MakeField("phaseTimer", &BattleFlowComponent::phaseTimer),
         MakeField("encounterRadius", &BattleFlowComponent::encounterRadius),
-        MakeField("introDuration", &BattleFlowComponent::introDuration)
+        MakeField("introDuration", &BattleFlowComponent::introDuration),
+        MakeField("battleId", &BattleFlowComponent::battleId),
+        MakeField("autoStartOnPlayerEnter", &BattleFlowComponent::autoStartOnPlayerEnter)
     );
 };
 

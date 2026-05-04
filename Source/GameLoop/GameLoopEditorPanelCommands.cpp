@@ -26,8 +26,18 @@ void GameLoopEditorPanelInternal::ReplaceNodeScene(uint32_t id, const std::strin
     std::string norm = GameLoopScenePicker::NormalizeScenePath(path);
     if (!n || norm.empty()) return;
 
+    const std::string oldPath = n->scenePath;
     n->scenePath = norm;
     n->name = GameLoopScenePicker::BuildNodeNameFromScenePath(norm);
+    for (GameLoopTransition& transition : m_asset.transitions) {
+        if (transition.toNodeId != id) continue;
+        for (GameFlowAction& action : transition.actions) {
+            if (action.type == GameFlowActionType::LoadScene &&
+                (action.target.empty() || action.target == oldPath)) {
+                action.target = norm;
+            }
+        }
+    }
     m_dirty = true;
 }
 
@@ -40,6 +50,19 @@ void GameLoopEditorPanelInternal::AddTransition(uint32_t from, uint32_t to)
     t.fromNodeId = from;
     t.toNodeId = to;
     t.name = "Transition";
+    t.conditionMode = GameFlowConditionMode::All;
+
+    GameFlowCondition condition;
+    condition.type = GameFlowConditionType::UIButtonClick;
+    condition.value.clear();
+    t.conditions.push_back(condition);
+
+    if (const GameLoopNode* toNode = FindNode(to)) {
+        GameFlowAction action;
+        action.type = GameFlowActionType::LoadScene;
+        action.target = toNode->scenePath;
+        t.actions.push_back(action);
+    }
 
     m_asset.transitions.push_back(t);
     SelectTransition((int)m_asset.transitions.size() - 1);
@@ -121,6 +144,13 @@ void GameLoopEditorPanelInternal::ReverseTransition(int i)
     uint32_t old = m_asset.transitions[i].fromNodeId;
     m_asset.transitions[i].fromNodeId = m_asset.transitions[i].toNodeId;
     m_asset.transitions[i].toNodeId = old;
+    if (const GameLoopNode* toNode = FindNode(m_asset.transitions[i].toNodeId)) {
+        for (GameFlowAction& action : m_asset.transitions[i].actions) {
+            if (action.type == GameFlowActionType::LoadScene) {
+                action.target = toNode->scenePath;
+            }
+        }
+    }
     m_dirty = true;
 }
 

@@ -1039,6 +1039,9 @@
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h">
       <Filter>Source\GameLoop</Filter>
     </ClInclude>
+    <ClInclude Include="Source\GameLoop\FlowEventQueue.h">
+      <Filter>Source\GameLoop</Filter>
+    </ClInclude>
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h">
       <Filter>Source\GameLoop</Filter>
     </ClInclude>

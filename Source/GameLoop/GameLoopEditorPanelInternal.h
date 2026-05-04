@@ -27,7 +27,7 @@ namespace
     constexpr float NodeW = 260.0f;
     constexpr float NodeH = 92.0f;
     constexpr float PinR = 7.0f;
-    constexpr const char* PickerPopup = "GameLoop Scene Picker";
+    constexpr const char* PickerPopup = "GameFlow Scene Picker";
     
     float MinF(float a, float b) { return a < b ? a : b; }
     float MaxF(float a, float b) { return a > b ? a : b; }
@@ -155,7 +155,8 @@ private:
     void DrawGraphContextMenu();
     void DrawNodeContextMenu(GameLoopNode& node);
     void DrawTransitionContextMenu(int index);
-    void DrawLoadingPolicyEditor(GameLoopTransition& transition);
+    void DrawConditionEditor(GameFlowCondition& condition, int index);
+    void DrawActionEditor(GameFlowAction& action, int index, const GameLoopNode* toNode);
 
     void OpenPickerForCreate(const DirectX::XMFLOAT2& pos);
     void OpenPickerForReplace(uint32_t nodeId);
@@ -193,7 +194,7 @@ private:
 private:
     GameLoopAsset m_asset;
     std::vector<NodeView> m_nodeViews;
-    std::filesystem::path m_currentPath = "Data/GameLoop/Main.gameloop";
+    std::filesystem::path m_currentPath = "Data/GameFlow/Main.gameflow";
 
     SelectionKind m_selection = SelectionKind::None;
     uint32_t m_selectedNodeId = 0;

@@ -18,7 +18,7 @@
 #endif
 
 namespace {
-    constexpr uint32_t kReservedDx12DescriptorSlots = 2;
+    constexpr uint32_t kDx12DescriptorHeapSlots = 1024;
 }
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND, UINT, WPARAM, LPARAM);
@@ -27,7 +27,7 @@ bool ImGuiRenderer::s_isDX12 = false;
 DX12Device* ImGuiRenderer::s_dx12Device = nullptr;
 Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ImGuiRenderer::s_imguiSrvHeap;
 uint32_t ImGuiRenderer::s_descriptorSize = 0;
-uint32_t ImGuiRenderer::s_nextTextureSlot = kReservedDx12DescriptorSlots;
+uint32_t ImGuiRenderer::s_nextTextureSlot = 0;
 std::unordered_map<const ITexture*, uint32_t> ImGuiRenderer::s_textureSlots;
 std::vector<ImGuiRenderer::DeferredTextureSlot> ImGuiRenderer::s_deferredUnregisters;
 std::vector<uint32_t> ImGuiRenderer::s_freeSlots;
@@ -90,8 +90,21 @@ void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
     initInfo.NumFramesInFlight = DX12Device::FRAME_COUNT;
     initInfo.RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     initInfo.SrvDescriptorHeap = s_imguiSrvHeap.Get();
-    initInfo.LegacySingleSrvCpuDescriptor = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
-    initInfo.LegacySingleSrvGpuDescriptor = s_imguiSrvHeap->GetGPUDescriptorHandleForHeapStart();
+    initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*,
+                                       D3D12_CPU_DESCRIPTOR_HANDLE* outCpuHandle,
+                                       D3D12_GPU_DESCRIPTOR_HANDLE* outGpuHandle)
+    {
+        const uint32_t slot = ImGuiRenderer::AllocateDX12DescriptorSlot();
+        IM_ASSERT(slot < kDx12DescriptorHeapSlots && "ImGui DX12 SRV descriptor heap is full.");
+        *outCpuHandle = ImGuiRenderer::GetDX12SrvCpuHandle(slot);
+        *outGpuHandle = ImGuiRenderer::GetDX12SrvGpuHandle(slot);
+    };
+    initInfo.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*,
+                                      D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+                                      D3D12_GPU_DESCRIPTOR_HANDLE)
+    {
+        ImGuiRenderer::FreeDX12DescriptorSlot(cpuHandle);
+    };
 
     ImGui_ImplDX12_Init(&initInfo);
 
@@ -186,18 +199,17 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
         slot = found->second;
     }
     else {
-        const uint32_t maxSlots = 1024;
         if (!s_freeSlots.empty()) {
             slot = s_freeSlots.back();
             s_freeSlots.pop_back();
         } else {
-            if (s_nextTextureSlot >= maxSlots) {
+            if (s_nextTextureSlot >= kDx12DescriptorHeapSlots) {
                 return nullptr;
             }
             slot = s_nextTextureSlot++;
         }
 
-        if (slot >= maxSlots) {
+        if (slot >= kDx12DescriptorHeapSlots) {
             return nullptr;
         }
         s_textureSlots.emplace(texture, slot);
@@ -256,13 +268,50 @@ void ImGuiRenderer::ResetTextureCache()
     s_textureSlots.clear();
     s_deferredUnregisters.clear();
     s_freeSlots.clear();
-    s_nextTextureSlot = kReservedDx12DescriptorSlots;
+    s_nextTextureSlot = 0;
+}
+
+uint32_t ImGuiRenderer::AllocateDX12DescriptorSlot()
+{
+    if (!s_freeSlots.empty()) {
+        const uint32_t slot = s_freeSlots.back();
+        s_freeSlots.pop_back();
+        return slot;
+    }
+
+    if (s_nextTextureSlot >= kDx12DescriptorHeapSlots) {
+        return kDx12DescriptorHeapSlots;
+    }
+
+    return s_nextTextureSlot++;
+}
+
+void ImGuiRenderer::FreeDX12DescriptorSlot(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle)
+{
+    if (!s_imguiSrvHeap || s_descriptorSize == 0 || cpuHandle.ptr == 0) {
+        return;
+    }
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE base = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
+    if (cpuHandle.ptr < base.ptr) {
+        return;
+    }
+
+    const SIZE_T offset = cpuHandle.ptr - base.ptr;
+    if ((offset % s_descriptorSize) != 0) {
+        return;
+    }
+
+    const uint32_t slot = static_cast<uint32_t>(offset / s_descriptorSize);
+    if (slot < kDx12DescriptorHeapSlots) {
+        s_freeSlots.push_back(slot);
+    }
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE ImGuiRenderer::GetDX12SrvCpuHandle(uint32_t slot)
 {
     D3D12_CPU_DESCRIPTOR_HANDLE handle = {};
-    if (!s_imguiSrvHeap) {
+    if (!s_imguiSrvHeap || slot >= kDx12DescriptorHeapSlots) {
         return handle;
     }
 
@@ -274,7 +323,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE ImGuiRenderer::GetDX12SrvCpuHandle(uint32_t slot)
 D3D12_GPU_DESCRIPTOR_HANDLE ImGuiRenderer::GetDX12SrvGpuHandle(uint32_t slot)
 {
     D3D12_GPU_DESCRIPTOR_HANDLE handle = {};
-    if (!s_imguiSrvHeap) {
+    if (!s_imguiSrvHeap || slot >= kDx12DescriptorHeapSlots) {
         return handle;
     }
 

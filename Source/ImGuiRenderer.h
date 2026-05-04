@@ -49,6 +49,8 @@ private:
     static void NewFrame();
     static void Render(ID3D11DeviceContext* context);
     static void ResetTextureCache();
+    static uint32_t AllocateDX12DescriptorSlot();
+    static void FreeDX12DescriptorSlot(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle);
 
     struct DeferredTextureSlot {
         const ITexture* texture = nullptr;
