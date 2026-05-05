@@ -174,7 +174,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 
 	renderState = std::make_unique<RenderState>(device.Get());
 	primitiveRenderer = std::make_unique<PrimitiveRenderer>(device.Get());
-	swordTrail = std::make_unique<SwordTrail>(device.Get());
 	postEffect = std::make_unique<PostEffect>(device.Get());
 	resourceFactory = std::make_unique<DX11ResourceFactory>(device.Get());
 	gizmos = std::make_unique<Gizmos>(resourceFactory.get());

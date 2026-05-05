@@ -11,7 +11,6 @@
 #include "Model/ModelRenderer.h"
 #include <mutex>
 #include "PrimitiveRenderer.h"
-#include "SwordTrail.h"
 #include"PostEffect.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/GraphicsAPI.h"
@@ -95,7 +94,6 @@ public:
 	PrimitiveRenderer* GetPrimitiveRenderer() { return primitiveRenderer.get(); }
 	ShadowMap* GetShadowMap() { return shadowMap.get(); }
 	ModelRenderer* GetModelRenderer() const { return modelRenderer.get(); }
-	SwordTrail* GetSwordTrail() { return  swordTrail.get(); }
 	PostEffect* GetPostEffect() const { return postEffect.get(); }
 	std::mutex& GetMutex() { return mutex; }
 
@@ -119,7 +117,6 @@ private:
 	std::unique_ptr<ShadowMap>				shadowMap;
 	std::unique_ptr<ModelRenderer>			modelRenderer;
 	std::unique_ptr<PrimitiveRenderer>		primitiveRenderer;
-	std::unique_ptr<SwordTrail>				swordTrail;
 	std::unique_ptr<PostEffect>				postEffect;
 
 	std::shared_ptr<ITexture> backBufferTexture;
