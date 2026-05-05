@@ -124,6 +124,8 @@ struct RenderContext
         bool enableSSR = true;
         bool enableDeferredLighting = true;
         bool enableSkybox = true;
+        bool clearSceneColor = true;
+        bool cameraPixelSnap = false;
         DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
 
         DirectX::XMFLOAT4X4 viewMatrix;
@@ -303,6 +305,8 @@ struct RenderContext
     bool enableSSR = true;
     bool enableDeferredLighting = true;
     bool enableSkybox = true;
+    bool clearSceneColor = true;
+    bool cameraPixelSnap = false;
     DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
     IBuffer* activeCountBuffer = nullptr;      // count buffer for multi-draw
     uint32_t activeCountBufferOffset = 0;

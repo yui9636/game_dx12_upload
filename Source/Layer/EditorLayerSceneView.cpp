@@ -1,4 +1,4 @@
-#include "EditorLayerInternal.h"
+﻿#include "EditorLayerInternal.h"
 
 void EditorLayer::DrawSceneView()
 {
@@ -68,7 +68,7 @@ void EditorLayer::DrawSceneView()
         const DirectX::XMFLOAT4X4 view = GetEditorViewMatrix();
         const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
         const DirectX::XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
-        if (m_showSceneGrid && m_sceneViewMode == SceneViewMode::Mode2D) {
+        if (IsSceneGridVisible() && m_sceneViewMode == SceneViewMode::Mode2D) {
             DrawSceneGridOverlay(m_sceneViewRect, view, projection);
         }
         ImGuizmo::BeginFrame();
@@ -535,68 +535,13 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
 bool EditorLayer::TryBuildGameView2DViewProjection(DirectX::XMFLOAT4X4& outView,
                                                    DirectX::XMFLOAT4X4& outProjection) const
 {
-    if (!m_gameLayer || m_gameViewRect.z <= 1.0f || m_gameViewRect.w <= 1.0f) {
+    if (!m_gameLayer) {
         return false;
     }
-
-    using namespace DirectX;
-    Registry& registry = m_gameLayer->GetRegistry();
-    EntityID cameraEntity = Entity::NULL_ID;
-    TransformComponent* cameraTransform = nullptr;
-    Camera2DComponent* camera2D = nullptr;
-
-    for (Archetype* archetype : registry.GetAllArchetypes()) {
-        const auto& signature = archetype->GetSignature();
-        if (!signature.test(TypeManager::GetComponentTypeID<Camera2DComponent>()) ||
-            !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
-            continue;
-        }
-
-        auto* cameraColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<Camera2DComponent>());
-        auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
-        auto* hierarchyColumn = signature.test(TypeManager::GetComponentTypeID<HierarchyComponent>())
-            ? archetype->GetColumn(TypeManager::GetComponentTypeID<HierarchyComponent>())
-            : nullptr;
-        const auto& entities = archetype->GetEntities();
-        for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
-            auto* currentCamera = static_cast<Camera2DComponent*>(cameraColumn->Get(i));
-            auto* currentTransform = static_cast<TransformComponent*>(transformColumn->Get(i));
-            auto* hierarchy = hierarchyColumn ? static_cast<HierarchyComponent*>(hierarchyColumn->Get(i)) : nullptr;
-            if (!currentCamera || !currentTransform) {
-                continue;
-            }
-            if (hierarchy && !hierarchy->isActive) {
-                continue;
-            }
-            cameraEntity = entities[i];
-            cameraTransform = currentTransform;
-            camera2D = currentCamera;
-            break;
-        }
-        if (!Entity::IsNull(cameraEntity)) {
-            break;
-        }
-    }
-
-    if (!cameraTransform || !camera2D) {
-        return false;
-    }
-
-    const XMVECTOR eye = XMVectorSet(cameraTransform->worldPosition.x,
-                                     cameraTransform->worldPosition.y,
-                                     cameraTransform->worldPosition.z,
-                                     1.0f);
-    const XMMATRIX view = XMMatrixLookToLH(eye, XMVectorSet(0, 0, 1, 0), XMVectorSet(0, 1, 0, 0));
-    const float aspect = m_gameViewRect.w > 0.0f ? (m_gameViewRect.z / m_gameViewRect.w) : (16.0f / 9.0f);
-    const float zoom = (std::max)(camera2D->zoom, 0.01f);
-    const float orthoSize = (std::max)(camera2D->orthographicSize / zoom, 0.01f);
-    const XMMATRIX proj = XMMatrixOrthographicLH(aspect * orthoSize * 2.0f,
-                                                 orthoSize * 2.0f,
-                                                 camera2D->nearZ,
-                                                 camera2D->farZ);
-    XMStoreFloat4x4(&outView, view);
-    XMStoreFloat4x4(&outProjection, proj);
-    return true;
+    return Camera2DUtils::TryBuildActiveViewProjection(m_gameLayer->GetRegistry(),
+                                                       m_gameViewRect,
+                                                       outView,
+                                                       outProjection);
 }
 
 bool EditorLayer::TryBuildGameView2DPreviewViewProjection(DirectX::XMFLOAT4X4& outView,

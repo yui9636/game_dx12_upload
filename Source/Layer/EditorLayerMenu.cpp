@@ -1,4 +1,4 @@
-#include "EditorLayerInternal.h"
+﻿#include "EditorLayerInternal.h"
 
 namespace {
     struct ClipboardEntry
@@ -421,7 +421,8 @@ void EditorLayer::ExecuteResetLayout()
     m_showSequencer = false;
     m_showStatusBar = true;
     m_showMainToolbar = true;
-    m_showSceneGrid = true;
+    m_showSceneGrid3D = true;
+    m_showSceneGrid2D = false;
     m_showSceneGizmo = true;
     m_showSceneStatsOverlay = false;
     m_showSceneSelectionOutline = false;
@@ -629,7 +630,12 @@ void EditorLayer::DrawMenuBar()
             }
             ImGui::Separator();
             if (ImGui::BeginMenu("Overlays")) {
-                ImGui::MenuItem("Show Grid", nullptr, &m_showSceneGrid);
+                {
+                    bool showGrid = IsSceneGridVisible();
+                    if (ImGui::MenuItem("Show Grid", nullptr, &showGrid)) {
+                        SetSceneGridVisible(showGrid);
+                    }
+                }
                 ImGui::MenuItem("Show Gizmo", nullptr, &m_showSceneGizmo);
                 ImGui::MenuItem("Show Stats Overlay", nullptr, &m_showSceneStatsOverlay);
                 ImGui::MenuItem("Show Selection Outline", nullptr, &m_showSceneSelectionOutline);

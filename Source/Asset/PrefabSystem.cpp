@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "Component/Camera2DComponent.h"
+#include "Component/Camera2DMainTagComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/AudioBusSendComponent.h"
 #include "Component/AudioEmitterComponent.h"
@@ -233,15 +234,41 @@ namespace
                 });
         }
 
-        // 2D Camera 設定を JSON へ保存します。
         if (const auto& camera2D = std::get<std::optional<Camera2DComponent>>(node.components); camera2D.has_value()) {
+            const char* aspectPolicyName = "Disabled";
+            switch (camera2D->aspectPolicy) {
+            case Camera2DComponent::AspectPolicy::Fit:  aspectPolicyName = "Fit"; break;
+            case Camera2DComponent::AspectPolicy::Fill: aspectPolicyName = "Fill"; break;
+            case Camera2DComponent::AspectPolicy::Disabled:
+            default: aspectPolicyName = "Disabled"; break;
+            }
+            const char* clearModeName = "SolidColor";
+            switch (camera2D->clearMode) {
+            case Camera2DComponent::ClearMode::DepthOnly: clearModeName = "DepthOnly"; break;
+            case Camera2DComponent::ClearMode::DontClear: clearModeName = "DontClear"; break;
+            case Camera2DComponent::ClearMode::SolidColor:
+            default: clearModeName = "SolidColor"; break;
+            }
             writeComponent("Camera2DComponent", json{
                 {"orthographicSize", camera2D->orthographicSize},
                 {"zoom", camera2D->zoom},
                 {"nearZ", camera2D->nearZ},
                 {"farZ", camera2D->farZ},
-                {"backgroundColor", camera2D->backgroundColor}
+                {"backgroundColor", camera2D->backgroundColor},
+                {"referenceResolution", json::array({
+                    camera2D->referenceResolution.x,
+                    camera2D->referenceResolution.y
+                })},
+                {"aspectPolicy", aspectPolicyName},
+                {"letterboxColor", camera2D->letterboxColor},
+                {"pixelSnap", camera2D->pixelSnap},
+                {"clearMode", clearModeName},
+                {"priority", camera2D->priority}
                 });
+        }
+
+        if (const auto& main2DTag = std::get<std::optional<Camera2DMainTagComponent>>(node.components); main2DTag.has_value()) {
+            writeComponent("Camera2DMainTagComponent", json::object());
         }
 
         // Mesh 表示設定を JSON へ保存します。
@@ -767,7 +794,6 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // 2D Camera 設定を JSON から読み込みます。
         if (components.contains("Camera2DComponent")) {
             Camera2DComponent component;
             const json& value = components["Camera2DComponent"];
@@ -776,7 +802,42 @@ namespace
             component.nearZ = value.value("nearZ", component.nearZ);
             component.farZ = value.value("farZ", component.farZ);
             component.backgroundColor = value.value("backgroundColor", component.backgroundColor);
+            if (value.contains("referenceResolution")) {
+                const json& ref = value["referenceResolution"];
+                if (ref.is_array() && ref.size() >= 2) {
+                    component.referenceResolution.x = ref.at(0).get<uint32_t>();
+                    component.referenceResolution.y = ref.at(1).get<uint32_t>();
+                } else if (ref.is_object()) {
+                    component.referenceResolution.x = ref.value("x", component.referenceResolution.x);
+                    component.referenceResolution.y = ref.value("y", component.referenceResolution.y);
+                }
+                component.referenceResolution.x = (std::max)(component.referenceResolution.x, 1u);
+                component.referenceResolution.y = (std::max)(component.referenceResolution.y, 1u);
+            }
+            const std::string aspectPolicyStr = value.value("aspectPolicy", std::string("Disabled"));
+            if (aspectPolicyStr == "Fit") {
+                component.aspectPolicy = Camera2DComponent::AspectPolicy::Fit;
+            } else if (aspectPolicyStr == "Fill") {
+                component.aspectPolicy = Camera2DComponent::AspectPolicy::Fill;
+            } else {
+                component.aspectPolicy = Camera2DComponent::AspectPolicy::Disabled;
+            }
+            component.letterboxColor = value.value("letterboxColor", component.letterboxColor);
+            component.pixelSnap = value.value("pixelSnap", component.pixelSnap);
+            const std::string clearModeStr = value.value("clearMode", std::string("SolidColor"));
+            if (clearModeStr == "DepthOnly") {
+                component.clearMode = Camera2DComponent::ClearMode::DepthOnly;
+            } else if (clearModeStr == "DontClear") {
+                component.clearMode = Camera2DComponent::ClearMode::DontClear;
+            } else {
+                component.clearMode = Camera2DComponent::ClearMode::SolidColor;
+            }
+            component.priority = value.value("priority", component.priority);
             SetOptional(node.components, component);
+        }
+
+        if (components.contains("Camera2DMainTagComponent")) {
+            SetOptional(node.components, Camera2DMainTagComponent{});
         }
 
         // Mesh 表示設定を JSON から読み込みます。

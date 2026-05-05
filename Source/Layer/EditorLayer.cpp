@@ -315,6 +315,7 @@ void EditorLayer::RenderUI()
         DrawStatusBar();
     }
     DrawUnsavedChangesPopup();
+    DrawNewSceneModePopup();
     DrawRecoveryPopup();
     DrawRenamePopup();
 

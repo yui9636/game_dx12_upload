@@ -30,6 +30,7 @@ struct ComponentMeta;
 #include "Component/AudioSettingsComponent.h"
 #include "Component/AudioStateComponent.h"
 #include "Component/Camera2DComponent.h"
+#include "Component/Camera2DMainTagComponent.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/CameraEffectComponent.h"
@@ -198,8 +199,20 @@ struct ComponentMeta<Camera2DComponent> {
         MakeField("zoom", &Camera2DComponent::zoom),
         MakeField("nearZ", &Camera2DComponent::nearZ),
         MakeField("farZ", &Camera2DComponent::farZ),
-        MakeField("backgroundColor", &Camera2DComponent::backgroundColor)
+        MakeField("backgroundColor", &Camera2DComponent::backgroundColor),
+        MakeField("referenceResolution", &Camera2DComponent::referenceResolution),
+        MakeField("aspectPolicy", &Camera2DComponent::aspectPolicy),
+        MakeField("letterboxColor", &Camera2DComponent::letterboxColor),
+        MakeField("pixelSnap", &Camera2DComponent::pixelSnap),
+        MakeField("clearMode", &Camera2DComponent::clearMode),
+        MakeField("priority", &Camera2DComponent::priority)
     );
+};
+
+template <>
+struct ComponentMeta<Camera2DMainTagComponent> {
+    static constexpr std::string_view Name = "Camera2DMainTagComponent";
+    static constexpr auto Fields = std::make_tuple();
 };
 
 template <>
@@ -1082,6 +1095,7 @@ using AllComponentTypes = std::tuple<
     AudioSettingsComponent,
     AudioStateComponent,
     Camera2DComponent,
+    Camera2DMainTagComponent,
     CameraFreeControlComponent,
     CameraTPVControlComponent,
     CameraLookAtComponent,

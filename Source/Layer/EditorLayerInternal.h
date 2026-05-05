@@ -17,6 +17,8 @@
 #include "Component/AudioListenerComponent.h"
 #include "Component/AudioSettingsComponent.h"
 #include "Component/Camera2DComponent.h"
+#include "Component/Camera2DMainTagComponent.h"
+#include "Camera/Camera2DUtils.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
 #include "Component/SequencerPreviewCameraComponent.h"
@@ -1168,7 +1170,7 @@ namespace {
         }
     }
 
-    void CreateDefaultSceneEntities(Registry& registry)
+    void CreateDefaultSceneEntities3D(Registry& registry)
     {
         using namespace DirectX;
 
@@ -1214,6 +1216,45 @@ namespace {
         EntityID audioSettingsEntity = registry.CreateEntity();
         registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
         registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
+    }
+
+    void CreateDefaultSceneEntities2D(Registry& registry)
+    {
+        EntityID camera2DEntity = registry.CreateEntity();
+        registry.AddComponent(camera2DEntity, NameComponent{ "Camera 2D" });
+
+        TransformComponent camTrans;
+        camTrans.localPosition = { 0.0f, 0.0f, -100.0f };
+        camTrans.localScale    = { 1.0f, 1.0f, 1.0f };
+        camTrans.isDirty       = true;
+        registry.AddComponent(camera2DEntity, camTrans);
+
+        registry.AddComponent(camera2DEntity, HierarchyComponent{});
+
+        Camera2DComponent camera2D{};
+        camera2D.referenceResolution = { 1920u, 1080u };
+        camera2D.aspectPolicy        = Camera2DComponent::AspectPolicy::Fit;
+        camera2D.letterboxColor      = { 0.0f, 0.0f, 0.0f, 1.0f };
+        camera2D.pixelSnap           = true;
+        camera2D.clearMode           = Camera2DComponent::ClearMode::SolidColor;
+        camera2D.priority            = 0;
+        registry.AddComponent(camera2DEntity, camera2D);
+
+        registry.AddComponent(camera2DEntity, Camera2DMainTagComponent{});
+        registry.AddComponent(camera2DEntity, AudioListenerComponent{});
+
+        EntityID audioSettingsEntity = registry.CreateEntity();
+        registry.AddComponent(audioSettingsEntity, NameComponent{ "Audio Settings" });
+        registry.AddComponent(audioSettingsEntity, AudioSettingsComponent{});
+    }
+
+    void CreateDefaultSceneEntities(Registry& registry, EditorLayer::SceneViewMode mode)
+    {
+        if (mode == EditorLayer::SceneViewMode::Mode2D) {
+            CreateDefaultSceneEntities2D(registry);
+        } else {
+            CreateDefaultSceneEntities3D(registry);
+        }
     }
 }
 inline void ApplyUnityTheme()

@@ -503,6 +503,12 @@ namespace
         transform.isDirty = true;
 
         Camera2DComponent camera2D{};
+        camera2D.referenceResolution = { 1920u, 1080u };
+        camera2D.aspectPolicy        = Camera2DComponent::AspectPolicy::Fit;
+        camera2D.letterboxColor      = { 0.0f, 0.0f, 0.0f, 1.0f };
+        camera2D.pixelSnap           = true;
+        camera2D.clearMode           = Camera2DComponent::ClearMode::SolidColor;
+        camera2D.priority            = 0;
 
         std::get<std::optional<NameComponent>>(node.components) = NameComponent{ "Camera 2D" };
         std::get<std::optional<TransformComponent>>(node.components) = transform;

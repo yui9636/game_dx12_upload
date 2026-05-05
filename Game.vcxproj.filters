@@ -181,6 +181,9 @@
     <ClInclude Include="Source\Camera\CameraFinalizeSystem.h">
       <Filter>Source\Camera</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Camera\Camera2DUtils.h">
+      <Filter>Source\Camera</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Camera\FreeCameraSystem.h">
       <Filter>Source\Camera</Filter>
     </ClInclude>
@@ -218,6 +221,12 @@
       <Filter>Source\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\CameraBehaviorComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\Camera2DComponent.h">
+      <Filter>Source\Component</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Component\Camera2DMainTagComponent.h">
       <Filter>Source\Component</Filter>
     </ClInclude>
     <ClInclude Include="Source\Component\CameraComponent.h">

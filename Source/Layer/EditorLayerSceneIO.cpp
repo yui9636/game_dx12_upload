@@ -1,4 +1,4 @@
-#include "EditorLayerInternal.h"
+﻿#include "EditorLayerInternal.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 
 void EditorLayer::DrawUnsavedChangesPopup()
@@ -196,7 +196,9 @@ bool EditorLayer::ExecutePendingSceneAction()
 
     switch (action) {
     case PendingSceneAction::NewScene:
-        NewScene();
+        // Open mode selection first; Create performs NewScene(mode).
+        m_newSceneSelectedMode = m_sceneViewMode;
+        m_openNewSceneModePopup = true;
         return true;
     case PendingSceneAction::OpenSceneDialog:
         return OpenScene();
@@ -218,7 +220,7 @@ bool EditorLayer::ExecutePendingSceneAction()
 }
 
 
-void EditorLayer::NewScene()
+void EditorLayer::NewScene(SceneViewMode mode)
 {
     if (!m_gameLayer) {
         return;
@@ -243,12 +245,75 @@ void EditorLayer::NewScene()
     m_hasCheckedRecovery = true;
 
     ClearRegistryEntities(registry);
-    CreateDefaultSceneEntities(registry);
+    CreateDefaultSceneEntities(registry, mode);
 
-    m_sceneViewMode = SceneViewMode::Mode3D;
+    m_sceneViewMode = mode;
     m_sceneSavePath = kDefaultSceneSavePath;
     MarkSceneSaved();
-    LOG_INFO("[Editor] New scene created.");
+    LOG_INFO("[Editor] New scene created. mode=%s", SceneViewModeToString(mode));
+}
+
+void EditorLayer::DrawNewSceneModePopup()
+{
+    static const char* kPopupId = "New Scene";
+
+    if (m_openNewSceneModePopup) {
+        ImGui::OpenPopup(kPopupId);
+        m_openNewSceneModePopup = false;
+    }
+
+    const ImVec2 viewportCenter = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(viewportCenter, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Appearing);
+
+    if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Choose a scene mode.");
+        ImGui::Spacing();
+
+        const bool is3D = (m_newSceneSelectedMode == SceneViewMode::Mode3D);
+        if (ImGui::RadioButton("3D Scene", is3D)) {
+            m_newSceneSelectedMode = SceneViewMode::Mode3D;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Main camera, directional light, reflection probe, environment.");
+
+        const bool is2D = (m_newSceneSelectedMode == SceneViewMode::Mode2D);
+        if (ImGui::RadioButton("2D Scene", is2D)) {
+            m_newSceneSelectedMode = SceneViewMode::Mode2D;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("Camera 2D, orthographic view. For titles and UI screens.");
+
+        // Arrow keys toggle the scene mode.
+        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+            m_newSceneSelectedMode = (m_newSceneSelectedMode == SceneViewMode::Mode2D)
+                ? SceneViewMode::Mode3D
+                : SceneViewMode::Mode2D;
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        const bool createPressed =
+            ImGui::Button("Create", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Enter);
+        ImGui::SameLine();
+        const bool cancelPressed =
+            ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+        if (createPressed) {
+            const SceneViewMode mode = m_newSceneSelectedMode;
+            ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+            NewScene(mode);
+            return;
+        }
+        if (cancelPressed) {
+            LOG_INFO("[Editor] New scene canceled.");
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)

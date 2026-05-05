@@ -54,6 +54,8 @@
 #include "Gameplay/BattleFlowSystem.h"
 #include "Component/CameraComponent.h"
 #include "Component/Camera2DComponent.h"
+#include "Component/Camera2DMainTagComponent.h"
+#include "Camera/Camera2DUtils.h"
 #include "Component/TransformComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/NameComponent.h"
@@ -85,67 +87,7 @@ namespace {
                                               DirectX::XMFLOAT4X4& outView,
                                               DirectX::XMFLOAT4X4& outProjection)
     {
-        if (viewRect.z <= 1.0f || viewRect.w <= 1.0f) {
-            return false;
-        }
-
-        using namespace DirectX;
-        TransformComponent* cameraTransform = nullptr;
-        Camera2DComponent* camera2D = nullptr;
-
-        for (Archetype* archetype : registry.GetAllArchetypes()) {
-            const auto& signature = archetype->GetSignature();
-            if (!signature.test(TypeManager::GetComponentTypeID<Camera2DComponent>()) ||
-                !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
-                continue;
-            }
-
-            auto* cameraColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<Camera2DComponent>());
-            auto* transformColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
-            auto* hierarchyColumn = signature.test(TypeManager::GetComponentTypeID<HierarchyComponent>())
-                ? archetype->GetColumn(TypeManager::GetComponentTypeID<HierarchyComponent>())
-                : nullptr;
-
-            for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
-                auto* currentCamera = static_cast<Camera2DComponent*>(cameraColumn->Get(i));
-                auto* currentTransform = static_cast<TransformComponent*>(transformColumn->Get(i));
-                auto* hierarchy = hierarchyColumn ? static_cast<HierarchyComponent*>(hierarchyColumn->Get(i)) : nullptr;
-                if (!currentCamera || !currentTransform) {
-                    continue;
-                }
-                if (hierarchy && !hierarchy->isActive) {
-                    continue;
-                }
-
-                cameraTransform = currentTransform;
-                camera2D = currentCamera;
-                break;
-            }
-
-            if (cameraTransform && camera2D) {
-                break;
-            }
-        }
-
-        if (!cameraTransform || !camera2D) {
-            return false;
-        }
-
-        const XMVECTOR eye = XMVectorSet(cameraTransform->worldPosition.x,
-                                         cameraTransform->worldPosition.y,
-                                         cameraTransform->worldPosition.z,
-                                         1.0f);
-        const XMMATRIX view = XMMatrixLookToLH(eye, XMVectorSet(0, 0, 1, 0), XMVectorSet(0, 1, 0, 0));
-        const float aspect = viewRect.w > 0.0f ? (viewRect.z / viewRect.w) : (16.0f / 9.0f);
-        const float zoom = (std::max)(camera2D->zoom, 0.01f);
-        const float orthoSize = (std::max)(camera2D->orthographicSize / zoom, 0.01f);
-        const XMMATRIX projection = XMMatrixOrthographicLH(aspect * orthoSize * 2.0f,
-                                                           orthoSize * 2.0f,
-                                                           camera2D->nearZ,
-                                                           camera2D->farZ);
-        XMStoreFloat4x4(&outView, view);
-        XMStoreFloat4x4(&outProjection, projection);
-        return true;
+        return Camera2DUtils::TryBuildActiveViewProjection(registry, viewRect, outView, outProjection);
     }
 
     void PushInputEventsToGameFlow(FlowEventQueue& flowEvents, const InputEventQueue& inputQueue)
@@ -1732,6 +1674,26 @@ void EngineKernel::Render()
                 gameState.aspect = static_cast<float>(gamePanelWidth) / static_cast<float>((std::max)(gamePanelHeight, 1u));
                 gameState.jitterOffset = { 0.0f, 0.0f };
                 gameState.prevJitterOffset = { 0.0f, 0.0f };
+                gameState.enableComputeCulling = false;
+                gameState.enableAsyncCompute = false;
+                gameState.enableGTAO = false;
+                gameState.enableSSGI = false;
+                gameState.enableVolumetricFog = false;
+                gameState.enableSSR = false;
+                gameState.enableDeferredLighting = false;
+                gameState.enableSkybox = false;
+
+                const Camera2DUtils::ActiveCamera2D activeCamera2D = Camera2DUtils::FindActiveCamera2D(reg);
+                if (activeCamera2D.camera) {
+                    const Camera2DComponent& camera2D = *activeCamera2D.camera;
+                    gameState.nearZ = camera2D.nearZ;
+                    gameState.farZ = camera2D.farZ;
+                    gameState.cameraPixelSnap = camera2D.pixelSnap;
+                    gameState.clearSceneColor = camera2D.clearMode == Camera2DComponent::ClearMode::SolidColor;
+                    gameState.clearColor = (camera2D.aspectPolicy == Camera2DComponent::AspectPolicy::Fit)
+                        ? camera2D.letterboxColor
+                        : camera2D.backgroundColor;
+                }
 
                 using namespace DirectX;
                 const XMMATRIX viewMatrix = XMLoadFloat4x4(&game2DView);

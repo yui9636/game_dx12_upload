@@ -483,6 +483,8 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     rc.enableSSR = viewState.enableSSR;
     rc.enableDeferredLighting = viewState.enableDeferredLighting;
     rc.enableSkybox = viewState.enableSkybox;
+    rc.clearSceneColor = viewState.clearSceneColor;
+    rc.cameraPixelSnap = viewState.cameraPixelSnap;
     rc.clearColor = viewState.clearColor;
     rc.viewMatrix = viewState.viewMatrix;
     rc.projectionMatrix = viewState.projectionMatrix;
@@ -750,6 +752,8 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     baseRc.pendingAsyncComputeFenceValue = rc.pendingAsyncComputeFenceValue;
     baseRc.enableDeferredLighting = rc.enableDeferredLighting;
     baseRc.enableSkybox = rc.enableSkybox;
+    baseRc.clearSceneColor = rc.clearSceneColor;
+    baseRc.cameraPixelSnap = rc.cameraPixelSnap;
     baseRc.clearColor = rc.clearColor;
     baseRc.debugGBuffer0 = rc.debugGBuffer0;
     baseRc.debugGBuffer1 = rc.debugGBuffer1;
@@ -821,6 +825,8 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.enableSSR = rc.enableSSR;
     view.enableDeferredLighting = rc.enableDeferredLighting;
     view.enableSkybox = rc.enableSkybox;
+    view.clearSceneColor = rc.clearSceneColor;
+    view.cameraPixelSnap = rc.cameraPixelSnap;
     view.clearColor = rc.clearColor;
     return viewContext;
 }

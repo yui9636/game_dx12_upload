@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Layer.h"
 #include "GameLayer.h"
 #include "Asset/AssetBrowser.h"
@@ -146,8 +146,17 @@ public:
             m_activeWorkspace == WorkspaceTab::PlayerEditor;
 
         return isGridWorkspace &&
-            m_showSceneGrid &&
+            IsSceneGridVisible() &&
             m_sceneViewMode == SceneViewMode::Mode3D;
+    }
+
+    // Scene grid visibility is remembered separately for 2D and 3D modes.
+    bool IsSceneGridVisible() const {
+        return (m_sceneViewMode == SceneViewMode::Mode2D) ? m_showSceneGrid2D : m_showSceneGrid3D;
+    }
+    void SetSceneGridVisible(bool value) {
+        if (m_sceneViewMode == SceneViewMode::Mode2D) m_showSceneGrid2D = value;
+        else m_showSceneGrid3D = value;
     }
 
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
@@ -251,7 +260,8 @@ private:
     bool m_showGBufferDebug = false;
     bool m_showStatusBar = true;
     bool m_showMainToolbar = true;
-    bool m_showSceneGrid = true;
+    bool m_showSceneGrid3D = true;
+    bool m_showSceneGrid2D = false;
     float m_sceneGridCellSize = 20.0f;
     int m_sceneGridHalfLineCount = 32;
     bool m_showSceneGizmo = true;
@@ -371,7 +381,8 @@ private:
     void CheckRecoveryCandidate();
     void RequestSceneAction(PendingSceneAction action, std::filesystem::path scenePath = {});
     bool ExecutePendingSceneAction();
-    void NewScene();
+    void NewScene(SceneViewMode mode);
+    void DrawNewSceneModePopup();
     bool OpenScene();
     bool SaveCurrentScene();
     bool SaveCurrentSceneAs();
@@ -379,6 +390,8 @@ private:
     bool m_requestNewScene = false;
     bool m_requestOpenScene = false;
     bool m_requestSaveSceneAs = false;
+    bool m_openNewSceneModePopup = false;
+    SceneViewMode m_newSceneSelectedMode = SceneViewMode::Mode3D;
     GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
     GameViewAspectPolicy m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
     GameViewScalePolicy m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;

@@ -51,7 +51,7 @@ public:
                 continue;
             }
 
-            if (packet.pixelSnap) {
+            if (packet.pixelSnap || rc.cameraPixelSnap) {
                 for (auto& corner : corners) {
                     corner.x = std::round(corner.x);
                     corner.y = std::round(corner.y);

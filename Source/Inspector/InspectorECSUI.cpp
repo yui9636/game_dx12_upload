@@ -1,4 +1,4 @@
-#include "InspectorECSUI.h"
+﻿#include "InspectorECSUI.h"
 
 #include "Engine/EditorSelection.h"
 #include "Engine/EngineKernel.h"
@@ -63,6 +63,7 @@
 #include "Component/AudioListenerComponent.h"
 #include "Component/AudioSettingsComponent.h"
 #include "Component/Camera2DComponent.h"
+#include "Component/Camera2DMainTagComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/EnvironmentComponent.h"
 #include "Component/PostEffectComponent.h"
@@ -160,6 +161,15 @@ namespace {
         }
         else if constexpr (std::is_same_v<T, DirectX::XMFLOAT4>) {
             changed = ImGui::DragFloat4("##value", &value.x, 0.01f);
+
+        }
+        else if constexpr (std::is_same_v<T, DirectX::XMUINT2>) {
+            int temp[2] = { static_cast<int>(value.x), static_cast<int>(value.y) };
+            if (ImGui::DragInt2("##value", temp, 1.0f, 1)) {
+                value.x = static_cast<uint32_t>((std::max)(temp[0], 1));
+                value.y = static_cast<uint32_t>((std::max)(temp[1], 1));
+                changed = true;
+            }
 
         }
         else if constexpr (std::is_same_v<T, EntityID>) {
@@ -867,6 +877,177 @@ namespace {
         }
 
         return changed;
+    }
+
+    const char* Camera2DAspectPolicyLabel(Camera2DComponent::AspectPolicy policy)
+    {
+        switch (policy) {
+        case Camera2DComponent::AspectPolicy::Fit:
+            return "Fit";
+        case Camera2DComponent::AspectPolicy::Fill:
+            return "Fill";
+        case Camera2DComponent::AspectPolicy::Disabled:
+        default:
+            return "Disabled";
+        }
+    }
+
+    const char* Camera2DClearModeLabel(Camera2DComponent::ClearMode mode)
+    {
+        switch (mode) {
+        case Camera2DComponent::ClearMode::DepthOnly:
+            return "DepthOnly";
+        case Camera2DComponent::ClearMode::DontClear:
+            return "DontClear";
+        case Camera2DComponent::ClearMode::SolidColor:
+        default:
+            return "SolidColor";
+        }
+    }
+
+    bool DrawCamera2DAspectPolicyCombo(Registry* registry,
+                                       EntityID entity,
+                                       Camera2DComponent& component)
+    {
+        const Camera2DComponent before = component;
+        bool changed = false;
+        if (ImGui::BeginCombo("Aspect Policy", Camera2DAspectPolicyLabel(component.aspectPolicy))) {
+            const Camera2DComponent::AspectPolicy values[] = {
+                Camera2DComponent::AspectPolicy::Disabled,
+                Camera2DComponent::AspectPolicy::Fit,
+                Camera2DComponent::AspectPolicy::Fill
+            };
+            for (Camera2DComponent::AspectPolicy item : values) {
+                if (ImGui::Selectable(Camera2DAspectPolicyLabel(item), component.aspectPolicy == item)) {
+                    component.aspectPolicy = item;
+                    changed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (changed) {
+            ExecuteImmediateComponentChange(registry, entity, before, component);
+        }
+        return changed;
+    }
+
+    bool DrawCamera2DClearModeCombo(Registry* registry,
+                                    EntityID entity,
+                                    Camera2DComponent& component)
+    {
+        const Camera2DComponent before = component;
+        bool changed = false;
+        if (ImGui::BeginCombo("Clear Mode", Camera2DClearModeLabel(component.clearMode))) {
+            const Camera2DComponent::ClearMode values[] = {
+                Camera2DComponent::ClearMode::SolidColor,
+                Camera2DComponent::ClearMode::DepthOnly,
+                Camera2DComponent::ClearMode::DontClear
+            };
+            for (Camera2DComponent::ClearMode item : values) {
+                if (ImGui::Selectable(Camera2DClearModeLabel(item), component.clearMode == item)) {
+                    component.clearMode = item;
+                    changed = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        if (changed) {
+            ExecuteImmediateComponentChange(registry, entity, before, component);
+        }
+        return changed;
+    }
+
+    bool DrawCamera2DUInt2(Registry* registry,
+                           EntityID entity,
+                           Camera2DComponent& component)
+    {
+        const Camera2DComponent before = component;
+        int temp[2] = {
+            static_cast<int>(component.referenceResolution.x),
+            static_cast<int>(component.referenceResolution.y)
+        };
+        if (!ImGui::InputInt2("Reference Resolution", temp)) {
+            return false;
+        }
+
+        component.referenceResolution.x = static_cast<uint32_t>((std::max)(temp[0], 1));
+        component.referenceResolution.y = static_cast<uint32_t>((std::max)(temp[1], 1));
+        ExecuteImmediateComponentChange(registry, entity, before, component);
+        return true;
+    }
+
+    bool DrawCamera2DCheckbox(Registry* registry,
+                              EntityID entity,
+                              Camera2DComponent& component,
+                              const char* label,
+                              bool& value)
+    {
+        const Camera2DComponent before = component;
+        if (!ImGui::Checkbox(label, &value)) {
+            return false;
+        }
+        ExecuteImmediateComponentChange(registry, entity, before, component);
+        return true;
+    }
+
+    bool DrawCamera2DInt(Registry* registry,
+                         EntityID entity,
+                         Camera2DComponent& component,
+                         const char* label,
+                         int& value)
+    {
+        const Camera2DComponent before = component;
+        if (!ImGui::InputInt(label, &value)) {
+            return false;
+        }
+        ExecuteImmediateComponentChange(registry, entity, before, component);
+        return true;
+    }
+
+    void DrawCamera2DComponentInspector(Registry* registry, EntityID entity)
+    {
+        Camera2DComponent* camera = registry ? registry->GetComponent<Camera2DComponent>(entity) : nullptr;
+        if (!camera) {
+            return;
+        }
+
+        if (!ImGui::CollapsingHeader("Camera2DComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
+            return;
+        }
+
+        if (ImGui::TreeNodeEx("Background", ImGuiTreeNodeFlags_DefaultOpen)) {
+            DrawCamera2DClearModeCombo(registry, entity, *camera);
+            ImGui::BeginDisabled(camera->clearMode != Camera2DComponent::ClearMode::SolidColor);
+            DrawUndoableColorEdit4(registry, entity, *camera, "Background Color", camera->backgroundColor);
+            ImGui::EndDisabled();
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Projection", ImGuiTreeNodeFlags_DefaultOpen)) {
+            DrawUndoableDragFloat(registry, entity, *camera, "Orthographic Size", camera->orthographicSize, 0.05f, 0.01f, 10000.0f);
+            DrawUndoableDragFloat(registry, entity, *camera, "Zoom", camera->zoom, 0.01f, 0.01f, 1000.0f);
+            DrawUndoableDragFloat(registry, entity, *camera, "Near Z", camera->nearZ, 0.01f, 0.001f, 100000.0f);
+            DrawUndoableDragFloat(registry, entity, *camera, "Far Z", camera->farZ, 0.1f, 0.01f, 1000000.0f);
+            if (camera->farZ <= camera->nearZ) {
+                camera->farZ = camera->nearZ + 0.01f;
+            }
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Resolution", ImGuiTreeNodeFlags_DefaultOpen)) {
+            DrawCamera2DUInt2(registry, entity, *camera);
+            DrawCamera2DAspectPolicyCombo(registry, entity, *camera);
+            ImGui::BeginDisabled(camera->aspectPolicy != Camera2DComponent::AspectPolicy::Fit);
+            DrawUndoableColorEdit4(registry, entity, *camera, "Letterbox Color", camera->letterboxColor);
+            ImGui::EndDisabled();
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNodeEx("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
+            DrawCamera2DCheckbox(registry, entity, *camera, "Pixel Snap", camera->pixelSnap);
+            DrawCamera2DInt(registry, entity, *camera, "Priority", camera->priority);
+            ImGui::TreePop();
+        }
     }
 
     bool DrawFontSlot(const char* label, std::string& fontPath)
@@ -1800,7 +1981,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<LightComponent>(registry, entity);
             DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);
             DrawComponentIfPresent<CameraLensComponent>(registry, entity);
-            DrawComponentIfPresent<Camera2DComponent>(registry, entity);
+            DrawCamera2DComponentInspector(registry, entity);
+            DrawComponentRemovable<Camera2DMainTagComponent>(registry, entity);
             DrawComponentIfPresent<EnvironmentComponent>(registry, entity);
             DrawComponentIfPresent<PostEffectComponent>(registry, entity);
             DrawComponentIfPresent<ReflectionProbeComponent>(registry, entity);
@@ -1900,6 +2082,7 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 TryAddComponent<CameraLensComponent>(registry, entity, "CameraLens");
                 TryAddComponent<CameraFreeControlComponent>(registry, entity, "CameraFreeControl");
                 TryAddComponent<Camera2DComponent>(registry, entity, "Camera2D");
+                TryAddComponent<Camera2DMainTagComponent>(registry, entity, "Camera2DMainTag");
                 TryAddComponent<SpriteComponent>(registry, entity, "Sprite");
                 TryAddComponent<TextComponent>(registry, entity, "Text");
                 TryAddComponent<UIButtonComponent>(registry, entity, "UIButton");

@@ -152,8 +152,10 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         return;
     }
 
-    float clearColor[4] = { rc.clearColor.x, rc.clearColor.y, rc.clearColor.z, rc.clearColor.w };
-    rc.commandList->ClearColor(rtScene, clearColor);
+    if (rc.clearSceneColor) {
+        float clearColor[4] = { rc.clearColor.x, rc.clearColor.y, rc.clearColor.z, rc.clearColor.w };
+        rc.commandList->ClearColor(rtScene, clearColor);
+    }
     rc.commandList->SetRenderTarget(rtScene, nullptr);
 
     // ★ Context同期：これをしないと後の SkyboxPass 等が「空の深度」を使ってキャラを消します

@@ -1049,7 +1049,12 @@ void EditorLayer::DrawGridSettingsWindow()
             ImGui::TableSetColumnIndex(0);
             ImGui::TextDisabled("showGrid");
             ImGui::TableSetColumnIndex(1);
-            ImGui::Checkbox("##ShowSceneGrid", &m_showSceneGrid);
+            {
+                bool showGrid = IsSceneGridVisible();
+                if (ImGui::Checkbox("##ShowSceneGrid", &showGrid)) {
+                    SetSceneGridVisible(showGrid);
+                }
+            }
 
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
