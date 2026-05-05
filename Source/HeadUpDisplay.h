@@ -1,19 +1,20 @@
 #pragma once
 
 #include "Sprite/Sprite.h"
+#include "UI/UIElement.h"
 #include <memory>
 
 struct RenderContext;
 
-class	HeadUpDisplay
+class	HeadUpDisplay : public UIElement
 {
 public:
 	HeadUpDisplay();
-	~HeadUpDisplay();
+	~HeadUpDisplay() override;
 
-	void Update(float dt);
+	void Update(float dt) override;
 
-	void Render(const RenderContext& rc);
+	void Render(const RenderContext& rc) override;
 
 private:
 	void OnLockOn(void* data);
@@ -25,7 +26,7 @@ private:
 	float				lockonTimer		= -1;
 	float				lockonDirection	= 0;
 	float				lockonTimerMax	= 8;
-	DirectX::XMFLOAT2	lockonPosition	= { 0, 0 };
+	DirectX::XMFLOAT2	lockonPosition	= { 0.5f, 0.5f };
 
 	uint64_t			CAMERACHANGEFREEMODEKEY;
 	uint64_t			CAMERACHANGELOCKONMODEKEY;

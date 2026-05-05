@@ -1,6 +1,7 @@
 #include "HUDPass.h"
 
 #include "Graphics.h"
+#include "Font/FontManager.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RenderContext/RenderContext.h"
@@ -36,8 +37,15 @@ void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& /*queue
     const float h = static_cast<float>(displayColor->GetHeight());
     rc.commandList->SetViewport(0.0f, 0.0f, w, h);
 
+    RenderContext hudRc = rc;
+    hudRc.displayWidth = static_cast<uint32_t>(w);
+    hudRc.displayHeight = static_cast<uint32_t>(h);
+    hudRc.mainViewport = RhiViewport(0.0f, 0.0f, w, h);
+
+    FontManager::Instance().SetRuntimeViewport(w, h);
     SpriteRenderer::Instance().Begin(rc.commandList, { w, h });
-    UIManager::Instance().Render(rc);
-    DamageTextManager::Instance().Render(rc);
+    UIManager::Instance().Render(hudRc);
+    DamageTextManager::Instance().Render(hudRc);
     SpriteRenderer::Instance().End();
+    FontManager::Instance().ClearRuntimeViewport();
 }

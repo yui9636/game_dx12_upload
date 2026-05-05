@@ -1009,6 +1009,9 @@
     <ClInclude Include="Source\UI\UIHPNumber.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UI\UIHPText2D.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
     <ClInclude Include="Source\UI\UIManager.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
@@ -1848,6 +1851,9 @@
       <Filter>Source\UI</Filter>
     </ClCompile>
     <ClCompile Include="Source\UI\UIHPNumber.cpp">
+      <Filter>Source\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UI\UIHPText2D.cpp">
       <Filter>Source\UI</Filter>
     </ClCompile>
     <ClCompile Include="Source\UI\UIManager.cpp">

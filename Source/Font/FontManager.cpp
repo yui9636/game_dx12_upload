@@ -18,6 +18,8 @@ using namespace DirectX;
 namespace
 {
     constexpr const char* kDefaultBitmapFontPath = "Data/Font/Unnamed-1.fnt";
+    float g_runtimeViewportWidth = 0.0f;
+    float g_runtimeViewportHeight = 0.0f;
 
     std::string NormalizeFontAssetPath(const std::string& path)
     {
@@ -46,11 +48,17 @@ namespace
 
     float GetFallbackViewportWidth()
     {
+        if (g_runtimeViewportWidth > 0.0f) {
+            return g_runtimeViewportWidth;
+        }
         return (std::max)(1.0f, Graphics::Instance().GetScreenWidth());
     }
 
     float GetFallbackViewportHeight()
     {
+        if (g_runtimeViewportHeight > 0.0f) {
+            return g_runtimeViewportHeight;
+        }
         return (std::max)(1.0f, Graphics::Instance().GetScreenHeight());
     }
 }
@@ -83,6 +91,18 @@ std::shared_ptr<Font> FontManager::Get(const std::string& key)
 {
     auto it = fonts.find(key);
     return (it != fonts.end()) ? it->second : nullptr;
+}
+
+void FontManager::SetRuntimeViewport(float width, float height)
+{
+    g_runtimeViewportWidth = (std::max)(0.0f, width);
+    g_runtimeViewportHeight = (std::max)(0.0f, height);
+}
+
+void FontManager::ClearRuntimeViewport()
+{
+    g_runtimeViewportWidth = 0.0f;
+    g_runtimeViewportHeight = 0.0f;
 }
 
 std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)

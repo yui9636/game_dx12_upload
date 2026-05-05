@@ -56,7 +56,7 @@ void UIProgressBar3D::SetBackgroundSprite(std::shared_ptr<Sprite> sprite)
 
 void UIProgressBar3D::Render(const RenderContext& rc)
 {
-    if (!visible) return;
+    if (!IsActive()) return;
 
     XMFLOAT3 center{};
     if (!WorldToScreen(rc, center)) return;

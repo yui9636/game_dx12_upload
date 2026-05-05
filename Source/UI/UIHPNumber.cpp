@@ -1,7 +1,8 @@
 #include "UIHPNumber.h"
 #include "Font/FontManager.h"
-#include "Camera/Camera.h"
 #include "RHI/ICommandList.h"
+
+#include <algorithm>
 
 using namespace DirectX;
 
@@ -15,32 +16,34 @@ void UIHPNumber::SetHP(int current, int max)
     maxHP = max;
 }
 
+void UIHPNumber::SetScreenOffset(float x, float y)
+{
+    screenOffset = { x, y };
+}
+
+void UIHPNumber::SetScale(float value)
+{
+    scale = (std::max)(0.01f, value);
+}
+
 void UIHPNumber::Render(const RenderContext& rc)
 {
-    if (!visible) return;
+    if (!IsActive()) return;
 
-    Camera& cam = Camera::Instance();
-    XMMATRIX view = XMLoadFloat4x4(&cam.GetView());
-    XMMATRIX projection = XMLoadFloat4x4(&cam.GetProjection());
+    XMFLOAT3 screenPos;
+    if (!WorldToScreen(rc, screenPos)) {
+        return;
+    }
 
-    XMFLOAT3 drawPos = position;
-
-
-    XMFLOAT4 textColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-    float scale = 0.055f;
-
-    FontManager::Instance().DrawFormat3D(
+    FontManager::Instance().DrawFormat(
         rc.commandList,
-        view,
-        projection,
         "ComboFont",
-        drawPos,
-        rotation,
+        screenPos.x + screenOffset.x,
+        screenPos.y + screenOffset.y,
+        color,
         scale,
-        textColor,
         FontAlign::Center,
         L"%d / %d",
         currentHP, maxHP
     );
-
 }

@@ -10,10 +10,12 @@ public:
     void Render(const RenderContext& rc) override;
 
     void SetHP(int current, int max);
+    void SetScreenOffset(float x, float y);
+    void SetScale(float value);
 
 private:
     int currentHP = 0;
     int maxHP = 0;
-
-    const float OFFSET_Y = 0.25f;
+    DirectX::XMFLOAT2 screenOffset{ 0.0f, -18.0f };
+    float scale = 0.2f;
 };

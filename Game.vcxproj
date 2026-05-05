@@ -472,6 +472,7 @@
     <ClInclude Include="Source\UI\UIDamagePopup.h" />
     <ClInclude Include="Source\UI\UIElement.h" />
     <ClInclude Include="Source\UI\UIHPNumber.h" />
+    <ClInclude Include="Source\UI\UIHPText2D.h" />
     <ClInclude Include="Source\UI\UIManager.h" />
     <ClInclude Include="Source\UI\UIProgressBar2D.h" />
     <ClInclude Include="Source\UI\UIProgressBar3D.h" />
@@ -761,6 +762,7 @@
     <ClCompile Include="Source\UI\UIDamagePopup.cpp" />
     <ClCompile Include="Source\UI\UIElement.cpp" />
     <ClCompile Include="Source\UI\UIHPNumber.cpp" />
+    <ClCompile Include="Source\UI\UIHPText2D.cpp" />
     <ClCompile Include="Source\UI\UIManager.cpp" />
     <ClCompile Include="Source\UI\UIProgressBar2D.cpp" />
     <ClCompile Include="Source\UI\UIProgressBar3D.cpp" />

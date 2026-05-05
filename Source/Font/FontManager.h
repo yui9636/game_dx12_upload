@@ -36,6 +36,8 @@ public:
     void Load(ID3D11Device* device, const std::string& key, const char* filename);
     void Load(IResourceFactory* factory, const std::string& key, const char* filename);
     std::shared_ptr<Font> Get(const std::string& key);
+    void SetRuntimeViewport(float width, float height);
+    void ClearRuntimeViewport();
 
     // --------------------------------------------------------------------------
     // --------------------------------------------------------------------------

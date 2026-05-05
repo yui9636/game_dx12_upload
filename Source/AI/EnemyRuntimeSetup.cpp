@@ -72,7 +72,7 @@ namespace EnemyRuntimeSetup
         }
         if (auto* hudLink = EnsureComponent<HUDLinkComponent>(registry, entity)) {
             hudLink->asBossHUD    = true;
-            hudLink->asWorldFloat = false;
+            hudLink->asWorldFloat = true;
         }
 
         if (auto* loco = EnsureComponent<LocomotionStateComponent>(registry, entity)) {

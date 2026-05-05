@@ -175,6 +175,10 @@ void SpriteRenderer::DrawInternal(const Sprite& sprite,
     if (!texture) return;
     if (m_currentViewport.x <= 0.0f || m_currentViewport.y <= 0.0f) return;
 
+    m_currentCommandList->SetPipelineState(m_pso.get());
+    m_currentCommandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
+    m_currentCommandList->SetInputLayout(m_inputLayout.get());
+
     // Build the four corners in screen pixel space, then convert to NDC.
     // dx,dy is the pivot-corrected top-left of the quad. Callers handle the
     // pivot themselves to keep the shader-side math trivial.

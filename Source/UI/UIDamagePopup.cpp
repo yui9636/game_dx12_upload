@@ -34,6 +34,11 @@ void UIDamagePopup::Update(float dt)
 {
     if (!isActive) return;
 
+    position.x += velocity.x * dt;
+    position.y += velocity.y * dt;
+    position.z += velocity.z * dt;
+    velocity.y -= 9.8f * dt;
+
     lifeTime += dt;
     if (lifeTime >= maxLifeTime)
     {

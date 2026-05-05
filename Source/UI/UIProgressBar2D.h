@@ -17,6 +17,11 @@ public:
     void SetProgress(float v);
     float GetProgress() const { return progress; }
 
+    void SetResponsiveRect(float centerXNorm, float centerYNorm, float widthNorm, float heightPx);
+    void ClearResponsiveRect();
+
 private:
     float progress;
+    bool useResponsiveRect = false;
+    DirectX::XMFLOAT4 responsiveRect{ 0.5f, 0.5f, 0.4f, 16.0f };
 };
