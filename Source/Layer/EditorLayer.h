@@ -392,6 +392,11 @@ private:
     bool m_requestSaveSceneAs = false;
     bool m_openNewSceneModePopup = false;
     SceneViewMode m_newSceneSelectedMode = SceneViewMode::Mode3D;
+    // Defer NewScene execution to Update (between frames). Calling it during
+    // RenderUI would tear down entities whose GPU resources are already
+    // recorded in the in-flight frame's command list.
+    bool m_pendingNewSceneRequest = false;
+    SceneViewMode m_pendingNewSceneMode = SceneViewMode::Mode3D;
     GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
     GameViewAspectPolicy m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
     GameViewScalePolicy m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;

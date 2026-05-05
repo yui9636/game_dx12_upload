@@ -80,6 +80,13 @@ void EditorLayer::DrawRecoveryPopup()
 
 void EditorLayer::ProcessDeferredEditorActions()
 {
+    // Mode dialog confirmed last frame: now we are between frames, so it is
+    // safe to tear down the registry and rebuild it.
+    if (m_pendingNewSceneRequest) {
+        m_pendingNewSceneRequest = false;
+        NewScene(m_pendingNewSceneMode);
+    }
+
     const bool requestNewScene = m_requestNewScene;
     const bool requestOpenScene = m_requestOpenScene;
     const bool requestSaveSceneAs = m_requestSaveSceneAs;
@@ -302,11 +309,12 @@ void EditorLayer::DrawNewSceneModePopup()
             ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
 
         if (createPressed) {
-            const SceneViewMode mode = m_newSceneSelectedMode;
+            // Defer the actual NewScene to the next Update tick. Running it
+            // here (mid RenderUI) would destroy entities whose GPU resources
+            // are already referenced by this frame's recorded command list.
+            m_pendingNewSceneRequest = true;
+            m_pendingNewSceneMode = m_newSceneSelectedMode;
             ImGui::CloseCurrentPopup();
-            ImGui::EndPopup();
-            NewScene(mode);
-            return;
         }
         if (cancelPressed) {
             LOG_INFO("[Editor] New scene canceled.");
