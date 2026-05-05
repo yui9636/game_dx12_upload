@@ -1163,10 +1163,23 @@ namespace {
             entities.insert(entities.end(), archetypeEntities.begin(), archetypeEntities.end());
         }
 
+        // Editor-only preview entities (Sequencer / Effect editor) own live GPU
+        // resources that the render pipeline references between frames. They
+        // must survive scene replacement; otherwise the next BeginFrame hits
+        // dangling state and the device is removed. Mirror the protection
+        // policy used by PrefabSystem::ClearRegistryForSceneReplace.
         for (auto it = entities.rbegin(); it != entities.rend(); ++it) {
-            if (registry.IsAlive(*it)) {
-                registry.DestroyEntity(*it);
+            const EntityID entity = *it;
+            if (!registry.IsAlive(entity)) {
+                continue;
             }
+            if (registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
+                continue;
+            }
+            if (registry.GetComponent<EffectPreviewTagComponent>(entity)) {
+                continue;
+            }
+            registry.DestroyEntity(entity);
         }
     }
 
