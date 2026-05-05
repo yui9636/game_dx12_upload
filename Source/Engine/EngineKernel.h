@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "EngineTime.h"
 #include "EngineMode.h"
 #include "Audio/AudioWorldSystem.h"
@@ -20,159 +20,173 @@
 class GameLayer;
 class EditorLayer;
 
-// �G���W���S�̂̒��j��S������J�[�l���N���X�B
-// �X�V�E�`��E���͎擾�E���s���[�h�Ǘ��E�e��v�T�u�V�X�e���̕ێ����s���B
+// エンジン全体の中核を担当するカーネルクラス。
+// 更新、描画、入力取得、実行モード管理、各種サブシステムの保持を行う。
 class EngineKernel
 {
-    // Framework ����̂ݏ������E�I�������փA�N�Z�X������B
+    // Framework からのみ初期化と終了処理へアクセスさせる。
     friend class Framework;
 
 private:
-    // singleton �p�Ȃ̂ŃR���X�g���N�^�� private�B
+    // singleton 用なのでコンストラクタは private にする。
     EngineKernel();
 
-    // singleton �p�Ȃ̂Ńf�X�g���N�^�� private�B
+    // singleton 用なのでデストラクタは private にする。
     ~EngineKernel();
 
 public:
-    // singleton �C���X�^���X��Ԃ��B
+    // singleton インスタンスを取得する。
     static EngineKernel& Instance();
 
-    // 1 �t���[���Ԃ�̍X�V�������s���B
+    // 1 フレーム分の更新処理を実行する。
     void Update(float rawDt);
 
-    // 1 �t���[���Ԃ�̕`�揈�����s���B
+    // 1 フレーム分の描画処理を実行する。
     void Render();
 
-    // ���̓f�o�C�X����C�x���g�����W����B
+    // 入力デバイスからイベントを収集する。
     void PollInput();
 
-    // Editor / Pause ��Ԃ��� Play ���J�n����B
+    // Editor または Pause 状態から Play を開始する。
     void Play();
 
-    // Play / Pause ���~���� Editor �֖߂��B
+    // Play または Pause を終了し、Editor 状態へ戻す。
     void Stop();
 
-    // Play �� Pause ��؂�ւ���B
+    // Play と Pause を切り替える。
     void Pause();
 
-    // Pause ���� 1 �t���[�������i�߂�B
+    // Pause 状態から 1 フレームだけ進める。
     void Step();
 
-    // �V�[���؂�ւ����ɕ`��֘A��Ԃ����S�Ƀ��Z�b�g����B
+    // シーン切り替え時に描画関連の状態を安全にリセットする。
     void ResetRenderStateForSceneChange();
 
-    // ���݂̎��s���[�h��Ԃ��B
+    // 現在の実行モードを取得する。
     EngineMode GetMode() const { return mode; }
 
-    // ���݂̃G���W�����ԏ���Ԃ��B
+    // 現在のエンジン時間情報を取得する。
     const EngineTime& GetTime() const { return time; }
 
-    // AudioWorldSystem �Q�Ƃ�Ԃ��B
+    // AudioWorldSystem への参照を取得する。
     AudioWorldSystem& GetAudioWorld() { return *m_audioWorld; }
 
-    // const �� AudioWorldSystem �Q�Ƃ�Ԃ��B
+    // const 版の AudioWorldSystem への参照を取得する。
     const AudioWorldSystem& GetAudioWorld() const { return *m_audioWorld; }
 
-    // ���̓o�b�N�G���h�Q�Ƃ�Ԃ��B
+    // 入力バックエンドへの参照を取得する。
     IInputBackend& GetInputBackend() { return *m_inputBackend; }
 
-    // GameLoop authoring data (scene transition graph).
+    // GameLoop の編集用データを取得する。
     GameLoopAsset& GetGameLoopAsset() { return m_gameLoopAsset; }
+
+    // const 版の GameLoop 編集用データを取得する。
     const GameLoopAsset& GetGameLoopAsset() const { return m_gameLoopAsset; }
 
-    // GameLoop runtime state (persistent across scene loads).
+    // シーンロードをまたいで保持される GameLoop の実行状態を取得する。
     GameLoopRuntime& GetGameLoopRuntime() { return m_gameLoopRuntime; }
+
+    // const 版の GameLoop 実行状態を取得する。
     const GameLoopRuntime& GetGameLoopRuntime() const { return m_gameLoopRuntime; }
 
-    // Registry that owns the GameLoop persistent input owner entity.
+    // GameLoop の永続入力用 Entity を保持する Registry を取得する。
     Registry& GetGameLoopRegistry() { return m_gameLoopRegistry; }
 
+    // 現在の GameLayer が保持する Registry を取得する。
     Registry* GetGameRegistry();
+
+    // const 版の GameLayer Registry を取得する。
     const Registry* GetGameRegistry() const;
 
-    // Per-frame UI button click queue (cleared at end of frame).
+    // 1 フレーム分の UI ボタンクリックイベントキューを取得する。
     UIButtonClickEventQueue& GetUIButtonClickQueue() { return m_uiButtonClickQueue; }
 
+    // 1 フレーム分の GameFlow イベントキューを取得する。
     FlowEventQueue& GetFlowEventQueue() { return m_flowEventQueue; }
 
-    // ���t���[�����W�������̓C�x���g�L���[��Ԃ��B
+    // 1 フレームで収集された入力イベントキューを取得する。
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
 private:
-    // �G���W���S�̂�����������B
+    // エンジン全体を初期化する。
     void Initialize();
 
-    // �G���W���S�̂��I����������B
+    // エンジン全体を終了処理する。
     void Finalize();
 
-    // PlayerEditor �p�̃v���r���[�� offscreen �`�悷��B
+    // PlayerEditor 用のプレビューを offscreen に描画する。
     void RenderPlayerPreviewOffscreen();
+
+    // 停止要求を即座に反映する。
     void StopImmediate();
 
-    // ���ԊǗ����B
+    // 時間管理情報。
     EngineTime time;
 
-    // ���݂̎��s���[�h�B
+    // 現在の実行モード。
     EngineMode mode = EngineMode::Editor;
 
-    // Pause ���� 1 �t���[�������i�߂�v���t���O�B
+    // Pause 状態から 1 フレームだけ進めるためのフラグ。
     bool m_stepFrameRequested = false;
+
+    // Stop が要求されたことを示すフラグ。
     bool m_stopRequested = false;
+
+    // Render 中であることを示すフラグ。
     bool m_renderInProgress = false;
 
-    // �`��p�C�v���C���{�́B
+    // 描画パイプライン本体。
     std::unique_ptr<RenderPipeline> m_renderPipeline;
 
-    // ReflectionProbe �x�C�N�S���B
+    // ReflectionProbe のベイク担当。
     std::unique_ptr<ReflectionProbeBaker> m_probeBaker;
 
-    // �t���[�����̕`��p�P�b�g���W�߂�L���[�B
+    // フレーム内の描画コマンドを集めるキュー。
     RenderQueue m_renderQueue;
 
-    // Editor �p�O���b�h�`��V�X�e���B
+    // Editor 用のグリッド描画システム。
     GridRenderSystem m_editorGridRenderSystem;
 
-    // �I�[�f�B�I���[���h�X�V�V�X�e���B
+    // オーディオワールド更新システム。
     std::unique_ptr<AudioWorldSystem> m_audioWorld;
 
-    // �Q�[���{�҃��C���[�B
+    // ゲーム本編用レイヤー。
     std::unique_ptr<GameLayer> m_gameLayer;
 
-    // �G�f�B�^���C���[�B
+    // エディタ用レイヤー。
     std::unique_ptr<EditorLayer> m_editorLayer;
 
-    // �T���l�C����e��v���r���[�p�̋��L offscreen renderer�B
+    // サムネイルや各種プレビュー用の共有 offscreen renderer。
     std::unique_ptr<OffscreenRenderer> m_sharedOffscreen;
 
-    // ���̓o�b�N�G���h�{�́B
+    // 入力バックエンド本体。
     std::unique_ptr<IInputBackend> m_inputBackend;
 
-    // ���t���[���̓��̓C�x���g�~�ϐ�B
+    // 1 フレーム分の入力イベントを蓄積するキュー。
     InputEventQueue m_inputQueue;
 
-    // GameLayer ���������̑�֗p�� Registry�B
+    // GameLayer が存在しない場合の代替 Registry。
     Registry m_emptyRegistry;
 
     // ---- GameLoop ----
-    // GameLoop authoring data.
+    // GameLoop の編集用データ。
     GameLoopAsset m_gameLoopAsset;
 
-    // GameLoop runtime state (persistent across scene loads).
+    // シーンロードをまたいで保持される GameLoop の実行状態。
     GameLoopRuntime m_gameLoopRuntime;
 
-    // Registry hosting the GameLoop persistent input owner entity.
+    // GameLoop の永続入力用 Entity を保持する Registry。
     Registry m_gameLoopRegistry;
 
-    // Per-frame UI button click queue.
+    // 1 フレーム分の UI ボタンクリックイベントキュー。
     UIButtonClickEventQueue m_uiButtonClickQueue;
 
-    // Per-frame GameFlow event queue.
+    // 1 フレーム分の GameFlow イベントキュー。
     FlowEventQueue m_flowEventQueue;
 
-    // True once GameLoop input owner entity has been created.
+    // GameLoop の入力オーナー Entity を作成済みかどうか。
     bool m_gameLoopInputOwnerInitialized = false;
 
-    // Editor scene path at the moment Play was pressed (restored on Stop).
+    // Play を押した時点の Editor シーンパス。Stop 時に復元する。
     std::string m_savedEditorScenePath;
 };

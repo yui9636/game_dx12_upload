@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <DirectXMath.h>
 #include <vector>
 #include <string>
@@ -6,129 +6,318 @@
 #include"JSONManager.h"
 
 //==================================================
+// パーティクル描画方式
 //==================================================
 
+// パーティクルをどの見た目で描画するかを表す列挙型。
 enum class RenderMode
 {
+    // カメラ方向を向く板ポリゴンとして描画する。
     Billboard, 
+
+    // メッシュ形状として描画する。
     Mesh      
 };
 
+// パーティクルの発生形状を表す列挙型。
 enum class ShapeType
 {
-    Point, Sphere, Box, Cone, Spark, Circle, Ring, Arc, Hemisphere, Ellipsoid, Torus, Line,Mesh
+    // 1点から発生させる。
+    Point,
+
+    // 球状に発生させる。
+    Sphere,
+
+    // 箱状に発生させる。
+    Box,
+
+    // 円錐方向に発生させる。
+    Cone,
+
+    // 火花のような方向付き発生に使う。
+    Spark,
+
+    // 円形に発生させる。
+    Circle,
+
+    // リング状に発生させる。
+    Ring,
+
+    // 扇形に発生させる。
+    Arc,
+
+    // 半球状に発生させる。
+    Hemisphere,
+
+    // 楕円体状に発生させる。
+    Ellipsoid,
+
+    // トーラス状に発生させる。
+    Torus,
+
+    // 線分上に発生させる。
+    Line,
+
+    // メッシュ表面またはメッシュ由来の形状から発生させる。
+    Mesh
 };
-enum class PositionMode { Center, Random };
-enum class LifeMode { Constant, Range };
-enum class ScaleMode { Uniform, Range };
+
+// 発生位置の決め方。
+enum class PositionMode
+{
+    // 中心位置から発生させる。
+    Center,
+
+    // 形状内または形状表面のランダム位置から発生させる。
+    Random
+};
+
+// 寿命の決め方。
+enum class LifeMode
+{
+    // 全パーティクルで一定寿命を使う。
+    Constant,
+
+    // 最小寿命から最大寿命の範囲でランダムに決める。
+    Range
+};
+
+// スケールの決め方。
+enum class ScaleMode
+{
+    // 一定のスケールを使う。
+    Uniform,
+
+    // 開始スケールと終了スケールを範囲指定する。
+    Range
+};
 
 //==================================================
+// グラデーション色キー
 //==================================================
-struct GradientColor { DirectX::XMFLOAT4 color; float time; };
+
+// 指定時刻における色を保持する構造体。
+struct GradientColor
+{
+    // このキーで使う色。
+    DirectX::XMFLOAT4 color;
+
+    // 0.0～1.0 の正規化時間。
+    float time;
+};
 
 //==================================================
+// パーティクル発生・挙動設定
 //==================================================
 struct ParticleSetting
 {
-
-
+    // グラデーションに登録できる最大キー数。
     static constexpr int MaxGradientKeys = 4;
 
+    // 再生終了後にループするかどうか。
     bool  loop = true;
+
+    // 1回の再生時間。
     float playSeconds = 5.0f;
+
+    // 管理するパーティクル数。
     int   count = 200;
+
+    // 初回にまとめて発生させるかどうか。
     bool  burst = true;
+
+    // バースト時の発生倍率。
     int   burstFactor = 5;
+
+    // 1秒あたりの通常発生数。
     float spawnRate = 2.0f;
 
-
+    // 描画モード。
     RenderMode renderMode = RenderMode::Billboard;
+
+    // 発生形状。
     ShapeType           shape = ShapeType::Sphere;
+
+    // エミッタの基準位置。
     DirectX::XMFLOAT3   position{ 0,0,0 };
+
+    // 球・円などで使う半径。
     float               radius = 0.3f;
+
+    // 箱形状で使う大きさ。
     DirectX::XMFLOAT3   boxSize{ 1,1,1 };
 
+    // Cone / Spark の基準方向。
     DirectX::XMFLOAT3   coneDirection{ 0,1,0 };
+
+    // Cone / Spark の広がり角度。
     float               coneAngleDeg = 30.0f;
+
+    // ランダム速度の最小値。
     float               minSpeed = 1.0f;
+
+    // ランダム速度の最大値。
     float               maxSpeed = 5.0f;
 
+    // 速度を成分ごとに指定する場合の最小値。
     DirectX::XMFLOAT3   minVelocity{ 0,0,0 };
+
+    // 速度を成分ごとに指定する場合の最大値。
     DirectX::XMFLOAT3   maxVelocity{ 0,0,0 };
+
+    // 毎フレーム加える加速度。
     DirectX::XMFLOAT3   acceleration{ 0,0,0 };
+
+    // 重力を使うかどうか。
     bool                useGravity = false;
+
+    // 重力の強さ。
     float               gravityPower = 9.8f;
+
+    // 重力の方向。
     DirectX::XMFLOAT3   gravityDirection{ 0,-1,0 };
 
+    // 寿命の決定方式。
     LifeMode            lifeMode = LifeMode::Constant;
+
+    // 一定寿命モードで使う寿命秒数。
     float               lifeSeconds = 3.0f;
+
+    // ランダム寿命の最小値。
     float               lifeMin = 1.0f;
+
+    // ランダム寿命の最大値。
     float               lifeMax = 3.0f;
 
+    // スケールの決定方式。
     ScaleMode           scaleMode = ScaleMode::Uniform;
+
+    // 一定スケールで使う開始・終了スケール。
     DirectX::XMFLOAT2   scale{ 0.2f, 0.28f };
+
+    // ランダムスケールの開始範囲。
     DirectX::XMFLOAT2   scaleBeginRange{ 0.2f, 0.28f };
+
+    // ランダムスケールの終了範囲。
     DirectX::XMFLOAT2   scaleEndRange{ 1.0f, 1.0f };
 
+    // Z軸回転速度のランダム範囲。
     DirectX::XMFLOAT2   angularVelocityRangeZ{ -DirectX::XM_PIDIV4, DirectX::XM_PIDIV4 };
 
+    // 基本色。
     DirectX::XMFLOAT4   color{ 1,1,1,1 };
+
+    // 時間に応じて色を変えるためのグラデーションキー。
     GradientColor       gradientColors[MaxGradientKeys]{
         {{1,0,0,1},0.0f}, {{1,1,0,1},0.33f}, {{0,1,0,1},0.66f}, {{0,0,1,1},1.0f}
     };
+
+    // 使用するグラデーションキー数。
     int                 gradientCount = 1;
+
+    // 寿命序盤でフェードインする割合。
     float               fadeInRatio = 0.0f;
+
+    // 寿命終盤でフェードアウトする割合。
     float               fadeOutRatio = 0.0f;
 
+    // 発生位置の決定方式。
     PositionMode        positionMode = PositionMode::Random;
+
+    // 親空間に追従させるための親行列。
     DirectX::XMFLOAT4X4 parentMatrix{ 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+
+    // ローカル空間で動かすかどうか。
     bool                useLocalSpace = false;
 
+    // テクスチャを何分割してスプライトアニメーションに使うか。
     DirectX::XMUINT2    textureSplitCount{ 1,1 };
+
+    // 使用するスプライト番号。
     int                 spriteIndex = 0;
+
+    // スプライトアニメーションのフレーム数。
     int                 spriteFrameCount = 1;
+
+    // スプライトアニメーションの再生速度。
     float               spriteFPS = 16.0f;
 
+    // 円形発生で使う半径。
     float               circleRadius = 1.0f;
+
+    // リング発生の内側半径。
     float               ringInnerRadius = 0.5f;
+
+    // リング発生の外側半径。
     float               ringOuterRadius = 1.0f;
+
+    // 扇形発生の開始角度。
     float               arcStartDegree = -45.0f;
+
+    // 扇形発生の終了角度。
     float               arcEndDegree = +45.0f;
+
+    // 扇形の内部も埋めて発生させるかどうか。
     bool                arcFill = true;
+
+    // 楕円体発生で使う各軸半径。
     DirectX::XMFLOAT3   ellipsoidRadii{ 0.7f, 1.0f, 0.7f };
+
+    // トーラス発生の主半径。
     float               torusMajorRadius = 1.0f;
+
+    // トーラス発生の管半径。
     float               torusMinorRadius = 0.25f;
+
+    // 線分発生の開始点。
     DirectX::XMFLOAT3   linePointA{ -0.5f, 0.0f, 0.0f };
+
+    // 線分発生の終了点。
     DirectX::XMFLOAT3   linePointB{ +0.5f, 0.0f, 0.0f };
+
+    // true の場合は形状内部ではなく表面のみから発生させる。
     bool                surfaceOnly = false;
 };
 
-
 //==================================================
-// ParticleRendererSettings
+// パーティクル描画補助設定
 //==================================================
 struct ParticleRendererSettings
 {
+    // 速度方向にパーティクルを伸ばすかどうか。
     bool  velocityStretchEnabled = false;
+
+    // 速度伸ばしの倍率。
     float velocityStretchScale = 0.05f;
+
+    // 速度伸ばし時の最大アスペクト比。
     float velocityStretchMaxAspect = 8.0f;
+
+    // この速度未満では速度伸ばしを行わない。
     float velocityStretchMinSpeed = 0.0f;
 
+    // カールノイズによる揺らぎの強さ。
     float curlNoiseStrength = 0.0f;
+
+    // カールノイズの空間スケール。
     float curlNoiseScale = 0.1f;
+
+    // カールノイズを時間方向に動かす速度。
     float curlMoveSpeed = 0.2f;
 };
 
 //==================================================
-// nlohmann::json ADL serializers
+// nlohmann::json 用の変換定義
 //==================================================
 namespace nlohmann {
 
+    // XMUINT2 を JSON の x/y 形式に変換する。
     template<> struct adl_serializer<DirectX::XMUINT2> {
         static void to_json(json& j, const DirectX::XMUINT2& v) { j = { {"x", v.x}, {"y", v.y} }; }
         static void from_json(const json& j, DirectX::XMUINT2& v) { j.at("x").get_to(v.x); j.at("y").get_to(v.y); }
     };
 
+    // ShapeType を文字列として保存・復元する。
     template<> struct adl_serializer<ShapeType> {
         static void to_json(json& j, const ShapeType& s) {
             switch (s) {
@@ -167,21 +356,28 @@ namespace nlohmann {
         }
     };
 
+    // LifeMode を文字列として保存・復元する。
     template<> struct adl_serializer<LifeMode> {
         static void to_json(json& j, const LifeMode& v) { j = (v == LifeMode::Constant) ? "Constant" : "Range"; }
         static void from_json(const json& j, LifeMode& v) { v = (j.get<std::string>() == "Range") ? LifeMode::Range : LifeMode::Constant; }
     };
+
+    // ScaleMode を文字列として保存・復元する。
     template<> struct adl_serializer<ScaleMode> {
         static void to_json(json& j, const ScaleMode& v) { j = (v == ScaleMode::Uniform) ? "Uniform" : "Range"; }
         static void from_json(const json& j, ScaleMode& v) { v = (j.get<std::string>() == "Range") ? ScaleMode::Range : ScaleMode::Uniform; }
     };
+
+    // PositionMode を文字列として保存・復元する。
     template<> struct adl_serializer<PositionMode> {
         static void to_json(json& j, const PositionMode& v) { j = (v == PositionMode::Center) ? "Center" : "Random"; }
         static void from_json(const json& j, PositionMode& v) { v = (j.get<std::string>() == "Center") ? PositionMode::Center : PositionMode::Random; }
     };
 
+    // ParticleSetting 全体を JSON に保存・復元する。
     template<> struct adl_serializer<ParticleSetting>
     {
+        // ParticleSetting の各項目を JSON オブジェクトへ書き出す。
         static void to_json(json& j, const ParticleSetting& e)
         {
             j = {
@@ -220,7 +416,6 @@ namespace nlohmann {
                 {"spriteFrameCount", e.spriteFrameCount},
                 {"spriteFPS", e.spriteFPS},
 
-
                 {"circleRadius",      e.circleRadius},
                 {"ringInnerRadius",   e.ringInnerRadius},
                 {"ringOuterRadius",   e.ringOuterRadius},
@@ -233,12 +428,10 @@ namespace nlohmann {
                 {"linePointA",        e.linePointA},
                 {"linePointB",        e.linePointB},
                 {"surfaceOnly",       e.surfaceOnly}
-
-
-
             };
         }
 
+        // JSON に存在する項目だけを ParticleSetting に読み戻す。
         static void from_json(const json& j, ParticleSetting& e)
         {
             if (j.contains("loop"))        j.at("loop").get_to(e.loop);
@@ -313,8 +506,10 @@ namespace nlohmann {
         }
     };
 
+    // ParticleRendererSettings 全体を JSON に保存・復元する。
     template<> struct adl_serializer<ParticleRendererSettings>
     {
+        // 描画補助設定を JSON に書き出す。
         static void to_json(json& j, const ParticleRendererSettings& p)
         {
             j = {
@@ -329,6 +524,7 @@ namespace nlohmann {
             };
         }
 
+        // JSON に存在する項目だけを描画補助設定へ読み戻す。
         static void from_json(const json& j, ParticleRendererSettings& p)
         {
             if (j.contains("velocityStretchEnabled"))   j.at("velocityStretchEnabled").get_to(p.velocityStretchEnabled);
@@ -343,4 +539,3 @@ namespace nlohmann {
     };
 
 } // namespace nlohmann
-

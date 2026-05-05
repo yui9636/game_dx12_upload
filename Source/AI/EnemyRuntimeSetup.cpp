@@ -1,3 +1,4 @@
+﻿// 敵 Entity に必要なランタイムコンポーネントを付与・初期化する実装ファイル。
 #include "EnemyRuntimeSetup.h"
 
 #include "Archetype/Archetype.h"
@@ -32,8 +33,10 @@
 #include "EnemyConfigAsset.h"
 #include "PerceptionComponent.h"
 
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // 指定コンポーネントが無ければ追加し、追加後のポインタを返す。
     template<typename T>
     T* EnsureComponent(Registry& registry, EntityID entity)
     {
@@ -43,8 +46,10 @@ namespace
     }
 }
 
+// 敵ランタイム構築用の関数群をまとめる名前空間。
 namespace EnemyRuntimeSetup
 {
+    // 敵として動作するために必要な全ランタイムコンポーネントを揃える。
     void EnsureEnemyRuntimeComponents(Registry& registry, EntityID entity)
     {
         if (Entity::IsNull(entity)) return;
@@ -76,7 +81,6 @@ namespace EnemyRuntimeSetup
         }
 
         if (auto* loco = EnsureComponent<LocomotionStateComponent>(registry, entity)) {
-            // AI writes world-space x/z directly; bypass camera transform.
             loco->useCameraRelativeInput = false;
         }
 
@@ -87,6 +91,7 @@ namespace EnemyRuntimeSetup
         EnsureComponent<AggroComponent>(registry, entity);
     }
 
+    // 敵 AI の一時状態・ヘイト・移動入力を初期化する。
     void ResetEnemyRuntimeState(Registry& registry, EntityID entity)
     {
         if (Entity::IsNull(entity)) return;
@@ -107,10 +112,9 @@ namespace EnemyRuntimeSetup
         }
     }
 
+    // EnemyTag を持つ全 Entity に敵ランタイム構成を適用する。
     void EnsureAllEnemyRuntimeComponents(Registry& registry, bool resetRuntimeState)
     {
-        // Sweep: any entity tagged Enemy gets the full enemy component set.
-        // Use snapshot (avoid mutation during traversal).
         Signature sig = CreateSignature<EnemyTagComponent>();
         std::vector<EntityID> enemies;
         for (auto* arch : registry.GetAllArchetypes()) {
@@ -126,6 +130,7 @@ namespace EnemyRuntimeSetup
         }
     }
 
+    // NPC として動作するための最小ランタイム構成を揃える。
     void EnsureNPCRuntimeComponents(Registry& registry, EntityID entity)
     {
         if (Entity::IsNull(entity)) return;
@@ -147,13 +152,12 @@ namespace EnemyRuntimeSetup
         if (auto* loco = EnsureComponent<LocomotionStateComponent>(registry, entity)) {
             loco->useCameraRelativeInput = false;
         }
-        // NPC also gets BTRuntime + Blackboard so state-bound BT can run for them too.
         EnsureComponent<BehaviorTreeAssetComponent>(registry, entity);
         EnsureComponent<BehaviorTreeRuntimeComponent>(registry, entity);
         EnsureComponent<BlackboardComponent>(registry, entity);
-        // No PerceptionComponent / AggroComponent for NPC by default.
     }
 
+    // EnemyConfigAsset の内容から敵 Entity を生成して初期化する。
     EntityID SpawnFromConfig(Registry& registry,
                              const EnemyConfigAsset& config,
                              const DirectX::XMFLOAT3& position)
@@ -194,12 +198,11 @@ namespace EnemyRuntimeSetup
     }
 }
 
-// ============================================================================
-// v2.0 ActorEditor toolbar helpers
-// ============================================================================
 
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // 指定名の StateNode を取得し、無ければ新規作成する。
     StateNode* FindOrCreateState(StateMachineAsset& sm, const char* name, StateNodeType type)
     {
         for (auto& s : sm.states) {
@@ -208,6 +211,7 @@ namespace
         return sm.AddState(name, type);
     }
 
+    // 指定ステート間の遷移が無ければ追加する。
     void EnsureTransition(StateMachineAsset& sm, uint32_t fromId, uint32_t toId)
     {
         for (const auto& t : sm.transitions) {
@@ -217,14 +221,13 @@ namespace
     }
 }
 
+// エディタ用に Enemy の標準構成と StateMachine を作成する。
 void EnemyEditorSetupFullEnemy(Registry& registry, EntityID entity, StateMachineAsset& sm)
 {
     if (Entity::IsNull(entity)) return;
 
-    // 1) Components
     EnemyRuntimeSetup::EnsureEnemyRuntimeComponents(registry, entity);
 
-    // 2) States (idempotent: existing names are reused).
     StateNode* idle    = FindOrCreateState(sm, "Idle",    StateNodeType::Locomotion);
     StateNode* chase   = FindOrCreateState(sm, "Chase",   StateNodeType::Locomotion);
     StateNode* attack1 = FindOrCreateState(sm, "Attack1", StateNodeType::Action);
@@ -233,7 +236,6 @@ void EnemyEditorSetupFullEnemy(Registry& registry, EntityID entity, StateMachine
 
     if (sm.defaultStateId == 0 && idle) sm.defaultStateId = idle->id;
 
-    // 3) Default BT paths (state-bound; designer can later change paths per state).
     auto setBT = [&sm](StateNode* s, const char* leaf) {
         if (!s) return;
         if (s->behaviorTreePath.empty()) {
@@ -243,16 +245,15 @@ void EnemyEditorSetupFullEnemy(Registry& registry, EntityID entity, StateMachine
     };
     setBT(idle,    "Idle");
     setBT(chase,   "Chase");
-    // Attack / Damage / Dead are animation-only by default (path stays empty).
     (void)attack1; (void)damaged; (void)dead;
 
-    // 4) Default transitions (idempotent).
     if (idle && chase)   EnsureTransition(sm, idle->id, chase->id);
     if (chase && attack1)EnsureTransition(sm, chase->id, attack1->id);
     if (attack1 && idle) EnsureTransition(sm, attack1->id, idle->id);
     if (damaged && idle) EnsureTransition(sm, damaged->id, idle->id);
 }
 
+// エディタ操作から NPC Entity をフルセットアップする。
 void EnemyEditorSetupFullNPC(Registry& registry, EntityID entity, StateMachineAsset& sm)
 {
     if (Entity::IsNull(entity)) return;
@@ -261,6 +262,7 @@ void EnemyEditorSetupFullNPC(Registry& registry, EntityID entity, StateMachineAs
     if (idle && sm.defaultStateId == 0) sm.defaultStateId = idle->id;
 }
 
+// エディタ操作から敵ランタイムコンポーネントの不足を修復する。
 void EnemyEditorRepairRuntime(Registry& registry, EntityID entity)
 {
     if (Entity::IsNull(entity)) return;

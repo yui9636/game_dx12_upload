@@ -1,4 +1,4 @@
-#include "PhysicsSyncSystem.h"
+﻿#include "PhysicsSyncSystem.h"
 #include "Component/TransformComponent.h"
 #include "Component/PhysicsComponent.h"
 #include "Physics/PhysicsManager.h"
@@ -7,6 +7,7 @@
 
 using namespace JPH;
 
+// Transform と PhysicsComponent を持つ Entity を走査し、物理 Body と Transform を同期する。
 void PhysicsSyncSystem::Update(Registry& registry, bool isSimulation) {
     auto& physicsMgr = PhysicsManager::Instance();
     BodyInterface& bodyInterface = physicsMgr.GetBodyInterface();

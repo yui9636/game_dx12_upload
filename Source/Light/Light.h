@@ -1,45 +1,34 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
 #include <vector>
 #include"Sprite/Sprite.h"
 
+// 点光源1つ分の描画用データです。
+// 位置・範囲・色・強さを RenderContext に渡すために使います。
 struct PointLight
 {
+    // 光源のワールド座標です。
     DirectX::XMFLOAT3 position;
+
+    // 光が届く距離です。
     float range;
-    DirectX::XMFLOAT3 color;    
+
+    // 光の色です。
+    DirectX::XMFLOAT3 color;
+
+    // 光の強さです。
     float intensity;
 };
 
+// 平行光源1つ分の描画用データです。
+// 太陽光のように、全体へ同じ方向から当たるライトを表します。
 struct DirectionalLight
 {
+    // 光が進む方向です。
     DirectX::XMFLOAT3 direction;
+
+    // 光の色です。
     DirectX::XMFLOAT3 color;
-  
 };
 
-//class LightManager
-//{
-//public:
-//    static LightManager& Instance()
-//    {
-//        static LightManager lightManager;
-//        return lightManager;
-//    }
-//
-//    void SetDirectionalLight(const DirectionalLight& light) { directionalLight = light; }
-//    const DirectionalLight& GetDirectionalLight() const { return directionalLight; }
-//
-//
-//    void ClearPointLights() { pointLights.clear(); }
-//
-//    void AddPointLight(const PointLight& light) { pointLights.push_back(light); }
-//
-//    const std::vector<PointLight>& GetPointLights() const { return pointLights; }
-//
-//private:
-//    DirectionalLight directionalLight;
-//
-//    std::vector<PointLight> pointLights;
-//};

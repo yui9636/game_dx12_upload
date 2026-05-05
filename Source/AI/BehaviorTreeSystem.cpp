@@ -1,3 +1,4 @@
+﻿// Enemy のビヘイビアツリーを毎フレーム評価し、移動・攻撃・ブラックボードへ反映するシステム実装。
 #include "BehaviorTreeSystem.h"
 
 #include <cmath>
@@ -29,17 +30,17 @@
 #include "BlackboardComponent.h"
 #include "PerceptionComponent.h"
 
-// ============================================================================
-// Asset cache (path -> loaded asset)
-// ============================================================================
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // 読み込み済みビヘイビアツリーをパスごとに共有するキャッシュを取得する。
     std::unordered_map<std::string, std::shared_ptr<BehaviorTreeAsset>>& AssetCache()
     {
         static std::unordered_map<std::string, std::shared_ptr<BehaviorTreeAsset>> cache;
         return cache;
     }
 
+    // 指定パスのビヘイビアツリーを読み込み、以後はキャッシュから返す。
     const BehaviorTreeAsset* LoadOrCache(const std::string& path)
     {
         if (path.empty()) return nullptr;
@@ -55,11 +56,10 @@ namespace
     }
 }
 
-// ============================================================================
-// Tick context + status
-// ============================================================================
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // ノード評価の結果状態。
     enum class BTStatus : uint8_t
     {
         None    = 0,
@@ -68,6 +68,7 @@ namespace
         Failure = 3,
     };
 
+    // 1 回のビヘイビアツリー評価で必要な参照情報をまとめる構造体。
     struct BTContext
     {
         Registry&                     registry;
@@ -84,8 +85,10 @@ namespace
         float                         dt;
     };
 
+    // ノード種別に応じた評価関数へ分岐する内部 Tick の前方宣言。
     BTStatus Tick(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx);
 
+    // 子ノード ID からノードを検索して評価する。
     BTStatus TickChild(const BehaviorTreeAsset& asset, uint32_t childId, BTContext& ctx)
     {
         const BTNode* child = asset.FindNode(childId);
@@ -93,6 +96,7 @@ namespace
         return Tick(asset, *child, ctx);
     }
 
+    // Aggro が保持する現在ターゲットのワールド座標を取得する。
     DirectX::XMFLOAT3 ReadTargetPos(const BTContext& ctx, bool& outOk)
     {
         outOk = false;
@@ -104,6 +108,7 @@ namespace
         return tr->worldPosition;
     }
 
+    // 自分とターゲットの XZ 平面距離を計算する。
     float DistanceToTargetXZ(const BTContext& ctx, bool& outOk)
     {
         outOk = false;
@@ -115,6 +120,7 @@ namespace
         return std::sqrt(dx * dx + dz * dz);
     }
 
+    // AI が計算したワールド方向の移動入力を Locomotion に書き込む。
     void WriteWorldMove(BTContext& ctx, float dirX, float dirZ, float strength)
     {
         if (!ctx.loco) return;
@@ -130,17 +136,17 @@ namespace
     }
 }
 
-// ============================================================================
-// Per-type tick functions
-// ============================================================================
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // Root ノードを評価し、唯一の子ノードへ処理を渡す。
     BTStatus TickRoot(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         if (node.childrenIds.empty()) return BTStatus::Failure;
         return TickChild(asset, node.childrenIds[0], ctx);
     }
 
+    // Sequence ノードを評価し、子が全て成功するまで順番に実行する。
     BTStatus TickSequence(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         for (uint32_t cid : node.childrenIds) {
@@ -151,6 +157,7 @@ namespace
         return BTStatus::Success;
     }
 
+    // Selector ノードを評価し、成功する子を順番に探す。
     BTStatus TickSelector(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         for (uint32_t cid : node.childrenIds) {
@@ -161,6 +168,7 @@ namespace
         return BTStatus::Failure;
     }
 
+    // Parallel ノードを評価し、成功数が閾値を超えたか判定する。
     BTStatus TickParallel(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         if (node.childrenIds.empty()) return BTStatus::Failure;
@@ -178,6 +186,7 @@ namespace
         return BTStatus::Running;
     }
 
+    // 子ノードの Success と Failure を反転する。
     BTStatus TickInverter(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         if (node.childrenIds.empty()) return BTStatus::Failure;
@@ -187,6 +196,7 @@ namespace
         return s;
     }
 
+    // 子ノードを指定回数だけ繰り返し評価する。
     BTStatus TickRepeat(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         if (node.childrenIds.empty() || node.iParam0 <= 0) return BTStatus::Failure;
@@ -208,10 +218,10 @@ namespace
         return BTStatus::Running;
     }
 
+    // 子ノード成功後に一定時間のクールダウンを入れる。
     BTStatus TickCooldown(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         if (node.childrenIds.empty() || node.fParam0 <= 0.0f) return BTStatus::Failure;
-        // Stored value: remaining cooldown seconds.
         const float remaining = ctx.runtime.GetNodeState(node.id);
         if (remaining > 0.0f) {
             const float next = remaining - ctx.dt;
@@ -228,12 +238,9 @@ namespace
         return s;
     }
 
+    // 条件ノードが成功した場合のみ本体ノードを評価する。
     BTStatus TickConditionGuard(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
-        // Use sParam0 as condition node id (string-encoded).
-        // Simpler: treat first child as the guarded subtree, second child as the condition.
-        // To stay strict: sParam0 holds the condition node id as a decimal string;
-        // if empty, fall back to "evaluate child[0] only when blackboard 'TargetDist' != 0".
         if (node.childrenIds.empty()) return BTStatus::Failure;
 
         bool conditionOk = true;
@@ -250,13 +257,14 @@ namespace
         return TickChild(asset, node.childrenIds[0], ctx);
     }
 
-    // ---- Conditions ----
+    // 現在ターゲットを持っているか判定する。
     BTStatus TickHasTarget(const BTNode&, BTContext& ctx)
     {
         if (!ctx.aggro) return BTStatus::Failure;
         return Entity::IsNull(ctx.aggro->currentTarget) ? BTStatus::Failure : BTStatus::Success;
     }
 
+    // ターゲットが指定距離内にいるか判定する。
     BTStatus TickTargetInRange(const BTNode& node, BTContext& ctx)
     {
         bool ok = false;
@@ -265,6 +273,7 @@ namespace
         return d <= node.fParam0 ? BTStatus::Success : BTStatus::Failure;
     }
 
+    // ターゲットが視界内にいるか判定する。
     BTStatus TickTargetVisible(const BTNode&, BTContext& ctx)
     {
         if (!ctx.blackboard) return BTStatus::Failure;
@@ -273,6 +282,7 @@ namespace
         return (it->second.f <= 0.0001f) ? BTStatus::Success : BTStatus::Failure;
     }
 
+    // 自身の HP 割合が指定値以下か判定する。
     BTStatus TickHealthBelow(const BTNode& node, BTContext& ctx)
     {
         if (!ctx.health || ctx.health->maxHealth <= 0) return BTStatus::Failure;
@@ -280,12 +290,13 @@ namespace
         return ratio < node.fParam0 ? BTStatus::Success : BTStatus::Failure;
     }
 
+    // スタミナ条件を評価するための将来拡張用ノード。
     BTStatus TickStaminaAbove(const BTNode& /*node*/, BTContext& /*ctx*/)
     {
-        // StaminaComponent is optional; v1 returns Failure when absent.
         return BTStatus::Failure;
     }
 
+    // ブラックボード上の値が指定条件と一致するか判定する。
     BTStatus TickBlackboardEqual(const BTNode& node, BTContext& ctx)
     {
         if (!ctx.blackboard || node.sParam0.empty()) return BTStatus::Failure;
@@ -301,7 +312,7 @@ namespace
         }
     }
 
-    // ---- Actions: locomotion ----
+    // 指定秒数が経過するまで Running を返す。
     BTStatus TickWait(const BTNode& node, BTContext& ctx)
     {
         if (node.fParam0 <= 0.0f) return BTStatus::Success;
@@ -314,6 +325,7 @@ namespace
         return BTStatus::Running;
     }
 
+    // ターゲット方向へ向くための入力を生成する。
     BTStatus TickFaceTarget(const BTNode&, BTContext& ctx)
     {
         bool ok = false;
@@ -328,6 +340,7 @@ namespace
         return BTStatus::Success;
     }
 
+    // ターゲットへ接近する移動入力を生成する。
     BTStatus TickMoveToTarget(const BTNode& node, BTContext& ctx)
     {
         bool ok = false;
@@ -351,6 +364,7 @@ namespace
         return BTStatus::Running;
     }
 
+    // ターゲット周囲を回り込む移動入力を生成する。
     BTStatus TickStrafeAroundTarget(const BTNode& node, BTContext& ctx)
     {
         bool ok = false;
@@ -361,7 +375,6 @@ namespace
         const float dz = tgt.z - ctx.selfTransform->worldPosition.z;
         const float len = std::sqrt(dx * dx + dz * dz);
         if (len < 0.0001f) return BTStatus::Failure;
-        // Tangent: perpendicular to (dx, dz), counter-clockwise.
         const float tx = -dz;
         const float tz =  dx;
         WriteWorldMove(ctx, tx, tz, 0.6f);
@@ -378,6 +391,7 @@ namespace
         return BTStatus::Running;
     }
 
+    // ターゲットから離れる移動入力を生成する。
     BTStatus TickRetreat(const BTNode& node, BTContext& ctx)
     {
         bool ok = false;
@@ -395,8 +409,7 @@ namespace
         return BTStatus::Running;
     }
 
-    // ---- Actions: combat (rising-edge) ----
-    // phase: 0=Idle, 1=Requested, 2=InProgress
+    // 攻撃や回避など、StateMachine へ 1 回だけトリガーを立てる行動を管理する。
     BTStatus TickRisingEdgeAction(const BTNode& node, BTContext& ctx,
                                   const char* paramName,
                                   CharacterState targetState)
@@ -426,14 +439,12 @@ namespace
                 return BTStatus::Running;
             }
             if (ctx.actionState->state == CharacterState::Locomotion) {
-                // SM did not transition yet; keep trying for a few ticks.
                 ctx.smParams->SetParam(paramName, 1.0f);
                 return BTStatus::Running;
             }
             return BTStatus::Running;
         }
 
-        // phase 2: in progress. Wait for return to Locomotion.
         if (ctx.actionState->state == CharacterState::Locomotion) {
             ctx.runtime.ClearNodeState(node.id);
             return BTStatus::Success;
@@ -441,17 +452,19 @@ namespace
         return BTStatus::Running;
     }
 
+    // 攻撃行動を StateMachine に要求する。
     BTStatus TickAttack(const BTNode& node, BTContext& ctx)
     {
         return TickRisingEdgeAction(node, ctx, "Attack", CharacterState::Action);
     }
 
+    // 回避行動を StateMachine に要求する。
     BTStatus TickDodgeAction(const BTNode& node, BTContext& ctx)
     {
         return TickRisingEdgeAction(node, ctx, "Dodge", CharacterState::Dodge);
     }
 
-    // ---- Actions: state-machine I/F ----
+    // StateMachineParams に指定パラメータを書き込む。
     BTStatus TickSetSMParam(const BTNode& node, BTContext& ctx)
     {
         if (!ctx.smParams || node.sParam0.empty()) return BTStatus::Failure;
@@ -459,13 +472,13 @@ namespace
         return BTStatus::Success;
     }
 
+    // 指定ステート再生用の将来拡張ノード。
     BTStatus TickPlayState(const BTNode&, BTContext&)
     {
-        // PlayState writes currentStateId by name. v1 implements as Success no-op
-        // (state-name -> id resolution is StateMachineSystem's domain).
         return BTStatus::Success;
     }
 
+    // ブラックボードへ指定値を書き込む。
     BTStatus TickSetBlackboard(const BTNode& node, BTContext& ctx)
     {
         if (!ctx.blackboard || node.sParam1.empty()) return BTStatus::Failure;
@@ -482,6 +495,7 @@ namespace
         return BTStatus::Success;
     }
 
+    // ノード種別を見て対応する評価関数を呼び出す。
     BTStatus Tick(const BehaviorTreeAsset& asset, const BTNode& node, BTContext& ctx)
     {
         BTStatus s = BTStatus::Failure;
@@ -516,6 +530,7 @@ namespace
     }
 }
 
+// ビヘイビアツリーアセットキャッシュを破棄する。
 void BehaviorTreeSystem::InvalidateAssetCache(const char* path)
 {
     auto& cache = AssetCache();
@@ -526,13 +541,11 @@ void BehaviorTreeSystem::InvalidateAssetCache(const char* path)
     }
 }
 
+// Play 中の敵 Entity に対してビヘイビアツリーを 1 フレーム分評価する。
 void BehaviorTreeSystem::Update(Registry& registry, float dt)
 {
     if (EngineKernel::Instance().GetMode() != EngineMode::Play) return;
 
-    // v2.0 state-bound model: BT path is resolved from the current StateNode.
-    // Falls back to BehaviorTreeAssetComponent.assetPath only when the
-    // state has no behaviorTreePath of its own (v1.0 compatibility).
     Signature sig = CreateSignature<
         EnemyTagComponent,
         BehaviorTreeRuntimeComponent,
@@ -565,29 +578,23 @@ void BehaviorTreeSystem::Update(Registry& registry, float dt)
             auto& sm        = *static_cast<StateMachineParamsComponent*>(smCol->Get(i));
             auto& smAsset   = *static_cast<StateMachineAssetComponent*>(smAssetCol->Get(i));
 
-            // Reset BT runtime when the SM state changes (per-state BTs
-            // must not inherit Wait timers / Cooldown / rising-edge phase
-            // from the previous state).
             const uint32_t currentStateId = sm.currentStateId;
             if (currentStateId != runtime.lastTickedStateId) {
                 runtime.ResetAll();
                 runtime.lastTickedStateId = currentStateId;
             }
 
-            // Resolve which BT to tick for this entity in this state.
             std::string btPath;
             if (const StateNode* stateNode = smAsset.asset.FindState(currentStateId)) {
                 if (!stateNode->behaviorTreePath.empty()) btPath = stateNode->behaviorTreePath;
             }
             if (btPath.empty()) {
-                // v1.0 fallback: entity-level BT.
                 if (auto* legacy = registry.GetComponent<BehaviorTreeAssetComponent>(ents[i])) {
                     if (!legacy->assetPath.empty()) btPath = legacy->assetPath;
                 }
             }
 
             if (btPath.empty()) {
-                // No AI configured for this state. SM-only entity.
                 continue;
             }
 
@@ -596,8 +603,6 @@ void BehaviorTreeSystem::Update(Registry& registry, float dt)
             const BTNode* root = asset->FindNode(asset->rootId);
             if (!root) continue;
 
-            // Reset rising-edge trigger params each tick.
-            // Attack / DodgeAction handle their own rising-edge phase internally.
             sm.SetParam("Attack", 0.0f);
             sm.SetParam("Dodge", 0.0f);
 

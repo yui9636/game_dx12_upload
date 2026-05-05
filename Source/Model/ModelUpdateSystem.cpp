@@ -1,3 +1,4 @@
+﻿// ECS 上の MeshComponent に含まれる Model の更新を行うシステム実装です。
 #include "ModelUpdateSystem.h"
 #include "Model.h"
 #include "Component/MeshComponent.h"
@@ -5,6 +6,7 @@
 #include "System/Query.h"
 #include <DirectXMath.h>
 
+// Registry 内の Model を毎フレーム更新し、Transform 情報を反映します。
 void ModelUpdateSystem::Update(Registry& registry)
 {
     Query<MeshComponent, TransformComponent> query(registry);

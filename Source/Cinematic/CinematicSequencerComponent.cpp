@@ -1,4 +1,4 @@
-#include "CinematicSequencerComponent.h"
+﻿#include "CinematicSequencerComponent.h"
 #include "Cinematic/CinematicTrack.h"
 #include "Actor/Actor.h"
 #include "Graphics.h"
@@ -16,8 +16,11 @@ using namespace Cinematic;
 using namespace DirectX;
 
 // ==================================================================================
+// CinematicSequencerComponent の実装。
+// タイムライン再生、ImGui 編集 UI、選択キーの可視化を担当する。
 // ==================================================================================
 
+// 初期状態のシーケンスを作成する。
 CinematicSequencerComponent::CinematicSequencerComponent()
 {
     sequence = std::make_shared<Sequence>();
@@ -25,37 +28,45 @@ CinematicSequencerComponent::CinematicSequencerComponent()
     sequence->duration = 10.0f;
 }
 
+// コンポーネント破棄時にドライバー接続と編集用ゴーストを片付ける。
 CinematicSequencerComponent::~CinematicSequencerComponent()
 {
     driver.Disconnect();
 
     if (editorGhost)
     {
+        // 有効なカメラキー選択が無ければゴーストを消す。
         ActorManager::Instance().Remove(editorGhost);
         editorGhost = nullptr;
     }
 }
 
+// 再生中の時間更新、トラック評価、アニメーション上書き情報の更新を行う。
 void CinematicSequencerComponent::Update(float dt)
 {
+    // 選択中キーに合わせて編集用カメラゴーストを更新する。
     UpdateGhostCamera();
 
     if (isPlaying && sequence)
     {
         if (!isPaused)
         {
+            // 一時停止でなければ再生時間を進める。
             currentTime += dt;
         }
 
         if (currentTime >= sequence->duration)
         {
             currentTime = sequence->duration;
+            // 終端に到達したら停止する。
             Stop();
         }
 
+        // 現在時間で各トラックを評価する。
         sequence->Evaluate(currentTime);
 
         // =========================================================================
+        // AnimationTrack の現在有効なキーを調べ、外部へ渡す上書きアニメーションを決める。
         // =========================================================================
         int overrideAnim = -1;
         float animLocalTime = 0.0f;
@@ -83,6 +94,7 @@ void CinematicSequencerComponent::Update(float dt)
             }
         }
 
+        // アニメーション再生側へ渡す値をドライバーに保存する。
         driver.SetOverrideAnimation(overrideAnim);
         driver.SetLoop(true);
 
@@ -94,6 +106,7 @@ void CinematicSequencerComponent::Update(float dt)
         }
 
         // =========================================================================
+        // 旧カメラ再生処理。現行カメラシステム移行により無効化されている。
         // =========================================================================
      /*   if (Camera* renderCam = Graphics::Instance().GetCamera())
         {
@@ -126,6 +139,7 @@ void CinematicSequencerComponent::Update(float dt)
     }
 }
 
+// 選択中の CameraTrack キー位置に編集用ゴースト Actor を配置する。
 void CinematicSequencerComponent::UpdateGhostCamera()
 {
     if (selection.IsValid() && selection.trackIndex < (int)sequence->tracks.size())
@@ -138,15 +152,18 @@ void CinematicSequencerComponent::UpdateGhostCamera()
             {
                 if (!editorGhost)
                 {
+                    // 初回のみゴースト Actor を作成してカメラモデルを読み込む。
                     editorGhost = ActorManager::Instance().Create();
                     editorGhost->SetName("GhostCamera");
                     editorGhost->LoadModel("Data/Model/Camera/Camera.fbx", 0.005f);
                     editorGhost->isDebugModel = true;
                 }
 
+                // 選択キーの位置をゴーストの位置に反映する。
                 const auto& keyEye = camTrack->eyeCurve.keys[selection.keyIndex];
                 editorGhost->SetPosition(keyEye.value);
 
+                // 注視点から向きを計算し、ゴーストの回転へ変換する。
                 XMFLOAT3 focusPos = camTrack->focusCurve.Evaluate(keyEye.time);
                 XMVECTOR Eye = XMLoadFloat3(&keyEye.value);
                 XMVECTOR Focus = XMLoadFloat3(&focusPos);
@@ -169,11 +186,13 @@ void CinematicSequencerComponent::UpdateGhostCamera()
 
     if (editorGhost)
     {
+        // 有効なカメラキー選択が無ければゴーストを消す。
         ActorManager::Instance().Remove(editorGhost);
         editorGhost = nullptr;
     }
 }
 
+// シーケンスを先頭から再生開始する。
 void CinematicSequencerComponent::Play()
 {
     if (sequence)
@@ -184,6 +203,7 @@ void CinematicSequencerComponent::Play()
     }
 }
 
+// 再生を停止し、時間を 0 に戻す。
 void CinematicSequencerComponent::Stop()
 {
     if (isPlaying)
@@ -195,11 +215,13 @@ void CinematicSequencerComponent::Stop()
     UpdateGhostCamera();
 }
 
+// 再生中なら一時停止状態を切り替える。
 void CinematicSequencerComponent::Pause()
 {
     if (isPlaying) isPaused = !isPaused;
 }
 
+// タイムラインの現在時間を指定し、その時間の状態に更新する。
 void CinematicSequencerComponent::SetTime(float time)
 {
     float maxT = sequence->duration;
@@ -211,13 +233,14 @@ void CinematicSequencerComponent::SetTime(float time)
     UpdateGhostCamera();
 }
 
+// トラックの反映対象 Actor を設定し、各トラックへ Bind する。
 void CinematicSequencerComponent::SetTargetActor(std::shared_ptr<Actor> actor)
 {
     targetActor = actor;
     if (auto act = targetActor.lock())
     {
-        // Legacy AnimatorComponent support has been removed.
-        // Cinematic animation track playback will be reintroduced after the sequencer rewrite.
+        // 旧 AnimatorComponent 連携は削除済み。
+        // シーケンサー改修後に AnimationTrack 再生を再導入する。
         driver.Disconnect();
 
         if (sequence)
@@ -231,9 +254,12 @@ void CinematicSequencerComponent::SetTargetActor(std::shared_ptr<Actor> actor)
     }
 }
 
+// 再生前状態保存のための予約関数。現在は未実装。
 void CinematicSequencerComponent::CaptureInitialState() {}
+// 保存した状態へ戻すための予約関数。現在は未実装。
 void CinematicSequencerComponent::RestoreInitialState() {}
 
+// シーケンサー編集用の ImGui ウィンドウを描画する。
 void CinematicSequencerComponent::OnGUI()
 {
     DrawGizmo();
@@ -241,6 +267,7 @@ void CinematicSequencerComponent::OnGUI()
     ImGui::SetNextWindowSize(ImVec2(800, 400), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Cinematic Sequencer"))
     {
+        // 現在のターゲット Actor 名を表示する。
         std::string targetName = "None";
         if (auto act = targetActor.lock()) targetName = act->GetName();
 
@@ -264,12 +291,14 @@ void CinematicSequencerComponent::OnGUI()
         }
         ImGui::Separator();
 
+        // シーケンスを JSON として保存する。
         if (ImGui::Button("Save")) {
             char path[MAX_PATH] = "";
             if (Dialog::SaveFileName(path, MAX_PATH, "JSON Files\0*.json\0All Files\0*.*\0") == DialogResult::OK)
                 sequence->SaveToFile(path);
         }
         ImGui::SameLine();
+        // JSON からシーケンスを読み込み直す。
         if (ImGui::Button("Load")) {
             char path[MAX_PATH] = "";
             if (Dialog::OpenFileName(path, MAX_PATH, "JSON Files\0*.json\0All Files\0*.*\0") == DialogResult::OK) {
@@ -278,11 +307,13 @@ void CinematicSequencerComponent::OnGUI()
             }
         }
         ImGui::SameLine(); ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical); ImGui::SameLine();
+        // 再生制御ボタン。
         if (ImGui::Button("Play")) Play();
         ImGui::SameLine(); if (ImGui::Button("Stop")) Stop();
         ImGui::SameLine(); if (ImGui::Button(isPaused ? "Resume" : "Pause")) Pause();
         ImGui::SameLine(); ImGui::Text("Time: %.2f / %.2f", currentTime, sequence->duration);
         ImGui::SameLine(); ImGui::PushItemWidth(-1);
+        // スライダー操作中は現在時間を直接評価する。
         if (ImGui::SliderFloat("##TimeSlider", &currentTime, 0.0f, sequence->duration)) {
             if (sequence) sequence->Evaluate(currentTime);
             driver.SetTime(currentTime);
@@ -291,6 +322,7 @@ void CinematicSequencerComponent::OnGUI()
         ImGui::PopItemWidth();
         ImGui::Separator();
 
+        // 選択中トラックに応じてキー追加・キー編集 UI を切り替える。
         if (selection.trackIndex >= 0 && selection.trackIndex < (int)sequence->tracks.size())
         {
             auto track = sequence->tracks[selection.trackIndex];
@@ -299,7 +331,7 @@ void CinematicSequencerComponent::OnGUI()
 
             if (track->GetType() == TrackType::Camera) {
                 if (ImGui::Button("Add Camera Key")) {
-                    //Camera* cam = Graphics::Instance().GetCamera();
+                    // 現行カメラシステム移行中のため、実カメラからのキー取得は無効化中。
                    /* if (cam) {
                         CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
                         camTrack->eyeCurve.AddKey(currentTime, cam->GetEye());
@@ -330,6 +362,7 @@ void CinematicSequencerComponent::OnGUI()
                 {
                     auto& key = effTrack->keys[selection.keyIndex];
 
+                    // 選択中エフェクトキーの詳細を編集する。
                     ImGui::Text("Key Property:");
                     ImGui::DragFloat("Start Time", &key.time, 0.01f);
                     ImGui::DragFloat("Duration", &key.duration, 0.01f, 0.1f, 100.0f);
@@ -338,6 +371,7 @@ void CinematicSequencerComponent::OnGUI()
                     if (ImGui::InputText("Effect Path", buf, sizeof(buf))) key.effectName = buf;
                     ImGui::SameLine();
                     if (ImGui::Button("...##Eff")) {
+                        // ファイルダイアログからエフェクト JSON を選ぶ。
                         char path[MAX_PATH] = "";
                         if (Dialog::OpenFileName(path, MAX_PATH, "JSON\0*.json\0", "Select Effect", nullptr) == DialogResult::OK) {
                             std::string fullPath = path;
@@ -351,6 +385,7 @@ void CinematicSequencerComponent::OnGUI()
                     {
                         if (auto model = actor->GetModelRaw())
                         {
+                            // モデルのノード一覧から追従ボーンを選ぶ。
                             std::string currentBone = key.boneName.empty() ? "(Root)" : key.boneName;
                             if (ImGui::BeginCombo("Bone Name", currentBone.c_str()))
                             {
@@ -402,17 +437,19 @@ void CinematicSequencerComponent::OnGUI()
     ImGui::End();
 }
 
+// 選択中カメラキーをギズモで編集するための処理。
 void CinematicSequencerComponent::DrawGizmo()
 {
     if (editorGhost && selection.IsValid())
     {
-        //Camera* camera = Graphics::Instance().GetCamera();
+        // 現行カメラシステム移行中のため、実カメラの view/projection 取得は無効化中。
         //if (!camera) return;
 
         auto track = sequence->tracks[selection.trackIndex];
         if (track->GetType() != TrackType::Camera) return;
         CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
 
+        // ImGuizmo の描画範囲を画面全体に設定する。
         ImGuizmo::Enable(true);
         ImGuizmo::SetRect(0, 0, (float)Graphics::Instance().GetScreenWidth(), (float)Graphics::Instance().GetScreenHeight());
 
@@ -420,6 +457,7 @@ void CinematicSequencerComponent::DrawGizmo()
         //const XMFLOAT4X4& proj = camera->GetProjection();
         XMFLOAT4X4 worldMatrix;
 
+        // ゴースト Actor の位置・回転から編集用ワールド行列を作る。
         XMMATRIX T = XMMatrixTranslationFromVector(XMLoadFloat3(&editorGhost->GetPosition()));
         XMMATRIX R = XMMatrixRotationQuaternion(XMLoadFloat4(&editorGhost->GetRotation()));
         XMStoreFloat4x4(&worldMatrix, R * T);
@@ -446,12 +484,15 @@ void CinematicSequencerComponent::DrawGizmo()
     }
 }
 
+// トラック一覧とトラック追加メニューを描画する。
 void CinematicSequencerComponent::DrawTrackList()
 {
     ImGui::BeginChild("TrackList", ImVec2(0, 0), false);
+    // トラック追加ポップアップを開く。
     if (ImGui::Button("+ Add Track")) ImGui::OpenPopup("AddTrackPopup");
     if (ImGui::BeginPopup("AddTrackPopup"))
     {
+        // 追加直後のトラックを現在のターゲット Actor へ接続する。
         auto AddAndBind = [&](auto track) {
             if (auto act = targetActor.lock()) track->Bind(act.get());
             };
@@ -473,6 +514,7 @@ void CinematicSequencerComponent::DrawTrackList()
     }
     ImGui::Separator();
 
+    // 既存トラックを一覧表示し、クリックで選択する。
     for (int i = 0; i < (int)sequence->tracks.size(); ++i)
     {
         auto& track = sequence->tracks[i];
@@ -490,6 +532,7 @@ void CinematicSequencerComponent::DrawTrackList()
     ImGui::EndChild();
 }
 
+// タイムライン本体を描画し、キーの選択・ドラッグ操作を処理する。
 void CinematicSequencerComponent::DrawTimelineWindow()
 {
     ImGui::BeginChild("TimelineView", ImVec2(0, 0), true, ImGuiWindowFlags_HorizontalScrollbar);
@@ -498,15 +541,18 @@ void CinematicSequencerComponent::DrawTimelineWindow()
     float scale = 100.0f;
     float rowHeight = ImGui::GetTextLineHeightWithSpacing();
 
+    // 1秒ごとの縦線と時刻ラベルを描く。
     for (float t = 0; t <= sequence->duration + 1; t += 1.0f) {
         float x = p.x + t * scale;
         drawList->AddLine(ImVec2(x, p.y), ImVec2(x, p.y + 1000), 0x40FFFFFF);
         char buf[8]; sprintf_s(buf, "%.0fs", t);
         drawList->AddText(ImVec2(x + 2, p.y), 0xFFAAAAAA, buf);
     }
+    // 現在時間を赤い再生ヘッドとして表示する。
     float cx = p.x + currentTime * scale;
     drawList->AddLine(ImVec2(cx, p.y), ImVec2(cx, p.y + 1000), 0xFFFF0000, 2.0f);
 
+    // 空白部分をクリックしたら、その位置へ再生時間を移動する。
     if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) {
         float t = (ImGui::GetMousePos().x - p.x) / scale;
         SetTime(t);
@@ -514,11 +560,13 @@ void CinematicSequencerComponent::DrawTimelineWindow()
         UpdateGhostCamera();
     }
 
+    // 既存トラックを一覧表示し、クリックで選択する。
     for (int i = 0; i < (int)sequence->tracks.size(); ++i) {
         float y = p.y + i * rowHeight + 25.0f;
         auto track = sequence->tracks[i];
 
         // -----------------------------------------------------------
+        // CameraTrack のキーをダイヤ型で表示する。
         // -----------------------------------------------------------
         if (track->GetType() == TrackType::Camera) {
             CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
@@ -530,11 +578,13 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(ImVec2(x - 6, y - 6));
                 ImGui::PushID(i * 1000 + k);
 
+                // 透明ボタンでキーのクリック判定だけを受ける。
                 if (ImGui::InvisibleButton("##Key", ImVec2(12, 12))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
                     UpdateGhostCamera();
                 }
+                // ドラッグ量を時間へ変換してキー位置を移動する。
                 if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
                     keys[k].time += ImGui::GetIO().MouseDelta.x / scale;
                     if (keys[k].time < 0.0f) keys[k].time = 0.0f;
@@ -548,6 +598,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
             }
         }
         // -----------------------------------------------------------
+        // AnimationTrack のキーを横長バーとして表示する。
         // -----------------------------------------------------------
         else if (track->GetType() == TrackType::Animation)
         {
@@ -569,6 +620,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(rectMin);
                 ImGui::PushID(i * 1000 + k);
 
+                // バー全体をクリック・ドラッグ対象にする。
                 if (ImGui::InvisibleButton("##Bar", ImVec2(width, barH))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
@@ -595,6 +647,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
             }
         }
         // -----------------------------------------------------------
+        // EffectTrack のキーを横長バーとして表示する。
         // -----------------------------------------------------------
         else if (track->GetType() == TrackType::Effect)
         {
@@ -616,6 +669,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 ImGui::SetCursorScreenPos(rectMin);
                 ImGui::PushID(i * 1000 + k);
 
+                // エフェクトバー全体をクリック・ドラッグ対象にする。
                 if (ImGui::InvisibleButton("##EffBar", ImVec2(width, barH))) {
                     selection.trackIndex = i;
                     selection.keyIndex = k;
@@ -636,6 +690,7 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 drawList->AddRectFilled(rectMin, rectMax, col, 4.0f);
                 drawList->AddRect(rectMin, rectMax, 0xFF000000, 4.0f);
 
+                // 表示名はパスの末尾だけにしてタイムラインを見やすくする。
                 std::string label = keys[k].effectName;
                 size_t slash = label.find_last_of("/\\");
                 if (slash != std::string::npos) label = label.substr(slash + 1);

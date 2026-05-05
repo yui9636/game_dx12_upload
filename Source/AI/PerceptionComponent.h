@@ -1,20 +1,27 @@
-#pragma once
+﻿#pragma once
+
+// AI の視覚・聴覚検知パラメータを保持するコンポーネント定義。
 #include <cstdint>
 
-// Sight / hearing parameters for AI perception.
+// AI がターゲットを検知するための視覚・聴覚設定。
 struct PerceptionComponent
 {
-    // Sight
+    // 視覚検知を有効にするか。
     bool  sightEnabled        = true;
-    float sightRadius         = 10.0f;     // metres
-    float sightFOV            = 1.5708f;   // 90 deg in radians
-    float sightHeight         = 1.6f;      // ray origin offset (m)
-    bool  requireLineOfSight  = false;     // v1: distance + FOV only
+    // 視覚検知できる半径。
+    float sightRadius         = 10.0f;
+    // 視覚検知の視野角。
+    float sightFOV            = 1.5708f;
+    // 視線判定に使う目線の高さ。
+    float sightHeight         = 1.6f;
+    // 遮蔽物チェックを要求するか。
+    bool  requireLineOfSight  = false;
 
-    // Hearing (v1 stub: radius only, events come later)
+    // 聴覚検知を有効にするか。
     bool  hearingEnabled      = false;
+    // 聴覚検知できる半径。
     float hearingRadius       = 6.0f;
 
-    // Detection target faction (0 = treat ActorType::Player as hostile by default)
+    // 検知対象にする陣営マスク。
     uint16_t targetFactionMask = 0;
 };

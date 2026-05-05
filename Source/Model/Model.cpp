@@ -1,62 +1,36 @@
+﻿// モデルの読み込み・アニメーション・当たり判定・GPUリソース同期を実装するファイルです。
 #include "System/Misc.h"
-
 #include "Model.h"
 #include "ModelResource.h"
-
 #include "AssimpImporter.h"
-
 #include<filesystem>
-
 #include"GpuResourceUtils.h"
-
 #include <fstream>
-
 #include <cereal/cereal.hpp>
-
 #include <cereal/archives/binary.hpp>
-
 #include <cereal/types/string.hpp>
-
 #include <cereal/types/vector.hpp>
-
 #include <limits>
-
 #include <cfloat>
-
 #include <cstring>
-
 #include <Collision\Collision.h>
-
 #include "System/ResourceManager.h"
-
 #include "RHI/DX11/DX11Buffer.h"
-
 #include "RHI/ICommandList.h"
-
 #include "RHI/IBuffer.h"
-
 #include "RHI/ITexture.h"
-
 #include "RHI/IResourceFactory.h"
-
 #include <RHI\DX11\DX11Texture.h>
-
 #include "Graphics.h"
-
 #include <DirectXTex.h>
-
 #include "Console/Logger.h"
 
-
-
 namespace DirectX
-
-
-
 {
 
 	template<class Archive>
 
+	// DirectX::XMUINT4 を cereal で保存・読み込みできるようにします。
 	void serialize(Archive& archive, XMUINT4& v)
 
 	{
@@ -75,10 +49,9 @@ namespace DirectX
 
 	}
 
-
-
 	template<class Archive>
 
+	// DirectX::XMFLOAT2 を cereal で保存・読み込みできるようにします。
 	void serialize(Archive& archive, XMFLOAT2& v)
 
 	{
@@ -93,10 +66,9 @@ namespace DirectX
 
 	}
 
-
-
 	template<class Archive>
 
+	// DirectX::XMFLOAT3 を cereal で保存・読み込みできるようにします。
 	void serialize(Archive& archive, XMFLOAT3& v)
 
 	{
@@ -113,10 +85,9 @@ namespace DirectX
 
 	}
 
-
-
 	template<class Archive>
 
+	// DirectX::XMFLOAT4 を cereal で保存・読み込みできるようにします。
 	void serialize(Archive& archive, XMFLOAT4& v)
 
 	{
@@ -135,10 +106,9 @@ namespace DirectX
 
 	}
 
-
-
 	template<class Archive>
 
+	// DirectX::XMFLOAT4X4 を cereal で保存・読み込みできるようにします。
 	void serialize(Archive& archive, XMFLOAT4X4& m)
 
 	{
@@ -181,14 +151,11 @@ namespace DirectX
 
 	}
 
-
-
 }
-
-
 
 template<class Archive>
 
+// ノードの名前・親子関係・ローカル変換情報を保存・読み込みします。
 void Model::Node::serialize(Archive& archive)
 
 {
@@ -209,10 +176,9 @@ void Model::Node::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// マテリアルの色・テクスチャ・PBR パラメータを保存・読み込みします。
 void Model::Material::serialize(Archive& archive)
 
 {
@@ -247,10 +213,9 @@ void Model::Material::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// 頂点の位置・法線・UV・ボーン情報を保存・読み込みします。
 void Model::Vertex::serialize(Archive& archive)
 
 {
@@ -273,10 +238,9 @@ void Model::Vertex::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// スキニング用ボーン情報を保存・読み込みします。
 void Model::Bone::serialize(Archive& archive)
 
 {
@@ -291,10 +255,9 @@ void Model::Bone::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// メッシュの頂点・インデックス・材質・ボーン情報を保存・読み込みします。
 void Model::Mesh::serialize(Archive& archive)
 
 {
@@ -315,10 +278,9 @@ void Model::Mesh::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// 位置やスケールのキーフレームを保存・読み込みします。
 void Model::VectorKeyframe::serialize(Archive& archive)
 
 {
@@ -333,10 +295,9 @@ void Model::VectorKeyframe::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// 回転キーフレームを保存・読み込みします。
 void Model::QuaternionKeyframe::serialize(Archive& archive)
 
 {
@@ -351,10 +312,9 @@ void Model::QuaternionKeyframe::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// ノード単位のアニメーションカーブを保存・読み込みします。
 void Model::NodeAnim::serialize(Archive& archive)
 
 {
@@ -371,10 +331,9 @@ void Model::NodeAnim::serialize(Archive& archive)
 
 }
 
-
-
 template<class Archive>
 
+// アニメーション全体の長さと各ノードのカーブを保存・読み込みします。
 void Model::Animation::serialize(Archive& archive)
 
 {
@@ -391,20 +350,16 @@ void Model::Animation::serialize(Archive& archive)
 
 }
 
-
-
-
-
+// Model のリソース破棄を既定処理に任せます。
 Model::~Model() = default;
 
-
-
+// Mesh の既定初期化を行います。
 Model::Mesh::Mesh() = default;
 
+// Mesh の破棄を既定処理に任せます。
 Model::Mesh::~Mesh() = default;
 
-
-
+// モデルファイルを読み込み、必要に応じてキャッシュ生成と GPU リソース構築を行います。
 Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	:scaling(scaling)
@@ -415,15 +370,11 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	ID3D11Device* device = Graphics::Instance().GetDevice(); // DX12 ?? nullptr
 
-
-
 	std::filesystem::path sourceFilepath(filename);
 
 	std::filesystem::path dirpath(sourceFilepath.parent_path());
 
 	std::filesystem::path cerealPath(sourceFilepath);
-
-
 
 	cerealPath.replace_extension(".cereal");
 
@@ -457,19 +408,11 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 		LOG_WARN("[Model] Deserialize failed for '%s' and no source fallback is available.", cerealPath.string().c_str());
 	}
 
-
-
-
-
-
 	for (size_t nodeIndex = 0; nodeIndex < nodes.size(); ++nodeIndex)
 
 	{
 
 		Node& node = nodes.at(nodeIndex);
-
-
-
 
 		node.parent = node.parentIndex >= 0 ? &nodes.at(node.parentIndex) : nullptr;
 
@@ -483,11 +426,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	}
 
-
-
-
-
-
 	//for (Material& material : materials)
 
 	//{
@@ -495,7 +433,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 	//	if (material.diffuseTextureFileName.empty())
 
 	//	{
-
 
 	//		HRESULT hr = GpuResourceUtils::CreateDummyTexture(device, 0xFFFFFFFF,
 
@@ -508,7 +445,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 	//	else
 
 	//	{
-
 
 	//	std::filesystem::path diffuseTexturePath(dirpath / material.diffuseTextureFileName);
 
@@ -524,7 +460,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	//	{
 
-
 	//		HRESULT hr = GpuResourceUtils::CreateDummyTexture(device, 0xFFFF7F7F,
 
 	//			material.normalMap.GetAddressOf());
@@ -536,7 +471,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 	//	else
 
 	//	{
-
 
 	//		std::filesystem::path texturePath(dirpath / material.normalTextureFileName);
 
@@ -550,17 +484,13 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	//}
 
-
 //	for (Material& m : materials)
 
 //	{
 
-
 //		if (m.albedoTextureFileName.empty())
 
-
 //
-
 
 //		auto SafeLoad = [&](const std::string& file,
 
@@ -614,18 +544,9 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 //
 
-
-
-
-
-
-//		SafeLoad(m.albedoTextureFileName, m.albedoMap);                   
-
-
+//		SafeLoad(m.albedoTextureFileName, m.albedoMap);
 
 //	}
-
-
 
 	for (Material& material : materials)
 
@@ -644,9 +565,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 		}
 
 		auto& rm = ResourceManager::Instance();
-
-
-
 
 		static bool s_loggedAlbedoLoad = false;
 
@@ -685,8 +603,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 				if (tex) return tex;
 
 			}
-
-
 
 			if (!device) {
 
@@ -738,8 +654,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 			}
 
-
-
 			Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> dummySRV;
 
 			GpuResourceUtils::CreateDummyTexture(device, dummyColor, dummySRV.GetAddressOf());
@@ -756,8 +670,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 		};
 
-
-
 		material.diffuseMap = GetSafeTexture("diffuse", material.diffuseTextureFileName, 0xFFFFFFFF);
 
 		material.normalMap = GetSafeTexture("normal", material.normalTextureFileName, 0xFFFF7F7F);
@@ -766,13 +678,9 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 		material.roughnessMap = GetSafeTexture("roughness", material.roughnessTextureFileName, 0xFFFFFFFF);
 
-
-
 		std::string albedoName = material.albedoTextureFileName.empty() ? material.diffuseTextureFileName : material.albedoTextureFileName;
 
 		material.albedoMap = GetSafeTexture("albedo", albedoName, 0xFFFFFFFF);
-
-
 
 		material.occlusionMap = GetSafeTexture("occlusion", material.occlusionTextureFileName, 0xFFFFFFFF);
 
@@ -780,10 +688,7 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	}
 
-
-
-
-	// import ��� CPU ���̎Q�ƕ\����蒼���A�`��p���\�[�X����������B
+	// import 後に CPU 側の参照表を作り直し、描画用リソースも同期する。
 	RefreshMeshBindingData();
 
 	nodeCaches.resize(nodes.size());
@@ -792,9 +697,7 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 }
 
-
-
-// �m�[�h�K�w���X�V���A�Ō�� ModelResource �֕`��p transform �𓯊�����B
+// ノード階層を更新し、最後に ModelResource へ描画用 transform を同期する。
 
 void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 
@@ -802,18 +705,13 @@ void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 
 	DirectX::XMMATRIX ParentWorldTransform = DirectX::XMLoadFloat4x4(&worldTransform);
 
-
-
-// ���f�����W�n���G���W�����W�n�֍��킹��␳�B
+// モデル座標系をエンジン座標系へ合わせる補正。
 
 	DirectX::XMMATRIX CoordinateSystemTransform = DirectX::XMMatrixScaling(-scaling, scaling, scaling);
-
-
 
 	for (Node& node : nodes)
 
 	{
-
 
 		DirectX::XMMATRIX S = DirectX::XMMatrixScaling(node.scale.x, node.scale.y, node.scale.z);
 
@@ -822,9 +720,6 @@ void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 		DirectX::XMMATRIX T = DirectX::XMMatrixTranslation(node.position.x, node.position.y, node.position.z);
 
 		DirectX::XMMATRIX LocalTransform = S * R * T;
-
-
-
 
 		DirectX::XMMATRIX ParentGlobalTransform;
 
@@ -846,13 +741,7 @@ void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 
 		DirectX::XMMATRIX GlobalTransform = LocalTransform * ParentGlobalTransform;
 
-
-
-
 		DirectX::XMMATRIX WorldTransform = GlobalTransform * CoordinateSystemTransform * ParentWorldTransform;
-
-
-
 
 		DirectX::XMStoreFloat4x4(&node.localTransform, LocalTransform);
 
@@ -867,13 +756,7 @@ void Model::UpdateTransform(const DirectX::XMFLOAT4X4& worldTransform)
 
 }
 
-
-
-
-
-
-
-
+// 指定したアニメーションを再生し、必要なら現在姿勢からブレンドします。
 void Model::PlayAnimation(int index, bool loop, float blendSeconds)
 
 {
@@ -886,17 +769,11 @@ void Model::PlayAnimation(int index, bool loop, float blendSeconds)
 
 	animationPlaying = true;
 
-
-
-
 	animationBlending = blendSeconds > 0.0f;
 
 	currentAnimationBlendSeconds = 0.0f;
 
 	animationBlendSecondsLength = blendSeconds;
-
-
-
 
 	for (size_t i = 0; i < nodes.size(); ++i)
 
@@ -905,8 +782,6 @@ void Model::PlayAnimation(int index, bool loop, float blendSeconds)
 		const Node& src = nodes.at(i);
 
 		NodeCache& dst = nodeCaches.at(i);
-
-
 
 		dst.position = src.position;
 
@@ -918,9 +793,7 @@ void Model::PlayAnimation(int index, bool loop, float blendSeconds)
 
 }
 
-
-
-
+// 現在アニメーションが再生中かどうかを返します。
 bool Model::IsPlayAnimation() const
 
 {
@@ -933,9 +806,7 @@ bool Model::IsPlayAnimation() const
 
 }
 
-
-
-
+// 経過時間に応じてアニメーション時間とノード姿勢を更新します。
 void Model::UpdateAnimation(float dt)
 
 {
@@ -944,12 +815,9 @@ void Model::UpdateAnimation(float dt)
 
 	ComputeBlending(dt * animationSpeed);
 
-
-
 }
 
-
-
+// 現在再生中アニメーションの長さを返します。
 const float Model::GetCurrentAnimLength() const
 
 {
@@ -964,12 +832,11 @@ const float Model::GetCurrentAnimLength() const
 
 	}
 
-
-
 	return 0.0f;
 
 }
 
+// メッシュとノード・マテリアル・ボーンの参照関係を再構築します。
 void Model::RefreshMeshBindingData()
 
 {
@@ -989,6 +856,7 @@ void Model::RefreshMeshBindingData()
 	}
 }
 
+// Model の内容から描画用 ModelResource を作り直します。
 void Model::RebuildModelResource()
 
 {
@@ -1003,6 +871,7 @@ void Model::RebuildModelResource()
 	}
 }
 
+// ノード変換や境界情報を描画用 ModelResource へ同期します。
 void Model::SyncModelResourceSceneData()
 
 {
@@ -1012,6 +881,7 @@ void Model::SyncModelResourceSceneData()
 	}
 }
 
+// 指定メッシュの頂点・インデックスバッファを ModelResource へ同期します。
 void Model::SyncModelResourceMeshBuffers(int subsetIndex)
 
 {
@@ -1044,6 +914,7 @@ void Model::SyncModelResourceMeshBuffers(int subsetIndex)
 		mesh.nodeIndex);
 }
 
+// 指定メッシュが参照しているマテリアル番号を返します。
 int Model::GetMeshMaterialIndex(int meshIndex) const
 
 {
@@ -1051,6 +922,7 @@ int Model::GetMeshMaterialIndex(int meshIndex) const
 	return meshBindingData[meshIndex].materialIndex;
 }
 
+// 指定メッシュが所属するノード番号を返します。
 int Model::GetMeshNodeIndex(int meshIndex) const
 
 {
@@ -1058,6 +930,7 @@ int Model::GetMeshNodeIndex(int meshIndex) const
 	return meshBindingData[meshIndex].nodeIndex;
 }
 
+// 指定メッシュの指定ボーンが参照するノード番号を返します。
 int Model::GetMeshBoneNodeIndex(int meshIndex, int boneIndex) const
 
 {
@@ -1067,24 +940,14 @@ int Model::GetMeshBoneNodeIndex(int meshIndex, int boneIndex) const
 	return boneIndices[boneIndex];
 }
 
-
-
-
-
-
+// 再生中アニメーションのキーフレームを評価して各ノード姿勢に反映します。
 void Model::ComputeAnimation(float dt)
 
 {
 
 	if (!IsPlayAnimation()) return;
 
-
-
-
 	const Animation& animation = animations.at(currentAnimationIndex);
-
-
-
 
 	for (size_t nodeIndex = 0; nodeIndex < animation.nodeAnims.size(); ++nodeIndex)
 
@@ -1094,38 +957,25 @@ void Model::ComputeAnimation(float dt)
 
 		const Model::NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
 
-
-
-
 		for (size_t index = 0; index < nodeAnim.positionKeyframes.size() - 1; ++index)
 
 		{
-
 
 			const Model::VectorKeyframe& keyframe0 = nodeAnim.positionKeyframes.at(index);
 
 			const Model::VectorKeyframe& keyframe1 = nodeAnim.positionKeyframes.at(index + 1);
 
-
-
 			if (currentAnimationSeconds >= keyframe0.seconds && currentAnimationSeconds < keyframe1.seconds)
 
 			{
 
-
 				float rate = (currentAnimationSeconds - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 				DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
 
 				DirectX::XMVECTOR V1 = DirectX::XMLoadFloat3(&keyframe1.value);
 
 				DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
-
-
-
 
 				DirectX::XMStoreFloat3(&node.position, V);
 
@@ -1133,29 +983,19 @@ void Model::ComputeAnimation(float dt)
 
 		}
 
-
-
-
 		for (size_t index = 0; index < nodeAnim.rotationKeyframes.size() - 1; ++index)
 
 		{
-
 
 			const Model::QuaternionKeyframe& keyframe0 = nodeAnim.rotationKeyframes.at(index);
 
 			const Model::QuaternionKeyframe& keyframe1 = nodeAnim.rotationKeyframes.at(index + 1);
 
-
-
 			if (currentAnimationSeconds >= keyframe0.seconds && currentAnimationSeconds < keyframe1.seconds)
 
 			{
 
-
 				float rate = (currentAnimationSeconds - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 				DirectX::XMVECTOR Q0 = DirectX::XMLoadFloat4(&keyframe0.value);
 
@@ -1163,47 +1003,31 @@ void Model::ComputeAnimation(float dt)
 
 				DirectX::XMVECTOR Q = DirectX::XMQuaternionSlerp(Q0, Q1, rate);
 
-
-
-
 				DirectX::XMStoreFloat4(&node.rotation, Q);
 
 			}
 
 		}
 
-
-
-
 		for (size_t index = 0; index < nodeAnim.scaleKeyframes.size() - 1; ++index)
 
 		{
-
 
 			const Model::VectorKeyframe& keyframe0 = nodeAnim.scaleKeyframes.at(index);
 
 			const Model::VectorKeyframe& keyframe1 = nodeAnim.scaleKeyframes.at(index + 1);
 
-
-
 			if (currentAnimationSeconds >= keyframe0.seconds && currentAnimationSeconds < keyframe1.seconds)
 
 			{
 
-
 				float rate = (currentAnimationSeconds - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 				DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
 
 				DirectX::XMVECTOR V1 = DirectX::XMLoadFloat3(&keyframe1.value);
 
 				DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
-
-
-
 
 				DirectX::XMStoreFloat3(&node.scale, V);
 
@@ -1213,13 +1037,7 @@ void Model::ComputeAnimation(float dt)
 
 	}
 
-
-
-
 	currentAnimationSeconds += dt;
-
-
-
 
 	if (currentAnimationSeconds >= animation.secondsLength)
 
@@ -1229,7 +1047,6 @@ void Model::ComputeAnimation(float dt)
 
 		{
 
-
 			currentAnimationSeconds -= animation.secondsLength;
 
 		}
@@ -1237,7 +1054,6 @@ void Model::ComputeAnimation(float dt)
 		else
 
 		{
-
 
 			currentAnimationSeconds = animation.secondsLength;
 
@@ -1249,24 +1065,14 @@ void Model::ComputeAnimation(float dt)
 
 }
 
-
-
-
-
-
+// アニメーション切り替え時のブレンド姿勢を計算します。
 void Model::ComputeBlending(float dt)
 
 {
 
 	if (!animationBlending) return;
 
-
-
-
 	float rate = currentAnimationBlendSeconds / animationBlendSecondsLength;
-
-
-
 
 	int count = static_cast<int>(nodes.size());
 
@@ -1277,8 +1083,6 @@ void Model::ComputeBlending(float dt)
 		const NodeCache& cache = nodeCaches.at(i);
 
 		Node& node = nodes.at(i);
-
-
 
 		DirectX::XMVECTOR S0 = DirectX::XMLoadFloat3(&cache.scale);
 
@@ -1292,15 +1096,11 @@ void Model::ComputeBlending(float dt)
 
 		DirectX::XMVECTOR T1 = DirectX::XMLoadFloat3(&node.position);
 
-
-
 		DirectX::XMVECTOR S = DirectX::XMVectorLerp(S0, S1, rate);
 
 		DirectX::XMVECTOR R = DirectX::XMQuaternionSlerp(R0, R1, rate);
 
 		DirectX::XMVECTOR T = DirectX::XMVectorLerp(T0, T1, rate);
-
-
 
 		DirectX::XMStoreFloat3(&node.scale, S);
 
@@ -1309,9 +1109,6 @@ void Model::ComputeBlending(float dt)
 		DirectX::XMStoreFloat3(&node.position, T);
 
 	}
-
-
-
 
 	currentAnimationBlendSeconds += dt;
 
@@ -1327,39 +1124,24 @@ void Model::ComputeBlending(float dt)
 
 }
 
-
-
-
+// 全メッシュの境界を合成してモデル全体のワールド境界を更新します。
 void Model::ComputeWorldBounds()
 
 {
-
 
 	bounds.Center = { 0, 0, 0 };
 
 	bounds.Extents = { 0, 0, 0 };
 
-
-
 	bool firstMerged = false;
-
-
-
 
 	for (const Mesh& mesh : meshes)
 
 	{
 
-
 		DirectX::BoundingBox meshBounds;
 
-
-
-
 		if (mesh.vertices.empty()) continue;
-
-
-
 
 		DirectX::BoundingBox::CreateFromPoints(
 
@@ -1373,17 +1155,11 @@ void Model::ComputeWorldBounds()
 
 		);
 
-
-
-
 		if (mesh.nodeIndex < 0 || static_cast<size_t>(mesh.nodeIndex) >= nodes.size()) continue;
 
 		DirectX::XMMATRIX worldMat = DirectX::XMLoadFloat4x4(&nodes[mesh.nodeIndex].worldTransform);
 
 		meshBounds.Transform(meshBounds, worldMat);
-
-
-
 
 		if (!firstMerged)
 
@@ -1405,12 +1181,9 @@ void Model::ComputeWorldBounds()
 
 	}
 
-
-
 }
 
-
-
+// 指定位置に最も近い頂点を探索します。
 bool Model::GetNearestVertex(
 
 	const DirectX::XMFLOAT3& rayOrigin,
@@ -1423,17 +1196,11 @@ bool Model::GetNearestVertex(
 
 	using namespace DirectX;
 
-
-
-
 	XMVECTOR origin = XMLoadFloat3(&rayOrigin);
 
 	XMVECTOR dir = XMLoadFloat3(&rayDir);
 
 	float distToBox = 0.0f;
-
-
-
 
 	if (!bounds.Intersects(origin, dir, distToBox))
 
@@ -1443,22 +1210,13 @@ bool Model::GetNearestVertex(
 
 	}
 
-
-
-
 	float minDistanceSqr = FLT_MAX;
 
 	bool found = false;
 
 	XMVECTOR bestVertexPos = XMVectorZero();
 
-
-
-
-
 	const float threshold = 0.5f;
-
-
 
 	for (const Mesh& mesh : meshes)
 
@@ -1468,43 +1226,25 @@ bool Model::GetNearestVertex(
 
 		XMMATRIX worldMat = XMLoadFloat4x4(&nodes[mesh.nodeIndex].worldTransform);
 
-
-
 		for (const Vertex& v : mesh.vertices)
 
 		{
-
 
 			XMVECTOR localPos = XMLoadFloat3(&v.position);
 
 			XMVECTOR worldPos = XMVector3Transform(localPos, worldMat);
 
-
-
-
-
-
-
-
 			XMVECTOR vToP = XMVectorSubtract(worldPos, origin);
 
 			float t = XMVectorGetX(XMVector3Dot(vToP, dir));
 
-
-
-
 			if (t < 0.0f) continue;
-
-
 
 			XMVECTOR proj = XMVectorScale(dir, t);
 
 			XMVECTOR perp = XMVectorSubtract(vToP, proj);
 
 			float distSqr = XMVectorGetX(XMVector3Dot(perp, perp));
-
-
-
 
 			if (distSqr < threshold * threshold && distSqr < minDistanceSqr)
 
@@ -1522,8 +1262,6 @@ bool Model::GetNearestVertex(
 
 	}
 
-
-
 	if (found)
 
 	{
@@ -1534,14 +1272,11 @@ bool Model::GetNearestVertex(
 
 	}
 
-
-
 	return false;
 
 }
 
-
-
+// モデルのメッシュに対してレイ判定を行い、最も近いヒット情報を返します。
 bool Model::Raycast(
 
 	const DirectX::XMFLOAT3& rayOrigin,
@@ -1554,17 +1289,11 @@ bool Model::Raycast(
 
 	using namespace DirectX;
 
-
-
 	XMVECTOR origin = XMLoadFloat3(&rayOrigin);
 
 	XMVECTOR dir = XMLoadFloat3(&rayDir);
 
 	float distToBox = 0.0f;
-
-
-
-
 
 	if (!bounds.Intersects(origin, dir, distToBox))
 
@@ -1574,41 +1303,27 @@ bool Model::Raycast(
 
 	}
 
-
-
-
 	bool hasHit = false;
 
 	float minT = FLT_MAX;
 
 	XMVECTOR bestNormal = XMVectorZero();
 
-
-
 	for (const Mesh& mesh : meshes)
 
 	{
-
 
 		if (mesh.nodeIndex < 0 || static_cast<size_t>(mesh.nodeIndex) >= nodes.size()) continue;
 
 		XMMATRIX worldMat = XMLoadFloat4x4(&nodes[mesh.nodeIndex].worldTransform);
 
-
-
-
-
 		const auto& indices = mesh.indices;
 
 		const auto& vertices = mesh.vertices;
 
-
-
-
 		for (size_t i = 0; i < indices.size(); i += 3)
 
 		{
-
 
 			uint32_t i0 = indices[i];
 
@@ -1616,24 +1331,17 @@ bool Model::Raycast(
 
 			uint32_t i2 = indices[i + 2];
 
-
-
-
 			XMVECTOR v0 = XMVector3Transform(XMLoadFloat3(&vertices[i0].position), worldMat);
 
 			XMVECTOR v1 = XMVector3Transform(XMLoadFloat3(&vertices[i1].position), worldMat);
 
 			XMVECTOR v2 = XMVector3Transform(XMLoadFloat3(&vertices[i2].position), worldMat);
 
-
-
 			float t = 0.0f;
-
 
 			if (TriangleTests::Intersects(origin, dir, v0, v1, v2, t))
 
 			{
-
 
 				if (t < minT)
 
@@ -1642,9 +1350,6 @@ bool Model::Raycast(
 					minT = t;
 
 					hasHit = true;
-
-
-
 
 					XMVECTOR edge1 = v1 - v0;
 
@@ -1660,14 +1365,11 @@ bool Model::Raycast(
 
 	}
 
-
-
 	if (hasHit)
 
 	{
 
 		outHit.distance = minT;
-
 
 		XMVECTOR hitPoint = XMVectorAdd(origin, XMVectorScale(dir, minT));
 
@@ -1681,36 +1383,22 @@ bool Model::Raycast(
 
 	}
 
-
-
 	return false;
 
 }
 
-
-
-
-
-
-
-
-
-
-
+// 名前に一致するノードを検索します。
 Model::Node* Model::FindNode(const char* name)
 
 {
-
 
 	for (Node& node : nodes)
 
 	{
 
-
 		if (std::strcmp(node.name.c_str(), name) == 0)
 
 		{
-
 
 			return &node;
 
@@ -1718,16 +1406,11 @@ Model::Node* Model::FindNode(const char* name)
 
 	}
 
-
-
-
 	return nullptr;
 
 }
 
-
-
-
+// 名前に一致するノードのインデックスを返します。
 int Model::GetNodeIndex(const char* name) const
 
 {
@@ -1750,8 +1433,7 @@ int Model::GetNodeIndex(const char* name) const
 
 }
 
-
-
+// 指定アニメーション・指定ノードの指定時間における姿勢を計算します。
 void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, NodePose& nodePose) const
 
 {
@@ -1760,13 +1442,9 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 	const NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
 
-
-
-
 	for (size_t index = 0; index < nodeAnim.positionKeyframes.size() - 1; ++index)
 
 	{
-
 
 		const VectorKeyframe& keyframe0 = nodeAnim.positionKeyframes.at(index);
 
@@ -1776,11 +1454,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 		{
 
-
 			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 			DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
 
@@ -1788,18 +1462,15 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 			DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
 
-
 			DirectX::XMStoreFloat3(&nodePose.position, V);
 
 		}
 
 	}
 
-
 	for (size_t index = 0; index < nodeAnim.rotationKeyframes.size() - 1; ++index)
 
 	{
-
 
 		const QuaternionKeyframe& keyframe0 = nodeAnim.rotationKeyframes.at(index);
 
@@ -1809,11 +1480,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 		{
 
-
 			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 			DirectX::XMVECTOR Q0 = DirectX::XMLoadFloat4(&keyframe0.value);
 
@@ -1821,18 +1488,15 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 			DirectX::XMVECTOR Q = DirectX::XMQuaternionSlerp(Q0, Q1, rate);
 
-
 			DirectX::XMStoreFloat4(&nodePose.rotation, Q);
 
 		}
 
 	}
 
-
 	for (size_t index = 0; index < nodeAnim.scaleKeyframes.size() - 1; ++index)
 
 	{
-
 
 		const VectorKeyframe& keyframe0 = nodeAnim.scaleKeyframes.at(index);
 
@@ -1842,18 +1506,13 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 		{
 
-
 			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-
-
 
 			DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
 
 			DirectX::XMVECTOR V1 = DirectX::XMLoadFloat3(&keyframe1.value);
 
 			DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
-
 
 			DirectX::XMStoreFloat3(&nodePose.scale, V);
 
@@ -1863,8 +1522,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 }
 
-
-
+// 指定アニメーション全体の指定時間における全ノード姿勢を計算します。
 void Model::ComputeAnimation(int animationIndex, float time, std::vector<NodePose>& nodePose)
 
 {
@@ -1885,15 +1543,9 @@ void Model::ComputeAnimation(int animationIndex, float time, std::vector<NodePos
 
 	}
 
-
-
-
-
 }
 
-
-
-
+// 名前に一致するアニメーション番号を返します。
 int Model::GetAnimationIndex(const char* name) const
 
 {
@@ -1916,9 +1568,7 @@ int Model::GetAnimationIndex(const char* name) const
 
 }
 
-
-
-
+// 外部で計算したノード姿勢をモデルへ反映します。
 void Model::SetNodePoses(const std::vector<NodePose>& nodePoses)
 
 {
@@ -1931,8 +1581,6 @@ void Model::SetNodePoses(const std::vector<NodePose>& nodePoses)
 
 		Node& node = nodes.at(nodeIndex);
 
-
-
 		node.position = pose.position;
 
 		node.rotation = pose.rotation;
@@ -1943,9 +1591,7 @@ void Model::SetNodePoses(const std::vector<NodePose>& nodePoses)
 
 }
 
-
-
-
+// 現在のノード姿勢を配列として取得します。
 void Model::GetNodePoses(std::vector<NodePose>& nodePoses) const
 
 {
@@ -1966,8 +1612,6 @@ void Model::GetNodePoses(std::vector<NodePose>& nodePoses) const
 
 		NodePose& pose = nodePoses.at(nodeIndex);
 
-
-
 		pose.position = node.position;
 
 		pose.rotation = node.rotation;
@@ -1978,8 +1622,7 @@ void Model::GetNodePoses(std::vector<NodePose>& nodePoses) const
 
 }
 
-
-
+// メッシュサブセット数を返します。
 int Model::GetSubsetCount() const
 
 {
@@ -1988,11 +1631,7 @@ int Model::GetSubsetCount() const
 
 }
 
-
-
 // Model.cpp
-
-
 
 Model::MeshData Model::GetMeshData(int subsetIndex)
 
@@ -2006,16 +1645,11 @@ Model::MeshData Model::GetMeshData(int subsetIndex)
 
 	}
 
-
-
-
 	return { &meshes[subsetIndex].vertices, &meshes[subsetIndex].indices };
 
 }
 
-
-
-
+// 指定サブセットのインデックス配列を差し替え、GPU バッファを更新します。
 void Model::UpdateMeshIndices(ID3D11Device* device, int subsetIndex, const std::vector<uint32_t>& newIndices)
 
 {
@@ -2034,9 +1668,7 @@ void Model::UpdateMeshIndices(ID3D11Device* device, int subsetIndex, const std::
 
 }
 
-
-
-
+// モデルデータをバイナリキャッシュとして保存します。
 void Model::Serialize(const char* filename)
 
 {
@@ -2048,8 +1680,6 @@ void Model::Serialize(const char* filename)
 	{
 
 		cereal::BinaryOutputArchive archive(ofstream);
-
-
 
 		try
 
@@ -2081,9 +1711,7 @@ void Model::Serialize(const char* filename)
 
 }
 
-
-
-
+// バイナリキャッシュからモデルデータを読み込みます。
 void Model::Deserialize(const char* filename)
 
 {
@@ -2130,6 +1758,4 @@ void Model::Deserialize(const char* filename)
 	}
 
 }
-
-
 

@@ -204,7 +204,6 @@
     <ClInclude Include="Source\Duplicate\DuplicateSystem.h" />
     <ClInclude Include="Source\easing.h" />
     <ClInclude Include="Source\Effect\EffectMaterial.h" />
-    <ClInclude Include="Source\Effect\HologramManager.h" />
     <ClInclude Include="Source\Engine\EditorSelection.h" />
     <ClInclude Include="Source\Engine\EngineMode.h" />
     <ClInclude Include="Source\Engine\EngineKernel.h" />
@@ -239,6 +238,7 @@
     <ClInclude Include="Source\Gameplay\DamageSystem.h" />
     <ClInclude Include="Source\Gameplay\LockOnSystem.h" />
     <ClInclude Include="Source\Gameplay\BattleFlowSystem.h" />
+    <ClInclude Include="Source\RenderContext\IndirectDrawCommon.h" />
     <ClInclude Include="Source\UI\HUDBindingSystem.h" />
     <ClInclude Include="Source\GameLoop\FlowEventQueue.h" />
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h" />
@@ -451,7 +451,6 @@
     <ClInclude Include="Source\Sprite\Sprite3D.h" />
     <ClInclude Include="Source\Stage\Stage.h" />
     <ClInclude Include="Source\Storage\GameplayAsset.h" />
-    <ClInclude Include="Source\SwordTrail.h" />
     <ClInclude Include="Source\Trail\TrailSystem.h" />
     <ClInclude Include="Source\Trail\TrailExtractSystem.h" />
     <ClInclude Include="Source\Component\TrailComponent.h" />
@@ -570,7 +569,6 @@
     <ClCompile Include="Source\DebugRender\DebugRenderSystem.cpp" />
     <ClCompile Include="Source\Duplicate\DuplicateSystem.cpp" />
     <ClCompile Include="Source\Effect\EffectMaterial.cpp" />
-    <ClCompile Include="Source\Effect\HologramManager.cpp" />
     <ClCompile Include="Source\Engine\EngineKernel.cpp" />
     <ClCompile Include="Source\Entity\EntityManager.cpp" />
     <ClCompile Include="Source\Environment\EnvironmentExtractSystem.cpp" />
@@ -749,7 +747,6 @@
     <ClCompile Include="Source\Sprite\SpriteRenderer.cpp" />
     <ClCompile Include="Source\Sprite\Sprite3D.cpp" />
     <ClCompile Include="Source\Stage\Stage.cpp" />
-    <ClCompile Include="Source\SwordTrail.cpp" />
     <ClCompile Include="Source\Trail\TrailSystem.cpp" />
     <ClCompile Include="Source\Trail\TrailExtractSystem.cpp" />
     <ClCompile Include="Source\System\Dialog.cpp" />

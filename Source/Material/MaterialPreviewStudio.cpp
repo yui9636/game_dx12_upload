@@ -1,4 +1,4 @@
-#include "MaterialPreviewStudio.h"
+﻿#include "MaterialPreviewStudio.h"
 #include "MaterialAsset.h"
 #include "Render/OffscreenRenderer.h"
 #include "Graphics.h"
@@ -12,21 +12,24 @@
 
 using namespace DirectX;
 
+// プレビュー RT をクリアするときの背景色です。
 static constexpr float CLEAR_R = 0.18f;
 static constexpr float CLEAR_G = 0.18f;
 static constexpr float CLEAR_B = 0.20f;
 static constexpr float CLEAR_A = 1.0f;
 
+// マテリアルプレビュー管理用のシングルトンインスタンスを返します。
 MaterialPreviewStudio& MaterialPreviewStudio::Instance() {
     static MaterialPreviewStudio instance;
     return instance;
 }
 
+// プレビュー用リソースの解放はスマートポインタへ任せます。
 MaterialPreviewStudio::~MaterialPreviewStudio() = default;
 
+// プレビュー専用の永続 RT、深度バッファ、球モデルを初期化します。
 void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
 {
-    // �}�e���A���v���r���[��p�̉i�� RT �Ɛ[�x���m�ۂ���B
     m_offscreen = offscreen;
     m_pendingMaterial = nullptr;
     m_dirty = false;
@@ -41,7 +44,8 @@ void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) return;
 
-    // Preview color texture: RGBA8_UNORM, RT+SRV (persistent)
+    // プレビュー結果を保持するカラー RT を作成します。
+    // RenderTarget と ShaderResource の両方として使います。
     {
         TextureDesc desc{};
         desc.width = PREVIEW_SIZE;
@@ -56,7 +60,7 @@ void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
         m_previewTexture = std::shared_ptr<ITexture>(std::move(raw));
     }
 
-    // Shared depth
+    // プレビュー用の深度バッファを作成します。
     {
         TextureDesc depthDesc{};
         depthDesc.width = PREVIEW_SIZE;
@@ -67,6 +71,7 @@ void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
         m_previewDepth = factory->CreateTexture("MaterialPreviewDepth", depthDesc);
     }
 
+    // マテリアルの質感確認用に球モデルを読み込みます。
     m_sphereModel = ResourceManager::Instance().GetModel("Data/Model/sphere/fbx_sphere_001.fbx");
     if (!m_sphereModel) {
         LOG_ERROR("[MaterialPreviewStudio] Failed to load sphere model.");
@@ -76,11 +81,13 @@ void MaterialPreviewStudio::Initialize(OffscreenRenderer* offscreen)
     LOG_INFO("[MaterialPreviewStudio] Initialized.");
 }
 
+// プレビュー描画に必要な主要リソースがそろっているかを確認します。
 bool MaterialPreviewStudio::IsReady() const {
     return m_offscreen && m_offscreen->IsReady()
         && m_sphereModel != nullptr && m_previewTexture != nullptr;
 }
 
+// 指定されたマテリアルを次回プレビュー描画の対象として予約します。
 void MaterialPreviewStudio::RequestPreview(MaterialAsset* material)
 {
     if (!material) return;
@@ -88,6 +95,7 @@ void MaterialPreviewStudio::RequestPreview(MaterialAsset* material)
     m_dirty = true;
 }
 
+// 再描画要求があり、GPU が空いている場合だけプレビューを更新します。
 void MaterialPreviewStudio::PumpPreview()
 {
     if (!m_dirty || !m_pendingMaterial || !IsReady()) return;
@@ -96,15 +104,16 @@ void MaterialPreviewStudio::PumpPreview()
     ExecuteRender();
 }
 
+// 予約されたマテリアルを球モデルへ反映し、オフスクリーン RT へ直接描画します。
 void MaterialPreviewStudio::ExecuteRender()
 {
-    // live �� MaterialAsset �������f���֓K�p���A���̂܂܃I�t�X�N���[���֕`�悷��B
     MaterialAsset* material = m_pendingMaterial;
 
     XMFLOAT4X4 identity;
     XMStoreFloat4x4(&identity, XMMatrixIdentity());
     m_sphereModel->UpdateTransform(identity);
 
+    // 球モデルの全マテリアルへ、エディタ上の live な MaterialAsset 値を反映します。
     auto& meshMaterials = m_sphereModel->GetMaterialss();
     for (auto& mat : meshMaterials) {
         mat.color = material->baseColor;
@@ -129,6 +138,7 @@ void MaterialPreviewStudio::ExecuteRender()
         mat.emissiveMap = ResourceManager::Instance().GetTexture(mat.emissiveTextureFileName);
     }
 
+    // 球モデル全体が収まるように、AABB からカメラ距離を計算します。
     BoundingBox aabb = m_sphereModel->GetWorldBounds();
     XMFLOAT3 center = aabb.Center;
     XMFLOAT3 ex = aabb.Extents;
@@ -154,10 +164,11 @@ void MaterialPreviewStudio::ExecuteRender()
     XMStoreFloat4x4(&viewProj, XMMatrixLookAtLH(eye, at, upV) *
         XMMatrixPerspectiveFovLH(fov, 1.0f, 0.01f, distance * 10.0f));
 
+    // プレビュー用の簡易ライトを設定します。
     XMFLOAT3 lightDir   = { -0.5f, -0.7f, 0.5f };
     XMFLOAT3 lightColor = { 3.0f, 3.0f, 3.0f };
 
-    // �i�� RT �ɒ��ڕ`�悵�āAFrameBuffer �̃R�s�[�⒆�ԃe�N�X�`�������Ȃ��B
+    // 永続 RT へ直接描画し、FrameBuffer コピーや中間テクスチャを作らないようにします。
     m_offscreen->BeginJob();
     m_offscreen->ClearExternalRT(m_previewTexture.get(), m_previewDepth.get(),
         CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A);
@@ -168,6 +179,7 @@ void MaterialPreviewStudio::ExecuteRender()
     m_offscreen->BindScene();
     m_offscreen->BindSampler();
 
+    // 球モデルを現在の MaterialAsset 値で描画します。
     auto modelRes = m_sphereModel->GetModelResource();
     m_offscreen->GetModelRenderer().Draw(
         ShaderId::Phong, modelRes,
@@ -175,5 +187,6 @@ void MaterialPreviewStudio::ExecuteRender()
         material->baseColor, material->metallic, material->roughness, material->emissive,
         material, BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
 
+    // 描画ジョブを送信し、プレビュー用テクスチャの内容を更新します。
     m_offscreen->SubmitDirect(m_previewTexture.get());
 }

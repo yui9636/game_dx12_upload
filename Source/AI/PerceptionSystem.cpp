@@ -1,3 +1,4 @@
+﻿// 敵 AI の視野判定を行い、ターゲット情報を Aggro と Blackboard に書き込むシステム実装。
 #include "PerceptionSystem.h"
 
 #include <cmath>
@@ -17,14 +18,17 @@
 #include "BlackboardComponent.h"
 #include "PerceptionComponent.h"
 
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // 知覚判定の候補になる敵対対象の一時データ。
     struct CandidateTarget
     {
         EntityID entity;
         DirectX::XMFLOAT3 worldPos;
     };
 
+    // 敵 AI が検知対象にするプレイヤー候補を収集する。
     void CollectHostileCandidates(Registry& registry, std::vector<CandidateTarget>& out)
     {
         Signature sig = CreateSignature<ActorTypeComponent, TransformComponent>();
@@ -46,6 +50,7 @@ namespace
         }
     }
 
+    // 検知したターゲット情報をブラックボードへ書き込む。
     void WriteTargetIntoBlackboard(BlackboardComponent& bb, EntityID target,
                                    const DirectX::XMFLOAT3& targetPos, float distance)
     {
@@ -70,6 +75,7 @@ namespace
         bb.entries["LastSeenTime"] = lst;
     }
 
+    // ターゲットを見失った状態をブラックボードへ反映する。
     void ClearTargetInBlackboard(BlackboardComponent& bb, float timeSinceSighted)
     {
         BlackboardValue v;
@@ -83,6 +89,7 @@ namespace
         bb.entries["LastSeenTime"] = lst;
     }
 
+    // Transform のワールド行列から XZ 平面上の前方向を取得する。
     DirectX::XMFLOAT3 GetForwardXZ(const TransformComponent& tr)
     {
         using namespace DirectX;
@@ -102,6 +109,7 @@ namespace
     }
 }
 
+// 敵の視野判定を行い、Aggro と Blackboard を更新する。
 void PerceptionSystem::Update(Registry& registry, float dt)
 {
     std::vector<CandidateTarget> hostiles;
@@ -147,7 +155,6 @@ void PerceptionSystem::Update(Registry& registry, float dt)
                 if (dist2D > per.sightRadius) continue;
 
                 if (dist2D < 0.001f) {
-                    // overlapping; treat as visible
                 } else {
                     const float ndx = dx / dist2D;
                     const float ndz = dz / dist2D;

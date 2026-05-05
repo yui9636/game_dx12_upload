@@ -1,3 +1,5 @@
+ï»¿// ã“ã®ãƒ•ã‚¡ã‚¤ãƒ«ã¯ UTF-8 BOM ä»˜ãã§ä¿å­˜ã—ã¦ãã ã•ã„ã€‚
+// Prefab / Scene ä¿å­˜æ©Ÿèƒ½ã®å…¬é–‹ã‚¤ãƒ³ã‚¿ãƒ¼ãƒ•ã‚§ãƒ¼ã‚¹ã‚’å®šç¾©ã—ã¾ã™ã€‚
 #pragma once
 
 #include <filesystem>
@@ -8,82 +10,82 @@
 
 class Registry;
 
-// scene ƒtƒ@ƒCƒ‹‚É•t‚·‚éŠÈ’P‚Èƒƒ^ƒf[ƒ^B
-// Œ»ó‚Í editor ‘¤‚Ì scene view mode ‚¾‚¯‚ğ•Û‚·‚éB
+// scene ãƒ•ã‚¡ã‚¤ãƒ«ã«ä»˜éšã™ã‚‹ç°¡å˜ãªãƒ¡ã‚¿ãƒ‡ãƒ¼ã‚¿ã€‚
+// ç¾çŠ¶ã¯ editor å´ã® scene view mode ã ã‘ã‚’ä¿æŒã™ã‚‹ã€‚
 struct SceneFileMetadata
 {
-    // SceneView ‚Ì•\¦ƒ‚[ƒhB
-    // —á: "3D"
+    // SceneView ã®è¡¨ç¤ºãƒ¢ãƒ¼ãƒ‰ã€‚
+    // ä¾‹: "3D"
     std::string sceneViewMode = "3D";
 };
 
-// Prefab / Scene ‚Ì•Û‘¶E“ÇE“K—pE·‚µ–ß‚µ‚ğ’S“–‚·‚éƒ†[ƒeƒBƒŠƒeƒBƒNƒ‰ƒXB
-// ‚·‚×‚Ä static ŠÖ”‚Å\¬‚³‚ê‚éB
+// Prefab / Scene ã®ä¿å­˜ãƒ»èª­è¾¼ãƒ»é©ç”¨ãƒ»å·®ã—æˆ»ã—ã‚’æ‹…å½“ã™ã‚‹ãƒ¦ãƒ¼ãƒ†ã‚£ãƒªãƒ†ã‚£ã‚¯ãƒ©ã‚¹ã€‚
+// ã™ã¹ã¦ static é–¢æ•°ã§æ§‹æˆã•ã‚Œã‚‹ã€‚
 class PrefabSystem
 {
 public:
-    // w’è entity ‚ğ prefab ‚Æ‚µ‚Ä•Û‘¶‚·‚éB
-    // •Û‘¶ƒtƒ@ƒCƒ‹–¼‚Í entity –¼‚©‚ç©“®Œˆ’è‚µAd•¡‚Í˜A”Ô‚ğ•t‚¯‚éB
-    // outPath ‚ªw’è‚³‚ê‚Ä‚¢‚ê‚ÎÅI•Û‘¶æƒpƒX‚ğ•Ô‚·B
+    // æŒ‡å®š entity ã‚’ prefab ã¨ã—ã¦ä¿å­˜ã™ã‚‹ã€‚
+    // ä¿å­˜ãƒ•ã‚¡ã‚¤ãƒ«åã¯ entity åã‹ã‚‰è‡ªå‹•æ±ºå®šã—ã€é‡è¤‡æ™‚ã¯é€£ç•ªã‚’ä»˜ã‘ã‚‹ã€‚
+    // outPath ãŒæŒ‡å®šã•ã‚Œã¦ã„ã‚Œã°æœ€çµ‚ä¿å­˜å…ˆãƒ‘ã‚¹ã‚’è¿”ã™ã€‚
     static bool SaveEntityAsPrefab(EntityID root,
         Registry& registry,
         const std::filesystem::path& destinationDir,
         std::filesystem::path* outPath = nullptr);
 
-    // prefab ƒtƒ@ƒCƒ‹‚ğ Registry ‚ÖƒCƒ“ƒXƒ^ƒ“ƒX‰»‚·‚éB
-    // parentEntity ‚ªw’è‚³‚ê‚Ä‚¢‚ê‚ÎA‚»‚Ìq‚Æ‚µ‚Ä•œŒ³‚·‚éB
+    // prefab ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ Registry ã¸ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹åŒ–ã™ã‚‹ã€‚
+    // parentEntity ãŒæŒ‡å®šã•ã‚Œã¦ã„ã‚Œã°ã€ãã®å­ã¨ã—ã¦å¾©å…ƒã™ã‚‹ã€‚
     static EntityID InstantiatePrefab(const std::filesystem::path& prefabPath,
         Registry& registry,
         EntityID parentEntity = Entity::NULL_ID);
 
-    // w’è entity ‚Ì subtree ‚ğ–¾¦‚µ‚½ prefabPath ‚Ö•Û‘¶‚·‚éB
+    // æŒ‡å®š entity ã® subtree ã‚’æ˜ç¤ºã—ãŸ prefabPath ã¸ä¿å­˜ã™ã‚‹ã€‚
     static bool SaveEntityToPrefabPath(EntityID root,
         Registry& registry,
         const std::filesystem::path& prefabPath);
 
-    // Registry ‘S‘Ì‚ğ scene ƒtƒ@ƒCƒ‹‚Æ‚µ‚Ä•Û‘¶‚·‚éB
-    // metadata ‚ª‚ ‚ê‚Î editor —p‚Ì’Ç‰Áî•ñ‚à•Û‘¶‚·‚éB
+    // Registry å…¨ä½“ã‚’ scene ãƒ•ã‚¡ã‚¤ãƒ«ã¨ã—ã¦ä¿å­˜ã™ã‚‹ã€‚
+    // metadata ãŒã‚ã‚Œã° editor ç”¨ã®è¿½åŠ æƒ…å ±ã‚‚ä¿å­˜ã™ã‚‹ã€‚
     static bool SaveRegistryAsScene(Registry& registry,
         const std::filesystem::path& scenePath,
         const SceneFileMetadata* metadata = nullptr);
 
-    // scene ƒtƒ@ƒCƒ‹‚ğ“Ç‚İ‚İARegistry ‚ğ‚»‚Ì“à—e‚Ö’u‚«Š·‚¦‚éB
-    // outMetadata ‚ª‚ ‚ê‚Î editor —pƒƒ^ƒf[ƒ^‚à•Ô‚·B
+    // scene ãƒ•ã‚¡ã‚¤ãƒ«ã‚’èª­ã¿è¾¼ã¿ã€Registry ã‚’ãã®å†…å®¹ã¸ç½®ãæ›ãˆã‚‹ã€‚
+    // outMetadata ãŒã‚ã‚Œã° editor ç”¨ãƒ¡ã‚¿ãƒ‡ãƒ¼ã‚¿ã‚‚è¿”ã™ã€‚
     static bool LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         Registry& registry,
         SceneFileMetadata* outMetadata = nullptr);
 
-    // prefab ƒtƒ@ƒCƒ‹‚ğ“Ç‚İ‚İAEntitySnapshot ‚Æ‚µ‚Ä•Ô‚·B
+    // prefab ãƒ•ã‚¡ã‚¤ãƒ«ã‚’èª­ã¿è¾¼ã¿ã€EntitySnapshot ã¨ã—ã¦è¿”ã™ã€‚
     static bool LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
         EntitySnapshot::Snapshot& outSnapshot);
 
-    // Œ»İ‚Ì entity “à—e‚ğ prefab Œ³ƒtƒ@ƒCƒ‹‚Öã‘‚«•Û‘¶‚·‚éB
+    // ç¾åœ¨ã® entity å†…å®¹ã‚’ prefab å…ƒãƒ•ã‚¡ã‚¤ãƒ«ã¸ä¸Šæ›¸ãä¿å­˜ã™ã‚‹ã€‚
     static bool ApplyPrefab(EntityID root, Registry& registry);
 
-    // prefab ‚ğŒ³ƒtƒ@ƒCƒ‹“à—e‚Å·‚µ–ß‚·B
-    // Œ»İ‚Ì entity ‚ğÁ‚µAŒ³ prefab ‚©‚çÄƒCƒ“ƒXƒ^ƒ“ƒX‰»‚·‚éB
+    // prefab ã‚’å…ƒãƒ•ã‚¡ã‚¤ãƒ«å†…å®¹ã§å·®ã—æˆ»ã™ã€‚
+    // ç¾åœ¨ã® entity ã‚’æ¶ˆã—ã€å…ƒ prefab ã‹ã‚‰å†ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹åŒ–ã™ã‚‹ã€‚
     static EntityID RevertPrefab(EntityID root, Registry& registry);
 
-    // prefab ‚Æ‚Ì•R•t‚¯‚¾‚¯‚ğŠO‚·B
-    // entity ©‘Ì‚Í‚»‚Ì‚Ü‚Üc‚·B
+    // prefab ã¨ã®ç´ä»˜ã‘ã ã‘ã‚’å¤–ã™ã€‚
+    // entity è‡ªä½“ã¯ãã®ã¾ã¾æ®‹ã™ã€‚
     static bool UnpackPrefab(EntityID root, Registry& registry);
 
-    // w’è entity ‚ª‘®‚·‚é prefab ‚Ìƒ‹[ƒg entity ‚ğ’T‚·B
-    // Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î NULL_ID ‚ğ•Ô‚·B
+    // æŒ‡å®š entity ãŒå±ã™ã‚‹ prefab ã®ãƒ«ãƒ¼ãƒˆ entity ã‚’æ¢ã™ã€‚
+    // è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° NULL_ID ã‚’è¿”ã™ã€‚
     static EntityID FindPrefabRoot(EntityID entity, Registry& registry);
 
-    // entity ‚ª prefab ”z‰º‚È‚çA‚»‚Ì prefab ƒ‹[ƒg‚É override ƒtƒ‰ƒO‚ğ—§‚Ä‚éB
+    // entity ãŒ prefab é…ä¸‹ãªã‚‰ã€ãã® prefab ãƒ«ãƒ¼ãƒˆã« override ãƒ•ãƒ©ã‚°ã‚’ç«‹ã¦ã‚‹ã€‚
     static void MarkPrefabOverride(EntityID entity, Registry& registry);
 
-    // entity ‚ğ newParent ‚Ìq‚Ö•t‚¯‘Ö‚¦‚Ä‚æ‚¢‚©”»’è‚·‚éB
+    // entity ã‚’ newParent ã®å­ã¸ä»˜ã‘æ›¿ãˆã¦ã‚ˆã„ã‹åˆ¤å®šã™ã‚‹ã€‚
     static bool CanReparent(EntityID entity, EntityID newParent, Registry& registry);
 
-    // parentEntity ‚Ìq‚ğV‹Kì¬‚µ‚Ä‚æ‚¢‚©”»’è‚·‚éB
+    // parentEntity ã®å­ã‚’æ–°è¦ä½œæˆã—ã¦ã‚ˆã„ã‹åˆ¤å®šã™ã‚‹ã€‚
     static bool CanCreateChild(EntityID parentEntity, Registry& registry);
 
-    // entity ‚ğíœ‚µ‚Ä‚æ‚¢‚©”»’è‚·‚éB
+    // entity ã‚’å‰Šé™¤ã—ã¦ã‚ˆã„ã‹åˆ¤å®šã™ã‚‹ã€‚
     static bool CanDelete(EntityID entity, Registry& registry);
 
-    // entity ‚ğ•¡»‚µ‚Ä‚æ‚¢‚©”»’è‚·‚éB
+	// entity ã‚’è¤‡è£½ã—ã¦ã‚ˆã„ã‹åˆ¤å®šã™ã‚‹ã€‚
     static bool CanDuplicate(EntityID entity, Registry& registry);
 };

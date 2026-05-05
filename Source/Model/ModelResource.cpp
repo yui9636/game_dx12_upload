@@ -1,3 +1,4 @@
+﻿// Model から描画用 GPU リソースを構築・同期する実装です。
 #include "ModelResource.h"
 
 #include "Model.h"
@@ -8,7 +9,7 @@
 
 namespace
 {
-    // �`�摤�Ŗ��ݒ�� transform �������Ƃ��̈��S�ȏ����l�B
+    // 描画側で未設定の transform を扱うときの安全な初期値。
     DirectX::XMFLOAT4X4 IdentityMatrix()
     {
         return DirectX::XMFLOAT4X4(
@@ -18,7 +19,7 @@ namespace
             0.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    // �e���b�V���̃��[�J�����E�� node �̌��� transform �ō������A�`��p�̃��f�����E�����B
+    // 各メッシュのローカル境界を node の現在 transform で合成し、描画用のモデル境界を作る。
     DirectX::BoundingBox BuildLocalBounds(
         const Model& model,
         const std::vector<ModelResource::MeshResource>& meshResources)
@@ -95,6 +96,7 @@ namespace
         return bounds;
     }
 
+    // 1 メッシュ分の頂点からローカル境界を計算します。
     DirectX::BoundingBox BuildMeshLocalBounds(const Model::Mesh& mesh)
     {
         using namespace DirectX;
@@ -117,9 +119,10 @@ namespace
     }
 }
 
+// Model のメッシュ情報から GPU バッファと描画用メッシュ情報を再構築します。
 void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* factory)
 {
-    // CPU �� Model ���� GPU �o�b�t�@�ƕ`�惁�^�f�[�^����蒼���B
+    // CPU 側 Model から GPU バッファと描画メタデータを作り直す。
     const auto& meshes = model.GetMeshes();
     m_meshResources.clear();
     m_meshResources.reserve(meshes.size());
@@ -158,9 +161,10 @@ void ModelResource::RebuildFromModel(const Model& model, IResourceFactory* facto
     m_localBounds = BuildLocalBounds(model, m_meshResources);
 }
 
+// Model のノード変換や境界情報を既存リソースへ同期します。
 void ModelResource::SyncSceneDataFromModel(const Model& model)
 {
-    // �m�[�h�s��� material �̍ŐV�l�����𓯊����AGPU �o�b�t�@���͍̂Đ������Ȃ��B
+    // ノード行列や material の最新値だけを同期し、GPU バッファ自体は再生成しない。
     const auto& meshes = model.GetMeshes();
     const auto& materials = model.GetMaterials();
     const auto& nodes = model.GetNodes();
@@ -210,9 +214,10 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
     m_localBounds = BuildLocalBounds(model, m_meshResources);
 }
 
+// 指定メッシュの頂点・インデックスバッファを更新します。
 void ModelResource::SyncMeshBuffers(int meshIndex,
     const std::shared_ptr<IBuffer>& vertexBuffer,
-    // CPU ���ō����ւ�������b�V���o�b�t�@��`�掑���֔��f����B
+    // CPU 側で差し替わったメッシュバッファを描画資源へ反映する。
     const std::shared_ptr<IBuffer>& indexBuffer,
     uint32_t vertexStride,
     uint32_t indexCount,
@@ -233,6 +238,7 @@ void ModelResource::SyncMeshBuffers(int meshIndex,
     resource.nodeIndex = nodeIndex;
 }
 
+// 指定メッシュの読み取り専用リソースを取得します。
 const ModelResource::MeshResource* ModelResource::GetMeshResource(int meshIndex) const
 {
     if (meshIndex < 0 || static_cast<size_t>(meshIndex) >= m_meshResources.size()) {
@@ -241,6 +247,7 @@ const ModelResource::MeshResource* ModelResource::GetMeshResource(int meshIndex)
     return &m_meshResources[meshIndex];
 }
 
+// 指定メッシュの編集可能リソースを取得します。
 ModelResource::MeshResource* ModelResource::GetMeshResource(int meshIndex)
 {
     if (meshIndex < 0 || static_cast<size_t>(meshIndex) >= m_meshResources.size()) {
@@ -249,9 +256,10 @@ ModelResource::MeshResource* ModelResource::GetMeshResource(int meshIndex)
     return &m_meshResources[meshIndex];
 }
 
+// 指定メッシュの頂点・インデックスバッファをコマンドリストへバインドします。
 bool ModelResource::BindMeshBuffers(ICommandList* commandList, int meshIndex) const
 {
-    // �`��p�X�� Model �ł͂Ȃ� ModelResource �o�R�� VB/IB ���擾����B
+    // 描画パスは Model ではなく ModelResource 経由で VB/IB を取得する。
     const MeshResource* meshResource = GetMeshResource(meshIndex);
     if (!commandList || !meshResource || !meshResource->vertexBuffer || !meshResource->indexBuffer) {
         return false;
@@ -262,6 +270,7 @@ bool ModelResource::BindMeshBuffers(ICommandList* commandList, int meshIndex) co
     return true;
 }
 
+// 指定メッシュのインデックス数を返します。
 uint32_t ModelResource::GetMeshIndexCount(int meshIndex) const
 {
     const MeshResource* meshResource = GetMeshResource(meshIndex);

@@ -1,10 +1,13 @@
-#include "MaterialAsset.h"
+﻿#include "MaterialAsset.h"
 #include <filesystem>
 
+// ファイルパスを受け取り、既存ファイルがあれば即座に読み込みます。
 MaterialAsset::MaterialAsset(const std::string& filePath) : m_filePath(filePath) {
     Load();
 }
 
+// JSON ファイルからマテリアルの各パラメータを読み込みます。
+// ファイルが存在しない場合は、既定値のまま処理を終了します。
 void MaterialAsset::Load() {
     if (!std::filesystem::exists(m_filePath)) return;
 
@@ -24,6 +27,7 @@ void MaterialAsset::Load() {
     alphaMode = json.Get<int>("alphaMode", 0);
 }
 
+// 現在保持しているマテリアルの各パラメータを JSON ファイルへ保存します。
 void MaterialAsset::Save() {
     JSONManager json(m_filePath);
 

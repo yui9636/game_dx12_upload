@@ -1,9 +1,11 @@
-#pragma once
+﻿#pragma once
+
+// Entity が参照するビヘイビアツリーアセットのパスを保持するコンポーネント定義。
 #include <string>
 
-// Reference to a serialized BehaviorTreeAsset (.bt) file.
-// BehaviorTreeSystem loads this lazily and caches it.
+// ビヘイビアツリー全体を保持するアセットデータ。
 struct BehaviorTreeAssetComponent
 {
-    std::string assetPath;     // e.g. "Data/AI/BehaviorTrees/Knight.bt"
+    // 読み込む .bt ファイルのパス。
+    std::string assetPath;
 };

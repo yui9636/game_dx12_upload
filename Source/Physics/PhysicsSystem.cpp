@@ -1,12 +1,12 @@
-#include "PhysicsSystem.h"
+﻿#include "PhysicsSystem.h"
 #include <System\Query.h>
-
 
 using namespace DirectX;
 
+// Jolt の物理更新を行い、各 Body の位置・回転を TransformComponent に反映する。
 void PhysicsSystem::Update(Registry& registry, float deltaTime) {
     auto& physicsMgr = PhysicsManager::Instance();
-    
+
     physicsMgr.Update(deltaTime);
 
     JPH::BodyInterface& bodyInterface = physicsMgr.GetBodyInterface();
@@ -14,7 +14,7 @@ void PhysicsSystem::Update(Registry& registry, float deltaTime) {
     Query<PhysicsComponent, TransformComponent> query(registry);
 
     query.ForEach([&](const PhysicsComponent& phys, TransformComponent& trans) {
-        
+
         JPH::RVec3 joltPos = bodyInterface.GetPosition(phys.bodyID);
         JPH::Quat joltRot = bodyInterface.GetRotation(phys.bodyID);
 

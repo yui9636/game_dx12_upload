@@ -1,9 +1,11 @@
+﻿// 敵キャラクター設定アセットの JSON 入出力とプリセット生成を実装するファイル。
 #include "EnemyConfigAsset.h"
 
 #include <fstream>
 
 #include <nlohmann/json.hpp>
 
+// 敵設定アセットを JSON ファイルから読み込む。
 bool EnemyConfigAsset::LoadFromFile(const std::filesystem::path& path)
 {
     std::ifstream ifs(path);
@@ -31,6 +33,7 @@ bool EnemyConfigAsset::LoadFromFile(const std::filesystem::path& path)
     return true;
 }
 
+// 敵設定アセットを JSON ファイルへ保存する。
 bool EnemyConfigAsset::SaveToFile(const std::filesystem::path& path) const
 {
     nlohmann::json j;
@@ -60,6 +63,7 @@ bool EnemyConfigAsset::SaveToFile(const std::filesystem::path& path) const
     return true;
 }
 
+// 攻撃型騎士の標準設定プリセットを生成する。
 EnemyConfigAsset EnemyConfigAsset::CreateAggressiveKnight()
 {
     EnemyConfigAsset c;

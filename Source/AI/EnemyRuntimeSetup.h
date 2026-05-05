@@ -1,38 +1,41 @@
-#pragma once
+﻿#pragma once
+
+// 敵 Entity のランタイム構築・修復用ヘルパー関数を宣言するファイル。
 
 #include <DirectXMath.h>
 
 #include "Entity/Entity.h"
 
 class Registry;
+// 敵 1 種類分のアセット参照と基本ステータスをまとめた設定アセット。
 struct EnemyConfigAsset;
 
 struct StateMachineAsset;
 
+// 敵ランタイム構築用の関数群をまとめる名前空間。
 namespace EnemyRuntimeSetup
 {
-    // Ensure all enemy entities have the components needed for AI to drive them.
-    // Symmetric to PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents.
+    // EnemyTag を持つ全 Entity に敵ランタイム構成を適用する。
     void EnsureAllEnemyRuntimeComponents(Registry& registry, bool resetRuntimeState);
 
-    // Add the components for one enemy entity.
+    // 敵として動作するために必要な全ランタイムコンポーネントを揃える。
     void EnsureEnemyRuntimeComponents(Registry& registry, EntityID entity);
 
-    // Add minimal NPC components (Locomotion + ActionState + StateMachine,
-    // no AI / Perception / Aggro). Used by Setup Full NPC.
+    // NPC として動作するための最小ランタイム構成を揃える。
     void EnsureNPCRuntimeComponents(Registry& registry, EntityID entity);
 
-    // Reset BT runtime + Aggro state for one enemy entity.
+    // 敵 AI の一時状態・ヘイト・移動入力を初期化する。
     void ResetEnemyRuntimeState(Registry& registry, EntityID entity);
 
-    // Spawn one enemy entity from a config bundle. Returns NULL_ID on failure.
+    // EnemyConfigAsset の内容から敵 Entity を生成して初期化する。
     EntityID SpawnFromConfig(Registry& registry,
                              const EnemyConfigAsset& config,
                              const DirectX::XMFLOAT3& position);
 }
 
-// Free helpers used by PlayerEditorPanel toolbar buttons (v2.0 ActorEditor).
-// Declared at namespace scope so PlayerEditor can reach them via extern decl.
+// エディタ用に Enemy の標準構成と StateMachine を作成する。
 void EnemyEditorSetupFullEnemy(Registry& registry, EntityID entity, StateMachineAsset& sm);
+// エディタ操作から NPC Entity をフルセットアップする。
 void EnemyEditorSetupFullNPC  (Registry& registry, EntityID entity, StateMachineAsset& sm);
+// エディタ操作から敵ランタイムコンポーネントの不足を修復する。
 void EnemyEditorRepairRuntime (Registry& registry, EntityID entity);

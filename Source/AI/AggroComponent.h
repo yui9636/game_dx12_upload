@@ -1,12 +1,18 @@
-#pragma once
+﻿#pragma once
+
+// AI が現在狙っている対象とヘイト状態を保持するコンポーネント定義。
 
 #include "Entity/Entity.h"
 
-// Aggro / threat state for an AI entity.
+// AI の現在ターゲットとヘイト状態を保持するコンポーネント。
 struct AggroComponent
 {
+    // 現在狙っているターゲット Entity。
     EntityID currentTarget   = Entity::NULL_ID;
-    float    threat          = 0.0f;     // 0..1
-    float    timeSinceSighted = 0.0f;    // sec; ticks while target is not in sight this frame
-    float    loseTargetAfter  = 5.0f;    // sec; clear currentTarget after this much un-sighted time
+    // 現在ターゲットへのヘイト量。
+    float    threat          = 0.0f;
+    // 最後に視認してからの経過時間。
+    float    timeSinceSighted = 0.0f;
+    // この秒数以上見失ったらターゲットを解除する。
+    float    loseTargetAfter  = 5.0f;
 };

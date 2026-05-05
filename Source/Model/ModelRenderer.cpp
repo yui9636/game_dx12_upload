@@ -1,3 +1,4 @@
+﻿// モデル描画キューを実際の描画コマンドへ変換するレンダラ実装です。
 #include "ModelRenderer.h"
 #include <algorithm>
 #include "ModelResource.h"
@@ -17,8 +18,10 @@
 #include "RHI/DX12/DX12CommandList.h"
 #include "RenderContext/IndirectDrawCommon.h"
 
+// ModelRenderer の破棄を既定処理に任せます。
 ModelRenderer::~ModelRenderer() = default;
 
+// 描画に必要なシェーダーとスケルトン用定数バッファを初期化します。
 ModelRenderer::ModelRenderer(IResourceFactory* factory)
 {
     skeletonConstantBuffer = factory->CreateBuffer(sizeof(CbSkeleton), BufferType::Constant);
@@ -27,6 +30,7 @@ ModelRenderer::ModelRenderer(IResourceFactory* factory)
     shaders[static_cast<int>(ShaderId::GBufferPBR)] = std::make_unique<GBufferPBRShader>(factory);
 }
 
+// 1 つのモデル描画要求を描画キューへ積みます。
 void ModelRenderer::Draw(ShaderId shaderId, std::shared_ptr<ModelResource> modelResource,
     const DirectX::XMFLOAT4X4& worldMatrix, const DirectX::XMFLOAT4X4& prevWorldMatrix,
     const DirectX::XMFLOAT4& baseColor, float metallic, float roughness, float emissive,
@@ -48,6 +52,7 @@ void ModelRenderer::Draw(ShaderId shaderId, std::shared_ptr<ModelResource> model
     drawInfo.rasterizerState = raster;
 }
 
+// メッシュのボーン情報からスケルトン用定数バッファ内容を作ります。
 void ModelRenderer::FillSkeletonConstantBuffer(const ModelResource::MeshResource& meshResource,
     const DirectX::XMFLOAT4X4& worldMatrix,
     const DirectX::XMFLOAT4X4& prevWorldMatrix,
@@ -78,6 +83,7 @@ void ModelRenderer::FillSkeletonConstantBuffer(const ModelResource::MeshResource
     }
 }
 
+// スケルトン用定数バッファを GPU へ転送してシェーダーへ設定します。
 void ModelRenderer::ApplySkeletonConstantBuffer(const RenderContext& rc, const CbSkeleton& cbSkeleton) const
 {
     const bool isDX12 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12;
@@ -89,6 +95,7 @@ void ModelRenderer::ApplySkeletonConstantBuffer(const RenderContext& rc, const C
     }
 }
 
+// MaterialAsset の上書き値を使用中シェーダーへ反映します。
 void ModelRenderer::ApplyMaterialOverrides(ShaderId shaderId, Shader* shader,
     const DirectX::XMFLOAT4& baseColor,
     float metallic,
@@ -106,12 +113,14 @@ void ModelRenderer::ApplyMaterialOverrides(ShaderId shaderId, Shader* shader,
     }
 }
 
+// 登録済みの描画キューを不透明・透明の順に描画します。
 void ModelRenderer::Render(const RenderContext& rc, const RenderQueue& queue)
 {
     RenderOpaque(rc);
     RenderTransparent(rc);
 }
 
+// GPU Driven 用に準備済みの不透明描画コマンドを描画します。
 void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShaderId, ShaderId forcedShaderId)
 {
     if (!rc.HasPreparedOpaqueCommands()) {
@@ -304,6 +313,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
     }
 }
 
+// 通常の不透明モデル描画を実行します。
 void ModelRenderer::RenderOpaque(const RenderContext& rc)
 {
     const bool isDX12 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12;
@@ -400,6 +410,7 @@ void ModelRenderer::RenderOpaque(const RenderContext& rc)
     }
 }
 
+// 透明モデルをカメラ距離順に並べて描画します。
 void ModelRenderer::RenderTransparent(const RenderContext& rc)
 {
     const bool isDX12 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12;
@@ -459,6 +470,7 @@ void ModelRenderer::RenderTransparent(const RenderContext& rc)
     }
 }
 
+// IBL 用の拡散・鏡面反射テクスチャを設定します。
 void ModelRenderer::SetIBL(const std::string& diffusePath, const std::string& specularPath)
 {
     if (!diffusePath.empty()) {

@@ -1,3 +1,5 @@
+﻿// 音声アセット管理システムの実装です。
+// 音声ファイルのパス解決、対応拡張子判定、メタ情報取得、キャッシュ管理を行います。
 #include "AudioAssetSystem.h"
 
 #include <algorithm>
@@ -9,8 +11,10 @@
 
 namespace
 {
+    // このサイズ以上の音声ファイルは、ストリーミング再生向けとして扱います。
     constexpr uint64_t kStreamingThresholdBytes = 2ull * 1024ull * 1024ull;
 
+    // 音声ファイルの指定パスを、実際にアクセス可能なファイルシステムパスへ解決します。
     std::filesystem::path ResolveAudioFilesystemPath(const std::string& clipPath)
     {
         if (clipPath.empty()) {
@@ -31,6 +35,7 @@ namespace
         return (std::filesystem::current_path(ec) / path).lexically_normal();
     }
 
+    // キャッシュキーとして使いやすいよう、音声ファイルパスを正規化します。
     std::string NormalizeAudioClipPath(const std::string& clipPath)
     {
         if (clipPath.empty()) {
@@ -47,6 +52,7 @@ namespace
         return ec ? path.string() : canonical.string();
     }
 
+    // 拡張子比較用に文字列を小文字化します。
     std::string ToLower(std::string value)
     {
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -56,12 +62,14 @@ namespace
     }
 }
 
+// 対応している音声ファイル拡張子かどうかを判定します。
 bool AudioAssetSystem::IsSupportedClipPath(const std::string& clipPath) const
 {
     const std::string ext = ToLower(std::filesystem::path(clipPath).extension().string());
     return ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac";
 }
 
+// 音声クリップのメタ情報を取得し、必要であればキャッシュへ追加します。
 const AudioClipAsset* AudioAssetSystem::GetClip(const std::string& clipPath)
 {
     const std::string normalizedPath = NormalizeAudioClipPath(clipPath);
@@ -79,6 +87,7 @@ const AudioClipAsset* AudioAssetSystem::GetClip(const std::string& clipPath)
     return &insertIt->second;
 }
 
+// 取得に失敗しても、呼び出し側が扱える最低限のメタ情報を返します。
 AudioClipAsset AudioAssetSystem::GetClipOrDefault(const std::string& clipPath)
 {
     if (const AudioClipAsset* clip = GetClip(clipPath)) {
@@ -91,16 +100,19 @@ AudioClipAsset AudioAssetSystem::GetClipOrDefault(const std::string& clipPath)
     return fallback;
 }
 
+// キャッシュ済みの音声メタ情報を全て削除します。
 void AudioAssetSystem::ClearCache()
 {
     m_clipCache.clear();
 }
 
+// キャッシュ済みクリップ数を返します。
 size_t AudioAssetSystem::GetCachedClipCount() const
 {
     return m_clipCache.size();
 }
 
+// キャッシュ済みクリップ一覧をパス順に並べて返します。
 std::vector<AudioClipAsset> AudioAssetSystem::GetCachedClips() const
 {
     std::vector<AudioClipAsset> clips;
@@ -115,6 +127,7 @@ std::vector<AudioClipAsset> AudioAssetSystem::GetCachedClips() const
     return clips;
 }
 
+// miniaudio の decoder を使い、音声ファイルの長さやチャンネル数などを読み取ります。
 AudioClipAsset AudioAssetSystem::BuildClipMetadata(const std::string& clipPath) const
 {
     AudioClipAsset clip;

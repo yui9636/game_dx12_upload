@@ -1,3 +1,5 @@
+﻿// このファイルは UTF-8 BOM 付きで保存してください。
+// Prefab / Scene の JSON 保存・読み込み・適用処理を実装します。
 #include "PrefabSystem.h"
 
 #include <fstream>
@@ -58,14 +60,19 @@
 
 namespace
 {
+    // この無名 namespace には、この cpp 内部だけで使う補助関数をまとめます。
     using json = nlohmann::json;
 
+    // JSON 型を短い名前で扱うための別名です。
+
+    // 指定した key にプリミティブ値を書き込みます。
     template<typename T>
     void WritePrimitive(json& out, const char* key, const T& value)
     {
         out[key] = value;
     }
 
+    // 指定した key が存在する場合だけ値を読み込みます。
     template<typename T>
     bool TryReadPrimitive(const json& in, const char* key, T& value)
     {
@@ -76,6 +83,7 @@ namespace
         return true;
     }
 
+    // EntitySnapshot の 1 ノードを JSON 形式へ変換します。
     json SerializeHierarchyNode(const EntitySnapshot::Node& node,
         const std::unordered_map<EntityID, uint32_t>& sourceToLocal)
     {
@@ -92,14 +100,17 @@ namespace
             components[name] = value;
             };
 
+        // 階層の有効状態を JSON へ保存します。
         if (const auto& hierarchy = std::get<std::optional<HierarchyComponent>>(node.components); hierarchy.has_value()) {
             writeComponent("HierarchyComponent", json{ {"isActive", hierarchy->isActive} });
         }
 
+        // entity 名を JSON へ保存します。
         if (const auto& name = std::get<std::optional<NameComponent>>(node.components); name.has_value()) {
             writeComponent("NameComponent", json{ {"name", name->name} });
         }
 
+        // 3D Transformを JSON へ保存します。
         if (const auto& transform = std::get<std::optional<TransformComponent>>(node.components); transform.has_value()) {
             writeComponent("TransformComponent", json{
                 {"localPosition", transform->localPosition},
@@ -108,6 +119,7 @@ namespace
                 });
         }
 
+        // 2D UI 用 RectTransformを JSON へ保存します。
         if (const auto& rect = std::get<std::optional<RectTransformComponent>>(node.components); rect.has_value()) {
             writeComponent("RectTransformComponent", json{
                 {"anchoredPosition", rect->anchoredPosition},
@@ -120,6 +132,7 @@ namespace
                 });
         }
 
+        // 2D UI の表示・操作設定を JSON へ保存します。
         if (const auto& canvas = std::get<std::optional<CanvasItemComponent>>(node.components); canvas.has_value()) {
             writeComponent("CanvasItemComponent", json{
                 {"sortingLayer", canvas->sortingLayer},
@@ -131,6 +144,7 @@ namespace
                 });
         }
 
+        // 2D Sprite の画像と色を JSON へ保存します。
         if (const auto& sprite = std::get<std::optional<SpriteComponent>>(node.components); sprite.has_value()) {
             writeComponent("SpriteComponent", json{
                 {"textureAssetPath", sprite->textureAssetPath},
@@ -138,6 +152,7 @@ namespace
                 });
         }
 
+        // UI Button の識別子と有効状態を JSON へ保存します。
         if (const auto& btn = std::get<std::optional<UIButtonComponent>>(node.components); btn.has_value()) {
             writeComponent("UIButtonComponent", json{
                 {"buttonId", btn->buttonId},
@@ -145,6 +160,7 @@ namespace
                 });
         }
 
+        // Actor 種別と勢力情報を JSON へ保存します。
         if (const auto& actor = std::get<std::optional<ActorTypeComponent>>(node.components); actor.has_value()) {
             writeComponent("ActorTypeComponent", json{
                 {"type",      static_cast<int>(actor->type)},
@@ -152,12 +168,14 @@ namespace
                 });
         }
 
+        // Enemy 種別タグを JSON へ保存します。
         if (const auto& tag = std::get<std::optional<EnemyTagComponent>>(node.components); tag.has_value()) {
             writeComponent("EnemyTagComponent", json{
                 {"enemyKindId", tag->enemyKindId}
                 });
         }
 
+        // 2D Text 表示情報を JSON へ保存します。
         if (const auto& text = std::get<std::optional<TextComponent>>(node.components); text.has_value()) {
             writeComponent("TextComponent", json{
                 {"text", text->text},
@@ -170,6 +188,7 @@ namespace
                 });
         }
 
+        // 音源設定を JSON へ保存します。
         if (const auto& audioEmitter = std::get<std::optional<AudioEmitterComponent>>(node.components); audioEmitter.has_value()) {
             writeComponent("AudioEmitterComponent", json{
                 {"clipAssetPath", audioEmitter->clipAssetPath},
@@ -186,6 +205,7 @@ namespace
                 });
         }
 
+        // Audio bus 送信設定を JSON へ保存します。
         if (const auto& audioBusSend = std::get<std::optional<AudioBusSendComponent>>(node.components); audioBusSend.has_value()) {
             writeComponent("AudioBusSendComponent", json{
                 {"bus", static_cast<int>(audioBusSend->bus)},
@@ -193,6 +213,7 @@ namespace
                 });
         }
 
+        // Audio listener 設定を JSON へ保存します。
         if (const auto& audioListener = std::get<std::optional<AudioListenerComponent>>(node.components); audioListener.has_value()) {
             writeComponent("AudioListenerComponent", json{
                 {"isPrimary", audioListener->isPrimary},
@@ -200,6 +221,7 @@ namespace
                 });
         }
 
+        // 全体 Audio 設定を JSON へ保存します。
         if (const auto& audioSettings = std::get<std::optional<AudioSettingsComponent>>(node.components); audioSettings.has_value()) {
             writeComponent("AudioSettingsComponent", json{
                 {"masterVolume", audioSettings->masterVolume},
@@ -211,6 +233,7 @@ namespace
                 });
         }
 
+        // 2D Camera 設定を JSON へ保存します。
         if (const auto& camera2D = std::get<std::optional<Camera2DComponent>>(node.components); camera2D.has_value()) {
             writeComponent("Camera2DComponent", json{
                 {"orthographicSize", camera2D->orthographicSize},
@@ -221,6 +244,7 @@ namespace
                 });
         }
 
+        // Mesh 表示設定を JSON へ保存します。
         if (const auto& mesh = std::get<std::optional<MeshComponent>>(node.components); mesh.has_value()) {
             writeComponent("MeshComponent", json{
                 {"modelFilePath", mesh->modelFilePath},
@@ -230,12 +254,14 @@ namespace
                 });
         }
 
+        // Material 参照を JSON へ保存します。
         if (const auto& material = std::get<std::optional<MaterialComponent>>(node.components); material.has_value()) {
             writeComponent("MaterialComponent", json{
                 {"materialAssetPath", material->materialAssetPath}
                 });
         }
 
+        // Light 設定を JSON へ保存します。
         if (const auto& light = std::get<std::optional<LightComponent>>(node.components); light.has_value()) {
             writeComponent("LightComponent", json{
                 {"type", static_cast<int>(light->type)},
@@ -246,6 +272,7 @@ namespace
                 });
         }
 
+        // Environment / IBL 設定を JSON へ保存します。
         if (const auto& environment = std::get<std::optional<EnvironmentComponent>>(node.components); environment.has_value()) {
             writeComponent("EnvironmentComponent", json{
                 {"enableSkybox", environment->enableSkybox},
@@ -255,6 +282,7 @@ namespace
                 });
         }
 
+        // Grid 表示設定を JSON へ保存します。
         if (const auto& grid = std::get<std::optional<GridComponent>>(node.components); grid.has_value()) {
             writeComponent("GridComponent", json{
                 {"subdivisions", grid->subdivisions},
@@ -264,6 +292,7 @@ namespace
                 });
         }
 
+        // Gizmo 表示設定を JSON へ保存します。
         if (const auto& gizmo = std::get<std::optional<GizmoComponent>>(node.components); gizmo.has_value()) {
             writeComponent("GizmoComponent", json{
                 {"shape", static_cast<int>(gizmo->shape)},
@@ -275,6 +304,7 @@ namespace
                 });
         }
 
+        // Shadow 設定を JSON へ保存します。
         if (const auto& shadow = std::get<std::optional<ShadowSettingsComponent>>(node.components); shadow.has_value()) {
             writeComponent("ShadowSettingsComponent", json{
                 {"enableShadow", shadow->enableShadow},
@@ -282,6 +312,7 @@ namespace
                 });
         }
 
+        // PostEffect 設定を JSON へ保存します。
         if (const auto& post = std::get<std::optional<PostEffectComponent>>(node.components); post.has_value()) {
             writeComponent("PostEffectComponent", json{
                 {"enableComputeCulling", post->enableComputeCulling},
@@ -311,6 +342,7 @@ namespace
                 });
         }
 
+        // Reflection Probe 設定を JSON へ保存します。
         if (const auto& probe = std::get<std::optional<ReflectionProbeComponent>>(node.components); probe.has_value()) {
             writeComponent("ReflectionProbeComponent", json{
                 {"position", probe->position},
@@ -318,6 +350,7 @@ namespace
                 });
         }
 
+        // Free camera 操作設定を JSON へ保存します。
         if (const auto& freeCam = std::get<std::optional<CameraFreeControlComponent>>(node.components); freeCam.has_value()) {
             writeComponent("CameraFreeControlComponent", json{
                 {"moveSpeed", freeCam->moveSpeed},
@@ -327,6 +360,7 @@ namespace
                 });
         }
 
+        // Third person camera 操作設定を JSON へ保存します。
         if (const auto& tpv = std::get<std::optional<CameraTPVControlComponent>>(node.components); tpv.has_value()) {
             json value{
                 {"distance", tpv->distance},
@@ -342,6 +376,7 @@ namespace
             writeComponent("CameraTPVControlComponent", value);
         }
 
+        // LookAt camera 設定を JSON へ保存します。
         if (const auto& lookAt = std::get<std::optional<CameraLookAtComponent>>(node.components); lookAt.has_value()) {
             json value{
                 {"up", lookAt->up}
@@ -353,6 +388,7 @@ namespace
             writeComponent("CameraLookAtComponent", value);
         }
 
+        // Camera lens 設定を JSON へ保存します。
         if (const auto& lens = std::get<std::optional<CameraLensComponent>>(node.components); lens.has_value()) {
             writeComponent("CameraLensComponent", json{
                 {"fovY", lens->fovY},
@@ -362,10 +398,12 @@ namespace
                 });
         }
 
+        // Main camera タグを JSON へ保存します。
         if (const auto& mainTag = std::get<std::optional<CameraMainTagComponent>>(node.components); mainTag.has_value()) {
             writeComponent("CameraMainTagComponent", json::object());
         }
 
+        // Camera shake 設定を JSON へ保存します。
         if (const auto& shake = std::get<std::optional<CameraShakeComponent>>(node.components); shake.has_value()) {
             writeComponent("CameraShakeComponent", json{
                 {"amplitude", shake->amplitude},
@@ -375,6 +413,7 @@ namespace
                 });
         }
 
+        // Collider 設定を JSON へ保存します。
         if (const auto& collider = std::get<std::optional<ColliderComponent>>(node.components); collider.has_value()) {
             json colliderJson;
             colliderJson["enabled"] = collider->enabled;
@@ -400,6 +439,7 @@ namespace
             writeComponent("ColliderComponent", colliderJson);
         }
 
+        // Node socket 接続情報を JSON へ保存します。
         if (const auto& sockets = std::get<std::optional<NodeSocketComponent>>(node.components); sockets.has_value()) {
             json value;
             value["sockets"] = json::array();
@@ -415,6 +455,7 @@ namespace
             writeComponent("NodeSocketComponent", value);
         }
 
+        // Input binding 設定を JSON へ保存します。
         if (const auto& inputBinding = std::get<std::optional<InputBindingComponent>>(node.components); inputBinding.has_value()) {
             writeComponent("InputBindingComponent", json{
                 {"bindingProfilePath", inputBinding->bindingProfilePath},
@@ -422,10 +463,12 @@ namespace
                 });
         }
 
+        // Input action map assetを JSON へ保存します。
         if (const auto& inputActionMap = std::get<std::optional<InputActionMapComponent>>(node.components); inputActionMap.has_value()) {
             writeComponent("InputActionMapComponent", InputActionMapAsset::ToJson(inputActionMap->asset));
         }
 
+        // Input context 設定を JSON へ保存します。
         if (const auto& inputContext = std::get<std::optional<InputContextComponent>>(node.components); inputContext.has_value()) {
             json value{
                 {"priority", static_cast<int>(inputContext->priority)},
@@ -443,6 +486,7 @@ namespace
             writeComponent("InputContextComponent", value);
         }
 
+        // Input user 設定を JSON へ保存します。
         if (const auto& inputUser = std::get<std::optional<InputUserComponent>>(node.components); inputUser.has_value()) {
             writeComponent("InputUserComponent", json{
                 {"userId", inputUser->userId},
@@ -453,6 +497,7 @@ namespace
                 });
         }
 
+        // Character physics 設定を JSON へ保存します。
         if (const auto& characterPhysics = std::get<std::optional<CharacterPhysicsComponent>>(node.components); characterPhysics.has_value()) {
             writeComponent("CharacterPhysicsComponent", json{
                 {"gravity", characterPhysics->gravity},
@@ -464,6 +509,7 @@ namespace
                 });
         }
 
+        // Health 値を JSON へ保存します。
         if (const auto& health = std::get<std::optional<HealthComponent>>(node.components); health.has_value()) {
             writeComponent("HealthComponent", json{
                 {"health", health->health},
@@ -471,6 +517,7 @@ namespace
                 });
         }
 
+        // Stamina 値を JSON へ保存します。
         if (const auto& stamina = std::get<std::optional<StaminaComponent>>(node.components); stamina.has_value()) {
             writeComponent("StaminaComponent", json{
                 {"current", stamina->current},
@@ -481,6 +528,7 @@ namespace
                 });
         }
 
+        // Action database 設定を JSON へ保存します。
         if (const auto& actionDatabase = std::get<std::optional<ActionDatabaseComponent>>(node.components); actionDatabase.has_value()) {
             json value;
             value["nodeCount"] = actionDatabase->nodeCount;
@@ -505,16 +553,19 @@ namespace
             writeComponent("ActionDatabaseComponent", value);
         }
 
+        // Player タグを JSON へ保存します。
         if (const auto& playerTag = std::get<std::optional<PlayerTagComponent>>(node.components); playerTag.has_value()) {
             writeComponent("PlayerTagComponent", json{
                 {"playerId", playerTag->playerId}
                 });
         }
 
+        // StateMachine assetを JSON へ保存します。
         if (const auto& stateMachineAsset = std::get<std::optional<StateMachineAssetComponent>>(node.components); stateMachineAsset.has_value()) {
             writeComponent("StateMachineAssetComponent", StateMachineAssetSerializer::ToJson(stateMachineAsset->asset));
         }
 
+        // StateMachine runtime paramsを JSON へ保存します。
         if (const auto& stateMachine = std::get<std::optional<StateMachineParamsComponent>>(node.components); stateMachine.has_value()) {
             json value;
             value["params"] = json::array();
@@ -527,6 +578,7 @@ namespace
             writeComponent("StateMachineParamsComponent", value);
         }
 
+        // Timeline libraryを JSON へ保存します。
         if (const auto& timelineLibrary = std::get<std::optional<TimelineLibraryComponent>>(node.components); timelineLibrary.has_value()) {
             json value;
             value["nextTimelineId"] = timelineLibrary->nextTimelineId;
@@ -537,16 +589,19 @@ namespace
             writeComponent("TimelineLibraryComponent", value);
         }
 
+        // 集めた component 群を node JSON に格納します。
         out["components"] = std::move(components);
         return out;
     }
 
+    // Snapshot 内の optional component に値を格納します。
     template<typename T>
     void SetOptional(EntitySnapshot::ComponentStorage& storage, T value)
     {
         std::get<std::optional<T>>(storage) = std::move(value);
     }
 
+    // JSON の 1 ノードから EntitySnapshot::Node を復元します。
     void DeserializeHierarchyNode(const json& in, EntitySnapshot::Node& node)
     {
 
@@ -555,23 +610,27 @@ namespace
             ? in.at("parent").get<uint32_t>()
             : EntitySnapshot::kInvalidLocalID;
 
+        // 復元前の仮 entity として localID を使います。
         node.sourceEntity = Entity::Create(node.localID, 0);
         node.externalParent = Entity::NULL_ID;
 
         const json components = in.value("components", json::object());
 
         HierarchyComponent hierarchyComponent{};
+        // 階層の有効状態を JSON から読み込みます。
         if (components.contains("HierarchyComponent")) {
             hierarchyComponent.isActive = components["HierarchyComponent"].value("isActive", hierarchyComponent.isActive);
         }
         SetOptional(node.components, hierarchyComponent);
 
+        // entity 名を JSON から読み込みます。
         if (components.contains("NameComponent")) {
             NameComponent component;
             component.name = components["NameComponent"].value("name", "New Entity");
             SetOptional(node.components, component);
         }
 
+        // 3D Transformを JSON から読み込みます。
         if (components.contains("TransformComponent")) {
             TransformComponent component;
             const json& value = components["TransformComponent"];
@@ -583,6 +642,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 2D UI 用 RectTransformを JSON から読み込みます。
         if (components.contains("RectTransformComponent")) {
             RectTransformComponent component;
             const json& value = components["RectTransformComponent"];
@@ -596,6 +656,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 2D UI の表示・操作設定を JSON から読み込みます。
         if (components.contains("CanvasItemComponent")) {
             CanvasItemComponent component;
             const json& value = components["CanvasItemComponent"];
@@ -608,6 +669,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 2D Sprite の画像と色を JSON から読み込みます。
         if (components.contains("SpriteComponent")) {
             SpriteComponent component;
             const json& value = components["SpriteComponent"];
@@ -616,6 +678,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // UI Button の識別子と有効状態を JSON から読み込みます。
         if (components.contains("UIButtonComponent")) {
             UIButtonComponent component;
             const json& value = components["UIButtonComponent"];
@@ -624,6 +687,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Actor 種別と勢力情報を JSON から読み込みます。
         if (components.contains("ActorTypeComponent")) {
             ActorTypeComponent component;
             const json& value = components["ActorTypeComponent"];
@@ -632,6 +696,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Enemy 種別タグを JSON から読み込みます。
         if (components.contains("EnemyTagComponent")) {
             EnemyTagComponent component;
             const json& value = components["EnemyTagComponent"];
@@ -639,6 +704,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 2D Text 表示情報を JSON から読み込みます。
         if (components.contains("TextComponent")) {
             TextComponent component;
             const json& value = components["TextComponent"];
@@ -652,6 +718,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 音源設定を JSON から読み込みます。
         if (components.contains("AudioEmitterComponent")) {
             AudioEmitterComponent component;
             const json& value = components["AudioEmitterComponent"];
@@ -669,6 +736,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Audio bus 送信設定を JSON から読み込みます。
         if (components.contains("AudioBusSendComponent")) {
             AudioBusSendComponent component;
             const json& value = components["AudioBusSendComponent"];
@@ -677,6 +745,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Audio listener 設定を JSON から読み込みます。
         if (components.contains("AudioListenerComponent")) {
             AudioListenerComponent component;
             const json& value = components["AudioListenerComponent"];
@@ -685,6 +754,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 全体 Audio 設定を JSON から読み込みます。
         if (components.contains("AudioSettingsComponent")) {
             AudioSettingsComponent component;
             const json& value = components["AudioSettingsComponent"];
@@ -697,6 +767,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // 2D Camera 設定を JSON から読み込みます。
         if (components.contains("Camera2DComponent")) {
             Camera2DComponent component;
             const json& value = components["Camera2DComponent"];
@@ -708,6 +779,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Mesh 表示設定を JSON から読み込みます。
         if (components.contains("MeshComponent")) {
             MeshComponent component;
             const json& value = components["MeshComponent"];
@@ -718,12 +790,14 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Material 参照を JSON から読み込みます。
         if (components.contains("MaterialComponent")) {
             MaterialComponent component;
             component.materialAssetPath = components["MaterialComponent"].value("materialAssetPath", component.materialAssetPath);
             SetOptional(node.components, component);
         }
 
+        // Light 設定を JSON から読み込みます。
         if (components.contains("LightComponent")) {
             LightComponent component;
             const json& value = components["LightComponent"];
@@ -735,6 +809,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Environment / IBL 設定を JSON から読み込みます。
         if (components.contains("EnvironmentComponent")) {
             EnvironmentComponent component;
             const json& value = components["EnvironmentComponent"];
@@ -745,6 +820,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Grid 表示設定を JSON から読み込みます。
         if (components.contains("GridComponent")) {
             GridComponent component;
             const json& value = components["GridComponent"];
@@ -755,6 +831,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Gizmo 表示設定を JSON から読み込みます。
         if (components.contains("GizmoComponent")) {
             GizmoComponent component;
             const json& value = components["GizmoComponent"];
@@ -767,6 +844,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Shadow 設定を JSON から読み込みます。
         if (components.contains("ShadowSettingsComponent")) {
             ShadowSettingsComponent component;
             const json& value = components["ShadowSettingsComponent"];
@@ -775,6 +853,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // PostEffect 設定を JSON から読み込みます。
         if (components.contains("PostEffectComponent")) {
             PostEffectComponent component;
             const json& value = components["PostEffectComponent"];
@@ -805,6 +884,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Reflection Probe 設定を JSON から読み込みます。
         if (components.contains("ReflectionProbeComponent")) {
             ReflectionProbeComponent component;
             const json& value = components["ReflectionProbeComponent"];
@@ -814,6 +894,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Free camera 操作設定を JSON から読み込みます。
         if (components.contains("CameraFreeControlComponent")) {
             CameraFreeControlComponent component;
             const json& value = components["CameraFreeControlComponent"];
@@ -825,6 +906,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Third person camera 操作設定を JSON から読み込みます。
         if (components.contains("CameraTPVControlComponent")) {
             CameraTPVControlComponent component;
             const json& value = components["CameraTPVControlComponent"];
@@ -839,6 +921,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // LookAt camera 設定を JSON から読み込みます。
         if (components.contains("CameraLookAtComponent")) {
             CameraLookAtComponent component;
             const json& value = components["CameraLookAtComponent"];
@@ -849,6 +932,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Camera lens 設定を JSON から読み込みます。
         if (components.contains("CameraLensComponent")) {
             CameraLensComponent component;
             const json& value = components["CameraLensComponent"];
@@ -859,10 +943,12 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Main camera タグを JSON から読み込みます。
         if (components.contains("CameraMainTagComponent")) {
             SetOptional(node.components, CameraMainTagComponent{});
         }
 
+        // Camera shake 設定を JSON から読み込みます。
         if (components.contains("CameraShakeComponent")) {
             CameraShakeComponent component;
             const json& value = components["CameraShakeComponent"];
@@ -875,6 +961,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Collider 設定を JSON から読み込みます。
         if (components.contains("ColliderComponent")) {
             ColliderComponent component;
             const json& value = components["ColliderComponent"];
@@ -919,6 +1006,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Node socket 接続情報を JSON から読み込みます。
         if (components.contains("NodeSocketComponent")) {
             NodeSocketComponent component;
             const json& value = components["NodeSocketComponent"];
@@ -939,6 +1027,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Input binding 設定を JSON から読み込みます。
         if (components.contains("InputBindingComponent")) {
             InputBindingComponent component;
             const json& value = components["InputBindingComponent"];
@@ -947,6 +1036,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Input action map assetを JSON から読み込みます。
         if (components.contains("InputActionMapComponent")) {
             InputActionMapComponent component;
             if (InputActionMapAsset::FromJson(components["InputActionMapComponent"], component.asset)) {
@@ -954,6 +1044,7 @@ namespace
             }
         }
 
+        // Input context 設定を JSON から読み込みます。
         if (components.contains("InputContextComponent")) {
             InputContextComponent component;
             const json& value = components["InputContextComponent"];
@@ -976,6 +1067,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Input user 設定を JSON から読み込みます。
         if (components.contains("InputUserComponent")) {
             InputUserComponent component;
             const json& value = components["InputUserComponent"];
@@ -987,6 +1079,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Character physics 設定を JSON から読み込みます。
         if (components.contains("CharacterPhysicsComponent")) {
             CharacterPhysicsComponent component;
             const json& value = components["CharacterPhysicsComponent"];
@@ -1002,6 +1095,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Health 値を JSON から読み込みます。
         if (components.contains("HealthComponent")) {
             HealthComponent component;
             const json& value = components["HealthComponent"];
@@ -1014,6 +1108,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Stamina 値を JSON から読み込みます。
         if (components.contains("StaminaComponent")) {
             StaminaComponent component;
             const json& value = components["StaminaComponent"];
@@ -1026,6 +1121,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Action database 設定を JSON から読み込みます。
         if (components.contains("ActionDatabaseComponent")) {
             ActionDatabaseComponent component;
             const json& value = components["ActionDatabaseComponent"];
@@ -1054,12 +1150,14 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Player タグを JSON から読み込みます。
         if (components.contains("PlayerTagComponent")) {
             PlayerTagComponent component;
             component.playerId = components["PlayerTagComponent"].value("playerId", component.playerId);
             SetOptional(node.components, component);
         }
 
+        // StateMachine assetを JSON から読み込みます。
         if (components.contains("StateMachineAssetComponent")) {
             StateMachineAssetComponent component;
             if (StateMachineAssetSerializer::FromJson(components["StateMachineAssetComponent"], component.asset)) {
@@ -1067,6 +1165,7 @@ namespace
             }
         }
 
+        // StateMachine runtime paramsを JSON から読み込みます。
         if (components.contains("StateMachineParamsComponent")) {
             StateMachineParamsComponent component;
             const json& value = components["StateMachineParamsComponent"];
@@ -1089,6 +1188,7 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // Timeline libraryを JSON から読み込みます。
         if (components.contains("TimelineLibraryComponent")) {
             TimelineLibraryComponent component;
             const json& value = components["TimelineLibraryComponent"];
@@ -1107,6 +1207,7 @@ namespace
         }
     }
 
+    // Prefab として保存するとき、既存の PrefabInstance 情報を取り除きます。
     void StripPrefabMetadata(EntitySnapshot::Snapshot& snapshot)
     {
         for (auto& node : snapshot.nodes) {
@@ -1114,6 +1215,7 @@ namespace
         }
     }
 
+    // 読み込んだ prefab の root ノードに PrefabInstance 情報を付け直します。
     void AttachPrefabMetadata(EntitySnapshot::Snapshot& snapshot, const std::filesystem::path& prefabPath)
     {
         for (auto& node : snapshot.nodes) {
@@ -1129,6 +1231,7 @@ namespace
         }
     }
 
+    // 同名ファイルがある場合に連番付きの prefab 保存先パスを作ります。
     std::filesystem::path MakeUniquePrefabPath(const std::filesystem::path& directory, const std::string& baseName)
     {
         std::error_code ec;
@@ -1141,6 +1244,7 @@ namespace
         return path;
     }
 
+    // Scene 読み込み時に削除してはいけないエディタ用 entity か判定します。
     bool IsSceneReplaceProtectedEntity(Registry& registry, EntityID entity)
     {
         if (registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
@@ -1154,6 +1258,7 @@ namespace
         return false;
     }
 
+    // Scene 保存対象になる root entity を Registry から集めます。
     std::vector<EntityID> GatherSceneRoots(Registry& registry)
     {
         std::vector<EntityID> roots;
@@ -1192,6 +1297,7 @@ namespace
         return roots;
     }
 
+    // Scene 読み込み前に、保護対象以外の entity を Registry から削除します。
     void ClearRegistryForSceneReplace(Registry& registry)
     {
         std::vector<EntityID> entities;
@@ -1217,6 +1323,7 @@ namespace
     }
 }
 
+// 指定 entity の subtree を prefab として保存し、必要なら保存先パスを返します。
 bool PrefabSystem::SaveEntityAsPrefab(EntityID root,
     Registry& registry,
     const std::filesystem::path& destinationDir,
@@ -1243,6 +1350,7 @@ bool PrefabSystem::SaveEntityAsPrefab(EntityID root,
     return true;
 }
 
+// 指定 entity の subtree を、明示された prefab ファイルパスへ保存します。
 bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
     Registry& registry,
     const std::filesystem::path& prefabPath)
@@ -1252,6 +1360,7 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
         return false;
     }
 
+    // root 以下の entity 階層を Snapshot 化します。
     EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(root, registry);
     if (snapshot.nodes.empty()) {
         return false;
@@ -1293,6 +1402,7 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
     return true;
 }
 
+// Registry 全体を scene ファイルとして保存します。
 bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
     const std::filesystem::path& scenePath,
     const SceneFileMetadata* metadata)
@@ -1369,6 +1479,7 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
     return true;
 }
 
+// scene ファイルを読み込み、Registry の内容を読み込んだ scene に置き換えます。
 bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
     Registry& registry,
     SceneFileMetadata* outMetadata)
@@ -1418,12 +1529,14 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         snapshot.rootLocalID = document.value("rootLocalId", snapshot.nodes.front().localID);
     }
 
+    // 既存 scene を消してから、読み込んだ Snapshot を復元します。
     ClearRegistryForSceneReplace(registry);
 
     EntitySnapshot::RestoreSubtree(snapshot, registry);
     return true;
 }
 
+// prefab ファイルを読み込み、EntitySnapshot として返します。
 bool PrefabSystem::LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
     EntitySnapshot::Snapshot& outSnapshot)
 {
@@ -1460,6 +1573,7 @@ bool PrefabSystem::LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
     return true;
 }
 
+// prefab ファイルを Registry にインスタンス化し、生成された root entity を返します。
 EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath,
     Registry& registry,
     EntityID parentEntity)
@@ -1469,6 +1583,7 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
         return Entity::NULL_ID;
     }
 
+    // インスタンス化後に prefab 元ファイルへの参照を保持できるようにします。
     AttachPrefabMetadata(snapshot, prefabPath);
 
     for (auto& node : snapshot.nodes) {
@@ -1489,6 +1604,7 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
     return restore.root;
 }
 
+// 現在の prefab instance の内容を、元 prefab ファイルへ上書き保存します。
 bool PrefabSystem::ApplyPrefab(EntityID root, Registry& registry)
 {
     auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root);
@@ -1504,6 +1620,7 @@ bool PrefabSystem::ApplyPrefab(EntityID root, Registry& registry)
     return true;
 }
 
+// 現在の prefab instance を破棄し、元 prefab ファイルの内容で作り直します。
 EntityID PrefabSystem::RevertPrefab(EntityID root, Registry& registry)
 {
     auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root);
@@ -1518,10 +1635,12 @@ EntityID PrefabSystem::RevertPrefab(EntityID root, Registry& registry)
 
     const std::string prefabPath = prefabInstance->prefabAssetPath;
 
+    // 現在の instance を一度削除し、保存元 prefab から再生成します。
     EntitySnapshot::DestroySubtree(root, registry);
     return InstantiatePrefab(prefabPath, registry, parent);
 }
 
+// prefab instance との紐付けだけを解除します。entity 自体は残します。
 bool PrefabSystem::UnpackPrefab(EntityID root, Registry& registry)
 {
     if (auto* prefabInstance = registry.GetComponent<PrefabInstanceComponent>(root)) {
@@ -1531,6 +1650,7 @@ bool PrefabSystem::UnpackPrefab(EntityID root, Registry& registry)
     return false;
 }
 
+// 指定 entity が所属する prefab root を親方向へたどって探します。
 EntityID PrefabSystem::FindPrefabRoot(EntityID entity, Registry& registry)
 {
     EntityID current = entity;
@@ -1549,6 +1669,7 @@ EntityID PrefabSystem::FindPrefabRoot(EntityID entity, Registry& registry)
     return Entity::NULL_ID;
 }
 
+// prefab 配下の entity が変更されたことを root の override フラグへ反映します。
 void PrefabSystem::MarkPrefabOverride(EntityID entity, Registry& registry)
 {
     EntityID root = FindPrefabRoot(entity, registry);
@@ -1561,6 +1682,7 @@ void PrefabSystem::MarkPrefabOverride(EntityID entity, Registry& registry)
     }
 }
 
+// prefab 制約上、entity を newParent へ付け替えてよいか判定します。
 bool PrefabSystem::CanReparent(EntityID entity, EntityID newParent, Registry& registry)
 {
     EntityID entityPrefabRoot = FindPrefabRoot(entity, registry);
@@ -1572,17 +1694,20 @@ bool PrefabSystem::CanReparent(EntityID entity, EntityID newParent, Registry& re
     return Entity::IsNull(parentPrefabRoot);
 }
 
+// prefab 制約上、parentEntity の子を新規作成してよいか判定します。
 bool PrefabSystem::CanCreateChild(EntityID parentEntity, Registry& registry)
 {
     return Entity::IsNull(FindPrefabRoot(parentEntity, registry));
 }
 
+// prefab 制約上、entity を削除してよいか判定します。
 bool PrefabSystem::CanDelete(EntityID entity, Registry& registry)
 {
     EntityID prefabRoot = FindPrefabRoot(entity, registry);
     return Entity::IsNull(prefabRoot) || prefabRoot == entity;
 }
 
+// prefab 制約上、entity を複製してよいか判定します。
 bool PrefabSystem::CanDuplicate(EntityID entity, Registry& registry)
 {
     EntityID prefabRoot = FindPrefabRoot(entity, registry);

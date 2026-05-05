@@ -307,9 +307,6 @@
     <ClInclude Include="Source\Effect\EffectMaterial.h">
       <Filter>Source\Effect</Filter>
     </ClInclude>
-    <ClInclude Include="Source\Effect\HologramManager.h">
-      <Filter>Source\Effect</Filter>
-    </ClInclude>
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h">
       <Filter>Source\EffectEditor</Filter>
     </ClInclude>
@@ -949,9 +946,6 @@
     <ClInclude Include="Source\Storage\GameplayAsset.h">
       <Filter>Source\Storage</Filter>
     </ClInclude>
-    <ClInclude Include="Source\SwordTrail.h">
-      <Filter>Source</Filter>
-    </ClInclude>
     <ClInclude Include="Source\System\Dialog.h">
       <Filter>Source\System</Filter>
     </ClInclude>
@@ -1143,6 +1137,9 @@
     <ClInclude Include="Source\GameLoop\GameLoopScenePicker.h">
       <Filter>Source\GameLoop</Filter>
     </ClInclude>
+    <ClInclude Include="Source\RenderContext\IndirectDrawCommon.h">
+      <Filter>Source\RenderContext</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="External\FSR2\dx11\ffx_fsr2_dx11.cpp">
@@ -1326,9 +1323,6 @@
       <Filter>Source\Duplicate</Filter>
     </ClCompile>
     <ClCompile Include="Source\Effect\EffectMaterial.cpp">
-      <Filter>Source\Effect</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\Effect\HologramManager.cpp">
       <Filter>Source\Effect</Filter>
     </ClCompile>
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp">
@@ -1807,9 +1801,6 @@
     </ClCompile>
     <ClCompile Include="Source\Stage\Stage.cpp">
       <Filter>Source\Stage</Filter>
-    </ClCompile>
-    <ClCompile Include="Source\SwordTrail.cpp">
-      <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="Source\System\Dialog.cpp">
       <Filter>Source\System</Filter>

@@ -5,15 +5,23 @@
   "nodes": [
     {
       "components": {
+        "NameComponent": {
+          "name": "_DamageEventQueue"
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
         "AudioListenerComponent": {
           "isPrimary": true,
           "volumeScale": 1.0
         },
         "CameraFreeControlComponent": {
           "moveSpeed": 20.0,
-          "pitch": 0.429999977350235,
+          "pitch": 0.14000000059604645,
           "rotateSpeed": 0.004999999888241291,
-          "yaw": 0.1549999862909317
+          "yaw": -0.05000000447034836
         },
         "CameraLensComponent": {
           "aspect": 1.7777777910232544,
@@ -35,10 +43,10 @@
             "z": -100.0
           },
           "localRotation": {
-            "w": 0.9740438461303711,
-            "x": 0.2127070277929306,
-            "y": 0.07563988864421844,
-            "z": -0.016517875716090202
+            "w": 0.9972392916679382,
+            "x": 0.06992098689079285,
+            "y": -0.02493618056178093,
+            "z": 0.00174838921520859
           },
           "localScale": {
             "x": 1.0,
@@ -47,7 +55,7 @@
           }
         }
       },
-      "id": 0
+      "id": 1
     },
     {
       "components": {
@@ -87,7 +95,7 @@
           }
         }
       },
-      "id": 1
+      "id": 2
     },
     {
       "components": {
@@ -103,34 +111,82 @@
           "radius": 20.0
         }
       },
-      "id": 2
-    },
-    {
-      "components": {
-        "EnvironmentComponent": {
-          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
-          "enableSkybox": true,
-          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
-          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
-        },
-        "NameComponent": {
-          "name": "Environment"
-        }
-      },
       "id": 3
     },
     {
       "components": {
-        "AudioSettingsComponent": {
-          "bgmVolume": 1.0,
-          "debugDraw": false,
-          "masterVolume": 1.0,
-          "muteAll": false,
-          "sfxVolume": 1.0,
-          "uiVolume": 1.0
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": false,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
         },
         "NameComponent": {
-          "name": "Audio Settings"
+          "name": "Text"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 320.0,
+            "y": 80.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 1.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 325.0,
+          "lineSpacing": 0.5,
+          "text": "Titile",
+          "wrapping": true
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
         }
       },
       "id": 4
@@ -243,6 +299,44 @@
     },
     {
       "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 6
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 7
+    },
+    {
+      "components": {
+        "NameComponent": {
+          "name": "_BattleFlow"
+        }
+      },
+      "id": 8
+    },
+    {
+      "components": {
         "InputContextComponent": {
           "activeMapCount": 0,
           "activeMapIndices": [],
@@ -254,7 +348,7 @@
           "uiNavigationEnabled": false
         }
       },
-      "id": 6
+      "id": 9
     },
     {
       "components": {
@@ -269,7 +363,7 @@
           "uiNavigationEnabled": false
         }
       },
-      "id": 7
+      "id": 10
     },
     {
       "components": {
@@ -284,80 +378,7 @@
           "uiNavigationEnabled": false
         }
       },
-      "id": 8
-    },
-    {
-      "components": {
-        "CanvasItemComponent": {
-          "interactable": true,
-          "lockAspect": false,
-          "orderInLayer": 0,
-          "pixelSnap": false,
-          "sortingLayer": 0,
-          "visible": true
-        },
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "NameComponent": {
-          "name": "Title"
-        },
-        "RectTransformComponent": {
-          "anchorMax": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "anchorMin": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "anchoredPosition": {
-            "x": -4.855072975158691,
-            "y": -4.396136283874512
-          },
-          "pivot": {
-            "x": 0.5,
-            "y": 0.5
-          },
-          "rotationZ": 0.0,
-          "scale2D": {
-            "x": 1.0,
-            "y": 1.0
-          },
-          "sizeDelta": {
-            "x": 1344.0,
-            "y": 768.0
-          }
-        },
-        "SpriteComponent": {
-          "textureAssetPath": "Data\\Texture\\Sprite\\Title.png",
-          "tint": {
-            "w": 1.0,
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
-          }
-        },
-        "TransformComponent": {
-          "localPosition": {
-            "x": -4.855072975158691,
-            "y": -4.396136283874512,
-            "z": 0.0
-          },
-          "localRotation": {
-            "w": 1.0,
-            "x": 0.0,
-            "y": 0.0,
-            "z": 0.0
-          },
-          "localScale": {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
-          }
-        }
-      },
-      "id": 9
+      "id": 11
     }
   ],
   "rootLocalIds": [
@@ -370,7 +391,9 @@
     6,
     7,
     8,
-    9
+    9,
+    10,
+    11
   ],
   "type": "scene",
   "version": 1

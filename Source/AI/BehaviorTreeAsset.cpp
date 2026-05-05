@@ -1,3 +1,4 @@
+﻿// BehaviorTreeAsset の JSON 入出力、テンプレート生成、検証処理を実装するファイル。
 #include "BehaviorTreeAsset.h"
 
 #include <algorithm>
@@ -8,8 +9,10 @@
 
 #include <nlohmann/json.hpp>
 
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // BlackboardValueType を JSON 保存用の文字列へ変換する。
     const char* BBValueTypeToString(BlackboardValueType t)
     {
         switch (t) {
@@ -24,6 +27,7 @@ namespace
         return "None";
     }
 
+    // JSON から読んだ文字列を BlackboardValueType に戻す。
     BlackboardValueType BBValueTypeFromString(const std::string& s)
     {
         if (s == "Bool")    return BlackboardValueType::Bool;
@@ -35,6 +39,7 @@ namespace
         return BlackboardValueType::None;
     }
 
+    // BTNode を JSON オブジェクトへ変換する。
     nlohmann::json NodeToJson(const BTNode& n)
     {
         nlohmann::json j;
@@ -55,6 +60,7 @@ namespace
         return j;
     }
 
+    // JSON オブジェクトから BTNode を復元する。
     BTNode NodeFromJson(const nlohmann::json& j)
     {
         BTNode n;
@@ -81,6 +87,7 @@ namespace
     }
 }
 
+// BTNodeType を保存・表示用の文字列へ変換する。
 const char* BTNodeTypeToString(BTNodeType t)
 {
     switch (t) {
@@ -112,6 +119,7 @@ const char* BTNodeTypeToString(BTNodeType t)
     return "Root";
 }
 
+// 文字列から BTNodeType を復元する。
 BTNodeType BTNodeTypeFromString(const std::string& s)
 {
     if (s == "Root")               return BTNodeType::Root;
@@ -141,6 +149,7 @@ BTNodeType BTNodeTypeFromString(const std::string& s)
     return BTNodeType::Root;
 }
 
+// BTNodeType のカテゴリを取得する。
 BTNodeCategory CategoryOfBTNodeType(BTNodeType t)
 {
     const uint16_t v = static_cast<uint16_t>(t);
@@ -152,18 +161,21 @@ BTNodeCategory CategoryOfBTNodeType(BTNodeType t)
     return BTNodeCategory::Action;
 }
 
+// 指定 ID のノードを読み取り専用で検索する。
 const BTNode* BehaviorTreeAsset::FindNode(uint32_t id) const
 {
     for (const auto& n : nodes) if (n.id == id) return &n;
     return nullptr;
 }
 
+// 指定 ID のノードを編集可能な形で検索する。
 BTNode* BehaviorTreeAsset::FindNode(uint32_t id)
 {
     for (auto& n : nodes) if (n.id == id) return &n;
     return nullptr;
 }
 
+// 既存ノード ID と重ならない新しい ID を発行する。
 uint32_t BehaviorTreeAsset::AllocateNodeId() const
 {
     uint32_t maxId = 0;
@@ -171,6 +183,7 @@ uint32_t BehaviorTreeAsset::AllocateNodeId() const
     return maxId + 1;
 }
 
+// 攻撃寄りの基本ビヘイビアツリーテンプレートを生成する。
 BehaviorTreeAsset BehaviorTreeAsset::CreateAggressiveTemplate()
 {
     BehaviorTreeAsset a;
@@ -191,6 +204,7 @@ BehaviorTreeAsset BehaviorTreeAsset::CreateAggressiveTemplate()
     return a;
 }
 
+// 防御寄りの基本ビヘイビアツリーテンプレートを生成する。
 BehaviorTreeAsset BehaviorTreeAsset::CreateDefensiveTemplate()
 {
     BehaviorTreeAsset a;
@@ -218,6 +232,7 @@ BehaviorTreeAsset BehaviorTreeAsset::CreateDefensiveTemplate()
     return a;
 }
 
+// 巡回用の基本ビヘイビアツリーテンプレートを生成する。
 BehaviorTreeAsset BehaviorTreeAsset::CreatePatrolTemplate()
 {
     BehaviorTreeAsset a;
@@ -231,6 +246,7 @@ BehaviorTreeAsset BehaviorTreeAsset::CreatePatrolTemplate()
     return a;
 }
 
+// ファイルからビヘイビアツリーアセットを読み込む。
 bool BehaviorTreeAsset::LoadFromFile(const std::filesystem::path& path)
 {
     std::ifstream ifs(path);
@@ -250,6 +266,7 @@ bool BehaviorTreeAsset::LoadFromFile(const std::filesystem::path& path)
     return true;
 }
 
+// 現在のビヘイビアツリーアセットをファイルへ保存する。
 bool BehaviorTreeAsset::SaveToFile(const std::filesystem::path& path) const
 {
     nlohmann::json j;
@@ -270,17 +287,20 @@ bool BehaviorTreeAsset::SaveToFile(const std::filesystem::path& path) const
     return true;
 }
 
+// 検証結果に Error が含まれるか調べる。
 bool BTValidateResult::HasError() const
 {
     for (const auto& m : messages) if (m.severity == BTValidateSeverity::Error) return true;
     return false;
 }
+// 検証結果内の Error 件数を数える。
 int BTValidateResult::ErrorCount() const
 {
     int n = 0;
     for (const auto& m : messages) if (m.severity == BTValidateSeverity::Error) ++n;
     return n;
 }
+// 検証結果内の Warning 件数を数える。
 int BTValidateResult::WarningCount() const
 {
     int n = 0;
@@ -288,8 +308,10 @@ int BTValidateResult::WarningCount() const
     return n;
 }
 
+// このファイル内だけで使う補助関数と補助型を定義する無名名前空間。
 namespace
 {
+    // ノード種別ごとの子ノード数が正しいか検証する。
     void CheckChildArity(const BTNode& n, BTValidateResult& r)
     {
         const std::string label = "node[" + std::to_string(n.id) + "][" + n.name + "]";
@@ -314,6 +336,7 @@ namespace
         }
     }
 
+    // ノード種別ごとのパラメータ範囲が正しいか検証する。
     void CheckParamRanges(const BTNode& n, BTValidateResult& r)
     {
         const std::string label = "node[" + std::to_string(n.id) + "][" + n.name + "]";
@@ -344,17 +367,16 @@ namespace
     }
 }
 
+// ビヘイビアツリー全体を検証する。
 BTValidateResult ValidateBehaviorTree(const BehaviorTreeAsset& asset)
 {
     BTValidateResult r;
 
-    // Root existence + uniqueness
     int rootCount = 0;
     for (const auto& n : asset.nodes) if (n.type == BTNodeType::Root) ++rootCount;
     if (rootCount == 0) r.messages.push_back({ BTValidateSeverity::Error, "no Root node" });
     if (rootCount > 1)  r.messages.push_back({ BTValidateSeverity::Error, "multiple Root nodes (must be exactly 1)" });
 
-    // rootId points to a Root
     if (const BTNode* rootNode = asset.FindNode(asset.rootId)) {
         if (rootNode->type != BTNodeType::Root)
             r.messages.push_back({ BTValidateSeverity::Error, "rootId does not point to a Root-type node" });
@@ -362,7 +384,6 @@ BTValidateResult ValidateBehaviorTree(const BehaviorTreeAsset& asset)
         r.messages.push_back({ BTValidateSeverity::Error, "rootId not present in nodes" });
     }
 
-    // Unique ids
     {
         std::set<uint32_t> seen;
         for (const auto& n : asset.nodes) {
@@ -371,7 +392,6 @@ BTValidateResult ValidateBehaviorTree(const BehaviorTreeAsset& asset)
         }
     }
 
-    // Per-node arity / params + children-existence
     for (const auto& n : asset.nodes) {
         CheckChildArity(n, r);
         CheckParamRanges(n, r);
@@ -382,7 +402,6 @@ BTValidateResult ValidateBehaviorTree(const BehaviorTreeAsset& asset)
         }
     }
 
-    // Reachability from rootId, and DAG / no-cycle.
     if (asset.FindNode(asset.rootId) != nullptr) {
         std::unordered_set<uint32_t> reachable;
         std::queue<uint32_t> q;

@@ -1,20 +1,15 @@
-#pragma once
+﻿#pragma once
+
+// ビヘイビアツリー実行システムの公開インターフェース定義。
 
 class Registry;
 
-// AI decision layer.
-// For every Enemy entity (EnemyTag + BehaviorTreeAsset + Runtime + Blackboard + SMParams),
-// load the .bt file (cached) and tick the tree once per frame.
-//
-// Writes go to:
-//   - LocomotionStateComponent.moveInput / inputStrength / targetAngleY (world-space)
-//   - StateMachineParamsComponent (Attack / Dodge are rising-edge)
-//   - BlackboardComponent.entries
-//
-// Never reads/writes other entities' gameplay components except indirectly through Aggro.
+// 敵 AI のビヘイビアツリーを更新するシステム。
 class BehaviorTreeSystem
 {
 public:
+    // 全対象 Entity のビヘイビアツリーを更新する。
     static void Update(Registry& registry, float dt);
+    // 読み込み済みアセットキャッシュを無効化する。
     static void InvalidateAssetCache(const char* path = nullptr);
 };
