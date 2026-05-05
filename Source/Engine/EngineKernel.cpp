@@ -3207,6 +3207,8 @@ void EngineKernel::Render()
     }
 
     std::vector<RenderPipeline::RenderViewContext> views;
+    const size_t invalidViewIndex = static_cast<size_t>(-1);
+    size_t gameView2DViewIndex = invalidViewIndex;
 
     if (m_editorLayer) {
         m_editorLayer->SetPlayerPreviewTexture(nullptr);
@@ -3411,6 +3413,54 @@ void EngineKernel::Render()
         state.prevJitterOffset = { 0.0f, 0.0f };
 
         views.push_back(std::move(primaryView));
+
+        if (m_editorLayer->ShouldRenderGameView2DUIOverlay()) {
+            const DirectX::XMFLOAT4 gameViewRect = m_editorLayer->GetGameViewRect();
+            const uint32_t gamePanelWidth = static_cast<uint32_t>((std::max)(gameViewRect.z, 0.0f));
+            const uint32_t gamePanelHeight = static_cast<uint32_t>((std::max)(gameViewRect.w, 0.0f));
+            DirectX::XMFLOAT4X4 game2DView{};
+            DirectX::XMFLOAT4X4 game2DProjection{};
+            if (gamePanelWidth > 1 &&
+                gamePanelHeight > 1 &&
+                m_editorLayer->TryBuildGameView2DPreviewViewProjection(game2DView, game2DProjection)) {
+                auto game2DViewContext = m_renderPipeline->BuildPrimaryViewContext(rc, gamePanelWidth, gamePanelHeight);
+                auto& gameState = game2DViewContext.state;
+                gameState.historyKey = 0x47414D4532440001ull;
+                gameState.panelWidth = gamePanelWidth;
+                gameState.panelHeight = gamePanelHeight;
+                gameState.renderWidth = gamePanelWidth;
+                gameState.renderHeight = gamePanelHeight;
+                gameState.displayWidth = gamePanelWidth;
+                gameState.displayHeight = gamePanelHeight;
+                gameState.viewport = RhiViewport(
+                    0.0f,
+                    0.0f,
+                    static_cast<float>(gamePanelWidth),
+                    static_cast<float>(gamePanelHeight));
+                gameState.viewMatrix = game2DView;
+                gameState.projectionMatrix = game2DProjection;
+                gameState.aspect = static_cast<float>(gamePanelWidth) / static_cast<float>((std::max)(gamePanelHeight, 1u));
+                gameState.jitterOffset = { 0.0f, 0.0f };
+                gameState.prevJitterOffset = { 0.0f, 0.0f };
+
+                using namespace DirectX;
+                const XMMATRIX viewMatrix = XMLoadFloat4x4(&game2DView);
+                const XMMATRIX projectionMatrix = XMLoadFloat4x4(&game2DProjection);
+                XMStoreFloat4x4(&gameState.viewProjectionUnjittered, viewMatrix * projectionMatrix);
+                gameState.prevViewProjectionMatrix = gameState.viewProjectionUnjittered;
+
+                const XMMATRIX inverseView = XMMatrixInverse(nullptr, viewMatrix);
+                XMFLOAT4 cameraPos4{};
+                XMFLOAT4 cameraForward4{};
+                XMStoreFloat4(&cameraPos4, inverseView.r[3]);
+                XMStoreFloat4(&cameraForward4, XMVector3Normalize(inverseView.r[2]));
+                gameState.cameraPosition = { cameraPos4.x, cameraPos4.y, cameraPos4.z };
+                gameState.cameraDirection = { cameraForward4.x, cameraForward4.y, cameraForward4.z };
+
+                gameView2DViewIndex = views.size();
+                views.push_back(std::move(game2DViewContext));
+            }
+        }
     }
     else {
         views.push_back(m_renderPipeline->BuildPrimaryViewContext(rc));
@@ -3483,8 +3533,13 @@ void EngineKernel::Render()
         auto& primaryView = views.front();
         ITexture* sceneViewTexture = primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture;
         ITexture* sceneDepthTexture = primaryView.sceneDepthTexture ? primaryView.sceneDepthTexture : rc.sceneDepthTexture;
-        ITexture* gameViewTexture = primaryView.sceneViewTexture ? primaryView.sceneViewTexture :
-            (primaryView.displayTexture ? primaryView.displayTexture : rc.sceneColorTexture);
+        ITexture* gameViewTexture = primaryView.displayTexture ? primaryView.displayTexture :
+            (primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture);
+        if (gameView2DViewIndex != invalidViewIndex && gameView2DViewIndex < views.size()) {
+            auto& game2DView = views[gameView2DViewIndex];
+            gameViewTexture = game2DView.displayTexture ? game2DView.displayTexture :
+                (game2DView.sceneViewTexture ? game2DView.sceneViewTexture : gameViewTexture);
+        }
         bool renderedPrimaryViewGizmos = false;
 
         // 3D グリッドを Scene 用専用フレームバッファへ合成する。
@@ -3550,7 +3605,11 @@ void EngineKernel::Render()
         }
 
         // EditorLayer へ各プレビュー用テクスチャを渡す。
-        m_editorLayer->SetSceneViewTexture(sceneViewTexture);
+        ITexture* editorSceneTextureForUi = sceneViewTexture;
+        if (m_editorLayer->GetSceneViewMode() == EditorLayer::SceneViewMode::Mode2D && primaryView.displayTexture) {
+            editorSceneTextureForUi = primaryView.displayTexture;
+        }
+        m_editorLayer->SetSceneViewTexture(editorSceneTextureForUi);
         m_editorLayer->SetGameViewTexture(gameViewTexture);
         m_editorLayer->SetGBufferDebugTextures(
             primaryView.debugGBuffer0 ? primaryView.debugGBuffer0 : rc.debugGBuffer0,
@@ -3646,6 +3705,15 @@ void EngineKernel::Render()
         transitionTextureForUi(rc.debugGBuffer2);
         transitionTextureForUi(rc.debugGBufferDepth);
         transitionTextureForUi(editorScenePreviewTexture);
+        for (const auto& view : views) {
+            transitionTextureForUi(view.sceneViewTexture);
+            transitionTextureForUi(view.displayTexture);
+            transitionTextureForUi(view.sceneDepthTexture);
+            transitionTextureForUi(view.debugGBuffer0);
+            transitionTextureForUi(view.debugGBuffer1);
+            transitionTextureForUi(view.debugGBuffer2);
+            transitionTextureForUi(view.debugDepth);
+        }
     }
 
     // Editor UI 描画。

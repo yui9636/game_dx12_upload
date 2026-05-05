@@ -9,6 +9,7 @@
 #include "RenderGraph/FrameGraphResources.h"
 #include "Sprite/SpriteRenderer.h"
 #include "UI/DamageTextManager.h"
+#include "UI/UI2DSpriteRenderSystem.h"
 #include "UI/UIManager.h"
 
 HUDPass::HUDPass(IResourceFactory* /*factory*/)
@@ -24,7 +25,7 @@ void HUDPass::Setup(FrameGraphBuilder& builder, const RenderContext& /*rc*/)
     }
 }
 
-void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& /*queue*/, RenderContext& rc)
+void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
     ITexture* displayColor = resources.GetTexture(m_hDisplayColor);
     if (!displayColor || !rc.commandList) {
@@ -44,6 +45,7 @@ void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& /*queue
 
     FontManager::Instance().SetRuntimeViewport(w, h);
     SpriteRenderer::Instance().Begin(rc.commandList, { w, h });
+    UI2DSpriteRenderSystem::RenderSprites(queue.ui2DSpritePackets, hudRc);
     UIManager::Instance().Render(hudRc);
     DamageTextManager::Instance().Render(hudRc);
     SpriteRenderer::Instance().End();

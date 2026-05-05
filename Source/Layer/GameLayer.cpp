@@ -64,6 +64,7 @@
 #include "UI/UIHPNumber.h"
 #include "UI/UIHPText2D.h"
 #include "UI/UIManager.h"
+#include "UI/UI2DSpriteExtractSystem.h"
 #include "UI/UIProgressBar2D.h"
 #include "UI/UIProgressBar3D.h"
 #include <algorithm>
@@ -491,6 +492,7 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     extractSys.Extract(m_registry, queue);
     EffectExtractSystem::Extract(m_registry, rc, queue);
     TrailExtractSystem::Extract(m_registry, queue, rc);
+    UI2DSpriteExtractSystem::Extract(m_registry, queue);
 
     DebugRenderSystem debugRenderSystem;
     debugRenderSystem.Render(m_registry);

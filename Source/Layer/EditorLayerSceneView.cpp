@@ -476,18 +476,7 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
             ? IM_COL32(80, 180, 255, 32)
             : IM_COL32(255, 255, 255, 16);
 
-        if (auto* sprite = entry.sprite; sprite && !sprite->textureAssetPath.empty()) {
-            if (auto texture = ResourceManager::Instance().GetTexture(sprite->textureAssetPath)) {
-                if (void* textureId = ImGuiRenderer::GetTextureID(texture.get())) {
-                    const ImU32 tintColor = ImGui::ColorConvertFloat4ToU32(ImVec4(
-                        sprite->tint.x,
-                        sprite->tint.y,
-                        sprite->tint.z,
-                        sprite->tint.w));
-                    drawList->AddImageQuad((ImTextureID)textureId, p0, p1, p2, p3, ImVec2(0, 0), ImVec2(1, 0), ImVec2(1, 1), ImVec2(0, 1), tintColor);
-                }
-            }
-        } else {
+        if (!entry.sprite || entry.sprite->textureAssetPath.empty()) {
             drawList->AddQuadFilled(p0, p1, p2, p3, fillColor);
         }
 
@@ -607,6 +596,25 @@ bool EditorLayer::TryBuildGameView2DViewProjection(DirectX::XMFLOAT4X4& outView,
                                                  camera2D->farZ);
     XMStoreFloat4x4(&outView, view);
     XMStoreFloat4x4(&outProjection, proj);
+    return true;
+}
+
+bool EditorLayer::TryBuildGameView2DPreviewViewProjection(DirectX::XMFLOAT4X4& outView,
+                                                          DirectX::XMFLOAT4X4& outProjection) const
+{
+    if (TryBuildGameView2DViewProjection(outView, outProjection)) {
+        return true;
+    }
+
+    if (!m_gameViewUseSceneViewCameraFallback2D || m_gameViewRect.z <= 1.0f || m_gameViewRect.w <= 1.0f) {
+        return false;
+    }
+
+    const float aspect = (m_gameViewRect.w > 0.0f)
+        ? (m_gameViewRect.z / m_gameViewRect.w)
+        : (16.0f / 9.0f);
+    outView = GetEditorViewMatrix();
+    outProjection = BuildEditorProjectionMatrix(aspect);
     return true;
 }
 

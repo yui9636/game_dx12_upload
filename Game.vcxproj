@@ -468,6 +468,8 @@
     <ClInclude Include="Source\Transform\TransformSystem.h" />
     <ClInclude Include="Source\Type\TypeInfo.h" />
     <ClInclude Include="Source\UI\DamageTextManager.h" />
+    <ClInclude Include="Source\UI\UI2DSpriteExtractSystem.h" />
+    <ClInclude Include="Source\UI\UI2DSpriteRenderSystem.h" />
     <ClInclude Include="Source\UI\UICombo.h" />
     <ClInclude Include="Source\UI\UIDamagePopup.h" />
     <ClInclude Include="Source\UI\UIElement.h" />

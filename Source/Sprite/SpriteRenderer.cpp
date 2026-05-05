@@ -164,6 +164,16 @@ void SpriteRenderer::Draw(const Sprite& sprite,
     DrawInternal(sprite, dx, dy, dw, dh, sx, sy, sw, sh, angleRad, tintColor);
 }
 
+void SpriteRenderer::DrawQuad(const Sprite& sprite,
+                              const DirectX::XMFLOAT2& p0,
+                              const DirectX::XMFLOAT2& p1,
+                              const DirectX::XMFLOAT2& p2,
+                              const DirectX::XMFLOAT2& p3,
+                              const DirectX::XMFLOAT4& tintColor)
+{
+    DrawQuadInternal(sprite, p0, p1, p2, p3, tintColor);
+}
+
 void SpriteRenderer::DrawInternal(const Sprite& sprite,
                                   float dx, float dy, float dw, float dh,
                                   float sx, float sy, float sw, float sh,
@@ -223,6 +233,56 @@ void SpriteRenderer::DrawInternal(const Sprite& sprite,
     vertices[1].texcoord = { u1, v0 };
     vertices[2].texcoord = { u0, v1 };
     vertices[3].texcoord = { u1, v1 };
+    for (auto& v : vertices) v.color = tintColor;
+
+    m_currentCommandList->UpdateBuffer(m_vertexBuffer.get(), vertices, sizeof(vertices));
+
+    UIConstants ui{};
+    const auto& spriteColor = sprite.GetColor();
+    ui.color = { spriteColor.x, spriteColor.y, spriteColor.z, spriteColor.w };
+    const auto& glow = sprite.GetGlowColor();
+    ui.glowColor = { glow.x, glow.y, glow.z, sprite.GetGlowIntensity() };
+    ui.glowIntensity = sprite.GetGlowIntensity();
+    m_currentCommandList->UpdateBuffer(m_constantBuffer.get(), &ui, sizeof(ui));
+
+    m_currentCommandList->SetVertexBuffer(0, m_vertexBuffer.get(), sizeof(SpriteVertex), 0);
+    m_currentCommandList->VSSetConstantBuffer(0, m_constantBuffer.get());
+    m_currentCommandList->PSSetConstantBuffer(0, m_constantBuffer.get());
+    m_currentCommandList->PSSetTexture(0, texture);
+    m_currentCommandList->Draw(kVertexCountPerSprite, 0);
+}
+
+void SpriteRenderer::DrawQuadInternal(const Sprite& sprite,
+                                      const DirectX::XMFLOAT2& p0,
+                                      const DirectX::XMFLOAT2& p1,
+                                      const DirectX::XMFLOAT2& p2,
+                                      const DirectX::XMFLOAT2& p3,
+                                      const DirectX::XMFLOAT4& tintColor)
+{
+    if (!m_initialized || !m_currentCommandList) return;
+    ITexture* texture = sprite.GetTexture();
+    if (!texture) return;
+    if (m_currentViewport.x <= 0.0f || m_currentViewport.y <= 0.0f) return;
+
+    m_currentCommandList->SetPipelineState(m_pso.get());
+    m_currentCommandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
+    m_currentCommandList->SetInputLayout(m_inputLayout.get());
+
+    auto pixelToNdc = [&](const DirectX::XMFLOAT2& p) -> DirectX::XMFLOAT3 {
+        const float ndcX = (p.x / m_currentViewport.x) * 2.0f - 1.0f;
+        const float ndcY = 1.0f - (p.y / m_currentViewport.y) * 2.0f;
+        return { ndcX, ndcY, 0.0f };
+    };
+
+    SpriteVertex vertices[kVertexCountPerSprite];
+    vertices[0].position = pixelToNdc(p0);
+    vertices[1].position = pixelToNdc(p1);
+    vertices[2].position = pixelToNdc(p3);
+    vertices[3].position = pixelToNdc(p2);
+    vertices[0].texcoord = { 0.0f, 0.0f };
+    vertices[1].texcoord = { 1.0f, 0.0f };
+    vertices[2].texcoord = { 0.0f, 1.0f };
+    vertices[3].texcoord = { 1.0f, 1.0f };
     for (auto& v : vertices) v.color = tintColor;
 
     m_currentCommandList->UpdateBuffer(m_vertexBuffer.get(), vertices, sizeof(vertices));

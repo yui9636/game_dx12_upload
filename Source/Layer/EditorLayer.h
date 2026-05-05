@@ -212,6 +212,9 @@ public:
     float GetEffectPreviewFarZ() const { return m_effectEditorPanel.GetPreviewFarZ(); }
     DirectX::XMFLOAT4 GetEffectPreviewClearColor() const { return m_effectEditorPanel.GetPreviewClearColor(); }
     bool ShouldEffectPreviewUseSkybox() const { return m_effectEditorPanel.ShouldPreviewUseSkybox(); }
+    bool ShouldRenderGameView2DUIOverlay() const { return m_sceneViewMode == SceneViewMode::Mode2D && m_gameViewShowUIOverlay; }
+    bool TryBuildGameView2DPreviewViewProjection(DirectX::XMFLOAT4X4& outView,
+                                                 DirectX::XMFLOAT4X4& outProjection) const;
     void SetGBufferDebugTextures(ITexture* g0, ITexture* g1, ITexture* g2, ITexture* g3, ITexture* depth) {
         m_gbufferTexture0 = g0;
         m_gbufferTexture1 = g1;

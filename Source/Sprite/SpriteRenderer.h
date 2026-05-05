@@ -52,6 +52,13 @@ public:
               float angleRad,
               const DirectX::XMFLOAT4& tintColor);
 
+    void DrawQuad(const Sprite& sprite,
+                  const DirectX::XMFLOAT2& p0,
+                  const DirectX::XMFLOAT2& p1,
+                  const DirectX::XMFLOAT2& p2,
+                  const DirectX::XMFLOAT2& p3,
+                  const DirectX::XMFLOAT4& tintColor);
+
     bool IsActive() const { return m_currentCommandList != nullptr; }
 
 private:
@@ -64,6 +71,13 @@ private:
                       float sx, float sy, float sw, float sh,
                       float angleRad,
                       const DirectX::XMFLOAT4& tintColor);
+
+    void DrawQuadInternal(const Sprite& sprite,
+                          const DirectX::XMFLOAT2& p0,
+                          const DirectX::XMFLOAT2& p1,
+                          const DirectX::XMFLOAT2& p2,
+                          const DirectX::XMFLOAT2& p3,
+                          const DirectX::XMFLOAT4& tintColor);
 
     std::shared_ptr<IShader>        m_vs;
     std::shared_ptr<IShader>        m_ps;

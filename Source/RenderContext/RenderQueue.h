@@ -5,7 +5,9 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
+#include <string>
 #include <DirectXMath.h>
+#include "Entity/Entity.h"
 #include "RenderState.h"
 #include "EffectRuntime/EffectGraphAsset.h"
 
@@ -241,6 +243,18 @@ struct TrailPacket {
     std::vector<uint32_t> indices;
 };
 
+struct UI2DSpritePacket {
+    EntityID entity = Entity::NULL_ID;
+    std::string textureAssetPath;
+    DirectX::XMFLOAT4 tint = { 1.0f, 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT3 worldPosition = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 worldRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 worldScale = { 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT2 sizeDelta = { 100.0f, 100.0f };
+    DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
+    bool pixelSnap = false;
+};
+
 class RenderQueue {
 public:
     std::vector<RenderPacket> opaquePackets;
@@ -249,6 +263,7 @@ public:
     std::vector<EffectMeshPacket> effectMeshPackets;
     std::vector<EffectParticlePacket> effectParticlePackets;
     std::vector<TrailPacket> trailPackets;
+    std::vector<UI2DSpritePacket> ui2DSpritePackets;
     RenderQueueMetrics metrics;
 
     void Clear() {
@@ -258,6 +273,7 @@ public:
         effectMeshPackets.clear();
         effectParticlePackets.clear();
         trailPackets.clear();
+        ui2DSpritePackets.clear();
         metrics = {};
     }
 };

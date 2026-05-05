@@ -34,6 +34,7 @@
 #include "RenderPass/EffectMeshPass.h"
 #include "RenderPass/EffectParticlePass.h"
 #include "RenderPass/PostProcessPass.h"
+#include "RenderPass/HUDPass.h"
 #include "Console/Logger.h"
 #include "System/TaskSystem.h"
 #include <chrono>
@@ -74,6 +75,7 @@ namespace
         if (dynamic_cast<EffectMeshPass*>(pass.get())) return std::make_shared<EffectMeshPass>();
         if (dynamic_cast<EffectParticlePass*>(pass.get())) return std::make_shared<EffectParticlePass>();
         if (dynamic_cast<FinalBlitPass*>(pass.get())) return std::make_shared<FinalBlitPass>(factory);
+        if (dynamic_cast<HUDPass*>(pass.get())) return std::make_shared<HUDPass>(factory);
         if (dynamic_cast<PostProcessPass*>(pass.get())) return std::make_shared<PostProcessPass>();
         return nullptr;
     }
