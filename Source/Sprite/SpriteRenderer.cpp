@@ -1,0 +1,239 @@
+#include "SpriteRenderer.h"
+
+#include "Sprite.h"
+#include "Graphics.h"
+#include "RHI/IBuffer.h"
+#include "RHI/ICommandList.h"
+#include "RHI/IPipelineState.h"
+#include "RHI/IResourceFactory.h"
+#include "RHI/IShader.h"
+#include "RHI/ITexture.h"
+#include "RHI/PipelineStateDesc.h"
+#include "RenderContext/RenderState.h"
+
+#include <cmath>
+#include <cstring>
+
+namespace
+{
+    // Vertex layout matches Shader/SpriteVS.hlsl:
+    //   POSITION (float3), COLOR (float4), TEXCOORD (float2)
+    struct SpriteVertex
+    {
+        DirectX::XMFLOAT3 position;
+        DirectX::XMFLOAT4 color;
+        DirectX::XMFLOAT2 texcoord;
+    };
+
+    // Mirrors the layout in Shader/Sprite.hlsli register(b0).
+    struct UIConstants
+    {
+        DirectX::XMFLOAT4 color;
+        DirectX::XMFLOAT4 glowColor;
+        float glowIntensity;
+        float padding[3];
+    };
+
+    constexpr uint32_t kVertexCountPerSprite = 4;
+}
+
+SpriteRenderer& SpriteRenderer::Instance()
+{
+    static SpriteRenderer instance;
+    return instance;
+}
+
+void SpriteRenderer::Initialize(IResourceFactory* factory)
+{
+    if (m_initialized || !factory) {
+        return;
+    }
+
+    // Step (a) of spec 3.5: load existing pre-compiled .cso. They were
+    // already produced by the FxCompile entries in Game.vcxproj at SM5.0.
+    auto vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/SpriteVS.cso");
+    auto ps = factory->CreateShader(ShaderType::Pixel,  "Data/Shader/SpriteUI_PS.cso");
+    if (!vs || !ps) {
+        // Shaders missing on disk. Stay uninitialized so HUDPass / UIElement
+        // can detect the situation and skip drawing instead of crashing.
+        return;
+    }
+    m_vs.reset(vs.release());
+    m_ps.reset(ps.release());
+
+    // Input layout (POSITION / COLOR / TEXCOORD) for SpriteVertex.
+    InputLayoutElement elements[3];
+    elements[0] = { "POSITION", 0, TextureFormat::R32G32B32_FLOAT,    0, 0,                                false, 0 };
+    elements[1] = { "COLOR",    0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement,            false, 0 };
+    elements[2] = { "TEXCOORD", 0, TextureFormat::R32G32_FLOAT,       0, kAppendAlignedElement,            false, 0 };
+    InputLayoutDesc ilDesc{ elements, 3 };
+    auto il = factory->CreateInputLayout(ilDesc, m_vs.get());
+    if (il) {
+        m_inputLayout.reset(il.release());
+    }
+
+    // Build the PSO. Alpha-blended, no depth, triangle strip (4 verts per
+    // sprite). RTV format follows the Display framebuffer because the
+    // HUDPass writes to DisplayColor.
+    auto* rs = Graphics::Instance().GetRenderState();
+    PipelineStateDesc desc{};
+    desc.vertexShader      = m_vs.get();
+    desc.pixelShader       = m_ps.get();
+    desc.inputLayout       = m_inputLayout.get();
+    desc.depthStencilState = rs->GetDepthStencilState(DepthState::NoTestNoWrite);
+    desc.rasterizerState   = rs->GetRasterizerState(RasterizerState::SolidCullNone);
+    desc.blendState        = rs->GetBlendState(BlendState::Transparency);
+    desc.primitiveTopology = PrimitiveTopology::TriangleStrip;
+    desc.numRenderTargets  = 1;
+    desc.rtvFormats[0]     = TextureFormat::RGBA8_UNORM;
+    if (FrameBuffer* display = Graphics::Instance().GetFrameBuffer(FrameBufferId::Display)) {
+        if (ITexture* displayColor = display->GetColorTexture(0)) {
+            desc.rtvFormats[0] = displayColor->GetFormat();
+        }
+    }
+    desc.dsvFormat = TextureFormat::Unknown;
+    auto pso = factory->CreatePipelineState(desc);
+    if (pso) {
+        m_pso.reset(pso.release());
+    }
+
+    // Per-draw mutable resources. The vertex buffer holds exactly 4
+    // vertices (one quad). Begin / End brackets a single frame so we
+    // can rewrite the same buffer for every Draw call.
+    auto vb = factory->CreateBuffer(
+        sizeof(SpriteVertex) * kVertexCountPerSprite,
+        BufferType::Vertex,
+        nullptr);
+    if (vb) {
+        m_vertexBuffer.reset(vb.release());
+    }
+    auto cb = factory->CreateBuffer(sizeof(UIConstants), BufferType::Constant, nullptr);
+    if (cb) {
+        m_constantBuffer.reset(cb.release());
+    }
+
+    m_initialized = m_pso != nullptr && m_vertexBuffer != nullptr && m_constantBuffer != nullptr;
+}
+
+void SpriteRenderer::Finalize()
+{
+    m_pso.reset();
+    m_inputLayout.reset();
+    m_vs.reset();
+    m_ps.reset();
+    m_vertexBuffer.reset();
+    m_constantBuffer.reset();
+    m_currentCommandList = nullptr;
+    m_initialized = false;
+}
+
+void SpriteRenderer::Begin(ICommandList* commandList, const DirectX::XMFLOAT2& viewportPx)
+{
+    if (!m_initialized) return;
+    m_currentCommandList = commandList;
+    m_currentViewport = viewportPx;
+    if (commandList) {
+        commandList->SetPipelineState(m_pso.get());
+        commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
+        commandList->SetInputLayout(m_inputLayout.get());
+    }
+}
+
+void SpriteRenderer::End()
+{
+    m_currentCommandList = nullptr;
+}
+
+void SpriteRenderer::Draw(const Sprite& sprite,
+                          float dx, float dy, float dw, float dh,
+                          float angleRad,
+                          const DirectX::XMFLOAT4& tintColor)
+{
+    const float texW = static_cast<float>(sprite.GetTextureWidth());
+    const float texH = static_cast<float>(sprite.GetTextureHeight());
+    Draw(sprite, dx, dy, dw, dh, 0.0f, 0.0f, texW, texH, angleRad, tintColor);
+}
+
+void SpriteRenderer::Draw(const Sprite& sprite,
+                          float dx, float dy,
+                          float dw, float dh,
+                          float sx, float sy, float sw, float sh,
+                          float angleRad,
+                          const DirectX::XMFLOAT4& tintColor)
+{
+    DrawInternal(sprite, dx, dy, dw, dh, sx, sy, sw, sh, angleRad, tintColor);
+}
+
+void SpriteRenderer::DrawInternal(const Sprite& sprite,
+                                  float dx, float dy, float dw, float dh,
+                                  float sx, float sy, float sw, float sh,
+                                  float angleRad,
+                                  const DirectX::XMFLOAT4& tintColor)
+{
+    if (!m_initialized || !m_currentCommandList) return;
+    ITexture* texture = sprite.GetTexture();
+    if (!texture) return;
+    if (m_currentViewport.x <= 0.0f || m_currentViewport.y <= 0.0f) return;
+
+    // Build the four corners in screen pixel space, then convert to NDC.
+    // dx,dy is the pivot-corrected top-left of the quad. Callers handle the
+    // pivot themselves to keep the shader-side math trivial.
+    const float cx = dx + dw * 0.5f;
+    const float cy = dy + dh * 0.5f;
+    const float c = std::cos(angleRad);
+    const float s = std::sin(angleRad);
+
+    auto rotateAround = [&](float px, float py) -> DirectX::XMFLOAT2 {
+        const float ox = px - cx;
+        const float oy = py - cy;
+        return { cx + ox * c - oy * s, cy + ox * s + oy * c };
+    };
+
+    const DirectX::XMFLOAT2 cornersPx[4] = {
+        rotateAround(dx,      dy),       // TL
+        rotateAround(dx + dw, dy),       // TR
+        rotateAround(dx,      dy + dh),  // BL
+        rotateAround(dx + dw, dy + dh),  // BR
+    };
+
+    auto pixelToNdc = [&](const DirectX::XMFLOAT2& p) -> DirectX::XMFLOAT3 {
+        const float ndcX = (p.x / m_currentViewport.x) * 2.0f - 1.0f;
+        const float ndcY = 1.0f - (p.y / m_currentViewport.y) * 2.0f;
+        return { ndcX, ndcY, 0.0f };
+    };
+
+    const float texW = (std::max)(1.0f, static_cast<float>(sprite.GetTextureWidth()));
+    const float texH = (std::max)(1.0f, static_cast<float>(sprite.GetTextureHeight()));
+    const float u0 = sx / texW;
+    const float v0 = sy / texH;
+    const float u1 = (sx + sw) / texW;
+    const float v1 = (sy + sh) / texH;
+
+    // TriangleStrip order: TL, TR, BL, BR
+    SpriteVertex vertices[kVertexCountPerSprite];
+    vertices[0].position = pixelToNdc(cornersPx[0]);
+    vertices[1].position = pixelToNdc(cornersPx[1]);
+    vertices[2].position = pixelToNdc(cornersPx[2]);
+    vertices[3].position = pixelToNdc(cornersPx[3]);
+    vertices[0].texcoord = { u0, v0 };
+    vertices[1].texcoord = { u1, v0 };
+    vertices[2].texcoord = { u0, v1 };
+    vertices[3].texcoord = { u1, v1 };
+    for (auto& v : vertices) v.color = tintColor;
+
+    m_currentCommandList->UpdateBuffer(m_vertexBuffer.get(), vertices, sizeof(vertices));
+
+    UIConstants ui{};
+    const auto& spriteColor = sprite.GetColor();
+    ui.color = { spriteColor.x, spriteColor.y, spriteColor.z, spriteColor.w };
+    const auto& glow = sprite.GetGlowColor();
+    ui.glowColor = { glow.x, glow.y, glow.z, sprite.GetGlowIntensity() };
+    ui.glowIntensity = sprite.GetGlowIntensity();
+    m_currentCommandList->UpdateBuffer(m_constantBuffer.get(), &ui, sizeof(ui));
+
+    m_currentCommandList->SetVertexBuffer(0, m_vertexBuffer.get(), sizeof(SpriteVertex), 0);
+    m_currentCommandList->VSSetConstantBuffer(0, m_constantBuffer.get());
+    m_currentCommandList->PSSetConstantBuffer(0, m_constantBuffer.get());
+    m_currentCommandList->PSSetTexture(0, texture);
+    m_currentCommandList->Draw(kVertexCountPerSprite, 0);
+}

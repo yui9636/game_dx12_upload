@@ -1,81 +1,47 @@
 #pragma once
 
-#include <wrl.h>
-#include <d3d11.h>
+#include <memory>
+#include <string>
 #include <DirectXMath.h>
 
+class ITexture;
+
+// Data-only sprite. Holds the texture reference and per-sprite tint /
+// glow parameters. The actual GPU draw is issued by SpriteRenderer (see
+// HUD_HPBar_Spec_2026-05-05 v3 section 3.2). Sprite no longer owns any
+// pipeline state, vertex buffer, or D3D11 / D3D12 native resources.
 class Sprite
 {
 public:
-	Sprite(ID3D11Device* device);
-	Sprite(ID3D11Device* device, const char* filename);
+    Sprite();
+    explicit Sprite(const std::string& texturePath);
+    ~Sprite() = default;
 
-	struct Vertex
-	{
-		DirectX::XMFLOAT3	position;
-		DirectX::XMFLOAT4	color;
-		DirectX::XMFLOAT2	texcoord;
-	};
+    void SetTexture(std::shared_ptr<ITexture> texture);
+    void SetTexture(const std::string& texturePath);
+    ITexture* GetTexture() const { return m_texture.get(); }
+    const std::shared_ptr<ITexture>& GetTextureShared() const { return m_texture; }
 
-	void Render(ID3D11DeviceContext* dc,
-		float dx, float dy,
-		float dz,
-		float dw, float dh,
-		float sx, float sy,
-		float sw, float sh,
-		float angle,
-		float r, float g, float b, float a
-	) const;
+    int GetTextureWidth() const  { return m_textureWidth; }
+    int GetTextureHeight() const { return m_textureHeight; }
 
-	void Render(ID3D11DeviceContext* dc,
-		float dx, float dy,
-		float dz,
-		float dw, float dh,
-		float angle,
-		float r, float g, float b, float a
-	) const;
+    void SetColor(const DirectX::XMFLOAT4& c) { m_color = c; }
+    const DirectX::XMFLOAT4& GetColor() const { return m_color; }
 
-
-	const Microsoft::WRL::ComPtr<ID3D11Buffer>& GetVertexBuffer() const { return vertexBuffer; }
-
-	const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& GetShaderResourceView() const { return shaderResourceView; }
-	void SetShaderResourceView(const Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& srv, float texWidth, float texHeight);
-	int GetTextureWidth() const { return  textureWidth; }
-
-	int GetTextureHeight() const { return textureHeight; }
-
-	void SetGlow(const DirectX::XMFLOAT3& color, float intensity)
-	{
-		currentGlowColor = color;
-		currentGlowIntensity = intensity;
-	}
+    void SetGlow(const DirectX::XMFLOAT3& color, float intensity)
+    {
+        m_glowColor = color;
+        m_glowIntensity = intensity;
+    }
+    const DirectX::XMFLOAT3& GetGlowColor() const { return m_glowColor; }
+    float GetGlowIntensity() const { return m_glowIntensity; }
 
 private:
-	Microsoft::WRL::ComPtr<ID3D11VertexShader>			vertexShader;
-	Microsoft::WRL::ComPtr<ID3D11PixelShader>			pixelShader;
-	Microsoft::WRL::ComPtr<ID3D11InputLayout>			inputLayout;
+    std::shared_ptr<ITexture> m_texture;
+    int m_textureWidth  = 0;
+    int m_textureHeight = 0;
 
-	Microsoft::WRL::ComPtr<ID3D11Buffer>				vertexBuffer;
-	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>	shaderResourceView;
-
-	float textureWidth = 0;
-	float textureHeight = 0;
-
-	Microsoft::WRL::ComPtr<ID3D11PixelShader>           uiPixelShader;
-	Microsoft::WRL::ComPtr<ID3D11Buffer>                uiConstantBuffer;
-
-	struct UIConstants
-	{
-		DirectX::XMFLOAT4 color;
-		DirectX::XMFLOAT4 glowColor;
-		float glowIntensity;
-		float padding[3];
-	};
-
-	DirectX::XMFLOAT4 currentColor = { 1, 1, 1, 1 };
-	DirectX::XMFLOAT3 currentGlowColor = { 0, 0, 0 };
-	float currentGlowIntensity = 0.0f;
-
-
-
+    DirectX::XMFLOAT4 m_color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT3 m_glowColor = { 0.0f, 0.0f, 0.0f };
+    float m_glowIntensity = 0.0f;
 };

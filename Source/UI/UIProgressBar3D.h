@@ -1,5 +1,7 @@
 #pragma once
 #include "UIWorld.h"
+#include "Sprite/Sprite.h"
+#include <memory>
 
 // ============================================================================
 // UIProgressBar3D
@@ -16,11 +18,13 @@ public:
     void SetProgress(float v);
     float GetProgress() const { return progress; }
 
-    void SetBackgroundSprite(std::shared_ptr<Sprite3D> sprite);
+    void SetSprite(std::shared_ptr<Sprite> sprite);
+    void SetBackgroundSprite(std::shared_ptr<Sprite> sprite);
 
     void SetBackgroundColor(float r, float g, float b, float a) { backgroundColor = { r, g, b, a }; }
 
 private:
-    std::shared_ptr<Sprite3D> backgroundSprite;
+    std::shared_ptr<Sprite> foregroundSprite;
+    std::shared_ptr<Sprite> backgroundSprite;
     DirectX::XMFLOAT4 backgroundColor;
 };

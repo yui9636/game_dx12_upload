@@ -1734,6 +1734,7 @@
 #include <RenderPass\VolumetricFogPass.h>
 #include <RenderPass\SSRPass.h>
 #include "RenderPass/FinalBlitPass.h"
+#include "RenderPass/HUDPass.h"
 #include <Material\MaterialPreviewStudio.h>
 #include "RHI/IResourceFactory.h"
 #include "ImGuiRenderer.h"
@@ -1757,6 +1758,9 @@
 #include "GameLoop/SceneTransitionSystem.h"
 #include "GameLoop/UIButtonClickSystem.h"
 #include "GameLoop/UIButtonClickEventQueue.h"
+#include "Sprite/SpriteRenderer.h"
+#include "UI/DamageTextManager.h"
+#include "UI/UIManager.h"
 #include "Gameplay/BattleFlowSystem.h"
 #include "Component/CameraComponent.h"
 #include "Component/Camera2DComponent.h"
@@ -2862,12 +2866,15 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<EffectMeshPass>());
     m_renderPipeline->AddPass(std::make_shared<EffectParticlePass>());
     if (isDX12) {
+        SpriteRenderer::Instance().Initialize(factory);
         m_renderPipeline->AddPass(std::make_shared<FinalBlitPass>(factory));
+        m_renderPipeline->AddPass(std::make_shared<HUDPass>(factory));
     }
 
     // GameLayer 初期化。
     m_gameLayer = std::make_unique<GameLayer>();
     m_gameLayer->Initialize();
+    DamageTextManager::Instance().Initialize();
 
     // AudioWorld 初期化。
     m_audioWorld = std::make_unique<AudioWorldSystem>();
@@ -3001,6 +3008,9 @@ void EngineKernel::Finalize()
         m_audioWorld.reset();
     }
 
+    UIManager::Instance().Clear();
+    SpriteRenderer::Instance().Finalize();
+
     if (m_editorLayer) m_editorLayer->Finalize();
     if (m_gameLayer) m_gameLayer->Finalize();
 }
@@ -3077,6 +3087,9 @@ void EngineKernel::Update(float rawDt)
         m_gameLayer->Update(time);
         BattleFlowSystem::DrainEvents(m_flowEventQueue);
     }
+
+    UIManager::Instance().Update(time.dt);
+    DamageTextManager::Instance().Update(time.dt);
 
     if (m_gameLayer) {
         Registry& gameRegistry = m_gameLayer->GetRegistry();

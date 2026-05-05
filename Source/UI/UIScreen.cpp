@@ -1,6 +1,7 @@
 #include "UIScreen.h"
+
 #include "RenderContext/RenderContext.h"
-#include "RHI/ICommandList.h"
+#include "Sprite/SpriteRenderer.h"
 
 using namespace DirectX;
 
@@ -9,18 +10,20 @@ UIScreen::UIScreen()
 {
 }
 
-void UIScreen::Render(const RenderContext& rc)
+void UIScreen::Render(const RenderContext& /*rc*/)
 {
     if (!IsActive() || !sprite) return;
 
-    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
+    const XMFLOAT2 globalPos = GetGlobalPosition();
+    const float drawX = globalPos.x - (size.x * pivot.x);
+    const float drawY = globalPos.y - (size.y * pivot.y);
 
-    DirectX::XMFLOAT2 globalPos = GetGlobalPosition();
-    float drawX = globalPos.x - (size.x * pivot.x);
-    float drawY = globalPos.y - (size.y * pivot.y);
-
-    sprite->Render(dc, drawX, drawY, 0.0f, size.x, size.y, rotation, color.x, color.y, color.z, color.w);
-
+    SpriteRenderer::Instance().Draw(
+        *sprite,
+        drawX, drawY,
+        size.x, size.y,
+        rotation,
+        color);
 }
 
 void UIScreen::SetSprite(std::shared_ptr<Sprite> newSprite)

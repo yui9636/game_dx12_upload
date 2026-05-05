@@ -392,6 +392,7 @@
     <ClInclude Include="Source\RenderPass\BuildIndirectCommandPass.h" />
     <ClInclude Include="Source\RenderPass\ComputeCullingPass.h" />
     <ClInclude Include="Source\RenderPass\GTAOPass.h" />
+    <ClInclude Include="Source\RenderPass\HUDPass.h" />
     <ClInclude Include="Source\RenderPass\IRenderPass.h" />
     <ClInclude Include="Source\RenderPass\PostProcessPass.h" />
     <ClInclude Include="Source\RenderPass\ShadowPass.h" />
@@ -446,6 +447,7 @@
     <ClInclude Include="Source\Shadow\ShadowExtractSystem.h" />
     <ClInclude Include="Source\SkyBox.h" />
     <ClInclude Include="Source\Sprite\Sprite.h" />
+    <ClInclude Include="Source\Sprite\SpriteRenderer.h" />
     <ClInclude Include="Source\Sprite\Sprite3D.h" />
     <ClInclude Include="Source\Stage\Stage.h" />
     <ClInclude Include="Source\Storage\GameplayAsset.h" />
@@ -704,6 +706,7 @@
     <ClCompile Include="Source\RenderPass\ComputeCullingPass.cpp" />
     <ClCompile Include="Source\RenderPass\FinalBlitPass.cpp" />
     <ClCompile Include="Source\RenderPass\GTAOPass.cpp" />
+    <ClCompile Include="Source\RenderPass\HUDPass.cpp" />
     <ClCompile Include="Source\RenderPass\PostProcessPass.cpp" />
     <ClCompile Include="Source\RenderPass\ShadowPass.cpp" />
     <ClCompile Include="Source\RenderPass\SkyboxPass.cpp" />
@@ -740,6 +743,7 @@
     <ClCompile Include="Source\Shadow\ShadowExtractSystem.cpp" />
     <ClCompile Include="Source\SkyBox.cpp" />
     <ClCompile Include="Source\Sprite\Sprite.cpp" />
+    <ClCompile Include="Source\Sprite\SpriteRenderer.cpp" />
     <ClCompile Include="Source\Sprite\Sprite3D.cpp" />
     <ClCompile Include="Source\Stage\Stage.cpp" />
     <ClCompile Include="Source\SwordTrail.cpp" />

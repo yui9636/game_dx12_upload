@@ -6,12 +6,12 @@
 
 #include	"Camera/Camera.h"
 #include	"Graphics.h"
+#include	"RenderContext/RenderContext.h"
+#include	"Sprite/SpriteRenderer.h"
 
 HeadUpDisplay::HeadUpDisplay()
 {
-	if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12)
-		lockonCursol = new Sprite(Graphics::Instance().GetDevice(), "Data/Sprite/LockonCursol.png");
-
+	lockonCursol = std::make_shared<Sprite>("Data/Sprite/LockonCursol.png");
 
 	CAMERACHANGEFREEMODEKEY		= Messenger::Instance().AddReceiver(MessageData::CAMERACHANGEFREEMODE, [&](void* data){ OnLockOff(data); });
 	CAMERACHANGELOCKONMODEKEY	= Messenger::Instance().AddReceiver(MessageData::CAMERACHANGELOCKONMODE, [&](void* data){ OnLockOn(data); });
@@ -23,12 +23,6 @@ HeadUpDisplay::~HeadUpDisplay()
 	Messenger::Instance().RemoveReceiver(CAMERACHANGEFREEMODEKEY);
 	Messenger::Instance().RemoveReceiver(CAMERACHANGELOCKONMODEKEY);
 	Messenger::Instance().RemoveReceiver(CAMERACHANGEMOTIONMODEKEY);
-
-	if( lockonCursol != nullptr )
-	{
-		delete	lockonCursol;
-		lockonCursol	= nullptr;
-	}
 }
 
 void HeadUpDisplay::Update(float dt)
@@ -42,27 +36,28 @@ void HeadUpDisplay::Update(float dt)
 	}
 }
 
-void HeadUpDisplay::Render(ID3D11DeviceContext* dc)
+void HeadUpDisplay::Render(const RenderContext& rc)
 {
-	//
-	if( lockonTimer > 0 )
+	(void)rc;
+
+	if( lockonTimer > 0 && lockonCursol )
 	{
 		float	cursolWidth		= static_cast<float>(  lockonCursol->GetTextureWidth() ) * 0.25f;
 		float	cursolHeight	= static_cast<float>( lockonCursol->GetTextureHeight() ) * 0.25f;
 		float	halfHeight		= static_cast<float>( lockonCursol->GetTextureHeight() ) * 0.25f;
 		float	alphaValue		= lockonTimer / lockonTimerMax;
 		float	sideValue		= 32 + 128 * ( 1 - alphaValue );
-		lockonCursol->Render(dc,
-			lockonPosition.x - sideValue, lockonPosition.y - halfHeight, 0.0f, cursolWidth, cursolHeight,
+		SpriteRenderer::Instance().Draw(*lockonCursol,
+			lockonPosition.x - sideValue, lockonPosition.y - halfHeight, cursolWidth, cursolHeight,
 			0, 0, static_cast<float>(lockonCursol->GetTextureWidth()), static_cast<float>(lockonCursol->GetTextureHeight()),
 			0,
-			1, 1, 1, alphaValue);
+			{ 1, 1, 1, alphaValue });
 
-		lockonCursol->Render(dc,
-			lockonPosition.x + sideValue, lockonPosition.y - halfHeight, 0.0f, cursolWidth, cursolHeight,
+		SpriteRenderer::Instance().Draw(*lockonCursol,
+			lockonPosition.x + sideValue, lockonPosition.y - halfHeight, cursolWidth, cursolHeight,
 			0, 0, static_cast<float>(lockonCursol->GetTextureWidth()), static_cast<float>(lockonCursol->GetTextureHeight()),
-			180,
-			1, 1, 1, alphaValue);
+			DirectX::XM_PI,
+			{ 1, 1, 1, alphaValue });
 
 
 	}

@@ -1,5 +1,4 @@
 #include "UIWorld.h"
-#include "Camera/Camera.h"
 #include "RenderContext/RenderContext.h"
 #include "Graphics.h"
 
@@ -16,27 +15,7 @@ UIWorld::UIWorld()
 
 void UIWorld::Render(const RenderContext& rc)
 {
-    if (!IsActive() || !sprite) return;
-
-    DirectX::XMFLOAT3 globalPos = position;
-    if (auto p = std::dynamic_pointer_cast<UIWorld>(parent.lock())) {
-        DirectX::XMFLOAT3 pPos = p->GetPosition();
-        globalPos.x += pPos.x;
-        globalPos.y += pPos.y;
-        globalPos.z += pPos.z;
-    }
-
-}
-
-void UIWorld::SetSprite(std::shared_ptr<Sprite3D> newSprite)
-{
-    sprite = newSprite;
-    if (sprite)
-    {
-        float scale = 0.01f;
-        size.x = sprite->GetTextureWidth() * scale;
-        size.y = sprite->GetTextureHeight() * scale;
-    }
+    (void)rc;
 }
 
 bool UIWorld::WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScreenPos) const
@@ -45,10 +24,22 @@ bool UIWorld::WorldToScreen(const RenderContext& rc, DirectX::XMFLOAT3& outScree
     DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&rc.viewMatrix);
     DirectX::XMMATRIX proj = DirectX::XMLoadFloat4x4(&rc.projectionMatrix);
 
-    float w = Graphics::Instance().GetScreenWidth();
-    float h = Graphics::Instance().GetScreenHeight();
+    float w = static_cast<float>(rc.displayWidth);
+    float h = static_cast<float>(rc.displayHeight);
+    if (w <= 0.0f) w = rc.mainViewport.width;
+    if (h <= 0.0f) h = rc.mainViewport.height;
+    if (w <= 0.0f) w = Graphics::Instance().GetScreenWidth();
+    if (h <= 0.0f) h = Graphics::Instance().GetScreenHeight();
 
-    XMVECTOR targetPos = XMLoadFloat3(&position);
+    DirectX::XMFLOAT3 globalPos = position;
+    if (auto p = std::dynamic_pointer_cast<UIWorld>(parent.lock())) {
+        const DirectX::XMFLOAT3 pPos = p->GetPosition();
+        globalPos.x += pPos.x;
+        globalPos.y += pPos.y;
+        globalPos.z += pPos.z;
+    }
+
+    XMVECTOR targetPos = XMLoadFloat3(&globalPos);
 
     XMVECTOR screenPosVec = XMVector3Project(
         targetPos,

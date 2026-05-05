@@ -2,6 +2,7 @@
 #include "Font/FontManager.h"
 #include "Graphics.h"
 #include "Sprite/Sprite.h" 
+#include "Sprite/SpriteRenderer.h"
 #include <cmath>
 #include <cstdlib>
 #include "RHI/ICommandList.h"
@@ -94,13 +95,11 @@ void UICombo::Render(const RenderContext& rc)
         float barX = drawX - gaugeWidth;
         float barY = drawY + 100.0f;
 
-        gaugeSprite->Render(
-            rc.commandList->GetNativeContext(),
+        SpriteRenderer::Instance().Draw(
+            *gaugeSprite,
             barX, barY,
-            0.0f,
             gaugeWidth, gaugeHeight,
             0.0f,
-            1.0f, 1.0f, 1.0f, alpha
-        );
+            { 1.0f, 1.0f, 1.0f, alpha });
     }
 }

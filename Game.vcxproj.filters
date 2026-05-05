@@ -775,6 +775,9 @@
     <ClInclude Include="Source\RenderPass\GTAOPass.h">
       <Filter>Source\RenderPass</Filter>
     </ClInclude>
+    <ClInclude Include="Source\RenderPass\HUDPass.h">
+      <Filter>Source\RenderPass</Filter>
+    </ClInclude>
     <ClInclude Include="Source\RenderPass\IRenderPass.h">
       <Filter>Source\RenderPass</Filter>
     </ClInclude>
@@ -932,6 +935,9 @@
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\Sprite\Sprite.h">
+      <Filter>Source\Sprite</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Sprite\SpriteRenderer.h">
       <Filter>Source\Sprite</Filter>
     </ClInclude>
     <ClInclude Include="Source\Sprite\Sprite3D.h">
@@ -1673,6 +1679,9 @@
     <ClCompile Include="Source\RenderPass\GTAOPass.cpp">
       <Filter>Source\RenderPass</Filter>
     </ClCompile>
+    <ClCompile Include="Source\RenderPass\HUDPass.cpp">
+      <Filter>Source\RenderPass</Filter>
+    </ClCompile>
     <ClCompile Include="Source\RenderPass\PostProcessPass.cpp">
       <Filter>Source\RenderPass</Filter>
     </ClCompile>
@@ -1779,6 +1788,9 @@
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="Source\Sprite\Sprite.cpp">
+      <Filter>Source\Sprite</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Sprite\SpriteRenderer.cpp">
       <Filter>Source\Sprite</Filter>
     </ClCompile>
     <ClCompile Include="Source\Sprite\Sprite3D.cpp">

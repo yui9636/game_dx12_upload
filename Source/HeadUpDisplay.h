@@ -1,6 +1,9 @@
 #pragma once
 
-#include "Sprite/Sprite.h" 
+#include "Sprite/Sprite.h"
+#include <memory>
+
+struct RenderContext;
 
 class	HeadUpDisplay
 {
@@ -10,7 +13,7 @@ public:
 
 	void Update(float dt);
 
-	void Render(ID3D11DeviceContext* dc);
+	void Render(const RenderContext& rc);
 
 private:
 	void OnLockOn(void* data);
@@ -18,7 +21,7 @@ private:
 	void OnLockOff(void* data);
 
 private:
-	Sprite*				lockonCursol	= nullptr;
+	std::shared_ptr<Sprite> lockonCursol;
 	float				lockonTimer		= -1;
 	float				lockonDirection	= 0;
 	float				lockonTimerMax	= 8;
