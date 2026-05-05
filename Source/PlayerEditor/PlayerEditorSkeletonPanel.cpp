@@ -20,6 +20,7 @@
 #include "Component/ColliderComponent.h"
 #include "Model/Model.h"
 #include "Registry/Registry.h"
+#include "System/Dialog.h"
 
 using namespace PlayerEditorInternal;
 
@@ -356,21 +357,9 @@ void PlayerEditorPanel::DrawPersistentColliderSection()
     }
 
     ImGui::Text("Persistent Colliders (%d)", persistentCount);
-
-    const bool canAdd = HasOpenModel() && CanUsePreviewEntity();
-    if (!canAdd) {
-        ImGui::BeginDisabled();
-    }
-    if (ImGui::Button("+ Body")) {
-        AddPersistentCollider(ColliderAttribute::Body);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("+ Attack")) {
-        AddPersistentCollider(ColliderAttribute::Attack);
-    }
-    if (!canAdd) {
-        ImGui::EndDisabled();
-    }
+    ImGui::TextDisabled("Use the toolbar's + Body / + Attack buttons to add new colliders.");
+    // (The bone-tree right-click menu also still offers Add Body / Add
+    // Attack with bone context.)
 
     if (!collider || persistentCount == 0) {
         return;
@@ -497,20 +486,67 @@ void PlayerEditorPanel::DrawPersistentColliderInspector()
     // body element is struck. DamageSystem reads these from the matching
     // Element after a Body x Attack contact and forwards them in the
     // DamageEvent. Empty path = silent. Attack elements ignore these.
+    // The Browse buttons mirror the Audio track UI in the timeline
+    // inspector and run paths through MakeDataRelativePath so saves are
+    // portable.
     if (element.attribute == ColliderAttribute::Body) {
         ImGui::Separator();
         ImGui::TextDisabled("Hit Reaction (this body's material)");
-        char vfxBuf[256] = {};
-        strncpy_s(vfxBuf, element.hitVfxPath.c_str(), _TRUNCATE);
-        if (ImGui::InputText("Hit VFX", vfxBuf, sizeof(vfxBuf))) {
-            element.hitVfxPath = vfxBuf;
-            m_colliderDirty = true;
+
+        // Hit VFX with InputText + Browse + Clear.
+        {
+            char vfxBuf[MAX_PATH] = {};
+            strncpy_s(vfxBuf, element.hitVfxPath.c_str(), _TRUNCATE);
+            if (ImGui::InputText("Hit VFX", vfxBuf, sizeof(vfxBuf))) {
+                element.hitVfxPath = vfxBuf;
+                m_colliderDirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER_OPEN " Browse##HitVfx")) {
+                char pathBuffer[MAX_PATH] = {};
+                if (!element.hitVfxPath.empty()) {
+                    strncpy_s(pathBuffer, element.hitVfxPath.c_str(), _TRUNCATE);
+                }
+                if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kVfxFileFilter, "Select Hit VFX") == DialogResult::OK) {
+                    element.hitVfxPath = MakeDataRelativePath(pathBuffer);
+                    m_colliderDirty = true;
+                }
+            }
+            if (!element.hitVfxPath.empty()) {
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_XMARK "##HitVfxClear")) {
+                    element.hitVfxPath.clear();
+                    m_colliderDirty = true;
+                }
+            }
         }
-        char sfxBuf[260] = {};
-        strncpy_s(sfxBuf, element.hitSfxPath.c_str(), _TRUNCATE);
-        if (ImGui::InputText("Hit SFX", sfxBuf, sizeof(sfxBuf))) {
-            element.hitSfxPath = sfxBuf;
-            m_colliderDirty = true;
+
+        // Hit SFX with InputText + Browse + Clear.
+        {
+            char sfxBuf[MAX_PATH] = {};
+            strncpy_s(sfxBuf, element.hitSfxPath.c_str(), _TRUNCATE);
+            if (ImGui::InputText("Hit SFX", sfxBuf, sizeof(sfxBuf))) {
+                element.hitSfxPath = sfxBuf;
+                m_colliderDirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(ICON_FA_FOLDER_OPEN " Browse##HitSfx")) {
+                char pathBuffer[MAX_PATH] = {};
+                if (!element.hitSfxPath.empty()) {
+                    strncpy_s(pathBuffer, element.hitSfxPath.c_str(), _TRUNCATE);
+                }
+                if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kAudioFileFilter, "Select Hit SFX") == DialogResult::OK) {
+                    element.hitSfxPath = MakeDataRelativePath(pathBuffer);
+                    m_colliderDirty = true;
+                }
+            }
+            if (!element.hitSfxPath.empty()) {
+                ImGui::SameLine();
+                if (ImGui::Button(ICON_FA_XMARK "##HitSfxClear")) {
+                    element.hitSfxPath.clear();
+                    m_colliderDirty = true;
+                }
+            }
         }
     }
 

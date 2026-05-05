@@ -39,6 +39,8 @@ namespace PlayerEditorInternal
         "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
     inline constexpr const char* kAudioFileFilter =
         "Audio Files (*.wav;*.ogg;*.mp3;*.flac)\0*.wav;*.ogg;*.mp3;*.flac\0WAV (*.wav)\0*.wav\0OGG (*.ogg)\0*.ogg\0MP3 (*.mp3)\0*.mp3\0FLAC (*.flac)\0*.flac\0All Files (*.*)\0*.*\0";
+    inline constexpr const char* kVfxFileFilter =
+        "VFX Asset (*.json;*.efk;*.efkefc)\0*.json;*.efk;*.efkefc\0JSON (*.json)\0*.json\0Effekseer (*.efk;*.efkefc)\0*.efk;*.efkefc\0All Files (*.*)\0*.*\0";
 
     inline constexpr uint32_t kScancodeA      = 4;
     inline constexpr uint32_t kScancodeD      = 7;

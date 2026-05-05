@@ -273,6 +273,20 @@ void PlayerEditorPanel::DrawToolbar()
         SavePrefabDocument(false);
     }
 
+    // Persistent collider add shortcuts. Sit next to Open / Save so the
+    // authoring flow doesn't require navigating into the Skeleton panel
+    // first. Disabled until a model is loaded and a preview entity is
+    // available, which mirrors the gating used inside the Skeleton panel.
+    const bool canAddCollider = HasOpenModel() && CanUsePreviewEntity();
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_PLUS " Body", canAddCollider)) {
+        AddPersistentCollider(ColliderAttribute::Body);
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_PLUS " Attack", canAddCollider)) {
+        AddPersistentCollider(ColliderAttribute::Attack);
+    }
+
     // v2.0 ActorEditor: mode-specific Setup / Repair buttons.
     if (m_actorEditorMode == ActorEditorMode::Enemy && m_registry && CanUsePreviewEntity()) {
         ImGui::SameLine();
