@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // PlayerEditor — core panel: lifecycle, top-level Draw / DockSpace, toolbar,
 // preview-entity / model setters, prefab save delegation. Concern-specific
 // drawing lives in sibling files:

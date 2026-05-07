@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // PlayerEditor — Timeline panel (track headers, grid, playback toolbar) and
 // timeline-related queries (frame limit, animation duration, selector).
 // Sibling of PlayerEditorPanel.cpp; split out for readability.

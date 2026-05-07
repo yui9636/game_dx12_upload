@@ -1,4 +1,4 @@
-// Asset picker logic for EffectEditorPanel — extracted from EffectEditorPanel.cpp
+﻿// Asset picker logic for EffectEditorPanel — extracted from EffectEditorPanel.cpp
 // to keep the main panel focused on dock layout / orchestration.
 //
 // All entry points remain member functions of EffectEditorPanel; only their

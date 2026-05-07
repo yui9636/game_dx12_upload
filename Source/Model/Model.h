@@ -249,6 +249,7 @@ public:
 	const std::vector<Mesh>& GetMeshes()const { return meshes; }
 	// 描画用 ModelResource を取得します。
 	std::shared_ptr<ModelResource> GetModelResource() const { return modelResource; }
+	float GetScaling() const { return scaling; }
 	// 指定メッシュのマテリアル番号を取得します。
 	int GetMeshMaterialIndex(int meshIndex) const;
 	// 指定メッシュのノード番号を取得します。

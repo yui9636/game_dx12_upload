@@ -1,4 +1,4 @@
-#include "System/Misc.h"
+﻿#include "System/Misc.h"
 #include "Graphics.h"
 #include "ShaderClass/PhongShader.h"
 #include "ShaderClass/PBRShader.h"
@@ -94,6 +94,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		gizmos = std::make_unique<Gizmos>(factory);
 		shadowMap = std::make_unique<ShadowMap>(factory);
 		modelRenderer = std::make_unique<ModelRenderer>(factory);
+		postEffect = std::make_unique<PostEffect>(factory, GraphicsAPI::DX12, m_dx12Device->GetDevice());
 		return;
 	}
 
@@ -174,8 +175,8 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 
 	renderState = std::make_unique<RenderState>(device.Get());
 	primitiveRenderer = std::make_unique<PrimitiveRenderer>(device.Get());
-	postEffect = std::make_unique<PostEffect>(device.Get());
 	resourceFactory = std::make_unique<DX11ResourceFactory>(device.Get());
+	postEffect = std::make_unique<PostEffect>(resourceFactory.get(), GraphicsAPI::DX11, device.Get());
 	gizmos = std::make_unique<Gizmos>(resourceFactory.get());
 	shadowMap = std::make_unique<ShadowMap>(resourceFactory.get());
 	modelRenderer = std::make_unique<ModelRenderer>(resourceFactory.get());
@@ -304,6 +305,11 @@ void Graphics::OnResize(uint32_t width, uint32_t height)
 		frameBuffers[static_cast<int>(FrameBufferId::VolumetricFogBlur)]= std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::SSR)]              = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
 		frameBuffers[static_cast<int>(FrameBufferId::SSRBlur)]          = std::make_unique<FrameBuffer>(factory, renderW / 2, renderH / 2, hdr);
+
+		// FSR2 コンテキストはディスプレイサイズに依存するので再生成を促す。
+		if (postEffect) {
+			postEffect->OnResize(width, height);
+		}
 	}
 }
 
@@ -389,6 +395,9 @@ void Graphics::CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination)
 
 std::unique_ptr<IPipelineState> Graphics::CreatePipelineState(const PipelineStateDesc& desc)
 {
+	if (resourceFactory) {
+		return resourceFactory->CreatePipelineState(desc);
+	}
 	return std::make_unique<DX11PipelineState>(desc);
 }
 

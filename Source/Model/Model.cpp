@@ -1434,92 +1434,105 @@ int Model::GetNodeIndex(const char* name) const
 }
 
 // 指定アニメーション・指定ノードの指定時間における姿勢を計算します。
+// time がキーフレーム範囲外でも端値にクランプして必ず有効な姿勢を書き込みます。
+// (範囲外で nodePose を未更新のまま返すと、呼び出し側のバインドポーズが残って
+//  ブレンド時に T ポーズが透けて見える原因になります)
 void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, NodePose& nodePose) const
-
 {
-
 	const Animation& animation = animations.at(animationIndex);
+
+	if (nodeIndex < 0 || static_cast<size_t>(nodeIndex) >= animation.nodeAnims.size()) {
+		return;
+	}
 
 	const NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
 
-	for (size_t index = 0; index < nodeAnim.positionKeyframes.size() - 1; ++index)
-
-	{
-
-		const VectorKeyframe& keyframe0 = nodeAnim.positionKeyframes.at(index);
-
-		const VectorKeyframe& keyframe1 = nodeAnim.positionKeyframes.at(index + 1);
-
-		if (time >= keyframe0.seconds && time <= keyframe1.seconds)
-
-		{
-
-			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-			DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
-
-			DirectX::XMVECTOR V1 = DirectX::XMLoadFloat3(&keyframe1.value);
-
-			DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
-
-			DirectX::XMStoreFloat3(&nodePose.position, V);
-
+	// position
+	if (!nodeAnim.positionKeyframes.empty()) {
+		const auto& kfs = nodeAnim.positionKeyframes;
+		if (kfs.size() == 1 || time <= kfs.front().seconds) {
+			nodePose.position = kfs.front().value;
 		}
-
+		else if (time >= kfs.back().seconds) {
+			nodePose.position = kfs.back().value;
+		}
+		else {
+			for (size_t i = 0; i + 1 < kfs.size(); ++i) {
+				const VectorKeyframe& k0 = kfs[i];
+				const VectorKeyframe& k1 = kfs[i + 1];
+				if (time >= k0.seconds && time <= k1.seconds) {
+					const float span = k1.seconds - k0.seconds;
+					const float rate = span > 0.0f ? (time - k0.seconds) / span : 0.0f;
+					DirectX::XMVECTOR V = DirectX::XMVectorLerp(
+						DirectX::XMLoadFloat3(&k0.value),
+						DirectX::XMLoadFloat3(&k1.value),
+						rate);
+					DirectX::XMStoreFloat3(&nodePose.position, V);
+					break;
+				}
+			}
+		}
 	}
 
-	for (size_t index = 0; index < nodeAnim.rotationKeyframes.size() - 1; ++index)
-
-	{
-
-		const QuaternionKeyframe& keyframe0 = nodeAnim.rotationKeyframes.at(index);
-
-		const QuaternionKeyframe& keyframe1 = nodeAnim.rotationKeyframes.at(index + 1);
-
-		if (time >= keyframe0.seconds && time <= keyframe1.seconds)
-
-		{
-
-			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-			DirectX::XMVECTOR Q0 = DirectX::XMLoadFloat4(&keyframe0.value);
-
-			DirectX::XMVECTOR Q1 = DirectX::XMLoadFloat4(&keyframe1.value);
-
-			DirectX::XMVECTOR Q = DirectX::XMQuaternionSlerp(Q0, Q1, rate);
-
-			DirectX::XMStoreFloat4(&nodePose.rotation, Q);
-
+	// rotation
+	if (!nodeAnim.rotationKeyframes.empty()) {
+		const auto& kfs = nodeAnim.rotationKeyframes;
+		if (kfs.size() == 1 || time <= kfs.front().seconds) {
+			nodePose.rotation = kfs.front().value;
 		}
-
+		else if (time >= kfs.back().seconds) {
+			nodePose.rotation = kfs.back().value;
+		}
+		else {
+			for (size_t i = 0; i + 1 < kfs.size(); ++i) {
+				const QuaternionKeyframe& k0 = kfs[i];
+				const QuaternionKeyframe& k1 = kfs[i + 1];
+				if (time >= k0.seconds && time <= k1.seconds) {
+					const float span = k1.seconds - k0.seconds;
+					const float rate = span > 0.0f ? (time - k0.seconds) / span : 0.0f;
+					DirectX::XMVECTOR Q0 = DirectX::XMLoadFloat4(&k0.value);
+					DirectX::XMVECTOR Q1 = DirectX::XMLoadFloat4(&k1.value);
+					// 最短経路を取るため dot < 0 なら片方を反転する
+					float dot = 0.0f;
+					DirectX::XMStoreFloat(&dot, DirectX::XMVector4Dot(Q0, Q1));
+					if (dot < 0.0f) {
+						Q1 = DirectX::XMVectorNegate(Q1);
+					}
+					DirectX::XMVECTOR Q = DirectX::XMQuaternionSlerp(Q0, Q1, rate);
+					Q = DirectX::XMQuaternionNormalize(Q);
+					DirectX::XMStoreFloat4(&nodePose.rotation, Q);
+					break;
+				}
+			}
+		}
 	}
 
-	for (size_t index = 0; index < nodeAnim.scaleKeyframes.size() - 1; ++index)
-
-	{
-
-		const VectorKeyframe& keyframe0 = nodeAnim.scaleKeyframes.at(index);
-
-		const VectorKeyframe& keyframe1 = nodeAnim.scaleKeyframes.at(index + 1);
-
-		if (time >= keyframe0.seconds && time <= keyframe1.seconds)
-
-		{
-
-			float rate = (time - keyframe0.seconds) / (keyframe1.seconds - keyframe0.seconds);
-
-			DirectX::XMVECTOR V0 = DirectX::XMLoadFloat3(&keyframe0.value);
-
-			DirectX::XMVECTOR V1 = DirectX::XMLoadFloat3(&keyframe1.value);
-
-			DirectX::XMVECTOR V = DirectX::XMVectorLerp(V0, V1, rate);
-
-			DirectX::XMStoreFloat3(&nodePose.scale, V);
-
+	// scale
+	if (!nodeAnim.scaleKeyframes.empty()) {
+		const auto& kfs = nodeAnim.scaleKeyframes;
+		if (kfs.size() == 1 || time <= kfs.front().seconds) {
+			nodePose.scale = kfs.front().value;
 		}
-
+		else if (time >= kfs.back().seconds) {
+			nodePose.scale = kfs.back().value;
+		}
+		else {
+			for (size_t i = 0; i + 1 < kfs.size(); ++i) {
+				const VectorKeyframe& k0 = kfs[i];
+				const VectorKeyframe& k1 = kfs[i + 1];
+				if (time >= k0.seconds && time <= k1.seconds) {
+					const float span = k1.seconds - k0.seconds;
+					const float rate = span > 0.0f ? (time - k0.seconds) / span : 0.0f;
+					DirectX::XMVECTOR V = DirectX::XMVectorLerp(
+						DirectX::XMLoadFloat3(&k0.value),
+						DirectX::XMLoadFloat3(&k1.value),
+						rate);
+					DirectX::XMStoreFloat3(&nodePose.scale, V);
+					break;
+				}
+			}
+		}
 	}
-
 }
 
 // 指定アニメーション全体の指定時間における全ノード姿勢を計算します。

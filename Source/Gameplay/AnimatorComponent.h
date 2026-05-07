@@ -25,7 +25,7 @@ struct AnimatorComponent
 
     bool enableRootMotion = true;
     bool bakeRootMotionY = false;
-    float rootMotionScale = 0.1f;
+    float rootMotionScale = 1.0f;
     DirectX::XMFLOAT3 rootMotionDelta = { 0.0f, 0.0f, 0.0f };
 
     bool driverConnected = false;

@@ -17,11 +17,17 @@ struct AnimatorRuntimeEntry
 
     // ルートノード index。
     // モデル全体の基準ノードとして使う。
-    int rootNodeIndex = 1;
+    int rootNodeIndex = -1;
+    DirectX::XMFLOAT3 rootNodeBindPosition = { 0.0f, 0.0f, 0.0f };
 
     // pelvis ボーンの index。
     // ルートモーションや下半身基準の処理で使う想定。
     int pelvisNodeIndex = -1;
+
+    int rootMotionNodeIndex = -1;
+    DirectX::XMFLOAT3 rootMotionBindPosition = { 0.0f, 0.0f, 0.0f };
+
+    std::vector<Model::NodePose> bindPoses;
 
     // spine ボーンの index。
     // 上半身マスクの起点として使う。
@@ -39,6 +45,9 @@ struct AnimatorRuntimeEntry
     // 攻撃や上半身アクションなど、追加で重ねたい姿勢を入れる。
     std::vector<Model::NodePose> actionPoses;
 
+    std::vector<Model::NodePose> baseBlendFromPoses;
+    std::vector<Model::NodePose> actionBlendFromPoses;
+
     // 一時計算用の pose 配列。
     // ブレンド途中や中間結果の退避に使う。
     std::vector<Model::NodePose> tempPoses;
@@ -46,6 +55,8 @@ struct AnimatorRuntimeEntry
     // 最終出力用の pose 配列。
     // 実際にモデルへ反映する最終姿勢をここに作る。
     std::vector<Model::NodePose> finalPoses;
+
+    bool hasValidFinalPose = false;
 
     // ブレンド補間用の pose オフセット配列。
     // action 遷移時のなめらかな補間などに使う。
@@ -63,6 +74,11 @@ struct AnimatorRuntimeEntry
     // 前回 action 再生時刻。
     // action 再生の継続・切り替え判定で使う想定。
     float prevActionTime = 0.0f;
+
+    int prevBaseRootMotionAnimIndex = -1;
+    float prevBaseRootMotionTime = 0.0f;
+    int prevActionRootMotionAnimIndex = -1;
+    float prevActionRootMotionTime = 0.0f;
 
     // アニメーション名から index を引くためのキャッシュ。
     // 毎回文字列検索しないようにする。

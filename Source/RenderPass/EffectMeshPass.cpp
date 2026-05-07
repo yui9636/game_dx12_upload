@@ -1,4 +1,4 @@
-#include "EffectMeshPass.h"
+﻿#include "EffectMeshPass.h"
 
 #include "Console/Logger.h"
 #include "Graphics.h"
@@ -77,7 +77,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
     ITexture* rtScene = resources.GetTexture(m_hSceneColor);
     ITexture* dsReal  = resources.GetTexture(m_hDepth);
     if (!rtScene || !dsReal) {
-        LOG_ERROR("[EffectMeshPass] rtScene=%p dsReal=%p — aborting", (void*)rtScene, (void*)dsReal);
+        LOG_ERROR("[EffectMeshPass] rtScene=%p dsReal=%p - aborting", (void*)rtScene, (void*)dsReal);
         return;
     }
 

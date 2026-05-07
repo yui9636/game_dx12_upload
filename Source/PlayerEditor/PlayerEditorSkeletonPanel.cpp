@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // PlayerEditor — Skeleton panel (bone tree + sockets) and persistent collider
 // authoring helpers. Sibling of PlayerEditorPanel.cpp; split out for readability.
 // ============================================================================

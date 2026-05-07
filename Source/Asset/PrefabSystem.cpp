@@ -42,6 +42,7 @@
 #include "Console/Logger.h"
 #include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/ActionDatabaseComponent.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/PlayerTagComponent.h"
@@ -186,6 +187,49 @@ namespace
                 {"alignment", static_cast<int>(text->alignment)},
                 {"lineSpacing", text->lineSpacing},
                 {"wrapping", text->wrapping}
+                });
+        }
+
+        if (const auto& hpBinding = std::get<std::optional<HPGaugeBindingComponent>>(node.components); hpBinding.has_value()) {
+            writeComponent("HPGaugeBindingComponent", json{
+                {"targetMode", static_cast<int>(hpBinding->targetMode)},
+                {"explicitTarget", hpBinding->explicitTarget},
+                {"visibleWhenNoTarget", hpBinding->visibleWhenNoTarget},
+                {"hideWhenDead", hpBinding->hideWhenDead},
+                {"hideWhenFull", hpBinding->hideWhenFull},
+                {"smoothingSpeed", hpBinding->smoothingSpeed},
+                {"damagePreviewDelay", hpBinding->damagePreviewDelay},
+                {"damagePreviewSpeed", hpBinding->damagePreviewSpeed}
+                });
+        }
+
+        if (const auto& hpFill = std::get<std::optional<HPGaugeFillComponent>>(node.components); hpFill.has_value()) {
+            writeComponent("HPGaugeFillComponent", json{
+                {"bindingRoot", hpFill->bindingRoot},
+                {"fillDirection", static_cast<int>(hpFill->fillDirection)},
+                {"colorMode", static_cast<int>(hpFill->colorMode)},
+                {"useDisplayedRatio", hpFill->useDisplayedRatio},
+                {"useDelayedRatio", hpFill->useDelayedRatio},
+                {"hideWhenNoTarget", hpFill->hideWhenNoTarget},
+                {"hideWhenFull", hpFill->hideWhenFull},
+                {"minVisibleRatio", hpFill->minVisibleRatio},
+                {"fixedColor", hpFill->fixedColor},
+                {"highColor", hpFill->highColor},
+                {"midColor", hpFill->midColor},
+                {"lowColor", hpFill->lowColor},
+                {"midThreshold", hpFill->midThreshold},
+                {"lowThreshold", hpFill->lowThreshold}
+                });
+        }
+
+        if (const auto& hpText = std::get<std::optional<HPGaugeTextComponent>>(node.components); hpText.has_value()) {
+            writeComponent("HPGaugeTextComponent", json{
+                {"bindingRoot", hpText->bindingRoot},
+                {"format", static_cast<int>(hpText->format)},
+                {"label", hpText->label},
+                {"hideWhenNoTarget", hpText->hideWhenNoTarget},
+                {"hideWhenDead", hpText->hideWhenDead},
+                {"hideWhenFull", hpText->hideWhenFull}
                 });
         }
 
@@ -742,6 +786,53 @@ namespace
             component.alignment = static_cast<TextAlignment>(value.value("alignment", static_cast<int>(component.alignment)));
             component.lineSpacing = value.value("lineSpacing", component.lineSpacing);
             component.wrapping = value.value("wrapping", component.wrapping);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("HPGaugeBindingComponent")) {
+            HPGaugeBindingComponent component;
+            const json& value = components["HPGaugeBindingComponent"];
+            component.targetMode = static_cast<HPGaugeTargetMode>(value.value("targetMode", static_cast<int>(component.targetMode)));
+            component.explicitTarget = value.value("explicitTarget", component.explicitTarget);
+            component.visibleWhenNoTarget = value.value("visibleWhenNoTarget", component.visibleWhenNoTarget);
+            component.hideWhenDead = value.value("hideWhenDead", component.hideWhenDead);
+            component.hideWhenFull = value.value("hideWhenFull", component.hideWhenFull);
+            component.smoothingSpeed = value.value("smoothingSpeed", component.smoothingSpeed);
+            component.damagePreviewDelay = value.value("damagePreviewDelay", component.damagePreviewDelay);
+            component.damagePreviewSpeed = value.value("damagePreviewSpeed", component.damagePreviewSpeed);
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("HPGaugeFillComponent")) {
+            HPGaugeFillComponent component;
+            const json& value = components["HPGaugeFillComponent"];
+            component.bindingRoot = value.value("bindingRoot", component.bindingRoot);
+            component.fillDirection = static_cast<HPGaugeFillDirection>(value.value("fillDirection", static_cast<int>(component.fillDirection)));
+            component.colorMode = static_cast<HPGaugeColorMode>(value.value("colorMode", static_cast<int>(component.colorMode)));
+            component.useDisplayedRatio = value.value("useDisplayedRatio", component.useDisplayedRatio);
+            component.useDelayedRatio = value.value("useDelayedRatio", component.useDelayedRatio);
+            component.hideWhenNoTarget = value.value("hideWhenNoTarget", component.hideWhenNoTarget);
+            component.hideWhenFull = value.value("hideWhenFull", component.hideWhenFull);
+            component.minVisibleRatio = value.value("minVisibleRatio", component.minVisibleRatio);
+            component.fixedColor = value.value("fixedColor", component.fixedColor);
+            component.highColor = value.value("highColor", component.highColor);
+            component.midColor = value.value("midColor", component.midColor);
+            component.lowColor = value.value("lowColor", component.lowColor);
+            component.midThreshold = value.value("midThreshold", component.midThreshold);
+            component.lowThreshold = value.value("lowThreshold", component.lowThreshold);
+            component.runtimeRatio = 1.0f;
+            SetOptional(node.components, component);
+        }
+
+        if (components.contains("HPGaugeTextComponent")) {
+            HPGaugeTextComponent component;
+            const json& value = components["HPGaugeTextComponent"];
+            component.bindingRoot = value.value("bindingRoot", component.bindingRoot);
+            component.format = static_cast<HPGaugeTextFormat>(value.value("format", static_cast<int>(component.format)));
+            component.label = value.value("label", component.label);
+            component.hideWhenNoTarget = value.value("hideWhenNoTarget", component.hideWhenNoTarget);
+            component.hideWhenDead = value.value("hideWhenDead", component.hideWhenDead);
+            component.hideWhenFull = value.value("hideWhenFull", component.hideWhenFull);
             SetOptional(node.components, component);
         }
 

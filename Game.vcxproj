@@ -130,6 +130,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="External\FSR2\dx11\ffx_fsr2_dx11.h" />
+    <ClInclude Include="External\FSR2\dx12\d3dx12.h" />
+    <ClInclude Include="External\FSR2\dx12\ffx_fsr2_dx12.h" />
+    <ClInclude Include="External\FSR2\dx12\shaders\ffx_fsr2_shaders_dx12.h" />
     <ClInclude Include="External\FSR2\ffx_fsr2.h" />
     <ClInclude Include="External\imgui-docking\imconfig.h" />
     <ClInclude Include="External\imgui-docking\imgui.h" />
@@ -149,6 +152,7 @@
     <ClInclude Include="Source\Animator\AnimatorRuntime.h" />
     <ClInclude Include="Source\Animator\AnimatorService.h" />
     <ClInclude Include="Source\Animator\AnimatorSystem.h" />
+    <ClInclude Include="Source\Animator\RootMotionSystem.h" />
     <ClInclude Include="Source\Archetype\Archetype.h" />
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
@@ -291,6 +295,7 @@
     <ClInclude Include="Source\Gameplay\AnimatorComponent.h" />
     <ClInclude Include="Source\Gameplay\DodgeStateComponent.h" />
     <ClInclude Include="Source\Gameplay\HitboxTrackingComponent.h" />
+    <ClInclude Include="Source\Gameplay\HPGaugeComponent.h" />
     <ClInclude Include="Source\Gameplay\StageBoundsComponent.h" />
     <ClInclude Include="Source\Gameplay\PlaybackComponent.h" />
     <ClInclude Include="Source\Gameplay\PlaybackRangeComponent.h" />
@@ -304,6 +309,7 @@
     <ClInclude Include="Source\Gameplay\DodgeSystem.h" />
     <ClInclude Include="Source\Gameplay\StaminaSystem.h" />
     <ClInclude Include="Source\Gameplay\HealthSystem.h" />
+    <ClInclude Include="Source\Gameplay\HPGaugeSystem.h" />
     <ClInclude Include="Source\Gameplay\CharacterPhysicsSystem.h" />
     <ClInclude Include="Source\Gameplay\PlaybackSystem.h" />
     <ClInclude Include="Source\Gameplay\TimelineSystem.h" />
@@ -472,6 +478,8 @@
     <ClInclude Include="Source\UI\DamageTextManager.h" />
     <ClInclude Include="Source\UI\UI2DSpriteExtractSystem.h" />
     <ClInclude Include="Source\UI\UI2DSpriteRenderSystem.h" />
+    <ClInclude Include="Source\UI\UI2DTextExtractSystem.h" />
+    <ClInclude Include="Source\UI\UI2DTextRenderSystem.h" />
     <ClInclude Include="Source\UI\UICombo.h" />
     <ClInclude Include="Source\UI\UIDamagePopup.h" />
     <ClInclude Include="Source\UI\UIElement.h" />
@@ -491,6 +499,8 @@
   <ItemGroup>
     <ClCompile Include="External\FSR2\dx11\ffx_fsr2_dx11.cpp" />
     <ClCompile Include="External\FSR2\dx11\shaders\ffx_fsr2_shaders_dx11.cpp" />
+    <ClCompile Include="External\FSR2\dx12\ffx_fsr2_dx12.cpp" />
+    <ClCompile Include="External\FSR2\dx12\shaders\ffx_fsr2_shaders_dx12.cpp" />
     <ClCompile Include="External\FSR2\ffx_assert.cpp" />
     <ClCompile Include="External\FSR2\ffx_fsr2.cpp" />
     <ClCompile Include="External\imgui-docking\imgui.cpp" />
@@ -501,7 +511,9 @@
     <ClCompile Include="External\imgui-docking\imgui_impl_win32.cpp" />
     <ClCompile Include="External\imgui-docking\imgui_tables.cpp" />
     <ClCompile Include="External\imgui-docking\imgui_widgets.cpp" />
-    <ClCompile Include="External\imgui-docking\profiler.cpp" />
+    <ClCompile Include="External\imgui-docking\profiler.cpp">
+      <ObjectFileName>$(IntDir)imgui_docking_profiler.obj</ObjectFileName>
+    </ClCompile>
     <ClCompile Include="External\imgui-docking\timer.cpp" />
     <ClCompile Include="External\imgui-node-editor-master\crude_json.cpp" />
     <ClCompile Include="External\imgui-node-editor-master\imgui_canvas.cpp" />
@@ -536,6 +548,7 @@
     <ClCompile Include="Source\Animator\AnimatorRuntime.cpp" />
     <ClCompile Include="Source\Animator\AnimatorService.cpp" />
     <ClCompile Include="Source\Animator\AnimatorSystem.cpp" />
+    <ClCompile Include="Source\Animator\RootMotionSystem.cpp" />
     <ClCompile Include="Source\Archetype\Archetype.cpp" />
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
@@ -602,6 +615,7 @@
     <ClCompile Include="Source\Gameplay\DodgeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\StaminaSystem.cpp" />
     <ClCompile Include="Source\Gameplay\HealthSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\HPGaugeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\CharacterPhysicsSystem.cpp" />
     <ClCompile Include="Source\Gameplay\PlaybackSystem.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineSystem.cpp" />
@@ -966,6 +980,12 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\FinalBlitPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\PostEffectBlitPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

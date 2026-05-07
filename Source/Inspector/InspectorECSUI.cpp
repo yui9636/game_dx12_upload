@@ -27,6 +27,7 @@
 #include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/StageBoundsComponent.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlaybackRangeComponent.h"
 #include "Gameplay/TimelineComponent.h"
@@ -427,6 +428,79 @@ namespace {
             return true;
         }
         return false;
+    }
+
+    template <typename TComponent, typename Func>
+    bool DrawCustomComponentRemovable(Registry* registry, EntityID entity, const char* name, TComponent* component, Func&& drawFields)
+    {
+        if (!registry || !component) {
+            return false;
+        }
+
+        bool open = true;
+        const bool headerOpen = ImGui::CollapsingHeader(name, &open, ImGuiTreeNodeFlags_DefaultOpen);
+        if (!open) {
+            registry->RemoveComponent<TComponent>(entity);
+            return true;
+        }
+
+        if (headerOpen && ImGui::BeginTable(name, 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+            ImGui::TableSetupColumn("Field", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableNextColumn();
+            drawFields();
+            ImGui::EndTable();
+        }
+        return false;
+    }
+
+    void DrawHPGaugeBindingComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<HPGaugeBindingComponent>(entity) : nullptr;
+        DrawCustomComponentRemovable(registry, entity, "HPGaugeBindingComponent", component, [&]() {
+            DrawUndoableValueWidget(registry, entity, *component, "targetMode", component->targetMode);
+            DrawUndoableValueWidget(registry, entity, *component, "explicitTarget", component->explicitTarget);
+            DrawUndoableValueWidget(registry, entity, *component, "visibleWhenNoTarget", component->visibleWhenNoTarget);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenDead", component->hideWhenDead);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenFull", component->hideWhenFull);
+            DrawUndoableValueWidget(registry, entity, *component, "smoothingSpeed", component->smoothingSpeed);
+            DrawUndoableValueWidget(registry, entity, *component, "damagePreviewDelay", component->damagePreviewDelay);
+            DrawUndoableValueWidget(registry, entity, *component, "damagePreviewSpeed", component->damagePreviewSpeed);
+        });
+    }
+
+    void DrawHPGaugeFillComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<HPGaugeFillComponent>(entity) : nullptr;
+        DrawCustomComponentRemovable(registry, entity, "HPGaugeFillComponent", component, [&]() {
+            DrawUndoableValueWidget(registry, entity, *component, "bindingRoot", component->bindingRoot);
+            DrawUndoableValueWidget(registry, entity, *component, "fillDirection", component->fillDirection);
+            DrawUndoableValueWidget(registry, entity, *component, "colorMode", component->colorMode);
+            DrawUndoableValueWidget(registry, entity, *component, "useDisplayedRatio", component->useDisplayedRatio);
+            DrawUndoableValueWidget(registry, entity, *component, "useDelayedRatio", component->useDelayedRatio);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenNoTarget", component->hideWhenNoTarget);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenFull", component->hideWhenFull);
+            DrawUndoableValueWidget(registry, entity, *component, "minVisibleRatio", component->minVisibleRatio);
+            DrawUndoableValueWidget(registry, entity, *component, "fixedColor", component->fixedColor);
+            DrawUndoableValueWidget(registry, entity, *component, "highColor", component->highColor);
+            DrawUndoableValueWidget(registry, entity, *component, "midColor", component->midColor);
+            DrawUndoableValueWidget(registry, entity, *component, "lowColor", component->lowColor);
+            DrawUndoableValueWidget(registry, entity, *component, "midThreshold", component->midThreshold);
+            DrawUndoableValueWidget(registry, entity, *component, "lowThreshold", component->lowThreshold);
+        });
+    }
+
+    void DrawHPGaugeTextComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<HPGaugeTextComponent>(entity) : nullptr;
+        DrawCustomComponentRemovable(registry, entity, "HPGaugeTextComponent", component, [&]() {
+            DrawUndoableValueWidget(registry, entity, *component, "bindingRoot", component->bindingRoot);
+            DrawUndoableValueWidget(registry, entity, *component, "format", component->format);
+            DrawUndoableValueWidget(registry, entity, *component, "label", component->label);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenNoTarget", component->hideWhenNoTarget);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenDead", component->hideWhenDead);
+            DrawUndoableValueWidget(registry, entity, *component, "hideWhenFull", component->hideWhenFull);
+        });
     }
 
     // ------------------------------------------------------------
@@ -2002,6 +2076,9 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentRemovable<DodgeStateComponent>(registry, entity);
             DrawComponentRemovable<HitboxTrackingComponent>(registry, entity);
             DrawComponentRemovable<StageBoundsComponent>(registry, entity);
+            DrawHPGaugeBindingComponentInspector(registry, entity);
+            DrawHPGaugeFillComponentInspector(registry, entity);
+            DrawHPGaugeTextComponentInspector(registry, entity);
             DrawComponentRemovable<PlaybackComponent>(registry, entity);
             DrawComponentRemovable<PlaybackRangeComponent>(registry, entity);
             DrawComponentRemovable<TimelineComponent>(registry, entity);
@@ -2049,6 +2126,9 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                 TryAddComponent<DodgeStateComponent>(registry, entity, "DodgeState");
                 TryAddComponent<HitboxTrackingComponent>(registry, entity, "HitboxTracking");
                 TryAddComponent<StageBoundsComponent>(registry, entity, "StageBounds");
+                TryAddComponent<HPGaugeBindingComponent>(registry, entity, "HPGaugeBinding");
+                TryAddComponent<HPGaugeFillComponent>(registry, entity, "HPGaugeFill");
+                TryAddComponent<HPGaugeTextComponent>(registry, entity, "HPGaugeText");
                 TryAddComponent<PlaybackComponent>(registry, entity, "Playback");
                 TryAddComponent<PlaybackRangeComponent>(registry, entity, "PlaybackRange");
                 TryAddComponent<TimelineComponent>(registry, entity, "Timeline");

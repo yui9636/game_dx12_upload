@@ -24,6 +24,7 @@
 #include <RenderPass\VolumetricFogPass.h>
 #include <RenderPass\SSRPass.h>
 #include "RenderPass/FinalBlitPass.h"
+#include "RenderPass/PostProcessPass.h"
 #include "RenderPass/HUDPass.h"
 #include <Material\MaterialPreviewStudio.h>
 #include "RHI/IResourceFactory.h"
@@ -81,6 +82,36 @@ namespace {
 
     // 診断ログの出力先。
     constexpr const char* kPhase4DiagPath = "C:/Users/yuito/Documents/MyEngine_Workspace/game_dx12_upload/Saved/Logs/phase4_diag.txt";
+
+    void ApplyProjectionJitter(
+        DirectX::XMFLOAT4X4& projection,
+        const DirectX::XMFLOAT2& jitter,
+        uint32_t renderWidth,
+        uint32_t renderHeight)
+    {
+        if (renderWidth == 0 || renderHeight == 0) {
+            return;
+        }
+
+        projection._31 += 2.0f * jitter.x / static_cast<float>(renderWidth);
+        projection._32 += 2.0f * jitter.y / static_cast<float>(renderHeight);
+    }
+
+    void ApplyFsr2JitterToViewState(
+        RenderContext::ViewState& state,
+        const DirectX::XMFLOAT2& jitter,
+        const DirectX::XMFLOAT2& prevJitter)
+    {
+        using namespace DirectX;
+        const XMMATRIX view = XMLoadFloat4x4(&state.viewMatrix);
+        const XMMATRIX projection = XMLoadFloat4x4(&state.projectionMatrix);
+        XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
+
+        state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
+        state.jitterOffset = jitter;
+        state.prevJitterOffset = prevJitter;
+        ApplyProjectionJitter(state.projectionMatrix, state.jitterOffset, state.renderWidth, state.renderHeight);
+    }
 
     bool TryBuildActiveCamera2DViewProjection(Registry& registry,
                                               const DirectX::XMFLOAT4& viewRect,
@@ -1099,7 +1130,7 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<EffectParticlePass>());
     if (isDX12) {
         SpriteRenderer::Instance().Initialize(factory);
-        m_renderPipeline->AddPass(std::make_shared<FinalBlitPass>(factory));
+        m_renderPipeline->AddPass(std::make_shared<PostProcessPass>());
         m_renderPipeline->AddPass(std::make_shared<HUDPass>(factory));
     }
 
@@ -1210,6 +1241,9 @@ void EngineKernel::Initialize()
         m_gameLoopInputOwnerInitialized = true;
     }
 
+    // ReflectionProbeBaker は DX11 / DX12 両対応 (内部で API 分岐)。
+    m_probeBaker = std::make_unique<ReflectionProbeBaker>();
+
     // DX12 では EditorLayer を作って終了。
     if (isDX12) {
         m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
@@ -1219,8 +1253,6 @@ void EngineKernel::Initialize()
 
     // DX11 固有初期化。
     ID3D11Device* dx11Dev = Graphics::Instance().GetDevice();
-
-    m_probeBaker = std::make_unique<ReflectionProbeBaker>(dx11Dev);
     GlobalRootSignature::Instance().Initialize(dx11Dev);
 
     m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
@@ -1433,14 +1465,15 @@ void EngineKernel::Render()
         m_gameLayer->Render(rc, m_renderQueue);
     }
 
-    // ReflectionProbeBaker は DX11 専用。
-    if (m_probeBaker && m_gameLayer && Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
+    // ReflectionProbeBaker は DX11 / DX12 共通で動く (内部分岐)。
+    if (m_probeBaker && m_gameLayer) {
         m_probeBaker->BakeAllDirtyProbes(m_gameLayer->GetRegistry(), m_renderQueue, rc);
     }
 
     std::vector<RenderPipeline::RenderViewContext> views;
     const size_t invalidViewIndex = static_cast<size_t>(-1);
     size_t gameView2DViewIndex = invalidViewIndex;
+    size_t gameViewMainViewIndex = invalidViewIndex;
 
     if (m_editorLayer) {
         m_editorLayer->SetPlayerPreviewTexture(nullptr);
@@ -1623,6 +1656,19 @@ void EngineKernel::Render()
         }
         // 通常の editor scene view。
         else {
+            const uint32_t sceneWidth = (std::max)(panelWidth, 64u);
+            const uint32_t sceneHeight = (std::max)(panelHeight, 64u);
+            state.panelWidth = sceneWidth;
+            state.panelHeight = sceneHeight;
+            state.renderWidth = sceneWidth;
+            state.renderHeight = sceneHeight;
+            state.displayWidth = sceneWidth;
+            state.displayHeight = sceneHeight;
+            state.viewport = RhiViewport(
+                0.0f,
+                0.0f,
+                static_cast<float>(sceneWidth),
+                static_cast<float>(sceneHeight));
             state.viewMatrix = m_editorLayer->GetEditorViewMatrix();
             state.cameraPosition = m_editorLayer->GetEditorCameraPosition();
             state.cameraDirection = m_editorLayer->GetEditorCameraDirection();
@@ -1631,6 +1677,7 @@ void EngineKernel::Render()
                 ? (static_cast<float>(state.renderWidth) / static_cast<float>(state.renderHeight))
                 : state.aspect;
             state.projectionMatrix = m_editorLayer->BuildEditorProjectionMatrix(state.aspect);
+            state.enablePostProcess = false;
 
             {
                 using namespace DirectX;
@@ -1640,11 +1687,31 @@ void EngineKernel::Render()
             }
         }
 
-        state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
-        state.jitterOffset = { 0.0f, 0.0f };
-        state.prevJitterOffset = { 0.0f, 0.0f };
+        if (usePlayerWorkspaceScene || usePlayerPreviewAsPrimary || useEffectPreviewAsPrimary) {
+            ApplyFsr2JitterToViewState(state, rc.jitterOffset, rc.prevJitterOffset);
+        } else {
+            state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
+            state.jitterOffset = { 0.0f, 0.0f };
+            state.prevJitterOffset = { 0.0f, 0.0f };
+        }
 
         views.push_back(std::move(primaryView));
+
+        if (!m_editorLayer->ShouldRenderGameView2DUIOverlay()) {
+            const DirectX::XMFLOAT2 gameViewSize = m_editorLayer->GetGameViewSize();
+            const uint32_t gamePanelWidth = static_cast<uint32_t>((std::max)(gameViewSize.x, 0.0f));
+            const uint32_t gamePanelHeight = static_cast<uint32_t>((std::max)(gameViewSize.y, 0.0f));
+            if (gamePanelWidth > 1 && gamePanelHeight > 1) {
+                auto gameViewContext = m_renderPipeline->BuildPrimaryViewContext(rc, gamePanelWidth, gamePanelHeight);
+                auto& gameState = gameViewContext.state;
+                gameState.historyKey = 0x47414D4556494557ull;
+                gameState.panelWidth = gamePanelWidth;
+                gameState.panelHeight = gamePanelHeight;
+                gameState.enablePostProcess = true;
+                gameViewMainViewIndex = views.size();
+                views.push_back(std::move(gameViewContext));
+            }
+        }
 
         if (m_editorLayer->ShouldRenderGameView2DUIOverlay()) {
             const DirectX::XMFLOAT4 gameViewRect = m_editorLayer->GetGameViewRect();
@@ -1787,6 +1854,11 @@ void EngineKernel::Render()
         ITexture* sceneDepthTexture = primaryView.sceneDepthTexture ? primaryView.sceneDepthTexture : rc.sceneDepthTexture;
         ITexture* gameViewTexture = primaryView.displayTexture ? primaryView.displayTexture :
             (primaryView.sceneViewTexture ? primaryView.sceneViewTexture : rc.sceneColorTexture);
+        if (gameViewMainViewIndex != invalidViewIndex && gameViewMainViewIndex < views.size()) {
+            auto& gameView = views[gameViewMainViewIndex];
+            gameViewTexture = gameView.displayTexture ? gameView.displayTexture :
+                (gameView.sceneViewTexture ? gameView.sceneViewTexture : gameViewTexture);
+        }
         if (gameView2DViewIndex != invalidViewIndex && gameView2DViewIndex < views.size()) {
             auto& game2DView = views[gameView2DViewIndex];
             gameViewTexture = game2DView.displayTexture ? game2DView.displayTexture :
@@ -1799,23 +1871,29 @@ void EngineKernel::Render()
             FrameBuffer* editorSceneFrameBuffer = Graphics::Instance().GetFrameBuffer(FrameBufferId::EditorScene);
             ITexture* editorSceneColor = editorSceneFrameBuffer ? editorSceneFrameBuffer->GetColorTexture(0) : nullptr;
 
-            if (editorSceneColor &&
+            ITexture* gridColorTarget = sceneViewTexture;
+            const bool copiedToEditorScene =
+                editorSceneColor &&
                 editorSceneColor->GetWidth() == sceneViewTexture->GetWidth() &&
                 editorSceneColor->GetHeight() == sceneViewTexture->GetHeight() &&
-                CopyTextureResource(rc.commandList, sceneViewTexture, editorSceneColor)) {
+                CopyTextureResource(rc.commandList, sceneViewTexture, editorSceneColor);
+            if (copiedToEditorScene) {
+                gridColorTarget = editorSceneColor;
+            }
 
+            if (gridColorTarget) {
                 RenderContext gridRc = rc;
-                gridRc.mainRenderTarget = editorSceneColor;
-                gridRc.sceneColorTexture = editorSceneColor;
+                gridRc.mainRenderTarget = gridColorTarget;
+                gridRc.sceneColorTexture = gridColorTarget;
                 gridRc.mainDepthStencil = sceneDepthTexture;
                 gridRc.sceneDepthTexture = sceneDepthTexture;
                 gridRc.mainViewport = RhiViewport(
                     0.0f,
                     0.0f,
-                    static_cast<float>(editorSceneColor->GetWidth()),
-                    static_cast<float>(editorSceneColor->GetHeight()));
-                gridRc.renderWidth = editorSceneColor->GetWidth();
-                gridRc.renderHeight = editorSceneColor->GetHeight();
+                    static_cast<float>(gridColorTarget->GetWidth()),
+                    static_cast<float>(gridColorTarget->GetHeight()));
+                gridRc.renderWidth = gridColorTarget->GetWidth();
+                gridRc.renderHeight = gridColorTarget->GetHeight();
                 gridRc.viewMatrix = primaryView.state.viewMatrix;
                 gridRc.projectionMatrix = primaryView.state.projectionMatrix;
                 gridRc.viewProjectionUnjittered = primaryView.state.viewProjectionUnjittered;
@@ -1829,9 +1907,9 @@ void EngineKernel::Render()
                 gridRc.jitterOffset = primaryView.state.jitterOffset;
                 gridRc.prevJitterOffset = primaryView.state.prevJitterOffset;
 
-                rc.commandList->TransitionBarrier(editorSceneColor, ResourceState::RenderTarget);
+                rc.commandList->TransitionBarrier(gridColorTarget, ResourceState::RenderTarget);
                 rc.commandList->TransitionBarrier(sceneDepthTexture, ResourceState::DepthRead);
-                rc.commandList->SetRenderTarget(editorSceneColor, sceneDepthTexture);
+                rc.commandList->SetRenderTarget(gridColorTarget, sceneDepthTexture);
                 rc.commandList->SetViewport(gridRc.mainViewport);
 
                 GridRenderSystem::EditorGridSettings gridSettings{};
@@ -1840,14 +1918,18 @@ void EngineKernel::Render()
                 m_editorGridRenderSystem.RenderEditorGrid(gridRc, gridSettings);
 
                 // Grid の後に gizmo も重ねる。
-                renderedPrimaryViewGizmos = renderPrimaryViewGizmos(editorSceneColor, sceneDepthTexture);
+                renderedPrimaryViewGizmos = renderPrimaryViewGizmos(gridColorTarget, sceneDepthTexture);
 
-                rc.commandList->TransitionBarrier(editorSceneColor, ResourceState::ShaderResource);
-                rc.commandList->TransitionBarrier(sceneViewTexture, ResourceState::ShaderResource);
+                rc.commandList->TransitionBarrier(gridColorTarget, ResourceState::ShaderResource);
+                if (gridColorTarget != sceneViewTexture) {
+                    rc.commandList->TransitionBarrier(sceneViewTexture, ResourceState::ShaderResource);
+                }
                 rc.commandList->TransitionBarrier(sceneDepthTexture, ResourceState::ShaderResource);
 
-                editorScenePreviewTexture = editorSceneColor;
-                sceneViewTexture = editorSceneColor;
+                if (copiedToEditorScene) {
+                    editorScenePreviewTexture = editorSceneColor;
+                }
+                sceneViewTexture = gridColorTarget;
             }
         }
 

@@ -31,6 +31,7 @@
 #include "Gameplay/DodgeStateComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/StageBoundsComponent.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlaybackRangeComponent.h"
 #include "Gameplay/TimelineComponent.h"
@@ -442,6 +443,106 @@ namespace
         return BuildUIButtonSnapshot("Button", "");
     }
 
+    EntitySnapshot::Snapshot BuildDefaultHPGaugeSnapshot()
+    {
+        EntitySnapshot::Snapshot snapshot;
+        snapshot.rootLocalID = 0;
+
+        auto makeTransform = [](float x, float y, float z = 0.0f) {
+            TransformComponent transform{};
+            transform.localPosition = { x, y, z };
+            transform.localScale = { 1.0f, 1.0f, 1.0f };
+            transform.isDirty = true;
+            return transform;
+        };
+
+        auto makeRect = [](float x, float y, float w, float h) {
+            RectTransformComponent rect{};
+            rect.anchoredPosition = { x, y };
+            rect.sizeDelta = { w, h };
+            rect.pivot = { 0.5f, 0.5f };
+            return rect;
+        };
+
+        auto makeNode = [&](uint32_t localId,
+                            uint32_t parentId,
+                            const std::string& name,
+                            float x,
+                            float y,
+                            float w,
+                            float h,
+                            int order) {
+            EntitySnapshot::Node node;
+            node.localID = localId;
+            node.sourceEntity = Entity::NULL_ID;
+            node.parentLocalID = parentId;
+            node.externalParent = Entity::NULL_ID;
+
+            CanvasItemComponent canvas{};
+            canvas.orderInLayer = order;
+            canvas.pixelSnap = true;
+
+            std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
+            std::get<std::optional<TransformComponent>>(node.components) = makeTransform(x, y);
+            std::get<std::optional<HierarchyComponent>>(node.components) = HierarchyComponent{};
+            std::get<std::optional<RectTransformComponent>>(node.components) = makeRect(x, y, w, h);
+            std::get<std::optional<CanvasItemComponent>>(node.components) = canvas;
+            return node;
+        };
+
+        EntitySnapshot::Node root = makeNode(0, EntitySnapshot::kInvalidLocalID, "HP Gauge", 0.0f, -420.0f, 360.0f, 42.0f, 100);
+        HPGaugeBindingComponent binding{};
+        binding.targetMode = HPGaugeTargetMode::FirstPlayer;
+        std::get<std::optional<HPGaugeBindingComponent>>(root.components) = binding;
+
+        EntitySnapshot::Node background = makeNode(1, 0, "Background", 0.0f, 0.0f, 360.0f, 28.0f, 0);
+        SpriteComponent backgroundSprite{};
+        backgroundSprite.textureAssetPath = "Data/Texture/UI/White.png";
+        backgroundSprite.tint = { 0.02f, 0.02f, 0.025f, 0.72f };
+        std::get<std::optional<SpriteComponent>>(background.components) = backgroundSprite;
+
+        EntitySnapshot::Node preview = makeNode(2, 0, "Damage Preview", 0.0f, 0.0f, 360.0f, 28.0f, 1);
+        SpriteComponent previewSprite{};
+        previewSprite.textureAssetPath = "Data/Texture/UI/White.png";
+        previewSprite.tint = { 0.85f, 0.16f, 0.12f, 0.42f };
+        HPGaugeFillComponent previewFill{};
+        previewFill.useDisplayedRatio = false;
+        previewFill.useDelayedRatio = true;
+        previewFill.colorMode = HPGaugeColorMode::Fixed;
+        previewFill.fixedColor = previewSprite.tint;
+        std::get<std::optional<SpriteComponent>>(preview.components) = previewSprite;
+        std::get<std::optional<HPGaugeFillComponent>>(preview.components) = previewFill;
+
+        EntitySnapshot::Node fill = makeNode(3, 0, "Fill", 0.0f, 0.0f, 360.0f, 28.0f, 2);
+        SpriteComponent fillSprite{};
+        fillSprite.textureAssetPath = "Data/Texture/UI/White.png";
+        fillSprite.tint = { 0.18f, 0.86f, 0.36f, 0.94f };
+        HPGaugeFillComponent fillComponent{};
+        fillComponent.useDisplayedRatio = true;
+        fillComponent.useDelayedRatio = false;
+        fillComponent.colorMode = HPGaugeColorMode::Threshold;
+        std::get<std::optional<SpriteComponent>>(fill.components) = fillSprite;
+        std::get<std::optional<HPGaugeFillComponent>>(fill.components) = fillComponent;
+
+        EntitySnapshot::Node textNode = makeNode(4, 0, "HP Text", 0.0f, -2.0f, 360.0f, 34.0f, 3);
+        TextComponent text{};
+        text.text = "100 / 100";
+        text.fontAssetPath = kDefault2DFontAssetPath;
+        text.fontSize = 24.0f;
+        text.alignment = TextAlignment::Center;
+        HPGaugeTextComponent gaugeText{};
+        gaugeText.format = HPGaugeTextFormat::CurrentMax;
+        std::get<std::optional<TextComponent>>(textNode.components) = text;
+        std::get<std::optional<HPGaugeTextComponent>>(textNode.components) = gaugeText;
+
+        snapshot.nodes.push_back(std::move(root));
+        snapshot.nodes.push_back(std::move(background));
+        snapshot.nodes.push_back(std::move(preview));
+        snapshot.nodes.push_back(std::move(fill));
+        snapshot.nodes.push_back(std::move(textNode));
+        return snapshot;
+    }
+
     bool Has2DComponents(Registry& registry, EntityID entity)
     {
         return !Entity::IsNull(entity) &&
@@ -748,6 +849,9 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         }
         if (ImGui::MenuItem("Create Text")) {
             CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), Entity::NULL_ID, "Create Text");
+        }
+        if (ImGui::MenuItem("Create HP Gauge")) {
+            CreateEntityFromSnapshot(registry, BuildDefaultHPGaugeSnapshot(), Entity::NULL_ID, "Create HP Gauge");
         }
 
         LightComponent pointLight;
@@ -1193,6 +1297,15 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
             }
             else {
                 CreateEntityFromSnapshot(registry, BuildDefaultTextSnapshot(), entity, "Create Text Child");
+            }
+        }
+
+        if (ImGui::MenuItem("Create HP Gauge Child")) {
+            if (!PrefabSystem::CanCreateChild(entity, *registry)) {
+                LOG_WARN("[Prefab] Prefab instance hierarchy is locked. Use Unpack before adding children.");
+            }
+            else {
+                CreateEntityFromSnapshot(registry, BuildDefaultHPGaugeSnapshot(), entity, "Create HP Gauge Child");
             }
         }
 

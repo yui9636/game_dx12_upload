@@ -1,4 +1,4 @@
-#include "EffectParticlePass.h"
+﻿#include "EffectParticlePass.h"
 
 #include <algorithm>
 #include <array>

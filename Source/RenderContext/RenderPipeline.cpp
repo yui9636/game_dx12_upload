@@ -57,6 +57,20 @@ namespace
         return 1;
     }
 
+    void ApplyProjectionJitter(
+        DirectX::XMFLOAT4X4& projection,
+        const DirectX::XMFLOAT2& jitter,
+        uint32_t renderWidth,
+        uint32_t renderHeight)
+    {
+        if (renderWidth == 0 || renderHeight == 0) {
+            return;
+        }
+
+        projection._31 += 2.0f * jitter.x / static_cast<float>(renderWidth);
+        projection._32 += 2.0f * jitter.y / static_cast<float>(renderHeight);
+    }
+
     std::shared_ptr<IRenderPass> ClonePassForView(const std::shared_ptr<IRenderPass>& pass, IResourceFactory* factory)
     {
         if (dynamic_cast<ExtractVisibleInstancesPass*>(pass.get())) return std::make_shared<ExtractVisibleInstancesPass>();
@@ -204,24 +218,21 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
     rc.prevViewProjectionMatrix = rc.viewProjectionUnjittered;
     rc.prevJitterOffset = { 0.0f, 0.0f };
 
-    // DX12 はまだ FSR2/TAA resolve が未接続なので、jitter だけ残すと揺れます。
-    if (g.GetAPI() == GraphicsAPI::DX12) {
-        rc.jitterOffset = { 0.0f, 0.0f };
-    }
-    else {
-        static int32_t jitterIndex = 0;
-        float renderScale = g.GetRenderScale();
-        float renderW = (float)(uint32_t)(g.GetScreenWidth() * renderScale);
-        float renderH = (float)(uint32_t)(g.GetScreenHeight() * renderScale);
-        float displayW = g.GetScreenWidth();
+    static int32_t jitterIndex = 0;
+    float renderScale = g.GetRenderScale();
+    float renderW = (float)(uint32_t)(g.GetScreenWidth() * renderScale);
+    float renderH = (float)(uint32_t)(g.GetScreenHeight() * renderScale);
+    float displayW = g.GetScreenWidth();
 
-        int32_t phaseCount = ffxFsr2GetJitterPhaseCount((int32_t)renderW, (int32_t)displayW);
-        float jitterX = 0.0f, jitterY = 0.0f;
-        ffxFsr2GetJitterOffset(&jitterX, &jitterY, jitterIndex++, phaseCount);
+    int32_t phaseCount = ffxFsr2GetJitterPhaseCount((int32_t)renderW, (int32_t)displayW);
+    phaseCount = (std::max)(phaseCount, 1);
+    float jitterX = 0.0f, jitterY = 0.0f;
+    ffxFsr2GetJitterOffset(&jitterX, &jitterY, jitterIndex++, phaseCount);
 
-        rc.jitterOffset.x = jitterX;
-        rc.jitterOffset.y = jitterY;
+    rc.jitterOffset.x = jitterX;
+    rc.jitterOffset.y = jitterY;
 
+    if (renderW > 0.0f && renderH > 0.0f) {
         float shiftX = 2.0f * jitterX / renderW;
         float shiftY = 2.0f * jitterY / renderH;
         rc.projectionMatrix._31 += shiftX;
@@ -483,6 +494,7 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     rc.enableSSR = viewState.enableSSR;
     rc.enableDeferredLighting = viewState.enableDeferredLighting;
     rc.enableSkybox = viewState.enableSkybox;
+    rc.enablePostProcess = viewState.enablePostProcess;
     rc.clearSceneColor = viewState.clearSceneColor;
     rc.cameraPixelSnap = viewState.cameraPixelSnap;
     rc.clearColor = viewState.clearColor;
@@ -752,6 +764,7 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     baseRc.pendingAsyncComputeFenceValue = rc.pendingAsyncComputeFenceValue;
     baseRc.enableDeferredLighting = rc.enableDeferredLighting;
     baseRc.enableSkybox = rc.enableSkybox;
+    baseRc.enablePostProcess = rc.enablePostProcess;
     baseRc.clearSceneColor = rc.clearSceneColor;
     baseRc.cameraPixelSnap = rc.cameraPixelSnap;
     baseRc.clearColor = rc.clearColor;
@@ -799,6 +812,7 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.fovY = rc.fovY;
     view.nearZ = rc.nearZ;
     view.farZ = rc.farZ;
+    bool projectionNeedsJitter = false;
     if (view.fovY > 0.0f && view.nearZ > 0.0f && view.farZ > view.nearZ) {
         DirectX::XMMATRIX projection = DirectX::XMMatrixPerspectiveFovLH(
             view.fovY,
@@ -808,6 +822,7 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
         DirectX::XMStoreFloat4x4(&view.projectionMatrix, projection);
         DirectX::XMMATRIX viewMatrix = DirectX::XMLoadFloat4x4(&view.viewMatrix);
         DirectX::XMStoreFloat4x4(&view.viewProjectionUnjittered, viewMatrix * projection);
+        projectionNeedsJitter = true;
     } else {
         view.projectionMatrix = rc.projectionMatrix;
         view.viewProjectionUnjittered = rc.viewProjectionUnjittered;
@@ -817,6 +832,9 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.cameraDirection = rc.cameraDirection;
     view.jitterOffset = rc.jitterOffset;
     view.prevJitterOffset = rc.prevJitterOffset;
+    if (projectionNeedsJitter) {
+        ApplyProjectionJitter(view.projectionMatrix, view.jitterOffset, view.renderWidth, view.renderHeight);
+    }
     view.enableComputeCulling = rc.allowGpuDrivenCompute;
     view.enableAsyncCompute = rc.allowAsyncCompute;
     view.enableGTAO = rc.enableGTAO;
@@ -825,6 +843,7 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.enableSSR = rc.enableSSR;
     view.enableDeferredLighting = rc.enableDeferredLighting;
     view.enableSkybox = rc.enableSkybox;
+    view.enablePostProcess = rc.enablePostProcess;
     view.clearSceneColor = rc.clearSceneColor;
     view.cameraPixelSnap = rc.cameraPixelSnap;
     view.clearColor = rc.clearColor;

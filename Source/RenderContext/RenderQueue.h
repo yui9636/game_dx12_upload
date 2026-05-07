@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <memory>
@@ -253,6 +253,24 @@ struct UI2DSpritePacket {
     DirectX::XMFLOAT2 sizeDelta = { 100.0f, 100.0f };
     DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
     bool pixelSnap = false;
+    bool fillClipEnabled = false;
+    float fillRatio = 1.0f;
+    int fillDirection = 0;
+};
+
+struct UI2DTextPacket {
+    EntityID entity = Entity::NULL_ID;
+    std::string text;
+    std::string fontAssetPath;
+    float fontSize = 32.0f;
+    DirectX::XMFLOAT4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    int alignment = 1;
+    DirectX::XMFLOAT3 worldPosition = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 worldRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 worldScale = { 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT2 sizeDelta = { 100.0f, 32.0f };
+    DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
+    bool pixelSnap = false;
 };
 
 class RenderQueue {
@@ -264,6 +282,7 @@ public:
     std::vector<EffectParticlePacket> effectParticlePackets;
     std::vector<TrailPacket> trailPackets;
     std::vector<UI2DSpritePacket> ui2DSpritePackets;
+    std::vector<UI2DTextPacket> ui2DTextPackets;
     RenderQueueMetrics metrics;
 
     void Clear() {
@@ -274,6 +293,7 @@ public:
         effectParticlePackets.clear();
         trailPackets.clear();
         ui2DSpritePackets.clear();
+        ui2DTextPackets.clear();
         metrics = {};
     }
 };

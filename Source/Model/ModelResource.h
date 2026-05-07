@@ -16,11 +16,14 @@ class ModelResource
 {
 public:
     // 描画時に使うボーンのノード番号と行列情報を保持します。
+    // worldTransform は今フレーム、prevWorldTransform は前フレームの bone world です。
+    // FSR2 / TAA に渡す motion vector を正しく出すために前フレームの行列を保持します。
     struct BoneResource
     {
         int nodeIndex = -1;
         DirectX::XMFLOAT4X4 offsetTransform = {};
         DirectX::XMFLOAT4X4 worldTransform = {};
+        DirectX::XMFLOAT4X4 prevWorldTransform = {};
     };
 
     // 1 メッシュ分の GPU バッファ・材質・ボーン情報を保持します。
@@ -34,6 +37,7 @@ public:
         int nodeIndex = -1;
         Model::Material material;
         DirectX::XMFLOAT4X4 nodeWorldTransform = {};
+        DirectX::XMFLOAT4X4 prevNodeWorldTransform = {};
         DirectX::BoundingBox localBounds = {};
         std::vector<BoneResource> bones;
     };

@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "Gameplay/HPGaugeComponent.h"
 #include "RenderContext/RenderQueue.h"
 #include "UI/UI2DDrawSystem.h"
 
@@ -26,6 +27,11 @@ public:
             packet.sizeDelta = entry.rect->sizeDelta;
             packet.pivot = entry.rect->pivot;
             packet.pixelSnap = entry.canvas->pixelSnap;
+            if (auto* fill = registry.GetComponent<HPGaugeFillComponent>(entry.entity)) {
+                packet.fillClipEnabled = true;
+                packet.fillRatio = fill->runtimeRatio;
+                packet.fillDirection = static_cast<int>(fill->fillDirection);
+            }
             queue.ui2DSpritePackets.push_back(std::move(packet));
         }
     }

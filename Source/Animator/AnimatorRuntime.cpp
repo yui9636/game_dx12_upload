@@ -77,6 +77,35 @@ namespace
             }
         }
     }
+    static int ResolveRootMotionNodeIndex(Model* model)
+    {
+        if (!model) {
+            return -1;
+        }
+
+        const char* candidateNames[] = {
+            "root",
+            "Root",
+            "ROOT",
+            "root_motion",
+            "RootMotion",
+            "Armature",
+            "mixamorig:Root"
+        };
+
+        for (const char* name : candidateNames) {
+            const int index = model->GetNodeIndex(name);
+            if (index >= 0) {
+                return index;
+            }
+        }
+
+        const size_t nodeCount = model->GetNodes().size();
+        if (nodeCount > 1) {
+            return 1;
+        }
+        return nodeCount == 1 ? 0 : -1;
+    }
 }
 
 // 指定 entity の runtime entry を検索して返す。
@@ -132,13 +161,24 @@ void AnimatorRuntimeRegistry::Rebind(AnimatorRuntimeEntry& entry, Model* model)
         return;
     }
 
-    // ルートノード index を仮設定する。
-    // 必要に応じて後でより厳密な取得方法へ差し替える余地がある。
-    entry.rootNodeIndex = 1;
+    FillBindPose(entry.bindPoses, model);
+
+    // モデル最上位ノード。A5 の dodge のように、root の親へ移動キーが入る asset がある。
+    entry.rootNodeIndex = model->GetNodes().empty() ? -1 : 0;
+    if (entry.rootNodeIndex >= 0 && entry.rootNodeIndex < static_cast<int>(model->GetNodes().size())) {
+        entry.rootNodeBindPosition = entry.bindPoses[entry.rootNodeIndex].position;
+    }
 
     // よく使う主要ボーンの index を名前検索で取得する。
     entry.pelvisNodeIndex = model->GetNodeIndex("pelvis");
     entry.spineNodeIndex = model->GetNodeIndex("spine_01");
+    entry.rootMotionNodeIndex = ResolveRootMotionNodeIndex(model);
+    if (entry.rootMotionNodeIndex < 0) {
+        entry.rootMotionNodeIndex = entry.rootNodeIndex;
+    }
+    if (entry.rootMotionNodeIndex >= 0 && entry.rootMotionNodeIndex < static_cast<int>(model->GetNodes().size())) {
+        entry.rootMotionBindPosition = entry.bindPoses[entry.rootMotionNodeIndex].position;
+    }
 
     // ノード数を取得する。
     const size_t poseCount = model->GetNodes().size();
@@ -148,6 +188,7 @@ void AnimatorRuntimeRegistry::Rebind(AnimatorRuntimeEntry& entry, Model* model)
 
     // action layer 用 pose バッファを確保する。
     entry.actionPoses.resize(poseCount);
+
 
     // 一時計算用 pose バッファを確保する。
     entry.tempPoses.resize(poseCount);

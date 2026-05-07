@@ -1,4 +1,4 @@
-#include "GameLayer.h"
+﻿#include "GameLayer.h"
 #include "Graphics.h"
 #include <Transform\TransformSystem.h>
 #include <Transform\NodeAttachmentSystem.h>
@@ -35,7 +35,7 @@
 #include "Gameplay/BattleFlowSystem.h"
 #include "Gameplay/LockOnSystem.h"
 #include "Gameplay/HealthSystem.h"
-#include "UI/HUDBindingSystem.h"
+#include "Gameplay/HPGaugeSystem.h"
 #include "HeadUpDisplay.h"
 #include "Gameplay/CharacterPhysicsSystem.h"
 #include "Gameplay/PlaybackSystem.h"
@@ -52,6 +52,7 @@
 #include "EffectRuntime/EffectSystems.h"
 #include "Animator/AnimatorService.h"
 #include "Animator/AnimatorSystem.h"
+#include "Animator/RootMotionSystem.h"
 #include "Sequencer/CinematicService.h"
 #include <Component\LightComponent.h>
 #include "Component/EnvironmentComponent.h"
@@ -60,15 +61,10 @@
 #include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
 #include "RHI/DX11/DX11Texture.h"
-#include "Sprite/Sprite.h"
-#include "UI/UIHPNumber.h"
-#include "UI/UIHPText2D.h"
 #include "UI/UIManager.h"
 #include "UI/UI2DSpriteExtractSystem.h"
-#include "UI/UIProgressBar2D.h"
-#include "UI/UIProgressBar3D.h"
+#include "UI/UI2DTextExtractSystem.h"
 #include <algorithm>
-#include <unordered_set>
 #include <vector>
 
 namespace
@@ -118,23 +114,6 @@ namespace
         }
     }
 
-    DirectX::XMFLOAT4 ResolveHPFillColor(float ratio)
-    {
-        if (ratio <= 0.25f) {
-            return { 0.95f, 0.16f, 0.12f, 0.94f };
-        }
-        if (ratio <= 0.5f) {
-            return { 0.95f, 0.72f, 0.16f, 0.94f };
-        }
-        return { 0.18f, 0.86f, 0.36f, 0.94f };
-    }
-
-    void ApplyColor(const std::shared_ptr<UIElement>& element, const DirectX::XMFLOAT4& c)
-    {
-        if (element) {
-            element->SetColor(c.x, c.y, c.z, c.w);
-        }
-    }
 }
 
 void GameLayer::Initialize()
@@ -142,13 +121,12 @@ void GameLayer::Initialize()
     DamageEventRuntimeQueue::Clear();
     BattleFlowSystem::Reset();
 
-    // エディタ起動直後でも最低限の描画情報が成立するように、
-    // デフォルトのカメラ・ライト・反射プローブを作っておく。
+    // Default camera/light/probe used by newly opened editor scenes.
     EntityID cameraEntity = m_registry.CreateEntity();
     m_registry.AddComponent(cameraEntity, NameComponent{ "Main Camera" });
 
     TransformComponent camTrans;
-    camTrans.localPosition = { 0.0f, 2.0f, -10.0f }; // モデルが見えるように少し上＆後ろに下がる
+    camTrans.localPosition = { 0.0f, 2.0f, -10.0f };
     m_registry.AddComponent(cameraEntity, camTrans);
 
     m_registry.AddComponent(cameraEntity, HierarchyComponent{});
@@ -156,14 +134,13 @@ void GameLayer::Initialize()
 
     m_registry.AddComponent(cameraEntity, CameraLensComponent{});
     m_registry.AddComponent(cameraEntity, CameraMatricesComponent{});
-    m_registry.AddComponent(cameraEntity, CameraMainTagComponent{}); 
+    m_registry.AddComponent(cameraEntity, CameraMainTagComponent{});
     m_registry.AddComponent(cameraEntity, AudioListenerComponent{});
 
     EntityID lightEntity = m_registry.CreateEntity();
     m_registry.AddComponent(lightEntity, NameComponent{ "Directional Light" });
 
     TransformComponent lightTrans;
-    // 斜め下を向くように回転（Pitch=45度, Yaw=45度）
     DirectX::XMVECTOR rot = DirectX::XMQuaternionRotationRollPitchYaw(
         DirectX::XMConvertToRadians(45.0f), DirectX::XMConvertToRadians(45.0f), 0.0f);
     DirectX::XMStoreFloat4(&lightTrans.localRotation, rot);
@@ -173,18 +150,17 @@ void GameLayer::Initialize()
 
     LightComponent lightComp;
     lightComp.type = LightType::Directional;
-    lightComp.color = { 1.0f, 1.0f, 1.0f }; // 白い光
-    lightComp.intensity = 1.0f;             // 光の強さ
+    lightComp.color = { 1.0f, 1.0f, 1.0f };
+    lightComp.intensity = 1.0f;
     m_registry.AddComponent(lightEntity, lightComp);
 
     EntityID probeEntity = m_registry.CreateEntity();
     m_registry.AddComponent(probeEntity, NameComponent{ "Reflection Probe" });
 
     ReflectionProbeComponent probeComp;
-    probeComp.position = { 0.0f, 1.5f, 0.0f }; // 地面より少し高い位置（目の高さ）に配置
-    probeComp.radius = 20.0f;                  // 影響範囲（今はまだ使いませんが設定しておく）
-    probeComp.needsBake = true;                // 初回なので必ず撮影させる
-
+    probeComp.position = { 0.0f, 1.5f, 0.0f };
+    probeComp.radius = 20.0f;
+    probeComp.needsBake = true;
     m_registry.AddComponent(probeEntity, probeComp);
 
     EntityID environmentEntity = m_registry.CreateEntity();
@@ -262,6 +238,7 @@ void GameLayer::Update(const EngineTime& time)
     transformSys.Update(m_registry);
 
     AnimatorSystem::Update(m_registry, time.dt);
+    RootMotionSystem::Update(m_registry, time.dt);
 
     transformSys.Update(m_registry);
 
@@ -285,8 +262,7 @@ void GameLayer::Update(const EngineTime& time)
     DamageSystem::Update(m_registry);
     HealthSystem::Update(m_registry, time.dt);
 
-    HUDBindingSystem::Update(m_registry);
-    ApplyHUDState();
+    HPGaugeSystem::Update(m_registry, time.dt);
     BattleFlowSystem::Update(m_registry, time.dt);
 
     CameraFinalizeSystem::Update(m_registry);
@@ -295,150 +271,15 @@ void GameLayer::Update(const EngineTime& time)
 void GameLayer::InitializeHUD()
 {
     auto& ui = UIManager::Instance();
-
-    m_hudWhiteSprite = std::make_shared<Sprite>("Data/Texture/UI/White.png");
-
-    const auto setupBar = [&](std::shared_ptr<UIProgressBar2D>& bar,
-                              const DirectX::XMFLOAT4& color,
-                              float centerXNorm,
-                              float centerYNorm,
-                              float widthNorm,
-                              float heightPx) {
-        bar = ui.CreateElement<UIProgressBar2D>();
-        bar->SetSprite(m_hudWhiteSprite);
-        bar->SetResponsiveRect(centerXNorm, centerYNorm, widthNorm, heightPx);
-        bar->SetProgress(1.0f);
-        bar->SetColor(color.x, color.y, color.z, color.w);
-        bar->SetVisible(false);
-    };
-
-    setupBar(m_playerBarBackground, { 0.02f, 0.02f, 0.025f, 0.72f }, 0.50f, 0.925f, 0.42f, 18.0f);
-    setupBar(m_playerBarFill,       { 0.18f, 0.86f, 0.36f, 0.94f },  0.50f, 0.925f, 0.42f, 18.0f);
-    setupBar(m_bossBarBackground,   { 0.02f, 0.02f, 0.025f, 0.72f }, 0.50f, 0.075f, 0.55f, 16.0f);
-    setupBar(m_bossBarFill,         { 0.95f, 0.16f, 0.12f, 0.94f },  0.50f, 0.075f, 0.55f, 16.0f);
-
-    m_playerHPText = ui.CreateElement<UIHPText2D>();
-    m_playerHPText->SetResponsivePosition(0.50f, 0.895f);
-    m_playerHPText->SetScale(0.28f);
-    m_playerHPText->SetColor(1.0f, 1.0f, 1.0f, 0.96f);
-    m_playerHPText->SetVisible(false);
-
-    m_bossHPText = ui.CreateElement<UIHPText2D>();
-    m_bossHPText->SetResponsivePosition(0.50f, 0.105f);
-    m_bossHPText->SetScale(0.25f);
-    m_bossHPText->SetColor(1.0f, 1.0f, 1.0f, 0.94f);
-    m_bossHPText->SetVisible(false);
-
     m_headUpDisplay = ui.CreateElement<HeadUpDisplay>();
 }
 
 void GameLayer::ShutdownHUD()
 {
     auto& ui = UIManager::Instance();
-    const auto removeElement = [&ui](auto& element) {
-        if (element) {
-            ui.RemoveElement(element);
-            element.reset();
-        }
-    };
-
-    removeElement(m_playerBarBackground);
-    removeElement(m_playerBarFill);
-    removeElement(m_playerHPText);
-    removeElement(m_bossBarBackground);
-    removeElement(m_bossBarFill);
-    removeElement(m_bossHPText);
-    removeElement(m_headUpDisplay);
-
-    for (auto& [entity, item] : m_worldHUD) {
-        (void)entity;
-        if (item.bar) {
-            ui.RemoveElement(item.bar);
-        }
-        if (item.text) {
-            ui.RemoveElement(item.text);
-        }
-    }
-    m_worldHUD.clear();
-    m_hudWhiteSprite.reset();
-}
-
-void GameLayer::ApplyHUDState()
-{
-    const auto& state = HUDBindingSystem::GetState();
-
-    const auto applyFlatHUD = [](bool active,
-                                 const std::shared_ptr<UIProgressBar2D>& background,
-                                 const std::shared_ptr<UIProgressBar2D>& fill,
-                                 const std::shared_ptr<UIHPText2D>& text,
-                                 float ratio,
-                                 int hp,
-                                 int maxHP) {
-        if (background) {
-            background->SetVisible(active);
-        }
-        if (fill) {
-            fill->SetVisible(active);
-            fill->SetProgress(ratio);
-            const DirectX::XMFLOAT4 c = ResolveHPFillColor(ratio);
-            fill->SetColor(c.x, c.y, c.z, c.w);
-        }
-        if (text) {
-            text->SetVisible(active);
-            text->SetHP(hp, maxHP);
-        }
-    };
-
-    applyFlatHUD(state.playerActive, m_playerBarBackground, m_playerBarFill, m_playerHPText,
-                 state.playerRatio, state.playerHP, state.playerMaxHP);
-    applyFlatHUD(state.bossActive, m_bossBarBackground, m_bossBarFill, m_bossHPText,
-                 state.bossRatio, state.bossHP, state.bossMaxHP);
-
-    std::unordered_set<EntityID> activeWorldEntities;
-    auto& ui = UIManager::Instance();
-    for (const auto& entry : state.world) {
-        if (Entity::IsNull(entry.entity) || entry.maxHP <= 0) {
-            continue;
-        }
-
-        activeWorldEntities.insert(entry.entity);
-        auto& item = m_worldHUD[entry.entity];
-        if (!item.bar) {
-            item.bar = ui.CreateElement<UIProgressBar3D>();
-            item.bar->SetSprite(m_hudWhiteSprite);
-            item.bar->SetBackgroundSprite(m_hudWhiteSprite);
-            item.bar->SetBackgroundColor(0.02f, 0.02f, 0.025f, 0.72f);
-            item.bar->SetSize(1.15f, 0.10f);
-        }
-        if (!item.text) {
-            item.text = ui.CreateElement<UIHPNumber>();
-            item.text->SetScreenOffset(0.0f, -18.0f);
-            item.text->SetScale(0.18f);
-        }
-
-        item.bar->SetVisible(true);
-        item.bar->SetPosition(entry.worldPos);
-        item.bar->SetProgress(entry.ratio);
-        ApplyColor(item.bar, ResolveHPFillColor(entry.ratio));
-
-        item.text->SetVisible(true);
-        item.text->SetPosition(entry.worldPos);
-        item.text->SetHP(entry.hp, entry.maxHP);
-        item.text->SetColor(1.0f, 1.0f, 1.0f, 0.92f);
-    }
-
-    for (auto it = m_worldHUD.begin(); it != m_worldHUD.end();) {
-        if (activeWorldEntities.find(it->first) == activeWorldEntities.end()) {
-            if (it->second.bar) {
-                ui.RemoveElement(it->second.bar);
-            }
-            if (it->second.text) {
-                ui.RemoveElement(it->second.text);
-            }
-            it = m_worldHUD.erase(it);
-        } else {
-            ++it;
-        }
+    if (m_headUpDisplay) {
+        ui.RemoveElement(m_headUpDisplay);
+        m_headUpDisplay.reset();
     }
 }
 
@@ -493,9 +334,8 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     EffectExtractSystem::Extract(m_registry, rc, queue);
     TrailExtractSystem::Extract(m_registry, queue, rc);
     UI2DSpriteExtractSystem::Extract(m_registry, queue);
+    UI2DTextExtractSystem::Extract(m_registry, queue);
 
     DebugRenderSystem debugRenderSystem;
     debugRenderSystem.Render(m_registry);
 }
-
-

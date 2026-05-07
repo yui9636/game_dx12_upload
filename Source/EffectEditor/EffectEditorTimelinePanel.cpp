@@ -1,4 +1,4 @@
-// Timeline panel for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
+﻿// Timeline panel for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
 // Method body remains a member function of EffectEditorPanel.
 
 #include "EffectEditorPanel.h"

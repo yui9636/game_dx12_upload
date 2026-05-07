@@ -1,4 +1,4 @@
-#include "TimelineSystem.h"
+﻿#include "TimelineSystem.h"
 #include "TimelineComponent.h"
 #include "PlaybackComponent.h"
 #include "Registry/Registry.h"

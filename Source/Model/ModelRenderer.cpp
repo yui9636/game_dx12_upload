@@ -53,6 +53,10 @@ void ModelRenderer::Draw(ShaderId shaderId, std::shared_ptr<ModelResource> model
 }
 
 // メッシュのボーン情報からスケルトン用定数バッファ内容を作ります。
+// 前フレームの bone world (prevWorldTransform) と前フレームの actor world
+// (prevWorldMatrix) を組み合わせて prev 行列を作るのが重要。
+// current の bone world × prev の actor world にすると skinning 後の
+// motion vector がボーン動作分を取り逃し、FSR2 が粒子状ノイズを出す。
 void ModelRenderer::FillSkeletonConstantBuffer(const ModelResource::MeshResource& meshResource,
     const DirectX::XMFLOAT4X4& worldMatrix,
     const DirectX::XMFLOAT4X4& prevWorldMatrix,
@@ -66,19 +70,23 @@ void ModelRenderer::FillSkeletonConstantBuffer(const ModelResource::MeshResource
     if (!meshResource.bones.empty()) {
         for (size_t i = 0; i < meshResource.bones.size(); ++i) {
             const auto& bone = meshResource.bones[i];
-            XMMATRIX modelSpaceTransform = XMLoadFloat4x4(&bone.worldTransform);
             XMMATRIX offsetTransform = XMLoadFloat4x4(&bone.offsetTransform);
+
+            XMMATRIX modelSpaceTransform = XMLoadFloat4x4(&bone.worldTransform);
             XMMATRIX boneTransform = offsetTransform * modelSpaceTransform * actorWorld;
             XMStoreFloat4x4(&cbSkeleton.boneTransforms[i], boneTransform);
 
-            XMMATRIX prevBoneTransform = offsetTransform * modelSpaceTransform * actorPrevWorld;
+            XMMATRIX prevModelSpaceTransform = XMLoadFloat4x4(&bone.prevWorldTransform);
+            XMMATRIX prevBoneTransform = offsetTransform * prevModelSpaceTransform * actorPrevWorld;
             XMStoreFloat4x4(&cbSkeleton.prevBoneTransforms[i], prevBoneTransform);
         }
     } else {
         XMMATRIX modelSpaceTransform = XMLoadFloat4x4(&meshResource.nodeWorldTransform);
         XMMATRIX worldTransform = modelSpaceTransform * actorWorld;
         XMStoreFloat4x4(&cbSkeleton.boneTransforms[0], worldTransform);
-        XMMATRIX prevTransform = modelSpaceTransform * actorPrevWorld;
+
+        XMMATRIX prevModelSpaceTransform = XMLoadFloat4x4(&meshResource.prevNodeWorldTransform);
+        XMMATRIX prevTransform = prevModelSpaceTransform * actorPrevWorld;
         XMStoreFloat4x4(&cbSkeleton.prevBoneTransforms[0], prevTransform);
     }
 }

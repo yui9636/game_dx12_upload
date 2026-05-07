@@ -1,4 +1,4 @@
-#include "EffectSystems.h"
+﻿#include "EffectSystems.h"
 
 #include <algorithm>
 #include <cmath>
@@ -574,7 +574,7 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                 }
 
                 if (!modelResource) {
-                    LOG_ERROR("[EffectMesh] modelResource null — packet skipped. meshAssetPath='%s'",
+                    LOG_ERROR("[EffectMesh] modelResource null - packet skipped. meshAssetPath='%s'",
                         effectiveMesh.meshAssetPath.c_str());
                 }
 

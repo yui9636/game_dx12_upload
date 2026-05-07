@@ -171,7 +171,26 @@ void SpriteRenderer::DrawQuad(const Sprite& sprite,
                               const DirectX::XMFLOAT2& p3,
                               const DirectX::XMFLOAT4& tintColor)
 {
-    DrawQuadInternal(sprite, p0, p1, p2, p3, tintColor);
+    DrawQuadInternal(sprite, p0, p1, p2, p3,
+        { 0.0f, 0.0f },
+        { 1.0f, 0.0f },
+        { 1.0f, 1.0f },
+        { 0.0f, 1.0f },
+        tintColor);
+}
+
+void SpriteRenderer::DrawQuadUV(const Sprite& sprite,
+                                const DirectX::XMFLOAT2& p0,
+                                const DirectX::XMFLOAT2& p1,
+                                const DirectX::XMFLOAT2& p2,
+                                const DirectX::XMFLOAT2& p3,
+                                const DirectX::XMFLOAT2& uv0,
+                                const DirectX::XMFLOAT2& uv1,
+                                const DirectX::XMFLOAT2& uv2,
+                                const DirectX::XMFLOAT2& uv3,
+                                const DirectX::XMFLOAT4& tintColor)
+{
+    DrawQuadInternal(sprite, p0, p1, p2, p3, uv0, uv1, uv2, uv3, tintColor);
 }
 
 void SpriteRenderer::DrawInternal(const Sprite& sprite,
@@ -257,6 +276,10 @@ void SpriteRenderer::DrawQuadInternal(const Sprite& sprite,
                                       const DirectX::XMFLOAT2& p1,
                                       const DirectX::XMFLOAT2& p2,
                                       const DirectX::XMFLOAT2& p3,
+                                      const DirectX::XMFLOAT2& uv0,
+                                      const DirectX::XMFLOAT2& uv1,
+                                      const DirectX::XMFLOAT2& uv2,
+                                      const DirectX::XMFLOAT2& uv3,
                                       const DirectX::XMFLOAT4& tintColor)
 {
     if (!m_initialized || !m_currentCommandList) return;
@@ -279,10 +302,10 @@ void SpriteRenderer::DrawQuadInternal(const Sprite& sprite,
     vertices[1].position = pixelToNdc(p1);
     vertices[2].position = pixelToNdc(p3);
     vertices[3].position = pixelToNdc(p2);
-    vertices[0].texcoord = { 0.0f, 0.0f };
-    vertices[1].texcoord = { 1.0f, 0.0f };
-    vertices[2].texcoord = { 0.0f, 1.0f };
-    vertices[3].texcoord = { 1.0f, 1.0f };
+    vertices[0].texcoord = uv0;
+    vertices[1].texcoord = uv1;
+    vertices[2].texcoord = uv3;
+    vertices[3].texcoord = uv2;
     for (auto& v : vertices) v.color = tintColor;
 
     m_currentCommandList->UpdateBuffer(m_vertexBuffer.get(), vertices, sizeof(vertices));

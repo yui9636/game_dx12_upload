@@ -1,4 +1,4 @@
-// Graph + NodeMode panels for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
+﻿// Graph + NodeMode panels for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
 // All entry points remain member functions of EffectEditorPanel.
 
 #include "EffectEditorPanel.h"

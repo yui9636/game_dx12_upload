@@ -1,4 +1,4 @@
-#include "EffectCompiler.h"
+﻿#include "EffectCompiler.h"
 #include "Console/Logger.h"
 #include "EffectParameterBindings.h"
 

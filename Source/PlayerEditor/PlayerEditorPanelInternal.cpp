@@ -1,4 +1,4 @@
-#include "PlayerEditorPanelInternal.h"
+﻿#include "PlayerEditorPanelInternal.h"
 
 #include <cmath>
 #include <cstdio>

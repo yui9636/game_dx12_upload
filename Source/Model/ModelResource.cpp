@@ -187,27 +187,66 @@ void ModelResource::SyncSceneDataFromModel(const Model& model)
         resource.materialIndex = model.GetMeshMaterialIndex(static_cast<int>(meshIndex));
         resource.nodeIndex = model.GetMeshNodeIndex(static_cast<int>(meshIndex));
         resource.material = getMaterial(static_cast<int>(meshIndex));
-        resource.nodeWorldTransform = IdentityMatrix();
-        if (resource.nodeIndex >= 0 && static_cast<size_t>(resource.nodeIndex) < nodes.size()) {
-            resource.nodeWorldTransform = nodes[resource.nodeIndex].worldTransform;
-        }
 
-        resource.bones.clear();
-        resource.bones.reserve(mesh.bones.size());
-        if (!mesh.bones.empty()) {
+        // 今フレームを更新する前に、現在値を prev へスナップショットする。
+        // これがないと skinning シェーダの prev 計算が現フレーム行列で行われ、
+        // motion vector がボーン動作分を反映できず FSR2 が暴れる (粒子状アーティファクト)。
+        resource.prevNodeWorldTransform = resource.nodeWorldTransform;
+
+        DirectX::XMFLOAT4X4 newNodeWorld = IdentityMatrix();
+        if (resource.nodeIndex >= 0 && static_cast<size_t>(resource.nodeIndex) < nodes.size()) {
+            newNodeWorld = nodes[resource.nodeIndex].worldTransform;
+        }
+        resource.nodeWorldTransform = newNodeWorld;
+
+        const size_t boneCount = mesh.bones.size();
+        const bool boneCountChanged = (resource.bones.size() != boneCount);
+        if (boneCountChanged) {
+            resource.bones.resize(boneCount);
+        }
+        if (boneCount > 0) {
             m_hasSkinnedMeshes = true;
         }
-        for (size_t boneIndex = 0; boneIndex < mesh.bones.size(); ++boneIndex)
+
+        for (size_t boneIndex = 0; boneIndex < boneCount; ++boneIndex)
         {
             const auto& bone = mesh.bones[boneIndex];
-            BoneResource boneResource{};
-            boneResource.nodeIndex = model.GetMeshBoneNodeIndex(static_cast<int>(meshIndex), static_cast<int>(boneIndex));
+            BoneResource& boneResource = resource.bones[boneIndex];
+
+            const int newNodeIndex = model.GetMeshBoneNodeIndex(
+                static_cast<int>(meshIndex), static_cast<int>(boneIndex));
+            const bool boneIdentityChanged =
+                boneCountChanged ||
+                boneResource.nodeIndex != newNodeIndex;
+
+            // 今フレームを書き込む前に prev を確保する。
+            boneResource.prevWorldTransform = boneResource.worldTransform;
+
+            boneResource.nodeIndex = newNodeIndex;
             boneResource.offsetTransform = bone.offsetTransform;
-            boneResource.worldTransform = IdentityMatrix();
+
+            DirectX::XMFLOAT4X4 newBoneWorld = IdentityMatrix();
             if (boneResource.nodeIndex >= 0 && static_cast<size_t>(boneResource.nodeIndex) < nodes.size()) {
-                boneResource.worldTransform = nodes[boneResource.nodeIndex].worldTransform;
+                newBoneWorld = nodes[boneResource.nodeIndex].worldTransform;
             }
-            resource.bones.push_back(std::move(boneResource));
+            boneResource.worldTransform = newBoneWorld;
+
+            // 新規 / リバインドされたボーンは prev を current に揃え、初フレームの
+            // 偽の motion vector (ゼロ行列由来) を防ぐ。
+            if (boneIdentityChanged) {
+                boneResource.prevWorldTransform = newBoneWorld;
+            }
+        }
+
+        // 初回呼び出し (RebuildFromModel 直後) で prevNodeWorldTransform が
+        // ゼロ行列のまま残らないようにする。
+        const float* p = &resource.prevNodeWorldTransform._11;
+        bool prevNodeIsZero = true;
+        for (int i = 0; i < 16; ++i) {
+            if (p[i] != 0.0f) { prevNodeIsZero = false; break; }
+        }
+        if (prevNodeIsZero) {
+            resource.prevNodeWorldTransform = newNodeWorld;
         }
     }
 

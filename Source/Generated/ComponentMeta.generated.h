@@ -83,6 +83,7 @@ struct ComponentMeta;
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/HitStopComponent.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Gameplay/HUDLinkComponent.h"
 #include "Gameplay/LockOnTargetComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
@@ -869,6 +870,60 @@ struct ComponentMeta<HitStopComponent> {
 };
 
 template <>
+struct ComponentMeta<HPGaugeBindingComponent> {
+    static constexpr std::string_view Name = "HPGaugeBindingComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("targetMode", &HPGaugeBindingComponent::targetMode),
+        MakeField("visibleWhenNoTarget", &HPGaugeBindingComponent::visibleWhenNoTarget),
+        MakeField("hideWhenDead", &HPGaugeBindingComponent::hideWhenDead),
+        MakeField("hideWhenFull", &HPGaugeBindingComponent::hideWhenFull),
+        MakeField("smoothingSpeed", &HPGaugeBindingComponent::smoothingSpeed),
+        MakeField("damagePreviewDelay", &HPGaugeBindingComponent::damagePreviewDelay),
+        MakeField("damagePreviewSpeed", &HPGaugeBindingComponent::damagePreviewSpeed),
+        MakeField("targetValid", &HPGaugeBindingComponent::targetValid),
+        MakeField("currentHP", &HPGaugeBindingComponent::currentHP),
+        MakeField("maxHP", &HPGaugeBindingComponent::maxHP),
+        MakeField("targetRatio", &HPGaugeBindingComponent::targetRatio),
+        MakeField("displayedRatio", &HPGaugeBindingComponent::displayedRatio),
+        MakeField("delayedRatio", &HPGaugeBindingComponent::delayedRatio),
+        MakeField("damagePreviewTimer", &HPGaugeBindingComponent::damagePreviewTimer)
+    );
+};
+
+template <>
+struct ComponentMeta<HPGaugeFillComponent> {
+    static constexpr std::string_view Name = "HPGaugeFillComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("fillDirection", &HPGaugeFillComponent::fillDirection),
+        MakeField("colorMode", &HPGaugeFillComponent::colorMode),
+        MakeField("useDisplayedRatio", &HPGaugeFillComponent::useDisplayedRatio),
+        MakeField("useDelayedRatio", &HPGaugeFillComponent::useDelayedRatio),
+        MakeField("hideWhenNoTarget", &HPGaugeFillComponent::hideWhenNoTarget),
+        MakeField("hideWhenFull", &HPGaugeFillComponent::hideWhenFull),
+        MakeField("minVisibleRatio", &HPGaugeFillComponent::minVisibleRatio),
+        MakeField("runtimeRatio", &HPGaugeFillComponent::runtimeRatio),
+        MakeField("fixedColor", &HPGaugeFillComponent::fixedColor),
+        MakeField("highColor", &HPGaugeFillComponent::highColor),
+        MakeField("midColor", &HPGaugeFillComponent::midColor),
+        MakeField("lowColor", &HPGaugeFillComponent::lowColor),
+        MakeField("midThreshold", &HPGaugeFillComponent::midThreshold),
+        MakeField("lowThreshold", &HPGaugeFillComponent::lowThreshold)
+    );
+};
+
+template <>
+struct ComponentMeta<HPGaugeTextComponent> {
+    static constexpr std::string_view Name = "HPGaugeTextComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("format", &HPGaugeTextComponent::format),
+        MakeField("label", &HPGaugeTextComponent::label),
+        MakeField("hideWhenNoTarget", &HPGaugeTextComponent::hideWhenNoTarget),
+        MakeField("hideWhenDead", &HPGaugeTextComponent::hideWhenDead),
+        MakeField("hideWhenFull", &HPGaugeTextComponent::hideWhenFull)
+    );
+};
+
+template <>
 struct ComponentMeta<HUDLinkComponent> {
     static constexpr std::string_view Name = "HUDLinkComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -1152,6 +1207,9 @@ using AllComponentTypes = std::tuple<
     HealthComponent,
     HitboxTrackingComponent,
     HitStopComponent,
+    HPGaugeBindingComponent,
+    HPGaugeFillComponent,
+    HPGaugeTextComponent,
     HUDLinkComponent,
     LockOnTargetComponent,
     LocomotionStateComponent,

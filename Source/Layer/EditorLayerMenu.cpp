@@ -861,7 +861,7 @@ void EditorLayer::DrawMenuBar()
         ImGui::TextDisabled(ICON_FA_GEAR " %.1f FPS", ImGui::GetIO().Framerate);
         ImGui::SameLine();
 
-        float totalTime = EngineKernel::Instance().GetTime().totalTime;
+        double totalTime = EngineKernel::Instance().GetTime().totalTime;
         ImGui::TextDisabled(ICON_FA_CLOCK " %.2f", totalTime);
 
         ImGui::EndMainMenuBar();

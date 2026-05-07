@@ -1,4 +1,4 @@
-#include "TimelineShakeSystem.h"
+﻿#include "TimelineShakeSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
 #include "HitStopComponent.h"

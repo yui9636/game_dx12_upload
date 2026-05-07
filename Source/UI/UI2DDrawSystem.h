@@ -72,6 +72,9 @@ public:
                 if (hierarchy && !hierarchy->isActive) {
                     continue;
                 }
+                if (!AreAncestorsVisible(registry, entities[i])) {
+                    continue;
+                }
 
                 UI2DDrawEntry entry;
                 entry.entity = entities[i];
@@ -96,5 +99,28 @@ public:
             return a.entity < b.entity;
         });
         return entries;
+    }
+
+private:
+    static bool AreAncestorsVisible(Registry& registry, EntityID entity)
+    {
+        auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        EntityID parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        for (int guard = 0; guard < 64 && !Entity::IsNull(parent) && registry.IsAlive(parent); ++guard) {
+            if (auto* parentHierarchy = registry.GetComponent<HierarchyComponent>(parent)) {
+                if (!parentHierarchy->isActive) {
+                    return false;
+                }
+                if (auto* parentCanvas = registry.GetComponent<CanvasItemComponent>(parent)) {
+                    if (!parentCanvas->visible) {
+                        return false;
+                    }
+                }
+                parent = parentHierarchy->parent;
+            } else {
+                break;
+            }
+        }
+        return true;
     }
 };

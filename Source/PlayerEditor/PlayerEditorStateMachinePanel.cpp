@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // PlayerEditor — State machine panel, presets, node graph and condition editor.
 // Sibling of PlayerEditorPanel.cpp; split out for readability.
 // ============================================================================

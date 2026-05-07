@@ -24,14 +24,11 @@ void SceneDataUploadSystem::Upload(const RenderContext& rc, GlobalRootSignature&
     scene.prevJitterX = rc.prevJitterOffset.x;
     scene.prevJitterY = rc.prevJitterOffset.y;
 
-    // DX12 は Phase 4 の途中段階で temporal 履歴契約をまだ完全に分離できていない。
-    // まず main view の見た目破綻を止めるため、SSGI などが使う previous view は
-    // 現在の unjittered 行列へフォールバックさせる。
-    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
-        scene.prevViewProjection = scene.viewProjectionUnjittered;
-        scene.prevJitterX = 0.0f;
-        scene.prevJitterY = 0.0f;
-    }
+    // 以前ここで DX12 のときに scene.prevViewProjection を現フレームの unjittered VP
+    // で上書きする暫定処置を入れていたが、これをすると GBuffer パスの motion vector
+    // が常にゼロになり、カメラを動かした瞬間に FSR2 が再投影できず粒子状ノイズが
+    // 出てしまう。RenderPipeline の history で prevViewProjection は正しく前フレーム
+    // の値が入るので、暫定処置は撤去して rc.prevViewProjectionMatrix をそのまま使う。
 
     const ITexture* sceneTarget = rc.sceneColorTexture ? rc.sceneColorTexture : rc.mainRenderTarget;
     const float renderWidth = rc.renderWidth > 0

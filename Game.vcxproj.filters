@@ -5,6 +5,8 @@
     <Filter Include="External\FSR2" />
     <Filter Include="External\FSR2\dx11" />
     <Filter Include="External\FSR2\dx11\shaders" />
+    <Filter Include="External\FSR2\dx12" />
+    <Filter Include="External\FSR2\dx12\shaders" />
     <Filter Include="External\imgui_gradient-main" />
     <Filter Include="External\imgui_gradient-main\src" />
     <Filter Include="External\imgui-docking" />
@@ -82,6 +84,15 @@
     <ClInclude Include="External\FSR2\dx11\ffx_fsr2_dx11.h">
       <Filter>External\FSR2\dx11</Filter>
     </ClInclude>
+    <ClInclude Include="External\FSR2\dx12\d3dx12.h">
+      <Filter>External\FSR2\dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="External\FSR2\dx12\ffx_fsr2_dx12.h">
+      <Filter>External\FSR2\dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="External\FSR2\dx12\shaders\ffx_fsr2_shaders_dx12.h">
+      <Filter>External\FSR2\dx12\shaders</Filter>
+    </ClInclude>
     <ClInclude Include="External\FSR2\ffx_fsr2.h">
       <Filter>External\FSR2</Filter>
     </ClInclude>
@@ -137,6 +148,9 @@
       <Filter>Source\Animator</Filter>
     </ClInclude>
     <ClInclude Include="Source\Animator\AnimatorSystem.h">
+      <Filter>Source\Animator</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Animator\RootMotionSystem.h">
       <Filter>Source\Animator</Filter>
     </ClInclude>
     <ClInclude Include="Source\Archetype\Archetype.h">
@@ -401,6 +415,12 @@
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="Source\Gameplay\HealthSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\HPGaugeComponent.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\HPGaugeSystem.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="Source\Gameplay\HitboxTrackingComponent.h">
@@ -1006,6 +1026,12 @@
     <ClInclude Include="Source\UI\UI2DSpriteRenderSystem.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UI\UI2DTextExtractSystem.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UI\UI2DTextRenderSystem.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
     <ClInclude Include="Source\UI\UICombo.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
@@ -1157,6 +1183,12 @@
     <ClCompile Include="External\FSR2\dx11\shaders\ffx_fsr2_shaders_dx11.cpp">
       <Filter>External\FSR2\dx11\shaders</Filter>
     </ClCompile>
+    <ClCompile Include="External\FSR2\dx12\ffx_fsr2_dx12.cpp">
+      <Filter>External\FSR2\dx12</Filter>
+    </ClCompile>
+    <ClCompile Include="External\FSR2\dx12\shaders\ffx_fsr2_shaders_dx12.cpp">
+      <Filter>External\FSR2\dx12\shaders</Filter>
+    </ClCompile>
     <ClCompile Include="External\FSR2\ffx_assert.cpp">
       <Filter>External\FSR2</Filter>
     </ClCompile>
@@ -1257,6 +1289,9 @@
       <Filter>Source\Animator</Filter>
     </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorSystem.cpp">
+      <Filter>Source\Animator</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Animator\RootMotionSystem.cpp">
       <Filter>Source\Animator</Filter>
     </ClCompile>
     <ClCompile Include="Source\Archetype\Archetype.cpp">
@@ -1380,6 +1415,9 @@
       <Filter>Source\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\HealthSystem.cpp">
+      <Filter>Source\Gameplay</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Gameplay\HPGaugeSystem.cpp">
       <Filter>Source\Gameplay</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp">
@@ -2022,6 +2060,9 @@
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\FinalBlitPS.hlsl">
+      <Filter>Shader</Filter>
+    </FxCompile>
+    <FxCompile Include="Shader\PostEffectBlitPS.hlsl">
       <Filter>Shader</Filter>
     </FxCompile>
     <FxCompile Include="Shader\Font_PS.hlsl">

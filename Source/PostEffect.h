@@ -1,42 +1,57 @@
-﻿#pragma once
-#include <wrl.h>
-#include <d3d11.h>
-#include <memory>
-#include "RenderContext/RenderContext.h"
-#include <ffx_fsr2.h>
-#include <dx11\ffx_fsr2_dx11.h>
+#pragma once
 
-// RHI 前方宣言
-class IShader;
+#include "RHI/GraphicsAPI.h"
+
+#include <ffx_fsr2.h>
+#include <cstdint>
+#include <memory>
+
 class IBuffer;
-class ITexture;
 class IPipelineState;
-class FrameBuffer; // 古いFBも一部残っているため
+class IResourceFactory;
+class IShader;
+class ITexture;
+struct RenderContext;
 
 class PostEffect
 {
 public:
-    PostEffect(ID3D11Device* device);
+    PostEffect(IResourceFactory* factory, GraphicsAPI api, void* nativeDevice);
     ~PostEffect();
 
-    // ====================================================
-    // ★ 修正：FrameBuffer ではなく、グラフから来た ITexture を受け取る！
-    // ====================================================
     void Process(const RenderContext& rc, ITexture* src, ITexture* dst, ITexture* depth, ITexture* velocity);
-
+    void OnResize(uint32_t displayWidth, uint32_t displayHeight);
     void DrawDebugGUI();
 
 private:
-    void LuminanceExtraction(const RenderContext& rc, FrameBuffer* luminanceTarget, ITexture* src);
-    void UberPostProcess(const RenderContext& rc, FrameBuffer* workTarget, ITexture* color, ITexture* luminance, ITexture* depth, ITexture* velocity);
+    void EnsureFsr2Context(uint32_t renderWidth, uint32_t renderHeight, uint32_t displayWidth, uint32_t displayHeight);
+    void DestroyFsr2Context();
+
+    void LuminanceExtraction(const RenderContext& rc, ITexture* luminanceTarget, ITexture* src);
+    void UberPostProcess(
+        const RenderContext& rc,
+        ITexture* workTarget,
+        ITexture* color,
+        ITexture* luminance,
+        ITexture* depth,
+        ITexture* velocity);
+    void Blit(const RenderContext& rc, ITexture* src, ITexture* dst);
+    bool DispatchFsr2(const RenderContext& rc, ITexture* color, ITexture* depth, ITexture* velocity, ITexture* output);
 
 private:
-    std::unique_ptr<IShader> fullscreenQuadVS;
-    std::unique_ptr<IShader> luminanceExtractionPS;
-    std::unique_ptr<IShader> uberPostPS;
+    IResourceFactory* m_factory = nullptr;
+    GraphicsAPI m_api = GraphicsAPI::DX11;
+    void* m_nativeDevice = nullptr;
+
+    std::unique_ptr<IShader> m_fullscreenQuadVS;
+    std::unique_ptr<IShader> m_luminanceExtractionPS;
+    std::unique_ptr<IShader> m_uberPostPS;
+    std::unique_ptr<IShader> m_blitPS;
 
     std::unique_ptr<IPipelineState> m_psoLuminance;
     std::unique_ptr<IPipelineState> m_psoUber;
+    std::unique_ptr<IPipelineState> m_psoBlitToHdr;
+    std::unique_ptr<IPipelineState> m_psoBlitToLdr;
 
     struct CbPostEffect
     {
@@ -61,11 +76,21 @@ private:
         float _pad[1];
     };
 
-    std::unique_ptr<IBuffer> constantBuffer;
-    CbPostEffect cbPostEffect;
+    std::unique_ptr<IBuffer> m_constantBuffer;
+    CbPostEffect m_cbPostEffect{};
 
-private:
-    FfxFsr2Context  m_fsr2Context;
-    FfxFsr2Interface m_fsr2Interface;
+    FfxFsr2Context m_fsr2Context{};
+    FfxFsr2Interface m_fsr2Interface{};
+    void* m_fsr2Scratch = nullptr;
     bool m_fsr2Initialized = false;
+    uint32_t m_fsr2MaxRenderWidth = 0;
+    uint32_t m_fsr2MaxRenderHeight = 0;
+    uint32_t m_fsr2DisplayWidth = 0;
+    uint32_t m_fsr2DisplayHeight = 0;
+    bool m_loggedFsr2ContextFailure = false;
+    bool m_loggedFsr2Fallback = false;
+    bool m_loggedFsr2Success = false;
+    bool m_loggedFsr2MissingInput = false;
+
+    std::unique_ptr<ITexture> m_fsr2OutputDX12;
 };
