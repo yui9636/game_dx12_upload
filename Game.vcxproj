@@ -81,7 +81,8 @@
       <AssemblerOutputFile>Data\Shader\%(Filename).cod</AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/" "$(ProjectDir)Source\AI" "AI/"</Command>
+      <Command>
+      </Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Debug\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
