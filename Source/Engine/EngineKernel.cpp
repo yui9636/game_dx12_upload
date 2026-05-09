@@ -33,6 +33,7 @@
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
 #include "Console/Logger.h"
+#include "System/PathResolver.h"
 #include "Input/SDLInputBackend.h"
 #include "Model/Model.h"
 #include "PlayerEditor/PlayerModelPreviewStudio.h"
@@ -43,6 +44,7 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 #include "Gameplay/TimelineShakeSystem.h"
 #include "GameLoop/GameLoopSystem.h"
 #include "GameLoop/FlowEventQueue.h"
@@ -81,7 +83,7 @@ namespace {
     constexpr uint32_t kMaxDiagnosticFrames = 8;
 
     // 診断ログの出力先。
-    constexpr const char* kPhase4DiagPath = "C:/Users/yuito/Documents/MyEngine_Workspace/game_dx12_upload/Saved/Logs/phase4_diag.txt";
+    constexpr const char* kPhase4DiagPath = "Saved/Logs/phase4_diag.txt";
 
     void ApplyProjectionJitter(
         DirectX::XMFLOAT4X4& projection,
@@ -252,7 +254,7 @@ namespace {
     void AppendPhase4Diag(const std::string& line)
     {
         static bool cleared = false;
-        const std::filesystem::path path(kPhase4DiagPath);
+        const std::filesystem::path path(PathResolver::Resolve(kPhase4DiagPath));
         std::filesystem::create_directories(path.parent_path());
         std::ofstream file(path, cleared ? (std::ios::out | std::ios::app) : (std::ios::out | std::ios::trunc));
         cleared = true;
@@ -362,9 +364,7 @@ namespace {
             return;
         }
 
-        std::string filePath = "Saved/Logs/";
-        filePath += label;
-        filePath += ".bmp";
+        std::filesystem::path filePath = std::filesystem::path(PathResolver::Resolve("Saved/Logs")) / (std::string(label) + ".bmp");
 
         const uint32_t width = state.width;
         const uint32_t height = state.height;
@@ -413,6 +413,7 @@ namespace {
             }
         }
 
+        std::filesystem::create_directories(filePath.parent_path());
         std::ofstream ofs(filePath, std::ios::binary);
         if (!ofs) {
             return;

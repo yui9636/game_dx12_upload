@@ -247,6 +247,7 @@
     <ClInclude Include="Source\Gameplay\BattleFlowSystem.h" />
     <ClInclude Include="Source\RenderContext\IndirectDrawCommon.h" />
     <ClInclude Include="Source\UI\HUDBindingSystem.h" />
+    <ClInclude Include="Source\UIEditor\UIEditorPanel.h" />
     <ClInclude Include="Source\GameLoop\FlowEventQueue.h" />
     <ClInclude Include="Source\GameLoop\GameLoopAsset.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanel.h" />
@@ -628,6 +629,7 @@
     <ClCompile Include="Source\Gameplay\LockOnSystem.cpp" />
     <ClCompile Include="Source\Gameplay\BattleFlowSystem.cpp" />
     <ClCompile Include="Source\UI\HUDBindingSystem.cpp" />
+    <ClCompile Include="Source\UIEditor\UIEditorPanel.cpp" />
     <ClCompile Include="Source\Gameplay\StateMachineSystem.cpp" />
     <ClCompile Include="Source\Gameplay\PlayerRuntimeSetup.cpp" />
     <ClCompile Include="Source\Gameplay\TimelineAssetRuntimeBuilder.cpp" />

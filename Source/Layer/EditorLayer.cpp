@@ -237,13 +237,17 @@ void EditorLayer::RenderUI()
     if (!m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor) {
         m_activeWorkspace = WorkspaceTab::LevelEditor;
     }
+    if (!m_showUIEditor && m_activeWorkspace == WorkspaceTab::UIEditor) {
+        m_activeWorkspace = WorkspaceTab::LevelEditor;
+    }
 
     DrawMenuBar();
     DrawWorkspaceTabs();
 
     const bool showPlayerWorkspace = m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor;
     const bool showEffectWorkspace = m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor;
-    const bool showSecondaryWorkspace = showPlayerWorkspace || showEffectWorkspace;
+    const bool showUIWorkspace = m_showUIEditor && m_activeWorkspace == WorkspaceTab::UIEditor;
+    const bool showSecondaryWorkspace = showPlayerWorkspace || showEffectWorkspace || showUIWorkspace;
     if (!showPlayerWorkspace) {
         m_playerEditorPanel.Suspend();
     }
@@ -251,6 +255,9 @@ void EditorLayer::RenderUI()
         m_maximizedWindow = WindowFocusTarget::None;
     }
     if (showEffectWorkspace && m_maximizedWindow == WindowFocusTarget::EffectEditor) {
+        m_maximizedWindow = WindowFocusTarget::None;
+    }
+    if (showUIWorkspace && m_maximizedWindow == WindowFocusTarget::UIEditor) {
         m_maximizedWindow = WindowFocusTarget::None;
     }
 
@@ -262,12 +269,14 @@ void EditorLayer::RenderUI()
         DrawPlayerEditorWorkspace();
     } else if (showEffectWorkspace) {
         DrawEffectEditorWorkspace();
+    } else if (showUIWorkspace) {
+        DrawUIEditorWorkspace();
     } else {
         DrawDockSpace();
     }
 
     const bool maximizeLeft = (m_maximizedWindow == WindowFocusTarget::Hierarchy);
-    const bool maximizeRight = (m_maximizedWindow == WindowFocusTarget::Inspector);
+    const bool maximizeInspector = (m_maximizedWindow == WindowFocusTarget::Inspector);
     const bool maximizeBottomAsset = (m_maximizedWindow == WindowFocusTarget::AssetBrowser);
     const bool maximizeBottomSerializer = (m_maximizedWindow == WindowFocusTarget::Serializer);
     const bool maximizeBottomConsole = (m_maximizedWindow == WindowFocusTarget::Console);
@@ -288,7 +297,7 @@ void EditorLayer::RenderUI()
         if (m_showHierarchy && (m_maximizedWindow == WindowFocusTarget::None || maximizeLeft)) {
             DrawHierarchy();
         }
-        if (m_showInspector && (m_maximizedWindow == WindowFocusTarget::None || maximizeRight)) {
+        if (m_showInspector && (m_maximizedWindow == WindowFocusTarget::None || maximizeInspector)) {
             DrawInspector();
         }
         if (m_showLightingWindow && (m_maximizedWindow == WindowFocusTarget::None || m_maximizedWindow == WindowFocusTarget::Lighting || maximizeTool)) {

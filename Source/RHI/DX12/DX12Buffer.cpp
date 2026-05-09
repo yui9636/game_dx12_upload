@@ -2,8 +2,21 @@
 #include <cassert>
 #include <cstring>
 #include <cstdio>
+#include <filesystem>
+#include <string>
 #include <windows.h>
 #include <dxgi1_4.h>
+#include "System/PathResolver.h"
+
+namespace
+{
+    std::string ResolveDx12BufferLogPath()
+    {
+        const std::filesystem::path logDir(PathResolver::Resolve("Saved/Logs"));
+        std::filesystem::create_directories(logDir);
+        return (logDir / "dx12_buffer_errors.log").string();
+    }
+}
 
 DX12Buffer::DX12Buffer(
     DX12Device* device,
@@ -115,12 +128,14 @@ DX12Buffer::DX12Buffer(
             sprintf_s(buf2, "[DX12Buffer] DeviceRemovedReason: 0x%08X\n", static_cast<unsigned>(reason));
             OutputDebugStringA(buf2);
             FILE* f2 = nullptr;
-            fopen_s(&f2, "dx12_buffer_errors.log", "a");
+            const std::string logPath = ResolveDx12BufferLogPath();
+            fopen_s(&f2, logPath.c_str(), "a");
             if (f2) { fprintf(f2, "%s", buf2); fclose(f2); }
         }
         // ファイルにもログ出力
         FILE* f = nullptr;
-        fopen_s(&f, "dx12_buffer_errors.log", "a");
+        const std::string logPath = ResolveDx12BufferLogPath();
+        fopen_s(&f, logPath.c_str(), "a");
         if (f) { fprintf(f, "%s", buf); fclose(f); }
         return;
     }

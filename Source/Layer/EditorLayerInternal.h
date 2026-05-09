@@ -46,6 +46,8 @@
 #include "Component/EnvironmentComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/PrefabInstanceComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Console/Console.h"
 #include "RHI/ITexture.h"
 #include "ImGuiRenderer.h"
