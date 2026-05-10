@@ -9,6 +9,7 @@
 
 #include "Component/CanvasItemComponent.h"
 #include "Component/HierarchyComponent.h"
+#include "Component/NameComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/TransformComponent.h"
 #include "Entity/Entity.h"
@@ -143,6 +144,10 @@ public:
             const auto& entities = archetype->GetEntities();
             for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
                 const EntityID entity = entities[i];
+                if (IsUIEditorAuthoringEntity(registry, entity)) {
+                    continue;
+                }
+
                 const auto* rect = static_cast<RectTransformComponent*>(rectColumn->Get(i));
                 const auto* canvas = static_cast<CanvasItemComponent*>(canvasColumn->Get(i));
                 const auto* transform = static_cast<TransformComponent*>(transformColumn->Get(i));
@@ -200,5 +205,27 @@ public:
         }
 
         return result;
+    }
+
+private:
+    static bool IsUIEditorAuthoringEntity(Registry& registry, EntityID entity)
+    {
+        constexpr const char* kUIEditorAuthoringCanvasName = "UIAuthoring_Canvas";
+
+        EntityID current = entity;
+        for (int guard = 0; guard < 64 && !Entity::IsNull(current) && registry.IsAlive(current); ++guard) {
+            if (auto* name = registry.GetComponent<NameComponent>(current)) {
+                if (name->name == kUIEditorAuthoringCanvasName) {
+                    return true;
+                }
+            }
+
+            auto* hierarchy = registry.GetComponent<HierarchyComponent>(current);
+            if (!hierarchy || Entity::IsNull(hierarchy->parent)) {
+                break;
+            }
+            current = hierarchy->parent;
+        }
+        return false;
     }
 };

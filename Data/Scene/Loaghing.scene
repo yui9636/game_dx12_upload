@@ -367,14 +367,14 @@
             "y": 0.5
           },
           "anchoredPosition": {
-            "x": 0.0,
-            "y": 0.0
+            "x": 7.777779579162598,
+            "y": -6.570048809051514
           },
           "pivot": {
             "x": 0.5,
             "y": 0.5
           },
-          "rotationZ": 0.0,
+          "rotationZ": -0.0,
           "scale2D": {
             "x": 1.0,
             "y": 1.0
@@ -395,20 +395,20 @@
           "fontAssetPath": "Data/Font/ArialUni.ttf",
           "fontSize": 32.0,
           "lineSpacing": 1.0,
-          "text": "Title  push z",
+          "text": "loadhing.......",
           "wrapping": false
         },
         "TransformComponent": {
           "localPosition": {
-            "x": 0.0,
-            "y": 0.0,
+            "x": 7.777779579162598,
+            "y": -6.570048809051514,
             "z": 0.0
           },
           "localRotation": {
             "w": 1.0,
             "x": 0.0,
             "y": 0.0,
-            "z": 0.0
+            "z": -0.0
           },
           "localScale": {
             "x": 1.0,

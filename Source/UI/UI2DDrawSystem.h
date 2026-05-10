@@ -72,6 +72,9 @@ public:
                 if (hierarchy && !hierarchy->isActive) {
                     continue;
                 }
+                if (IsUIEditorAuthoringEntity(registry, entities[i])) {
+                    continue;
+                }
                 if (!AreAncestorsVisible(registry, entities[i])) {
                     continue;
                 }
@@ -102,6 +105,27 @@ public:
     }
 
 private:
+    static bool IsUIEditorAuthoringEntity(Registry& registry, EntityID entity)
+    {
+        constexpr const char* kUIEditorAuthoringCanvasName = "UIAuthoring_Canvas";
+
+        EntityID current = entity;
+        for (int guard = 0; guard < 64 && !Entity::IsNull(current) && registry.IsAlive(current); ++guard) {
+            if (auto* name = registry.GetComponent<NameComponent>(current)) {
+                if (name->name == kUIEditorAuthoringCanvasName) {
+                    return true;
+                }
+            }
+
+            auto* hierarchy = registry.GetComponent<HierarchyComponent>(current);
+            if (!hierarchy || Entity::IsNull(hierarchy->parent)) {
+                break;
+            }
+            current = hierarchy->parent;
+        }
+        return false;
+    }
+
     static bool AreAncestorsVisible(Registry& registry, EntityID entity)
     {
         auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity);

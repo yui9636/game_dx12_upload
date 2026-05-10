@@ -476,59 +476,15 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
             ? IM_COL32(80, 180, 255, 32)
             : IM_COL32(255, 255, 255, 16);
 
-        if (!entry.sprite || entry.sprite->textureAssetPath.empty()) {
+        const bool hasSprite = entry.sprite && !entry.sprite->textureAssetPath.empty();
+        const bool showEditorBoundsFill = drawSelection && isSelected;
+        if (!hasSprite && showEditorBoundsFill) {
             drawList->AddQuadFilled(p0, p1, p2, p3, fillColor);
         }
 
-        if (auto* text = entry.text; text && !text->text.empty()) {
-            ImFont* font = ImGui::GetFont();
-            if (!text->fontAssetPath.empty()) {
-                if (ImFont* previewFont = FontManager::Instance().GetEditorPreviewFont(text->fontAssetPath)) {
-                    font = previewFont;
-                } else {
-                    FontManager::Instance().QueueEditorPreviewFont(text->fontAssetPath);
-                }
-            }
-            const float fontSize = (std::max)(8.0f, text->fontSize);
-            const float minScreenX = (std::min)((std::min)(p0.x, p1.x), (std::min)(p2.x, p3.x));
-            const float maxScreenX = (std::max)((std::max)(p0.x, p1.x), (std::max)(p2.x, p3.x));
-            const float minScreenY = (std::min)((std::min)(p0.y, p1.y), (std::min)(p2.y, p3.y));
-            const float maxScreenY = (std::max)((std::max)(p0.y, p1.y), (std::max)(p2.y, p3.y));
-            const float screenWidth = (std::max)(1.0f, maxScreenX - minScreenX);
-            const float screenHeight = (std::max)(1.0f, maxScreenY - minScreenY);
-            const float wrapWidth = text->wrapping ? screenWidth : 0.0f;
-            const ImVec2 textSize = font->CalcTextSizeA(
-                fontSize,
-                (std::numeric_limits<float>::max)(),
-                wrapWidth,
-                text->text.c_str());
-
-            ImVec2 textPos(minScreenX, minScreenY);
-            if (text->alignment == TextAlignment::Center) {
-                textPos.x += (screenWidth - textSize.x) * 0.5f;
-            } else if (text->alignment == TextAlignment::Right) {
-                textPos.x += screenWidth - textSize.x;
-            }
-            textPos.y += (std::max)(0.0f, (screenHeight - textSize.y) * 0.5f);
-            if (canvas->pixelSnap) {
-                textPos.x = std::round(textPos.x);
-                textPos.y = std::round(textPos.y);
-            }
-
-            const ImU32 textColor = ImGui::ColorConvertFloat4ToU32(ImVec4(
-                text->color.x,
-                text->color.y,
-                text->color.z,
-                text->color.w));
-
-            drawList->PushClipRect(ImVec2(minScreenX, minScreenY), ImVec2(maxScreenX, maxScreenY), true);
-            drawList->AddText(font, fontSize, textPos, textColor, text->text.c_str(), nullptr, wrapWidth);
-            drawList->PopClipRect();
+        if (drawSelection && m_showSceneSelectionOutline) {
+            drawList->AddQuad(p0, p1, p2, p3, outlineColor, 1.5f);
         }
-
-          if (drawSelection && m_showSceneSelectionOutline) {
-              drawList->AddQuad(p0, p1, p2, p3, outlineColor, 1.5f);
-          }
     }
 }
 
@@ -912,6 +868,20 @@ void EditorLayer::HandleSceneAssetDrop()
     std::string ext = assetPath.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
+    EntitySnapshot::Snapshot prefabDropSnapshot;
+    bool prefabIsUI = false;
+    if (ext == ".prefab" && PrefabSystem::LoadPrefabSnapshot(assetPath, prefabDropSnapshot)) {
+        for (const auto& node : prefabDropSnapshot.nodes) {
+            const bool hasRect = std::get<std::optional<RectTransformComponent>>(node.components).has_value();
+            const bool hasCanvas = std::get<std::optional<CanvasItemComponent>>(node.components).has_value();
+            const bool hasHPGauge = std::get<std::optional<HPGaugeBindingComponent>>(node.components).has_value();
+            if ((node.localID == prefabDropSnapshot.rootLocalID && hasRect && hasCanvas) || hasHPGauge) {
+                prefabIsUI = true;
+                break;
+            }
+        }
+    }
+
     using namespace DirectX;
     const XMFLOAT4X4 view = GetEditorViewMatrix();
     const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
@@ -931,7 +901,8 @@ void EditorLayer::HandleSceneAssetDrop()
         placementPosition = { 0.0f, 0.0f, 0.0f };
     }
 
-    if (m_sceneViewMode == SceneViewMode::Mode2D && (IsSupportedSpriteAsset(assetPath) || IsSupportedFontAsset(assetPath))) {
+    if (m_sceneViewMode == SceneViewMode::Mode2D &&
+        ((ext == ".prefab" && prefabIsUI) || IsSupportedSpriteAsset(assetPath) || IsSupportedFontAsset(assetPath))) {
         DirectX::XMFLOAT3 canvasPoint{};
         if (UIHitTestSystem::ScreenToCanvasPoint(
                 m_sceneViewRect,
@@ -958,9 +929,12 @@ void EditorLayer::HandleSceneAssetDrop()
                                            std::fabs(placementPosition.y) < 0.0001f &&
                                            std::fabs(placementPosition.z) < 0.0001f;
             const bool isTextPlacement = (m_sceneViewMode == SceneViewMode::Mode2D && IsSupportedFontAsset(assetPath));
+            const bool isUIPrefabPlacement = (m_sceneViewMode == SceneViewMode::Mode2D && ext == ".prefab" && prefabIsUI);
             const std::string previewText = isTextPlacement
                 ? (isOriginPlacement ? "Place Text at Origin" : "Place Text")
-                : (isOriginPlacement ? "Place at Origin" : "Place on Surface");
+                : (isUIPrefabPlacement
+                    ? (isOriginPlacement ? "Place UI Prefab at Origin" : "Place UI Prefab")
+                    : (isOriginPlacement ? "Place at Origin" : "Place on Surface"));
             drawList->AddText(ImVec2(screenPos.x + 16.0f, screenPos.y - 8.0f), IM_COL32(255, 255, 255, 230), previewText.c_str());
         }
     }
@@ -984,14 +958,40 @@ void EditorLayer::HandleSceneAssetDrop()
     };
 
     if (ext == ".prefab") {
-        EntitySnapshot::Snapshot snapshot;
-        if (PrefabSystem::LoadPrefabSnapshot(assetPath, snapshot) && !snapshot.nodes.empty()) {
-            ApplyPlacementToSnapshot(snapshot, placementPosition);
-            auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Prefab");
-            auto* actionPtr = action.get();
-            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
-            if (!Entity::IsNull(actionPtr->GetLiveRoot())) {
-                EditorSelection::Instance().SelectEntity(actionPtr->GetLiveRoot());
+        EntityID liveRoot = PrefabSystem::InstantiatePrefab(assetPath, registry, Entity::NULL_ID);
+        if (!Entity::IsNull(liveRoot) && registry.IsAlive(liveRoot)) {
+            if (prefabIsUI && m_sceneViewMode == SceneViewMode::Mode2D) {
+                if (auto* rect = registry.GetComponent<RectTransformComponent>(liveRoot)) {
+                    rect->anchoredPosition = { placementPosition.x, placementPosition.y };
+                }
+                if (auto* transform = registry.GetComponent<TransformComponent>(liveRoot)) {
+                    if (auto* rect = registry.GetComponent<RectTransformComponent>(liveRoot)) {
+                        SyncRectTransformToTransform(*rect, *transform);
+                    } else {
+                        transform->localPosition = placementPosition;
+                        transform->isDirty = true;
+                    }
+                }
+                Editor2D::FinalizeCreatedEntity(registry, liveRoot);
+            } else if (auto* transform = registry.GetComponent<TransformComponent>(liveRoot)) {
+                transform->localPosition = placementPosition;
+                transform->isDirty = true;
+            }
+
+            HierarchySystem::MarkDirtyRecursive(liveRoot, registry);
+            HierarchySystem hierarchySystem;
+            hierarchySystem.Update(registry);
+
+            EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(liveRoot, registry);
+            if (!snapshot.nodes.empty()) {
+                auto action = std::make_unique<CreateEntityAction>(std::move(snapshot), Entity::NULL_ID, "Place Prefab");
+                action->AdoptLiveRoot(liveRoot);
+                UndoSystem::Instance().RecordAction(std::move(action));
+                EditorSelection::Instance().SelectEntity(liveRoot);
+                m_gizmoOperation = GizmoOperation::Translate;
+                m_scenePickPending = false;
+                m_scenePickBlockedByGizmo = true;
+                RequestWindowFocus(WindowFocusTarget::SceneView);
             }
         }
     } else if (m_sceneViewMode == SceneViewMode::Mode2D && IsSupportedSpriteAsset(assetPath)) {
