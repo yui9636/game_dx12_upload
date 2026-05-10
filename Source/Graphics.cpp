@@ -15,12 +15,22 @@
 #include "RHI/DX12/DX12ResourceFactory.h"
 #include "RHI/DX12/DX12Texture.h"
 #include "Render/GlobalRootSignature.h"
+#include "System/PathResolver.h"
+#include <filesystem>
+#include <string>
 
 
 using namespace Microsoft::WRL;
 
 namespace {
 	bool g_graphicsShuttingDown = false;
+
+	std::string ResolveDebugLogPath(const char* fileName)
+	{
+		const std::filesystem::path logDir(PathResolver::Resolve("Saved/Logs"));
+		std::filesystem::create_directories(logDir);
+		return (logDir / fileName).string();
+	}
 }
 
 Graphics::~Graphics()
@@ -320,7 +330,8 @@ static void DumpDRED(ID3D12Device* device) {
 	D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs = {};
 	if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
 		FILE* f = nullptr;
-		fopen_s(&f, "dx12_dred.log", "a");
+		const std::string logPath = ResolveDebugLogPath("dx12_dred.log");
+		fopen_s(&f, logPath.c_str(), "a");
 		if (!f) return;
 		const D3D12_AUTO_BREADCRUMB_NODE* node = breadcrumbs.pHeadAutoBreadcrumbNode;
 		while (node) {
@@ -342,7 +353,8 @@ static void DumpDRED(ID3D12Device* device) {
 	D3D12_DRED_PAGE_FAULT_OUTPUT pageFault = {};
 	if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault))) {
 		FILE* f = nullptr;
-		fopen_s(&f, "dx12_dred.log", "a");
+		const std::string logPath = ResolveDebugLogPath("dx12_dred.log");
+		fopen_s(&f, logPath.c_str(), "a");
 		if (f) {
 			fprintf(f, "[DRED] PageFault VA=0x%llX\n", pageFault.PageFaultVA);
 			fclose(f);
@@ -362,7 +374,8 @@ void Graphics::Present(UINT syncInterval)
 				(unsigned)hr, (unsigned)reason);
 			OutputDebugStringA(buf);
 			FILE* f = nullptr;
-			fopen_s(&f, "dx12_device_lost.log", "a");
+			const std::string logPath = ResolveDebugLogPath("dx12_device_lost.log");
+			fopen_s(&f, logPath.c_str(), "a");
 			if (f) { fprintf(f, "%s", buf); fclose(f); }
 			DumpDRED(m_dx12Device->GetDevice());
 		}

@@ -3,13 +3,14 @@
 #include <cstdarg>
 #include <fstream>
 #include "Logger.h"
+#include "System/PathResolver.h"
 
 // ログ出力先ファイルのパスを返す。
-// 実行ディレクトリ配下の Saved/Logs/runtime.log を使う。
+// プロジェクトルート配下の Saved/Logs/runtime.log を使う。
 std::filesystem::path Logger::GetLogFilePath() const
 {
     // Saved/Logs ディレクトリを作成する。
-    auto dir = std::filesystem::current_path() / "Saved" / "Logs";
+    auto dir = std::filesystem::path(PathResolver::Resolve("Saved/Logs"));
     std::filesystem::create_directories(dir);
 
     // 実際のログファイルパスを返す。

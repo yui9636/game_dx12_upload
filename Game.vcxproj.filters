@@ -77,6 +77,7 @@
     <Filter Include="Source\Transform" />
     <Filter Include="Source\Type" />
     <Filter Include="Source\UI" />
+    <Filter Include="Source\UIEditor" />
     <Filter Include="Source\Undo" />
     <Filter Include="Source\Utils" />
   </ItemGroup>
@@ -1164,6 +1165,18 @@
     <ClInclude Include="Source\UI\HUDBindingSystem.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UIEditor\HPGaugeTemplateFactory.h">
+      <Filter>Source\UIEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UIEditor\UIEditorPanel.h">
+      <Filter>Source\UIEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UIEditor\UIEditorState.h">
+      <Filter>Source\UIEditor</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\UIEditor\UIRectEvaluator.h">
+      <Filter>Source\UIEditor</Filter>
+    </ClInclude>
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h">
@@ -1434,6 +1447,15 @@
     </ClCompile>
     <ClCompile Include="Source\UI\HUDBindingSystem.cpp">
       <Filter>Source\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UIEditor\HPGaugeTemplateFactory.cpp">
+      <Filter>Source\UIEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UIEditor\UIEditorPanel.cpp">
+      <Filter>Source\UIEditor</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\UIEditor\UIRectEvaluator.cpp">
+      <Filter>Source\UIEditor</Filter>
     </ClCompile>
     <ClCompile Include="Source\Gameplay\LocomotionSystem.cpp">
       <Filter>Source\Gameplay</Filter>

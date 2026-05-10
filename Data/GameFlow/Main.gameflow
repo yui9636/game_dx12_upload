@@ -1,8 +1,43 @@
 {
-  "nextNodeId": 1,
-  "nextTransitionId": 1,
-  "nodes": [],
-  "startNodeId": 0,
-  "transitions": [],
+  "nextNodeId": 3,
+  "nextTransitionId": 2,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Titile",
+      "posX": -296.0,
+      "posY": -181.0,
+      "scenePath": "Data/Scene/Titile.scene",
+      "type": "Scene"
+    },
+    {
+      "id": 2,
+      "name": "test",
+      "posX": 89.0,
+      "posY": -119.0,
+      "scenePath": "Data/Scene/test.scene",
+      "type": "Scene"
+    }
+  ],
+  "startNodeId": 1,
+  "transitions": [
+    {
+      "actions": [],
+      "conditionMode": "All",
+      "conditions": [
+        {
+          "expectedFlagValue": true,
+          "keyboardScancode": 29,
+          "type": "InputAction"
+        }
+      ],
+      "fromNodeId": 1,
+      "id": 1,
+      "loadingScenePath": "Data/Scene/Loaghing.scene",
+      "name": "Transition",
+      "priority": 0,
+      "toNodeId": 2
+    }
+  ],
   "version": 1
 }

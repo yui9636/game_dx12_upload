@@ -9,6 +9,7 @@
 #include "EffectEditor/EffectEditorPanel.h"
 #include "GameLoop/GameLoopEditorPanel.h"
 #include "Sequencer/SequencerPanel.h"
+#include "UIEditor/UIEditorPanel.h"
 #include <memory>
 #include <array>
 #include <DirectXMath.h>
@@ -96,6 +97,7 @@ public:
         GBufferDebug,
         PlayerEditor,
         EffectEditor,
+        UIEditor,
         GameLoopEditor
     };
 
@@ -103,7 +105,8 @@ public:
     {
         LevelEditor,
         PlayerEditor,
-        EffectEditor
+        EffectEditor,
+        UIEditor
     };
 
     struct CameraBookmark
@@ -274,10 +277,12 @@ private:
     bool m_showInputDebug = false;
     bool m_showPlayerEditor = false;
     bool m_showEffectEditor = false;
+    bool m_showUIEditor = false;
     bool m_showGameLoopEditor = false;
     WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
     PlayerEditorPanel m_playerEditorPanel;
     EffectEditorPanel m_effectEditorPanel;
+    UIEditorPanel m_uiEditorPanel;
     SequencerPanel m_sequencerPanel;
     GameLoopEditorPanel m_gameLoopEditorPanel;
     std::unique_ptr<PlayerEditorWindow> m_playerEditorWindow;
@@ -343,6 +348,7 @@ private:
     void DrawMainToolbar();
     void DrawPlayerEditorWorkspace();
     void DrawEffectEditorWorkspace();
+    void DrawUIEditorWorkspace();
     void DrawSequencer();
     void DrawSceneView();
     void DrawGameView();
