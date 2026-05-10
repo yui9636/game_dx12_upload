@@ -21,6 +21,7 @@ Data/Model/**/*.cereal
 imgui.ini
 Data/Effect/imgui.ini
 Data/Scene/imgui.ini
+Docs/
 
 # Runtime debug logs
 *.log
