@@ -85,36 +85,6 @@ namespace {
     // 診断ログの出力先。
     constexpr const char* kPhase4DiagPath = "Saved/Logs/phase4_diag.txt";
 
-    void ApplyProjectionJitter(
-        DirectX::XMFLOAT4X4& projection,
-        const DirectX::XMFLOAT2& jitter,
-        uint32_t renderWidth,
-        uint32_t renderHeight)
-    {
-        if (renderWidth == 0 || renderHeight == 0) {
-            return;
-        }
-
-        projection._31 += 2.0f * jitter.x / static_cast<float>(renderWidth);
-        projection._32 += 2.0f * jitter.y / static_cast<float>(renderHeight);
-    }
-
-    void ApplyFsr2JitterToViewState(
-        RenderContext::ViewState& state,
-        const DirectX::XMFLOAT2& jitter,
-        const DirectX::XMFLOAT2& prevJitter)
-    {
-        using namespace DirectX;
-        const XMMATRIX view = XMLoadFloat4x4(&state.viewMatrix);
-        const XMMATRIX projection = XMLoadFloat4x4(&state.projectionMatrix);
-        XMStoreFloat4x4(&state.viewProjectionUnjittered, view * projection);
-
-        state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
-        state.jitterOffset = jitter;
-        state.prevJitterOffset = prevJitter;
-        ApplyProjectionJitter(state.projectionMatrix, state.jitterOffset, state.renderWidth, state.renderHeight);
-    }
-
     bool TryBuildActiveCamera2DViewProjection(Registry& registry,
                                               const DirectX::XMFLOAT4& viewRect,
                                               DirectX::XMFLOAT4X4& outView,
@@ -1481,6 +1451,7 @@ void EngineKernel::Render()
         m_editorLayer->SetEffectPreviewTexture(nullptr);
 
         const bool useEffectPreviewAsPrimary = !usePlayerWorkspaceScene && !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
+        const bool isEditorPreviewView = usePlayerWorkspaceScene || usePlayerPreviewAsPrimary || useEffectPreviewAsPrimary;
 
         // Editor camera にユーザー override も auto frame も無いなら、
         // opaque packet 群からバウンディングボックスを作って自動で見やすい位置へ寄せる。
@@ -1588,11 +1559,8 @@ void EngineKernel::Render()
             state.enableVolumetricFog = false;
             state.enableSSR = false;
             state.enableSkybox = m_editorLayer->ShouldPlayerPreviewUseSkybox();
+            state.enablePostProcess = false;
             state.clearColor = m_editorLayer->GetPlayerPreviewClearColor();
-            rc.bloomData = {};
-            rc.colorFilterData = {};
-            rc.dofData = {};
-            rc.motionBlurData = {};
 
             {
                 using namespace DirectX;
@@ -1636,6 +1604,7 @@ void EngineKernel::Render()
             state.enableSSR = false;
             state.enableDeferredLighting = false;
             state.enableSkybox = m_editorLayer->ShouldEffectPreviewUseSkybox();
+            state.enablePostProcess = false;
             state.clearColor = m_editorLayer->GetEffectPreviewClearColor();
 
             {
@@ -1688,13 +1657,12 @@ void EngineKernel::Render()
             }
         }
 
-        if (usePlayerWorkspaceScene || usePlayerPreviewAsPrimary || useEffectPreviewAsPrimary) {
-            ApplyFsr2JitterToViewState(state, rc.jitterOffset, rc.prevJitterOffset);
-        } else {
-            state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
-            state.jitterOffset = { 0.0f, 0.0f };
-            state.prevJitterOffset = { 0.0f, 0.0f };
+        if (isEditorPreviewView) {
+            state.enablePostProcess = false;
         }
+        state.prevViewProjectionMatrix = state.viewProjectionUnjittered;
+        state.jitterOffset = { 0.0f, 0.0f };
+        state.prevJitterOffset = { 0.0f, 0.0f };
 
         views.push_back(std::move(primaryView));
 
