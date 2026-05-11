@@ -49,6 +49,10 @@
             }
           ]
         },
+        "ActorTypeComponent": {
+          "factionId": 0,
+          "type": 1
+        },
         "CharacterPhysicsComponent": {
           "acceleration": 50.0,
           "friction": 5.0,
@@ -59,7 +63,34 @@
         },
         "ColliderComponent": {
           "drawGizmo": true,
-          "elements": [],
+          "elements": [
+            {
+              "attribute": 0,
+              "color": {
+                "w": 0.3499999940395355,
+                "x": 0.20000000298023224,
+                "y": 0.8999999761581421,
+                "z": 0.3499999940395355
+              },
+              "enabled": true,
+              "height": 110.80000305175781,
+              "hitSfxPath": "",
+              "hitVfxPath": "",
+              "nodeIndex": -1,
+              "offsetLocal": {
+                "x": 0.0,
+                "y": 94.5999984741211,
+                "z": 0.0
+              },
+              "radius": 58.099998474121094,
+              "size": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "type": 1
+            }
+          ],
           "enabled": true
         },
         "HealthComponent": {
@@ -87,6 +118,15 @@
               "gamepadButton": 1,
               "mouseButton": 0,
               "scancode": 44,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "LockOn",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 8,
+              "mouseButton": 3,
+              "scancode": 43,
               "trigger": "Pressed"
             }
           ],

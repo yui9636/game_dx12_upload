@@ -611,6 +611,12 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
             groupsX,
             groupsY);
         dx12GraphicsCmd->RestoreDescriptorHeap();
+        GlobalRootSignature::Instance().BindAll(
+            rc.commandList,
+            rc.renderState,
+            rc.shadowMap,
+            rc.sceneConstantBufferOverride,
+            rc.shadowConstantBufferOverride);
         rc.pendingAsyncComputeFenceValue = 0;
         rc.prepMetrics.asyncComputeFallbackCount++;
     }

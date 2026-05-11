@@ -334,31 +334,31 @@ void EditorLayer::DrawSceneViewToolbar()
             }
         };
 
-        drawModeButton("3D", SceneViewMode::Mode3D, "3D mode");
+        drawModeButton("3D##SceneMode3D", SceneViewMode::Mode3D, "3D mode");
         ImGui::SameLine();
-        drawModeButton("2D", SceneViewMode::Mode2D, "2D mode");
+        drawModeButton("2D##SceneMode2D", SceneViewMode::Mode2D, "2D mode");
         ImGui::SameLine(0.0f, 8.0f);
 
-        drawOpButton("W", GizmoOperation::Translate, "Move");
+        drawOpButton("W##GizmoMove", GizmoOperation::Translate, "Move");
         ImGui::SameLine();
-        drawOpButton("E", GizmoOperation::Rotate, "Rotate");
+        drawOpButton("E##GizmoRotate", GizmoOperation::Rotate, "Rotate");
         ImGui::SameLine();
-        drawOpButton("R", GizmoOperation::Scale, "Scale");
+        drawOpButton("R##GizmoScale", GizmoOperation::Scale, "Scale");
         ImGui::SameLine();
 
-        if (ImGui::Button(m_gizmoSpace == GizmoSpace::Local ? "Lcl" : "Wld")) {
+        if (ImGui::Button(m_gizmoSpace == GizmoSpace::Local ? "Lcl##GizmoSpace" : "Wld##GizmoSpace")) {
             m_gizmoSpace = (m_gizmoSpace == GizmoSpace::Local) ? GizmoSpace::World : GizmoSpace::Local;
         }
         showCompactTooltip(m_gizmoSpace == GizmoSpace::Local ? "Local gizmo space" : "World gizmo space");
         ImGui::SameLine();
 
-        if (ImGui::Button("F")) {
+        if (ImGui::Button("F##FrameSelected")) {
             FocusSelectedEntity();
         }
         showCompactTooltip("Frame selected");
         ImGui::SameLine(0.0f, 8.0f);
 
-        if (drawToggleButton("T", m_translateSnapEnabled, "Move snap")) {
+        if (drawToggleButton("T##MoveSnapToggle", m_translateSnapEnabled, "Move snap")) {
             m_translateSnapEnabled = !m_translateSnapEnabled;
         }
         ImGui::SameLine();
@@ -367,7 +367,7 @@ void EditorLayer::DrawSceneViewToolbar()
         showCompactTooltip("Move snap step");
         ImGui::SameLine();
 
-        if (drawToggleButton("R", m_rotateSnapEnabled, "Rotate snap")) {
+        if (drawToggleButton("Rot##RotateSnapToggle", m_rotateSnapEnabled, "Rotate snap")) {
             m_rotateSnapEnabled = !m_rotateSnapEnabled;
         }
         ImGui::SameLine();
@@ -376,7 +376,7 @@ void EditorLayer::DrawSceneViewToolbar()
         showCompactTooltip("Rotate snap step");
         ImGui::SameLine();
 
-        if (drawToggleButton("S", m_scaleSnapEnabled, "Scale snap")) {
+        if (drawToggleButton("S##ScaleSnapToggle", m_scaleSnapEnabled, "Scale snap")) {
             m_scaleSnapEnabled = !m_scaleSnapEnabled;
         }
         ImGui::SameLine();
@@ -392,7 +392,7 @@ void EditorLayer::DrawSceneViewToolbar()
             ImGui::SliderFloat("##Scene2DZoom", &m_editor2DZoom, 1.0f, 200.0f, "%.1f");
         } else {
             ImGui::SameLine(0.0f, 8.0f);
-            if (ImGui::Button("View")) {
+            if (ImGui::Button("View##SceneViewPreset")) {
                 ImGui::OpenPopup("##SceneViewPresetPopup");
             }
             showCompactTooltip("Camera view presets");

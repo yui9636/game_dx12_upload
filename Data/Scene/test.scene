@@ -5,57 +5,49 @@
   "nodes": [
     {
       "components": {
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
+        },
+        "CameraFreeControlComponent": {
+          "moveSpeed": 20.0,
+          "pitch": 0.24500028789043427,
+          "rotateSpeed": 0.004999999888241291,
+          "yaw": 0.024999994784593582
+        },
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
         "HierarchyComponent": {
           "isActive": true
         },
-        "InputContextComponent": {
-          "activeMapCount": 0,
-          "activeMapIndices": [],
-          "consumeLowerPriority": false,
-          "enabled": true,
-          "pointerEnabled": true,
-          "priority": 0,
-          "textInputEnabled": false,
-          "uiNavigationEnabled": false
+        "NameComponent": {
+          "name": "Main Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -2.425389289855957,
+            "y": 212.842041015625,
+            "z": -199.69760131835938
+          },
+          "localRotation": {
+            "w": 0.992428719997406,
+            "x": 0.12218444794416428,
+            "y": 0.012406001798808575,
+            "z": -0.0015273848548531532
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
         }
       },
       "id": 0
-    },
-    {
-      "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "InputContextComponent": {
-          "activeMapCount": 0,
-          "activeMapIndices": [],
-          "consumeLowerPriority": false,
-          "enabled": true,
-          "pointerEnabled": true,
-          "priority": 1,
-          "textInputEnabled": false,
-          "uiNavigationEnabled": false
-        }
-      },
-      "id": 1
-    },
-    {
-      "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "InputContextComponent": {
-          "activeMapCount": 0,
-          "activeMapIndices": [],
-          "consumeLowerPriority": true,
-          "enabled": false,
-          "pointerEnabled": true,
-          "priority": 5,
-          "textInputEnabled": true,
-          "uiNavigationEnabled": false
-        }
-      },
-      "id": 2
     },
     {
       "components": {
@@ -95,95 +87,10 @@
           }
         }
       },
-      "id": 3
+      "id": 1
     },
     {
       "components": {
-        "EnvironmentComponent": {
-          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
-          "enableSkybox": true,
-          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
-          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
-        },
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "NameComponent": {
-          "name": "Environment"
-        }
-      },
-      "id": 4
-    },
-    {
-      "components": {
-        "AudioSettingsComponent": {
-          "bgmVolume": 1.0,
-          "debugDraw": false,
-          "masterVolume": 1.0,
-          "muteAll": false,
-          "sfxVolume": 1.0,
-          "uiVolume": 1.0
-        },
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "NameComponent": {
-          "name": "Audio Settings"
-        }
-      },
-      "id": 5
-    },
-    {
-      "components": {
-        "AudioListenerComponent": {
-          "isPrimary": true,
-          "volumeScale": 1.0
-        },
-        "CameraFreeControlComponent": {
-          "moveSpeed": 20.0,
-          "pitch": 0.12500008940696716,
-          "rotateSpeed": 0.004999999888241291,
-          "yaw": 0.07000001519918442
-        },
-        "CameraLensComponent": {
-          "aspect": 1.7777777910232544,
-          "farZ": 100000.0,
-          "fovY": 0.785398006439209,
-          "nearZ": 0.10000000149011612
-        },
-        "CameraMainTagComponent": {},
-        "HierarchyComponent": {
-          "isActive": true
-        },
-        "NameComponent": {
-          "name": "Main Camera"
-        },
-        "TransformComponent": {
-          "localPosition": {
-            "x": 5.522710800170898,
-            "y": 118.23361206054688,
-            "z": -241.79295349121094
-          },
-          "localRotation": {
-            "w": 0.9974362850189209,
-            "x": 0.06242110952734947,
-            "y": 0.03492454066872597,
-            "z": -0.002185631776228547
-          },
-          "localScale": {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
-          }
-        }
-      },
-      "id": 6
-    },
-    {
-      "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
         "NameComponent": {
           "name": "Reflection Probe"
         },
@@ -196,13 +103,10 @@
           "radius": 20.0
         }
       },
-      "id": 7
+      "id": 2
     },
     {
       "components": {
-        "HierarchyComponent": {
-          "isActive": true
-        },
         "InputActionMapComponent": {
           "actions": [
             {
@@ -305,6 +209,81 @@
           "userId": 0
         }
       },
+      "id": 3
+    },
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 4
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 5
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 0,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 6
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 1,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 7
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": true,
+          "enabled": false,
+          "pointerEnabled": true,
+          "priority": 5,
+          "textInputEnabled": true,
+          "uiNavigationEnabled": false
+        }
+      },
       "id": 8
     },
     {
@@ -370,7 +349,34 @@
         },
         "ColliderComponent": {
           "drawGizmo": true,
-          "elements": [],
+          "elements": [
+            {
+              "attribute": 0,
+              "color": {
+                "w": 0.3499999940395355,
+                "x": 0.20000000298023224,
+                "y": 0.8999999761581421,
+                "z": 0.3499999940395355
+              },
+              "enabled": true,
+              "height": 110.80000305175781,
+              "hitSfxPath": "",
+              "hitVfxPath": "",
+              "nodeIndex": -1,
+              "offsetLocal": {
+                "x": 0.0,
+                "y": 94.5999984741211,
+                "z": 0.0
+              },
+              "radius": 58.099998474121094,
+              "size": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "type": 1
+            }
+          ],
           "enabled": true
         },
         "HealthComponent": {

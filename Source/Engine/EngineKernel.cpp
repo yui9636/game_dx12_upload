@@ -1648,6 +1648,16 @@ void EngineKernel::Render()
                 : state.aspect;
             state.projectionMatrix = m_editorLayer->BuildEditorProjectionMatrix(state.aspect);
             state.enablePostProcess = false;
+            if (usePlayerWorkspaceScene) {
+                state.enableComputeCulling = false;
+                state.enableAsyncCompute = false;
+                state.enableGTAO = false;
+                state.enableSSGI = false;
+                state.enableVolumetricFog = false;
+                state.enableSSR = false;
+                state.enableSkybox = m_editorLayer->ShouldPlayerPreviewUseSkybox();
+                state.clearColor = m_editorLayer->GetPlayerPreviewClearColor();
+            }
 
             {
                 using namespace DirectX;
