@@ -1151,14 +1151,10 @@ void EngineKernel::Initialize()
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
-    // 既定の GameFlow asset を読み込む（無ければ空 flow を作る）。
-    {
-        const std::filesystem::path gameLoopPath = "Data/GameFlow/Main.gameflow";
-        if (!m_gameLoopAsset.LoadFromFile(gameLoopPath)) {
-            LOG_WARN("[GameFlow] %s not found, using empty flow", gameLoopPath.string().c_str());
-            m_gameLoopAsset = GameLoopAsset::CreateDefault();
-        }
-    }
+    // GameFlow は GameFlowEditor の Load を通して明示登録されたものだけ実行する。
+    m_gameLoopAsset = GameLoopAsset::CreateDefault();
+    m_gameLoopAssetRegistered = false;
+    m_gameLoopAssetPath.clear();
 
     // GameFlow 用の永続入力 owner entity を作る（シーン読み込みをまたいで保持）。
     if (!m_gameLoopInputOwnerInitialized) {
@@ -1363,13 +1359,15 @@ void EngineKernel::Update(float rawDt)
 
             PushUIButtonEventsToGameFlow(m_flowEventQueue, m_uiButtonClickQueue);
 
-            GameLoopSystem::Update(
-                m_gameLoopAsset,
-                m_gameLoopRuntime,
-                gameRegistry,
-                m_gameLoopRegistry,
-                m_flowEventQueue,
-                time.dt);
+            if (m_gameLoopAssetRegistered) {
+                GameLoopSystem::Update(
+                    m_gameLoopAsset,
+                    m_gameLoopRuntime,
+                    gameRegistry,
+                    m_gameLoopRegistry,
+                    m_flowEventQueue,
+                    time.dt);
+            }
         }
 
         m_uiButtonClickQueue.Clear();
@@ -1681,12 +1679,17 @@ void EngineKernel::Render()
             const uint32_t gamePanelWidth = static_cast<uint32_t>((std::max)(gameViewSize.x, 0.0f));
             const uint32_t gamePanelHeight = static_cast<uint32_t>((std::max)(gameViewSize.y, 0.0f));
             if (gamePanelWidth > 1 && gamePanelHeight > 1) {
-                auto gameViewContext = m_renderPipeline->BuildPrimaryViewContext(rc, gamePanelWidth, gamePanelHeight);
+                RenderContext gameViewRc = rc;
+                gameViewRc.enableTemporalJitter = false;
+                gameViewRc.jitterOffset = { 0.0f, 0.0f };
+                gameViewRc.prevJitterOffset = { 0.0f, 0.0f };
+                auto gameViewContext = m_renderPipeline->BuildPrimaryViewContext(gameViewRc, gamePanelWidth, gamePanelHeight);
                 auto& gameState = gameViewContext.state;
                 gameState.historyKey = 0x47414D4556494557ull;
                 gameState.panelWidth = gamePanelWidth;
                 gameState.panelHeight = gamePanelHeight;
                 gameState.enablePostProcess = true;
+                gameState.enableTemporalJitter = false;
                 gameViewMainViewIndex = views.size();
                 views.push_back(std::move(gameViewContext));
             }
@@ -1720,6 +1723,7 @@ void EngineKernel::Render()
                 gameState.aspect = static_cast<float>(gamePanelWidth) / static_cast<float>((std::max)(gamePanelHeight, 1u));
                 gameState.jitterOffset = { 0.0f, 0.0f };
                 gameState.prevJitterOffset = { 0.0f, 0.0f };
+                gameState.enableTemporalJitter = false;
                 gameState.enableComputeCulling = false;
                 gameState.enableAsyncCompute = false;
                 gameState.enableGTAO = false;
@@ -2199,18 +2203,23 @@ void EngineKernel::Play()
             m_savedEditorScenePath = m_editorLayer->GetCurrentScenePath();
         }
 
-        // GameFlow を開始する。startNode の scene はフレーム末尾で読み込む。
+        // GameFlow を開始する。未登録なら現在シーンのまま Play する。
         GameLoopRuntime& rt = m_gameLoopRuntime;
         rt.Reset();
-        rt.isActive = true;
         m_flowEventQueue.Clear();
         BattleFlowSystem::Reset();
 
-        if (!m_gameLoopAsset.nodes.empty()) {
+        if (!m_gameLoopAssetRegistered) {
+            LOG_INFO("[GameFlow] no loaded GameFlow asset; Play starts without GameFlow.");
+            rt.isActive = false;
+        }
+        else if (!m_gameLoopAsset.nodes.empty()) {
+            rt.isActive = true;
             const GameLoopNode* startNode = m_gameLoopAsset.FindNode(m_gameLoopAsset.startNodeId);
             if (startNode) {
                 rt.pendingNodeId            = startNode->id;
                 rt.pendingScenePath         = startNode->scenePath;
+                rt.pendingSceneAdvancesNode = true;
                 rt.sceneTransitionRequested = true;
                 rt.forceReload              = true;
             }
@@ -2220,7 +2229,7 @@ void EngineKernel::Play()
             }
         }
         else {
-            LOG_WARN("[GameFlow] asset has no nodes; GameFlow disabled");
+            LOG_WARN("[GameFlow] loaded asset has no nodes; GameFlow disabled");
             rt.isActive = false;
         }
     }
@@ -2274,6 +2283,37 @@ void EngineKernel::Pause()
     else if (mode == EngineMode::Pause) mode = EngineMode::Play;
 
     m_stepFrameRequested = false;
+}
+
+void EngineKernel::RegisterGameLoopAssetFromEditor(const GameLoopAsset& asset, const std::filesystem::path& path)
+{
+    m_gameLoopAsset = asset;
+    m_gameLoopAssetRegistered = true;
+    m_gameLoopAssetPath = path.lexically_normal();
+    m_gameLoopRuntime.Reset();
+    m_uiButtonClickQueue.Clear();
+    m_flowEventQueue.Clear();
+    LOG_INFO("[GameFlow] registered from editor: %s", m_gameLoopAssetPath.string().c_str());
+}
+
+void EngineKernel::ClearGameLoopAssetRegistration()
+{
+    m_gameLoopAsset = GameLoopAsset::CreateDefault();
+    m_gameLoopAssetRegistered = false;
+    m_gameLoopAssetPath.clear();
+    m_gameLoopRuntime.Reset();
+    m_uiButtonClickQueue.Clear();
+    m_flowEventQueue.Clear();
+    LOG_INFO("[GameFlow] runtime registration cleared.");
+}
+
+bool EngineKernel::IsRegisteredGameLoopAssetPath(const std::filesystem::path& path) const
+{
+    if (!m_gameLoopAssetRegistered) {
+        return false;
+    }
+
+    return m_gameLoopAssetPath.lexically_normal() == path.lexically_normal();
 }
 
 // Pause 中に 1 フレームだけ進める要求を出す。

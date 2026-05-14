@@ -33,6 +33,16 @@ namespace
         return std::filesystem::path(path).lexically_normal().string();
     }
 
+    // ランタイムで直接読み込めるフォントアセットかを判定する。
+    bool IsRuntimeFontAssetPath(const std::string& key)
+    {
+        std::string ext = std::filesystem::path(key).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return ext == ".fnt" || ext == ".ttf" || ext == ".otf";
+    }
+
     // printf形式のワイド文字列を安全に展開してバッファとして返す。
     std::vector<wchar_t> FormatWideString(const wchar_t* format, va_list args)
     {
@@ -127,6 +137,14 @@ std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)
     auto font = Get(key);
     if (font) {
         return font;
+    }
+
+    if (IsRuntimeFontAssetPath(key)) {
+        Load(Graphics::Instance().GetResourceFactory(), key, key.c_str());
+        font = Get(key);
+        if (font) {
+            return font;
+        }
     }
 
     Load(Graphics::Instance().GetResourceFactory(), key, kDefaultBitmapFontPath);

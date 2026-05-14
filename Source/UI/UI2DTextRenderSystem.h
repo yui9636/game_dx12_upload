@@ -61,7 +61,7 @@ public:
                 }
             }
 
-            if (pixelSnap || (screenSpaceOverlay && rc.cameraPixelSnap)) {
+            if (pixelSnap || screenSpaceOverlay) {
                 for (auto& corner : corners) {
                     corner.x = std::round(corner.x);
                     corner.y = std::round(corner.y);

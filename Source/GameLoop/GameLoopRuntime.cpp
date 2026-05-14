@@ -8,6 +8,7 @@ void GameLoopRuntime::Reset()
     pendingNodeId  = 0;
     currentScenePath.clear();
     pendingScenePath.clear();
+    pendingSceneAdvancesNode = true;
     sceneTransitionRequested = false;
     waitingSceneLoad         = false;
     forceReload              = false;

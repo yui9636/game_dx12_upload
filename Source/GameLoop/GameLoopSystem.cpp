@@ -97,15 +97,19 @@ namespace
     void RequestSceneTransition(
         GameLoopRuntime& runtime,
         const GameLoopNode& toNode,
-        const std::string& explicitScenePath)
+        const std::string& explicitScenePath,
+        bool advancesNode)
     {
         const std::string scenePath = explicitScenePath.empty() ? toNode.scenePath : explicitScenePath;
         if (scenePath.empty()) return;
 
         runtime.pendingNodeId = toNode.id;
         runtime.pendingScenePath = scenePath;
+        runtime.pendingSceneAdvancesNode = advancesNode;
         runtime.sceneTransitionRequested = true;
-        runtime.forceReload = (toNode.id == runtime.currentNodeId);
+        runtime.forceReload = advancesNode
+            ? (toNode.id == runtime.currentNodeId)
+            : (scenePath == runtime.currentScenePath);
     }
 
     bool HasLoadSceneAction(const GameLoopTransition& transition)
@@ -121,7 +125,8 @@ namespace
     void EnqueueLoadSceneAction(
         GameLoopRuntime& runtime,
         const GameLoopNode& toNode,
-        const std::string& scenePath)
+        const std::string& scenePath,
+        bool advancesNode = true)
     {
         if (scenePath.empty()) {
             return;
@@ -130,7 +135,7 @@ namespace
         GameFlowAction action;
         action.type = GameFlowActionType::LoadScene;
         action.target = scenePath;
-        runtime.pendingActions.push_back({ action, toNode.id });
+        runtime.pendingActions.push_back({ action, toNode.id, advancesNode });
     }
 
     void EnqueueWaitAction(GameLoopRuntime& runtime, const GameLoopNode& toNode, float seconds)
@@ -156,11 +161,12 @@ namespace
         const GameFlowAction& action,
         const GameLoopNode& toNode,
         GameLoopRuntime& runtime,
-        FlowEventQueue& flowEvents)
+        FlowEventQueue& flowEvents,
+        bool advancesNode)
     {
         switch (action.type) {
         case GameFlowActionType::LoadScene:
-            RequestSceneTransition(runtime, toNode, action.target);
+            RequestSceneTransition(runtime, toNode, action.target, advancesNode);
             return runtime.sceneTransitionRequested ? ActionResult::SceneRequested : ActionResult::Continue;
 
         case GameFlowActionType::SetCurrentNode:
@@ -234,7 +240,7 @@ namespace
         GameLoopRuntime& runtime)
     {
         if (!transition.loadingScenePath.empty()) {
-            EnqueueLoadSceneAction(runtime, toNode, transition.loadingScenePath);
+            EnqueueLoadSceneAction(runtime, toNode, transition.loadingScenePath, false);
             EnqueueWaitAction(runtime, toNode, transition.loadingMinimumSeconds);
         }
 
@@ -298,7 +304,7 @@ namespace
                 continue;
             }
 
-            const ActionResult result = ExecuteAction(queued.action, *toNode, runtime, flowEvents);
+            const ActionResult result = ExecuteAction(queued.action, *toNode, runtime, flowEvents, queued.advancesNode);
             if (result != ActionResult::Continue) {
                 return result;
             }

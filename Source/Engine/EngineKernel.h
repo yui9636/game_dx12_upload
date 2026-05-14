@@ -15,6 +15,7 @@
 #include "GameLoop/FlowEventQueue.h"
 #include "GameLoop/GameLoopRuntime.h"
 #include "GameLoop/UIButtonClickEventQueue.h"
+#include <filesystem>
 #include <memory>
 
 class GameLayer;
@@ -107,6 +108,21 @@ public:
     // 1 フレームで収集された入力イベントキューを取得する。
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
+    // GameFlowEditor の Load を経由して実行用 GameLoop を登録する。
+    void RegisterGameLoopAssetFromEditor(const GameLoopAsset& asset, const std::filesystem::path& path);
+
+    // 実行用 GameLoop の登録を解除し、Play 時の自動シーン遷移を止める。
+    void ClearGameLoopAssetRegistration();
+
+    // 実行用 GameLoop が登録済みかを返す。
+    bool IsGameLoopAssetRegistered() const { return m_gameLoopAssetRegistered; }
+
+    // 指定パスが現在登録されている GameLoop かを返す。
+    bool IsRegisteredGameLoopAssetPath(const std::filesystem::path& path) const;
+
+    // 登録済み GameLoop のパスを返す。
+    const std::filesystem::path& GetRegisteredGameLoopAssetPath() const { return m_gameLoopAssetPath; }
+
 private:
     // エンジン全体を初期化する。
     void Initialize();
@@ -171,6 +187,12 @@ private:
     // GameLoop 関連の状態。
     // GameLoop の編集用データ。
     GameLoopAsset m_gameLoopAsset;
+
+    // GameFlowEditor の Load を通して実行登録されたかどうか。
+    bool m_gameLoopAssetRegistered = false;
+
+    // 実行登録された GameFlow ファイルパス。
+    std::filesystem::path m_gameLoopAssetPath;
 
     // シーンロードをまたいで保持される GameLoop の実行状態。
     GameLoopRuntime m_gameLoopRuntime;

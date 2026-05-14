@@ -1,7 +1,7 @@
 ﻿#pragma once
 
-// ビットマップフォント描画クラスの宣言。
-// FNTファイルとテクスチャページを読み込み、2D / 3D 文字列をRHI経由で描画する。
+// フォント描画クラスの宣言。
+// FNTまたはTTF/OTFから文字メトリクスとテクスチャを用意し、2D / 3D 文字列をRHI経由で描画する。
 
 #include <DirectXMath.h>
 #include <cstdint>
@@ -22,11 +22,11 @@ class IResourceFactory;
 // フォントページ画像を保持するRHIテクスチャ。
 class ITexture;
 
-// BMFont形式の情報を元に、文字ごとの矩形を生成して描画するクラス。
+// フォントメトリクスを元に、文字ごとの矩形を生成して描画するクラス。
 class Font
 {
 public:
-    // FNTファイルを読み込み、文字描画に必要なシェーダ・バッファ・テクスチャ情報を初期化する。
+    // フォントファイルを読み込み、文字描画に必要なシェーダ・バッファ・テクスチャ情報を初期化する。
     Font(IResourceFactory* factory, const char* filename, int maxSpriteCount = 2048);
 
     // RHIリソースはスマートポインタで管理しているため、既定の破棄処理でよい。
@@ -50,7 +50,7 @@ public:
     // 指定した文字列を現在のフォント情報で描いた場合のおおよその幅を返す。
     float GetTextWidth(const wchar_t* string) const;
 
-    // FNTに記録された1行分の高さを返す。
+    // フォントに記録された1行分の高さを返す。
     float GetLineHeight() const { return m_fontHeight > 0.0f ? m_fontHeight : 32.0f; }
 
     // 文字の描画倍率を設定する。
@@ -88,7 +88,7 @@ private:
         DirectX::XMFLOAT4X4 Projection;
     };
 
-    // FNTファイルから読み込んだ1文字分のメトリクス情報。
+    // フォントファイルから読み込んだ1文字分のメトリクス情報。
     struct CharacterInfo
     {
         // 未登録文字を表す特殊コード。
@@ -127,8 +127,11 @@ private:
         uint32_t indexCount = 0;
     };
 
-    // FNTファイルを解析し、文字情報とフォントページテクスチャを読み込む。
+    // フォントファイルを解析し、文字情報とフォントページテクスチャを読み込む。
     bool LoadFontData(IResourceFactory* factory, const char* filename);
+
+    // TTF/OTFをSDF atlasへ変換し、既存の文字描画パイプラインで使える情報へ展開する。
+    bool LoadTrueTypeData(IResourceFactory* factory, const char* filename);
 
     // 1文字分の矩形頂点を現在の頂点バッファ作成領域へ追加する。
     void AddGlyphQuad(float x, float y, const CharacterInfo& info, bool ndc2D);
@@ -171,10 +174,12 @@ private:
     // 1回のBegin/Endで描ける最大文字数。
     int m_maxSpriteCount = 0;
 
-    // FNTに記録されたフォントページ幅。
+    // フォントページ幅。
     float m_fontWidth = 0.0f;
     // 1行分の高さ。
     float m_fontHeight = 0.0f;
+    // 半角スペース1文字ぶんの送り幅。
+    float m_spaceAdvance = 20.0f;
     // フォントページテクスチャ数。
     int m_textureCount = 0;
     // 読み込んだ文字情報数。

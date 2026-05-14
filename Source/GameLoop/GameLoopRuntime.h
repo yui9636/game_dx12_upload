@@ -24,6 +24,9 @@ struct GameLoopRuntime
     std::string currentScenePath;
     std::string pendingScenePath;
 
+    // Loading scene など、表示だけ差し替えて currentNodeId は進めない読み込みを区別する。
+    bool pendingSceneAdvancesNode = true;
+
     // 遷移要求中なら true（GameLoopSystem が設定し、
     // SceneTransitionSystem がクリアする）。
     bool sceneTransitionRequested = false;

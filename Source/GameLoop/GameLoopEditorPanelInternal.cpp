@@ -1,6 +1,8 @@
 ﻿// GameLoopEditorPanelInternal の GameLoop 関連実装をまとめます。
 #include "GameLoopEditorPanelInternal.h"
 
+#include "Engine/EngineKernel.h"
+
 GameLoopEditorPanelInternal::GameLoopEditorPanelInternal()
 {
     std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
@@ -49,6 +51,8 @@ void GameLoopEditorPanelInternal::DrawToolbar()
             ClearSelection();
             m_fitRequested = true;
             m_dirty = true;
+            m_statusMessage = "New draft. Runtime GameFlow is disabled until Load.";
+            EngineKernel::Instance().ClearGameLoopAssetRegistration();
         }
         if (ImGui::MenuItem("Load")) {
             std::strncpy(m_loadPath, m_currentPath.string().c_str(), sizeof(m_loadPath) - 1);
@@ -74,6 +78,14 @@ void GameLoopEditorPanelInternal::DrawToolbar()
 
     ImGui::SameLine();
     ImGui::TextDisabled("%s%s", m_dirty ? "*" : "", m_currentPath.filename().string().c_str());
+    if (EngineKernel::Instance().IsGameLoopAssetRegistered()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("Runtime: %s", EngineKernel::Instance().GetRegisteredGameLoopAssetPath().filename().string().c_str());
+    }
+    else {
+        ImGui::SameLine();
+        ImGui::TextDisabled("Runtime: unloaded");
+    }
 
     ImGui::EndMenuBar();
 }

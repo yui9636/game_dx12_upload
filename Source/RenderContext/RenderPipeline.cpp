@@ -489,6 +489,7 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     rc.enableDeferredLighting = viewState.enableDeferredLighting;
     rc.enableSkybox = viewState.enableSkybox;
     rc.enablePostProcess = viewState.enablePostProcess;
+    rc.enableTemporalJitter = viewState.enableTemporalJitter;
     rc.clearSceneColor = viewState.clearSceneColor;
     rc.cameraPixelSnap = viewState.cameraPixelSnap;
     rc.clearColor = viewState.clearColor;
@@ -759,6 +760,7 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     baseRc.enableDeferredLighting = rc.enableDeferredLighting;
     baseRc.enableSkybox = rc.enableSkybox;
     baseRc.enablePostProcess = rc.enablePostProcess;
+    baseRc.enableTemporalJitter = rc.enableTemporalJitter;
     baseRc.clearSceneColor = rc.clearSceneColor;
     baseRc.cameraPixelSnap = rc.cameraPixelSnap;
     baseRc.clearColor = rc.clearColor;
@@ -833,9 +835,9 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.prevViewProjectionMatrix = rc.prevViewProjectionMatrix;
     view.cameraPosition = rc.cameraPosition;
     view.cameraDirection = rc.cameraDirection;
-    view.jitterOffset = rc.jitterOffset;
-    view.prevJitterOffset = rc.prevJitterOffset;
-    if (projectionNeedsJitter) {
+    view.jitterOffset = rc.enableTemporalJitter ? rc.jitterOffset : DirectX::XMFLOAT2{ 0.0f, 0.0f };
+    view.prevJitterOffset = rc.enableTemporalJitter ? rc.prevJitterOffset : DirectX::XMFLOAT2{ 0.0f, 0.0f };
+    if (projectionNeedsJitter && rc.enableTemporalJitter) {
         ApplyProjectionJitter(view.projectionMatrix, view.jitterOffset, view.renderWidth, view.renderHeight);
     }
     view.enableComputeCulling = rc.allowGpuDrivenCompute;
@@ -847,6 +849,7 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.enableDeferredLighting = rc.enableDeferredLighting;
     view.enableSkybox = rc.enableSkybox;
     view.enablePostProcess = rc.enablePostProcess;
+    view.enableTemporalJitter = rc.enableTemporalJitter;
     view.clearSceneColor = rc.clearSceneColor;
     view.cameraPixelSnap = rc.cameraPixelSnap;
     view.clearColor = rc.clearColor;

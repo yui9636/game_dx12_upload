@@ -10,22 +10,28 @@ namespace
 {
     void ApplySuccessfulTransition(GameLoopRuntime& runtime)
     {
-        runtime.previousNodeId = runtime.currentNodeId;
-        runtime.currentNodeId = runtime.pendingNodeId;
         runtime.currentScenePath = runtime.pendingScenePath;
+
+        if (runtime.pendingSceneAdvancesNode) {
+            runtime.previousNodeId = runtime.currentNodeId;
+            runtime.currentNodeId = runtime.pendingNodeId;
+            runtime.nodeTimer = 0.0f;
+            runtime.observedActorPositionInitialized = false;
+        }
+
         runtime.pendingNodeId = 0;
         runtime.pendingScenePath.clear();
+        runtime.pendingSceneAdvancesNode = true;
         runtime.sceneTransitionRequested = false;
         runtime.waitingSceneLoad = false;
         runtime.forceReload = false;
-        runtime.nodeTimer = 0.0f;
-        runtime.observedActorPositionInitialized = false;
     }
 
     void DiscardPendingTransition(GameLoopRuntime& runtime)
     {
         runtime.pendingNodeId = 0;
         runtime.pendingScenePath.clear();
+        runtime.pendingSceneAdvancesNode = true;
         runtime.sceneTransitionRequested = false;
         runtime.waitingSceneLoad = false;
         runtime.forceReload = false;

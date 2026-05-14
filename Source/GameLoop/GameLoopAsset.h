@@ -100,6 +100,7 @@ struct QueuedGameFlowAction
 {
     GameFlowAction action;
     uint32_t toNodeId = 0;
+    bool advancesNode = true;
 };
 
 struct GameLoopAsset

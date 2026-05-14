@@ -1,7 +1,7 @@
 ﻿#include "Font.h"
 
 // Fontクラスの実装。
-// BMFont形式のFNTを読み込み、文字ごとに矩形頂点を生成して描画する。
+// FNTとTTF/OTFを共通の文字描画データへ展開し、文字ごとに矩形頂点を生成して描画する。
 
 #include "Console/Logger.h"
 #include "Graphics.h"
@@ -14,12 +14,19 @@
 #include "System/ResourceManager.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <fstream>
 #include <filesystem>
+#include <string>
+
+#include <DirectXTex.h>
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
 
 using namespace DirectX;
 
@@ -35,6 +42,27 @@ namespace
     bool IsValidPageIndex(int page, size_t count)
     {
         return page >= 0 && static_cast<size_t>(page) < count;
+    }
+
+    // 小文字化した拡張子を返す。
+    std::string GetLowerExtension(const std::string& filename)
+    {
+        std::string ext = std::filesystem::path(filename).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return ext;
+    }
+
+    // TTF atlasへ事前登録する基本文字。HUDで使う英数字・記号を優先する。
+    std::vector<int> BuildDefaultTrueTypeCodepoints()
+    {
+        std::vector<int> codepoints;
+        codepoints.reserve(96);
+        for (int code = 32; code <= 126; ++code) {
+            codepoints.push_back(code);
+        }
+        return codepoints;
     }
 }
 
@@ -109,15 +137,21 @@ Font::Font(IResourceFactory* factory, const char* filename, int maxSpriteCount)
         return;
     }
 
-    // 最後にFNTファイルを読み込み、描画可能かどうかを確定する。
+    // 最後にフォントファイルを読み込み、描画可能かどうかを確定する。
     m_isValid = LoadFontData(factory, filename);
 }
 
-// FNTファイルを読み込み、文字メトリクスとフォントページテクスチャを構築する。
-bool Font::LoadFontData(IResourceFactory*, const char* filename)
+// フォントファイルを読み込み、文字メトリクスとフォントページテクスチャを構築する。
+bool Font::LoadFontData(IResourceFactory* factory, const char* filename)
 {
     // エンジンのパス解決ルールに従い、実ファイルパスへ変換する。
     const std::string resolvedFilename = PathResolver::Resolve(filename);
+    const std::string ext = GetLowerExtension(resolvedFilename);
+    if (ext == ".ttf" || ext == ".otf") {
+        return LoadTrueTypeData(factory, filename);
+    }
+
+    m_spaceAdvance = 20.0f;
 
     // FNTファイルをバイナリとして読み込む。
     FILE* fp = nullptr;
@@ -262,6 +296,10 @@ bool Font::LoadFontData(IResourceFactory*, const char* filename)
                 token = strtok_s(nullptr, " ", &tokenCtx);
             }
 
+            if (id == 0x20 && xadvance > 0) {
+                m_spaceAdvance = static_cast<float>(xadvance);
+            }
+
             // 有効な文字IDだけ変換テーブルへ登録する。
             if (id > 0 && id < static_cast<int>(m_characterIndices.size()) &&
                 charInfoIndex < static_cast<int>(m_characterInfos.size()))
@@ -298,6 +336,206 @@ bool Font::LoadFontData(IResourceFactory*, const char* filename)
         std::any_of(m_textures.begin(), m_textures.end(), [](const std::shared_ptr<ITexture>& texture) {
             return texture != nullptr;
         });
+}
+
+// TTF/OTFをSDF atlasへ変換し、既存のFont描画データへ展開する。
+bool Font::LoadTrueTypeData(IResourceFactory* factory, const char* filename)
+{
+    if (!factory || !filename || filename[0] == '\0') {
+        return false;
+    }
+
+    const std::string resolvedFilename = PathResolver::Resolve(filename);
+    std::ifstream file(resolvedFilename, std::ios::binary | std::ios::ate);
+    if (!file) {
+        LOG_WARN("[Font] TTF file not found: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    const std::streamsize fileSize = file.tellg();
+    if (fileSize <= 0) {
+        LOG_WARN("[Font] Empty TTF file: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    std::vector<unsigned char> fontData(static_cast<size_t>(fileSize));
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char*>(fontData.data()), fileSize)) {
+        LOG_WARN("[Font] Failed to read TTF file: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    const int fontOffset = stbtt_GetFontOffsetForIndex(fontData.data(), 0);
+    stbtt_fontinfo fontInfo{};
+    if (fontOffset < 0 || !stbtt_InitFont(&fontInfo, fontData.data(), fontOffset)) {
+        LOG_WARN("[Font] Failed to parse TTF file: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    constexpr int atlasWidth = 1024;
+    constexpr int atlasHeight = 1024;
+    constexpr float bakedPixelHeight = 72.0f;
+    constexpr int sdfPadding = 8;
+    constexpr unsigned char sdfOnEdgeValue = 180;
+    constexpr float sdfPixelDistanceScale = 180.0f / static_cast<float>(sdfPadding);
+
+    const float scale = stbtt_ScaleForPixelHeight(&fontInfo, bakedPixelHeight);
+    int ascent = 0;
+    int descent = 0;
+    int lineGap = 0;
+    stbtt_GetFontVMetrics(&fontInfo, &ascent, &descent, &lineGap);
+    const float ascentPx = static_cast<float>(ascent) * scale;
+    const float descentPx = static_cast<float>(descent) * scale;
+    const float lineGapPx = static_cast<float>(lineGap) * scale;
+    m_fontHeight = (std::max)(1.0f, (ascentPx - descentPx) + lineGapPx);
+    m_fontWidth = static_cast<float>(atlasWidth);
+    m_spaceAdvance = 20.0f;
+    m_textureCount = 1;
+
+    std::vector<uint8_t> atlas(static_cast<size_t>(atlasWidth) * static_cast<size_t>(atlasHeight) * 4u, 0u);
+    m_characterInfos.assign(0x10000, CharacterInfo{});
+    m_characterIndices.assign(0x10000, CharacterInfo::NonCode);
+
+    const std::vector<int> codepoints = BuildDefaultTrueTypeCodepoints();
+    m_characterCount = static_cast<int>(codepoints.size()) + 1;
+    m_characterInfos.assign(static_cast<size_t>(m_characterCount), CharacterInfo{});
+
+    int penX = 1;
+    int penY = 1;
+    int rowHeight = 0;
+    int charInfoIndex = 1;
+
+    for (int codepoint : codepoints) {
+        int glyphWidth = 0;
+        int glyphHeight = 0;
+        int glyphXOffset = 0;
+        int glyphYOffset = 0;
+        unsigned char* sdf = stbtt_GetCodepointSDF(
+            &fontInfo,
+            scale,
+            codepoint,
+            sdfPadding,
+            sdfOnEdgeValue,
+            sdfPixelDistanceScale,
+            &glyphWidth,
+            &glyphHeight,
+            &glyphXOffset,
+            &glyphYOffset);
+
+        int advance = 0;
+        int leftSideBearing = 0;
+        stbtt_GetCodepointHMetrics(&fontInfo, codepoint, &advance, &leftSideBearing);
+        const float codepointAdvance = static_cast<float>(advance) * scale;
+        if (codepoint == 0x20 && codepointAdvance > 0.0f) {
+            m_spaceAdvance = codepointAdvance;
+        }
+
+        if (!sdf || glyphWidth <= 0 || glyphHeight <= 0) {
+            if (codepoint >= 0 && codepoint < static_cast<int>(m_characterIndices.size()) &&
+                charInfoIndex < static_cast<int>(m_characterInfos.size())) {
+                m_characterIndices[static_cast<size_t>(codepoint)] = static_cast<uint16_t>(charInfoIndex);
+                CharacterInfo& info = m_characterInfos[static_cast<size_t>(charInfoIndex)];
+                info.xadvance = codepointAdvance;
+                info.width = 0.0f;
+                info.height = 0.0f;
+                info.page = 0;
+                info.ascii = codepoint < 0x100;
+                ++charInfoIndex;
+            }
+            if (sdf) {
+                stbtt_FreeSDF(sdf, nullptr);
+            }
+            continue;
+        }
+
+        if (penX + glyphWidth + 1 >= atlasWidth) {
+            penX = 1;
+            penY += rowHeight + 1;
+            rowHeight = 0;
+        }
+        if (penY + glyphHeight + 1 >= atlasHeight) {
+            LOG_WARN("[Font] TTF atlas is full. Some glyphs were skipped: %s", resolvedFilename.c_str());
+            stbtt_FreeSDF(sdf, nullptr);
+            break;
+        }
+
+        for (int y = 0; y < glyphHeight; ++y) {
+            for (int x = 0; x < glyphWidth; ++x) {
+                const uint8_t value = sdf[y * glyphWidth + x];
+                const size_t dst = (static_cast<size_t>(penY + y) * atlasWidth + static_cast<size_t>(penX + x)) * 4u;
+                atlas[dst + 0] = 255u;
+                atlas[dst + 1] = 255u;
+                atlas[dst + 2] = 255u;
+                atlas[dst + 3] = value;
+            }
+        }
+
+        if (codepoint >= 0 && codepoint < static_cast<int>(m_characterIndices.size()) &&
+            charInfoIndex < static_cast<int>(m_characterInfos.size())) {
+            m_characterIndices[static_cast<size_t>(codepoint)] = static_cast<uint16_t>(charInfoIndex);
+            CharacterInfo& info = m_characterInfos[static_cast<size_t>(charInfoIndex)];
+            info.left = static_cast<float>(penX) / static_cast<float>(atlasWidth);
+            info.top = static_cast<float>(penY) / static_cast<float>(atlasHeight);
+            info.right = static_cast<float>(penX + glyphWidth) / static_cast<float>(atlasWidth);
+            info.bottom = static_cast<float>(penY + glyphHeight) / static_cast<float>(atlasHeight);
+            info.xoffset = static_cast<float>(glyphXOffset);
+            info.yoffset = ascentPx + static_cast<float>(glyphYOffset);
+            info.xadvance = codepointAdvance;
+            info.width = static_cast<float>(glyphWidth);
+            info.height = static_cast<float>(glyphHeight);
+            info.page = 0;
+            info.ascii = codepoint < 0x100;
+            ++charInfoIndex;
+        }
+
+        penX += glyphWidth + 1;
+        rowHeight = (std::max)(rowHeight, glyphHeight);
+        stbtt_FreeSDF(sdf, nullptr);
+    }
+
+    m_characterCount = charInfoIndex;
+    m_characterInfos.resize(static_cast<size_t>((std::max)(1, m_characterCount)));
+    m_characterIndices[0x00] = CharacterInfo::EndCode;
+    m_characterIndices[0x0a] = CharacterInfo::ReturnCode;
+    m_characterIndices[0x09] = CharacterInfo::TabCode;
+    m_characterIndices[0x20] = CharacterInfo::SpaceCode;
+
+    DirectX::ScratchImage image;
+    HRESULT hr = image.Initialize2D(
+        DXGI_FORMAT_R8G8B8A8_UNORM,
+        atlasWidth,
+        atlasHeight,
+        1,
+        1);
+    if (FAILED(hr)) {
+        LOG_WARN("[Font] Failed to allocate TTF atlas image: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    const DirectX::Image* dstImage = image.GetImage(0, 0, 0);
+    if (!dstImage || !dstImage->pixels || dstImage->rowPitch < static_cast<size_t>(atlasWidth) * 4u) {
+        LOG_WARN("[Font] Invalid TTF atlas image buffer: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    for (int y = 0; y < atlasHeight; ++y) {
+        memcpy(
+            dstImage->pixels + static_cast<size_t>(y) * dstImage->rowPitch,
+            atlas.data() + static_cast<size_t>(y) * atlasWidth * 4u,
+            static_cast<size_t>(atlasWidth) * 4u);
+    }
+
+    auto texture = factory->CreateTextureFromMemory(image, image.GetMetadata());
+    if (!texture) {
+        LOG_WARN("[Font] Failed to create TTF atlas texture: %s", resolvedFilename.c_str());
+        return false;
+    }
+
+    m_textures.clear();
+    m_textures.emplace_back(std::shared_ptr<ITexture>(std::move(texture)));
+    m_sdfThreshold = static_cast<float>(sdfOnEdgeValue) / 255.0f;
+    m_sdfSoftness = 0.85f;
+    return true;
 }
 
 // SDF文字の輪郭しきい値とぼかし幅を設定する。
@@ -405,7 +643,7 @@ void Font::Draw(float x, float y, const wchar_t* string)
     // 改行・タブ・スペースを処理しながら、文字ごとの矩形を追加する。
     const size_t length = wcslen(string);
     const float startX = x;
-    const float space = 20.0f * m_scaleX;
+    const float space = m_spaceAdvance * m_scaleX;
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -460,7 +698,7 @@ void Font::Draw3D(DirectX::CXMMATRIX world, DirectX::CXMMATRIX view, DirectX::CX
     float x = 0.0f;
     float y = 0.0f;
     const float startX = x;
-    const float space = 20.0f * m_scaleX;
+    const float space = m_spaceAdvance * m_scaleX;
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -517,11 +755,11 @@ float Font::GetTextWidth(const wchar_t* string) const
 
         const uint16_t code = m_characterIndices[word];
         if (code == CharacterInfo::SpaceCode) {
-            width += 20.0f;
+            width += m_spaceAdvance;
             continue;
         }
         if (code == CharacterInfo::TabCode) {
-            width += 80.0f;
+            width += m_spaceAdvance * 4.0f;
             continue;
         }
         if (code == CharacterInfo::NonCode || code >= CharacterInfo::ReturnCode || code >= m_characterInfos.size()) {

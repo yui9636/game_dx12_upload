@@ -123,6 +123,7 @@ struct RenderContext
         bool enableDeferredLighting = true;
         bool enableSkybox = true;
         bool enablePostProcess = true;
+        bool enableTemporalJitter = true;
         bool clearSceneColor = true;
         bool cameraPixelSnap = false;
         DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -303,6 +304,7 @@ struct RenderContext
     bool enableDeferredLighting = true;
     bool enableSkybox = true;
     bool enablePostProcess = true;
+    bool enableTemporalJitter = true;
     bool clearSceneColor = true;
     bool cameraPixelSnap = false;
     DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };

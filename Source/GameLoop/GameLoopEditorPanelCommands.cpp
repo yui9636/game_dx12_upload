@@ -1,6 +1,8 @@
 ﻿// GameLoopEditorPanelCommands の GameLoop 関連実装をまとめます。
 #include "GameLoopEditorPanelInternal.h"
 
+#include "Engine/EngineKernel.h"
+
 namespace
 {
     const char* DefaultNodeName(GameLoopNodeType type)
@@ -230,6 +232,10 @@ void GameLoopEditorPanelInternal::Save()
         m_dirty = false;
         m_fileDialogMode = FileDialogMode::None;
         m_statusMessage = "Saved: " + m_currentPath.string();
+        if (EngineKernel::Instance().IsRegisteredGameLoopAssetPath(m_currentPath)) {
+            EngineKernel::Instance().RegisterGameLoopAssetFromEditor(m_asset, m_currentPath);
+            m_statusMessage += " (runtime updated)";
+        }
         if (m_validateResult.HasError()) {
             m_statusMessage += " (with validation errors)";
         }
@@ -249,7 +255,8 @@ void GameLoopEditorPanelInternal::Load(const std::filesystem::path& path)
         m_dirty = false;
         m_validated = false;
         m_fileDialogMode = FileDialogMode::None;
-        m_statusMessage = "Loaded: " + m_currentPath.string();
+        EngineKernel::Instance().RegisterGameLoopAssetFromEditor(m_asset, m_currentPath);
+        m_statusMessage = "Loaded and registered: " + m_currentPath.string();
     }
     else {
         m_statusMessage = "Load failed: " + path.string();
