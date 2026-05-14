@@ -34,6 +34,7 @@
 #include "Hierarchy/HierarchySystem.h"
 #include "Physics/PhysicsManager.h"
 #include "System/Dialog.h"
+#include "System/ResourceManager.h"
 #include "ImGuizmo.h"
 #include "Component/LightComponent.h"
 #include "Component/ReflectionProbeComponent.h"
@@ -53,6 +54,7 @@
 #include "ImGuiRenderer.h"
 #include "UI/UI2DDrawSystem.h"
 #include "UI/UIHitTestSystem.h"
+#include "UI/UI2DLayoutResolver.h"
 #include "Input/InputDebugSystem.h"
 #include <algorithm>
 #include <cctype>
@@ -1019,6 +1021,7 @@ namespace {
         rect.sizeDelta = size;
 
         CanvasItemComponent canvas{};
+        canvas.screenSpaceOverlay = false;
         SpriteComponent sprite{};
         sprite.textureAssetPath = texturePath;
 

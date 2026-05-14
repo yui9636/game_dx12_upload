@@ -14,10 +14,12 @@
 #include "Component/TransformComponent.h"
 #include "Entity/Entity.h"
 #include "Registry/Registry.h"
+#include "RenderContext/RenderQueue.h"
 
 struct UI2DDrawEntry
 {
     EntityID entity = Entity::NULL_ID;
+    EntityID parent = Entity::NULL_ID;
     NameComponent* name = nullptr;
     HierarchyComponent* hierarchy = nullptr;
     TransformComponent* transform = nullptr;
@@ -82,6 +84,7 @@ public:
 
                 UI2DDrawEntry entry;
                 entry.entity = entities[i];
+                entry.parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
                 entry.name = nameColumn ? static_cast<NameComponent*>(nameColumn->Get(i)) : nullptr;
                 entry.hierarchy = hierarchy;
                 entry.transform = transform;
@@ -103,6 +106,33 @@ public:
             return a.entity < b.entity;
         });
         return entries;
+    }
+
+    static void AppendLayoutNodes(const std::vector<UI2DDrawEntry>& entries, RenderQueue& queue)
+    {
+        queue.ui2DLayoutNodes.reserve(queue.ui2DLayoutNodes.size() + entries.size());
+        for (const UI2DDrawEntry& entry : entries) {
+            if (!entry.transform || !entry.rect || !entry.canvas) {
+                continue;
+            }
+
+            UI2DLayoutNode node;
+            node.entity = entry.entity;
+            node.parent = entry.parent;
+            node.screenSpaceOverlay = entry.canvas->screenSpaceOverlay;
+            node.pixelSnap = entry.canvas->pixelSnap;
+            node.worldPosition = entry.transform->worldPosition;
+            node.worldRotation = entry.transform->worldRotation;
+            node.worldScale = entry.transform->worldScale;
+            node.anchoredPosition = entry.rect->anchoredPosition;
+            node.sizeDelta = entry.rect->sizeDelta;
+            node.anchorMin = entry.rect->anchorMin;
+            node.anchorMax = entry.rect->anchorMax;
+            node.pivot = entry.rect->pivot;
+            node.scale2D = entry.rect->scale2D;
+            node.rotationZ = entry.rect->rotationZ;
+            queue.ui2DLayoutNodes.push_back(node);
+        }
     }
 
 private:

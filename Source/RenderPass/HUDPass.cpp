@@ -46,8 +46,8 @@ void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
 
     FontManager::Instance().SetRuntimeViewport(w, h);
     SpriteRenderer::Instance().Begin(rc.commandList, { w, h });
-    UI2DSpriteRenderSystem::RenderSprites(queue.ui2DSpritePackets, hudRc);
-    UI2DTextRenderSystem::RenderText(queue.ui2DTextPackets, hudRc);
+    UI2DSpriteRenderSystem::RenderSprites(queue.ui2DSpritePackets, queue.ui2DLayoutNodes, hudRc);
+    UI2DTextRenderSystem::RenderText(queue.ui2DTextPackets, queue.ui2DLayoutNodes, hudRc);
     UIManager::Instance().Render(hudRc);
     DamageTextManager::Instance().Render(hudRc);
     SpriteRenderer::Instance().End();

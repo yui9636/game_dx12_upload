@@ -1,5 +1,375 @@
 ﻿#include "EditorLayerInternal.h"
 
+namespace
+{
+    struct ScreenSpaceUIResolve
+    {
+        std::array<DirectX::XMFLOAT2, 4> corners{};
+        DirectX::XMFLOAT2 pivotCanvas = { 0.0f, 0.0f };
+        DirectX::XMFLOAT2 anchorCenterCanvas = { 0.0f, 0.0f };
+        bool pixelSnap = false;
+    };
+
+    RenderContext MakeEditorUILayoutContext(const DirectX::XMFLOAT4& viewRect,
+                                            const DirectX::XMFLOAT4X4& view,
+                                            const DirectX::XMFLOAT4X4& projection)
+    {
+        RenderContext rc{};
+        rc.displayWidth = static_cast<uint32_t>((std::max)(viewRect.z, 1.0f));
+        rc.displayHeight = static_cast<uint32_t>((std::max)(viewRect.w, 1.0f));
+        rc.viewMatrix = view;
+        rc.projectionMatrix = projection;
+        return rc;
+    }
+
+    DirectX::XMFLOAT2 ScreenToOverlayCanvas(const DirectX::XMFLOAT4& viewRect, const ImVec2& screenPoint)
+    {
+        return {
+            screenPoint.x - viewRect.x - viewRect.z * 0.5f,
+            viewRect.y + viewRect.w * 0.5f - screenPoint.y
+        };
+    }
+
+    void OffsetCornersToViewRect(std::array<DirectX::XMFLOAT2, 4>& corners, const DirectX::XMFLOAT4& viewRect)
+    {
+        for (auto& corner : corners) {
+            corner.x += viewRect.x;
+            corner.y += viewRect.y;
+        }
+    }
+
+    DirectX::XMFLOAT2 OverlayAnchorCenterCanvas(const DirectX::XMFLOAT4& viewRect, const DirectX::XMFLOAT2& anchor)
+    {
+        return {
+            -viewRect.z * 0.5f + anchor.x * viewRect.z,
+            -viewRect.w * 0.5f + anchor.y * viewRect.w
+        };
+    }
+
+    float ChooseResponsiveAnchorAxis(float normalized)
+    {
+        if (normalized < 0.333f) {
+            return 0.0f;
+        }
+        if (normalized > 0.667f) {
+            return 1.0f;
+        }
+        return 0.5f;
+    }
+
+    DirectX::XMFLOAT2 ChooseResponsiveOverlayAnchor(const DirectX::XMFLOAT4& viewRect, const DirectX::XMFLOAT2& canvasPoint)
+    {
+        const float width = (std::max)(viewRect.z, 1.0f);
+        const float height = (std::max)(viewRect.w, 1.0f);
+        const float normalizedX = std::clamp((canvasPoint.x + width * 0.5f) / width, 0.0f, 1.0f);
+        const float normalizedY = std::clamp((canvasPoint.y + height * 0.5f) / height, 0.0f, 1.0f);
+        return {
+            ChooseResponsiveAnchorAxis(normalizedX),
+            ChooseResponsiveAnchorAxis(normalizedY)
+        };
+    }
+
+    bool IsScreenSpaceOverlayRoot(Registry& registry, EntityID entity)
+    {
+        auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        const EntityID parent = hierarchy ? hierarchy->parent : Entity::NULL_ID;
+        if (Entity::IsNull(parent) || !registry.IsAlive(parent)) {
+            return true;
+        }
+
+        auto* parentRect = registry.GetComponent<RectTransformComponent>(parent);
+        auto* parentCanvas = registry.GetComponent<CanvasItemComponent>(parent);
+        return !(parentRect && parentCanvas && parentCanvas->screenSpaceOverlay);
+    }
+
+    bool PointInQuad(const std::array<DirectX::XMFLOAT2, 4>& corners, const ImVec2& point)
+    {
+        bool hasNegative = false;
+        bool hasPositive = false;
+        for (size_t i = 0; i < corners.size(); ++i) {
+            const DirectX::XMFLOAT2& a = corners[i];
+            const DirectX::XMFLOAT2& b = corners[(i + 1) % corners.size()];
+            const float cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+            hasNegative = hasNegative || cross < -0.001f;
+            hasPositive = hasPositive || cross > 0.001f;
+            if (hasNegative && hasPositive) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    ImU32 ToImColor(const DirectX::XMFLOAT4& color)
+    {
+        return IM_COL32(
+            static_cast<int>((std::clamp)(color.x, 0.0f, 1.0f) * 255.0f),
+            static_cast<int>((std::clamp)(color.y, 0.0f, 1.0f) * 255.0f),
+            static_cast<int>((std::clamp)(color.z, 0.0f, 1.0f) * 255.0f),
+            static_cast<int>((std::clamp)(color.w, 0.0f, 1.0f) * 255.0f));
+    }
+
+    float Clamp01(float value)
+    {
+        return (std::max)(0.0f, (std::min)(1.0f, value));
+    }
+
+    DirectX::XMFLOAT2 LerpPoint(const DirectX::XMFLOAT2& a, const DirectX::XMFLOAT2& b, float t)
+    {
+        return { a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t };
+    }
+
+    void ApplyEditorFillClip(float ratio, int direction, std::array<DirectX::XMFLOAT2, 4>& corners)
+    {
+        ratio = Clamp01(ratio);
+        if (ratio >= 0.9999f) {
+            return;
+        }
+
+        const auto c0 = corners[0];
+        const auto c1 = corners[1];
+        const auto c2 = corners[2];
+        const auto c3 = corners[3];
+
+        switch (direction) {
+        case 1:
+            corners[0] = LerpPoint(c1, c0, ratio);
+            corners[1] = c1;
+            corners[2] = c2;
+            corners[3] = LerpPoint(c2, c3, ratio);
+            break;
+        case 2:
+            corners[0] = LerpPoint(c3, c0, ratio);
+            corners[1] = LerpPoint(c2, c1, ratio);
+            corners[2] = c2;
+            corners[3] = c3;
+            break;
+        case 3:
+            corners[0] = c0;
+            corners[1] = c1;
+            corners[2] = LerpPoint(c1, c2, ratio);
+            corners[3] = LerpPoint(c0, c3, ratio);
+            break;
+        case 0:
+        default:
+            corners[0] = c0;
+            corners[1] = LerpPoint(c0, c1, ratio);
+            corners[2] = LerpPoint(c3, c2, ratio);
+            corners[3] = c3;
+            break;
+        }
+    }
+
+    void BuildEditorFillUV(float ratio, int direction, std::array<ImVec2, 4>& uvs)
+    {
+        ratio = Clamp01(ratio);
+        switch (direction) {
+        case 1:
+            uvs[0] = { 1.0f - ratio, 0.0f };
+            uvs[1] = { 1.0f, 0.0f };
+            uvs[2] = { 1.0f, 1.0f };
+            uvs[3] = { 1.0f - ratio, 1.0f };
+            break;
+        case 2:
+            uvs[0] = { 0.0f, 1.0f - ratio };
+            uvs[1] = { 1.0f, 1.0f - ratio };
+            uvs[2] = { 1.0f, 1.0f };
+            uvs[3] = { 0.0f, 1.0f };
+            break;
+        case 3:
+            uvs[0] = { 0.0f, 0.0f };
+            uvs[1] = { 1.0f, 0.0f };
+            uvs[2] = { 1.0f, ratio };
+            uvs[3] = { 0.0f, ratio };
+            break;
+        case 0:
+        default:
+            uvs[0] = { 0.0f, 0.0f };
+            uvs[1] = { ratio, 0.0f };
+            uvs[2] = { ratio, 1.0f };
+            uvs[3] = { 0.0f, 1.0f };
+            break;
+        }
+    }
+
+    bool ResolveScreenSpaceUI(Registry& registry,
+                              EntityID entity,
+                              const DirectX::XMFLOAT4& viewRect,
+                              const DirectX::XMFLOAT4X4& view,
+                              const DirectX::XMFLOAT4X4& projection,
+                              ScreenSpaceUIResolve& out)
+    {
+        auto* rect = registry.GetComponent<RectTransformComponent>(entity);
+        auto* canvas = registry.GetComponent<CanvasItemComponent>(entity);
+        if (!rect || !canvas || !canvas->screenSpaceOverlay) {
+            return false;
+        }
+
+        const std::vector<UI2DDrawEntry> entries = UI2DDrawSystem::CollectDrawEntries(registry);
+        RenderQueue layoutQueue;
+        UI2DDrawSystem::AppendLayoutNodes(entries, layoutQueue);
+        RenderContext layoutRc = MakeEditorUILayoutContext(viewRect, view, projection);
+        UI2DLayoutResolver resolver(layoutQueue.ui2DLayoutNodes, layoutRc);
+
+        bool screenSpaceOverlay = false;
+        if (!resolver.ResolveCorners(entity, out.corners, out.pixelSnap, screenSpaceOverlay) || !screenSpaceOverlay) {
+            return false;
+        }
+
+        if (out.pixelSnap) {
+            for (auto& corner : out.corners) {
+                corner.x = std::round(corner.x);
+                corner.y = std::round(corner.y);
+            }
+        }
+        OffsetCornersToViewRect(out.corners, viewRect);
+
+        const DirectX::XMFLOAT2 pivotScreen = {
+            out.corners[0].x +
+                (out.corners[1].x - out.corners[0].x) * rect->pivot.x +
+                (out.corners[3].x - out.corners[0].x) * rect->pivot.y,
+            out.corners[0].y +
+                (out.corners[1].y - out.corners[0].y) * rect->pivot.x +
+                (out.corners[3].y - out.corners[0].y) * rect->pivot.y
+        };
+        out.pivotCanvas = ScreenToOverlayCanvas(viewRect, ImVec2(pivotScreen.x, pivotScreen.y));
+        out.anchorCenterCanvas = {
+            out.pivotCanvas.x - rect->anchoredPosition.x,
+            out.pivotCanvas.y - rect->anchoredPosition.y
+        };
+        return true;
+    }
+
+    UIHitTestResult PickScreenSpaceUITopmost(Registry& registry,
+                                             const DirectX::XMFLOAT4& viewRect,
+                                             const DirectX::XMFLOAT4X4& view,
+                                             const DirectX::XMFLOAT4X4& projection,
+                                             const ImVec2& screenPoint,
+                                             bool includeWorldSpaceUI)
+    {
+        UIHitTestResult result;
+        const std::vector<UI2DDrawEntry> entries = UI2DDrawSystem::CollectDrawEntries(registry);
+        RenderQueue layoutQueue;
+        UI2DDrawSystem::AppendLayoutNodes(entries, layoutQueue);
+        RenderContext layoutRc = MakeEditorUILayoutContext(viewRect, view, projection);
+        UI2DLayoutResolver resolver(layoutQueue.ui2DLayoutNodes, layoutRc);
+
+        int bestSortingLayer = (std::numeric_limits<int>::min)();
+        int bestOrder = (std::numeric_limits<int>::min)();
+        float bestZ = -(std::numeric_limits<float>::max)();
+
+        for (const UI2DDrawEntry& entry : entries) {
+            if (!entry.rect || !entry.canvas || !entry.transform || !entry.canvas->visible || !entry.canvas->interactable) {
+                continue;
+            }
+            if (!includeWorldSpaceUI && !entry.canvas->screenSpaceOverlay) {
+                continue;
+            }
+
+            std::array<DirectX::XMFLOAT2, 4> corners{};
+            bool pixelSnap = false;
+            bool screenSpaceOverlay = false;
+            if (!resolver.ResolveCorners(entry.entity, corners, pixelSnap, screenSpaceOverlay)) {
+                continue;
+            }
+            if (!includeWorldSpaceUI && !screenSpaceOverlay) {
+                continue;
+            }
+            if (pixelSnap) {
+                for (auto& corner : corners) {
+                    corner.x = std::round(corner.x);
+                    corner.y = std::round(corner.y);
+                }
+            }
+            OffsetCornersToViewRect(corners, viewRect);
+            if (!PointInQuad(corners, screenPoint)) {
+                continue;
+            }
+
+            const int sortingLayer = entry.canvas->sortingLayer;
+            const int order = entry.canvas->orderInLayer;
+            const float z = entry.transform->worldPosition.z;
+            if (sortingLayer > bestSortingLayer ||
+                (sortingLayer == bestSortingLayer && order > bestOrder) ||
+                (sortingLayer == bestSortingLayer && order == bestOrder && z > bestZ) ||
+                (sortingLayer == bestSortingLayer && order == bestOrder && std::fabs(z - bestZ) < 0.0001f && entry.entity > result.entity)) {
+                bestSortingLayer = sortingLayer;
+                bestOrder = order;
+                bestZ = z;
+                result.entity = entry.entity;
+            }
+        }
+
+        return result;
+    }
+
+    DirectX::XMFLOAT4X4 BuildOverlayViewMatrix()
+    {
+        using namespace DirectX;
+        XMFLOAT4X4 out{};
+        XMStoreFloat4x4(&out, XMMatrixLookToLH(
+            XMVectorSet(0.0f, 0.0f, -1.0f, 1.0f),
+            XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+            XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
+        return out;
+    }
+
+    DirectX::XMFLOAT4X4 BuildOverlayProjectionMatrix(const DirectX::XMFLOAT4& viewRect)
+    {
+        using namespace DirectX;
+        const float halfWidth = (std::max)(viewRect.z, 1.0f) * 0.5f;
+        const float halfHeight = (std::max)(viewRect.w, 1.0f) * 0.5f;
+        XMFLOAT4X4 out{};
+        XMStoreFloat4x4(&out, XMMatrixOrthographicOffCenterLH(
+            -halfWidth,
+            halfWidth,
+            -halfHeight,
+            halfHeight,
+            0.01f,
+            100.0f));
+        return out;
+    }
+
+    bool PlaceScreenSpaceOverlayAt(Registry& registry,
+                                   EntityID entity,
+                                   const DirectX::XMFLOAT4& viewRect,
+                                   const ImVec2& screenPoint,
+                                   const DirectX::XMFLOAT4X4& view,
+                                   const DirectX::XMFLOAT4X4& projection)
+    {
+        auto* rect = registry.GetComponent<RectTransformComponent>(entity);
+        auto* transform = registry.GetComponent<TransformComponent>(entity);
+        auto* canvas = registry.GetComponent<CanvasItemComponent>(entity);
+        if (!rect || !transform || !canvas || !canvas->screenSpaceOverlay) {
+            return false;
+        }
+
+        const DirectX::XMFLOAT2 canvasPoint = ScreenToOverlayCanvas(viewRect, screenPoint);
+        DirectX::XMFLOAT2 anchorCenter = { 0.0f, 0.0f };
+        if (IsScreenSpaceOverlayRoot(registry, entity)) {
+            const DirectX::XMFLOAT2 anchor = ChooseResponsiveOverlayAnchor(viewRect, canvasPoint);
+            rect->anchorMin = anchor;
+            rect->anchorMax = anchor;
+            anchorCenter = OverlayAnchorCenterCanvas(viewRect, anchor);
+        } else {
+            ScreenSpaceUIResolve resolved{};
+            if (ResolveScreenSpaceUI(registry, entity, viewRect, view, projection, resolved)) {
+                anchorCenter = resolved.anchorCenterCanvas;
+            } else {
+                anchorCenter = OverlayAnchorCenterCanvas(viewRect, rect->anchorMin);
+            }
+        }
+
+        rect->anchoredPosition = {
+            canvasPoint.x - anchorCenter.x,
+            canvasPoint.y - anchorCenter.y
+        };
+        Editor2D::SyncRectTransformToTransform(*rect, *transform);
+        transform->isDirty = true;
+        HierarchySystem::MarkDirtyRecursive(entity, registry);
+        return true;
+    }
+}
+
 void EditorLayer::DrawSceneView()
 {
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
@@ -418,7 +788,7 @@ void EditorLayer::DrawSceneViewToolbar()
 
 void EditorLayer::Draw2DOverlay()
 {
-    if (!m_gameLayer || m_sceneViewMode != SceneViewMode::Mode2D || m_sceneViewRect.z <= 1.0f || m_sceneViewRect.w <= 1.0f) {
+    if (!m_gameLayer || m_sceneViewRect.z <= 1.0f || m_sceneViewRect.w <= 1.0f) {
         return;
     }
 
@@ -443,6 +813,10 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
     const EntityID primary = EditorSelection::Instance().GetPrimaryEntity();
 
     const std::vector<UI2DDrawEntry> entries = UI2DDrawSystem::CollectDrawEntries(registry);
+    RenderQueue layoutQueue;
+    UI2DDrawSystem::AppendLayoutNodes(entries, layoutQueue);
+    RenderContext layoutRc = MakeEditorUILayoutContext(viewRect, view, projection);
+    UI2DLayoutResolver resolver(layoutQueue.ui2DLayoutNodes, layoutRc);
 
     for (const UI2DDrawEntry& entry : entries) {
         auto* rect = entry.rect;
@@ -452,19 +826,110 @@ void EditorLayer::Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
         if (!rect || !canvas || !transform || (hierarchy && !hierarchy->isActive) || !canvas->visible) {
             continue;
         }
+        if (m_sceneViewMode != SceneViewMode::Mode2D && !canvas->screenSpaceOverlay) {
+            continue;
+        }
 
         std::array<DirectX::XMFLOAT2, 4> corners{};
-        UIHitTestSystem::ComputeScreenCorners(*transform, *rect, viewRect, view, projection, corners);
-        if (canvas->pixelSnap) {
+        bool pixelSnap = false;
+        bool screenSpaceOverlay = false;
+        if (!resolver.ResolveCorners(entry.entity, corners, pixelSnap, screenSpaceOverlay)) {
+            continue;
+        }
+        if (m_sceneViewMode != SceneViewMode::Mode2D && !screenSpaceOverlay) {
+            continue;
+        }
+        if (pixelSnap) {
             for (auto& corner : corners) {
                 corner.x = std::round(corner.x);
                 corner.y = std::round(corner.y);
             }
         }
+        OffsetCornersToViewRect(corners, viewRect);
         const ImVec2 p0(corners[0].x, corners[0].y);
         const ImVec2 p1(corners[1].x, corners[1].y);
         const ImVec2 p2(corners[2].x, corners[2].y);
         const ImVec2 p3(corners[3].x, corners[3].y);
+        const bool drawScreenPreview = m_sceneViewMode != SceneViewMode::Mode2D && screenSpaceOverlay;
+
+        if (drawScreenPreview && entry.sprite && !entry.sprite->textureAssetPath.empty()) {
+            auto texture = ResourceManager::Instance().GetTexture(entry.sprite->textureAssetPath);
+            void* textureId = texture ? ImGuiRenderer::GetTextureID(texture.get()) : nullptr;
+            if (textureId) {
+                std::array<DirectX::XMFLOAT2, 4> spriteCorners = corners;
+                std::array<ImVec2, 4> uvs = {
+                    ImVec2{ 0.0f, 0.0f },
+                    ImVec2{ 1.0f, 0.0f },
+                    ImVec2{ 1.0f, 1.0f },
+                    ImVec2{ 0.0f, 1.0f }
+                };
+                if (auto* fill = registry.GetComponent<HPGaugeFillComponent>(entry.entity)) {
+                    const float ratio = Clamp01(fill->runtimeRatio);
+                    if (ratio <= 0.0001f) {
+                        goto SkipSpritePreview;
+                    }
+                    const int direction = static_cast<int>(fill->fillDirection);
+                    ApplyEditorFillClip(ratio, direction, spriteCorners);
+                    BuildEditorFillUV(ratio, direction, uvs);
+                }
+                drawList->AddImageQuad(
+                    (ImTextureID)textureId,
+                    ImVec2(spriteCorners[0].x, spriteCorners[0].y),
+                    ImVec2(spriteCorners[1].x, spriteCorners[1].y),
+                    ImVec2(spriteCorners[2].x, spriteCorners[2].y),
+                    ImVec2(spriteCorners[3].x, spriteCorners[3].y),
+                    uvs[0],
+                    uvs[1],
+                    uvs[2],
+                    uvs[3],
+                    ToImColor(entry.sprite->tint));
+            }
+        }
+SkipSpritePreview:
+
+        if (drawScreenPreview && entry.text && !entry.text->text.empty()) {
+            const float minX = (std::min)((std::min)(corners[0].x, corners[1].x), (std::min)(corners[2].x, corners[3].x));
+            const float maxX = (std::max)((std::max)(corners[0].x, corners[1].x), (std::max)(corners[2].x, corners[3].x));
+            const float minY = (std::min)((std::min)(corners[0].y, corners[1].y), (std::min)(corners[2].y, corners[3].y));
+            const float maxY = (std::max)((std::max)(corners[0].y, corners[1].y), (std::max)(corners[2].y, corners[3].y));
+            const float fontSize = (std::max)(8.0f, entry.text->fontSize);
+            ImFont* font = ImGui::GetFont();
+            if (!entry.text->fontAssetPath.empty()) {
+                if (ImFont* previewFont = FontManager::Instance().GetEditorPreviewFont(entry.text->fontAssetPath)) {
+                    font = previewFont;
+                } else {
+                    FontManager::Instance().QueueEditorPreviewFont(entry.text->fontAssetPath, fontSize);
+                }
+            }
+            const float width = (std::max)(1.0f, maxX - minX);
+            const float height = (std::max)(1.0f, maxY - minY);
+            const float wrapWidth = entry.text->wrapping ? width : 0.0f;
+            const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, wrapWidth, entry.text->text.c_str());
+
+            float textX = minX;
+            if (entry.text->alignment == TextAlignment::Left) {
+                textX = minX;
+            } else if (entry.text->alignment == TextAlignment::Right) {
+                textX = maxX - textSize.x;
+            } else {
+                textX = minX + (width - textSize.x) * 0.5f;
+            }
+            float textY = minY + (height - textSize.y) * 0.5f;
+            if (pixelSnap) {
+                textX = std::round(textX);
+                textY = std::round(textY);
+            }
+            drawList->PushClipRect(ImVec2(minX, minY), ImVec2(maxX, maxY), true);
+            drawList->AddText(
+                font,
+                fontSize,
+                ImVec2(textX, textY),
+                ToImColor(entry.text->color),
+                entry.text->text.c_str(),
+                nullptr,
+                wrapWidth);
+            drawList->PopClipRect();
+        }
 
         const bool isSelected = drawSelection && EditorSelection::Instance().IsEntitySelected(entry.entity);
         const ImU32 outlineColor = isSelected
@@ -555,6 +1020,7 @@ void EditorLayer::DrawTransformGizmo()
     EntityID entity = selection.GetEntity();
     auto* transform = registry.GetComponent<TransformComponent>(entity);
     auto* rectTransform = registry.GetComponent<RectTransformComponent>(entity);
+    auto* canvasItem = registry.GetComponent<CanvasItemComponent>(entity);
     if (!transform) {
         m_gizmoWasUsing = false;
         m_hasGizmoBeforeTransform = false;
@@ -564,7 +1030,10 @@ void EditorLayer::DrawTransformGizmo()
         return;
     }
 
-    if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
+    const bool isScreenSpaceOverlay = rectTransform && canvasItem && canvasItem->screenSpaceOverlay;
+    const bool editRectWithGizmo = rectTransform && (m_sceneViewMode == SceneViewMode::Mode2D || isScreenSpaceOverlay);
+
+    if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform && !isScreenSpaceOverlay) {
         Editor2D::SyncRectTransformToTransform(*rectTransform, *transform);
         HierarchySystem::MarkDirtyRecursive(entity, registry);
         HierarchySystem hierarchySystem;
@@ -576,8 +1045,31 @@ void EditorLayer::DrawTransformGizmo()
     const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
     XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
     XMFLOAT4X4 world = transform->worldMatrix;
+    ScreenSpaceUIResolve overlayResolve{};
+    if (isScreenSpaceOverlay) {
+        if (!ResolveScreenSpaceUI(registry, entity, m_sceneViewRect, view, projection, overlayResolve)) {
+            m_gizmoWasUsing = false;
+            m_hasGizmoBeforeTransform = false;
+            m_gizmoUndoEntity = Entity::NULL_ID;
+            s_gizmoBeforeState.reset();
+            s_rectGizmoBeforeState.reset();
+            return;
+        }
 
-    ImGuizmo::SetOrthographic(m_sceneViewMode == SceneViewMode::Mode2D);
+        view = BuildOverlayViewMatrix();
+        projection = BuildOverlayProjectionMatrix(m_sceneViewRect);
+
+        const XMMATRIX overlayWorld =
+            XMMatrixScaling(
+                (std::max)(std::fabs(rectTransform->scale2D.x), kMinScaleValue),
+                (std::max)(std::fabs(rectTransform->scale2D.y), kMinScaleValue),
+                1.0f) *
+            XMMatrixRotationZ(XMConvertToRadians(rectTransform->rotationZ)) *
+            XMMatrixTranslation(overlayResolve.pivotCanvas.x, overlayResolve.pivotCanvas.y, 0.0f);
+        XMStoreFloat4x4(&world, overlayWorld);
+    }
+
+    ImGuizmo::SetOrthographic(m_sceneViewMode == SceneViewMode::Mode2D || isScreenSpaceOverlay);
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(m_sceneViewRect.x, m_sceneViewRect.y, m_sceneViewRect.z, m_sceneViewRect.w);
 
@@ -588,6 +1080,7 @@ void EditorLayer::DrawTransformGizmo()
             entity = selection.GetEntity();
             transform = registry.GetComponent<TransformComponent>(entity);
             rectTransform = registry.GetComponent<RectTransformComponent>(entity);
+            canvasItem = registry.GetComponent<CanvasItemComponent>(entity);
             if (!transform) {
                 m_gizmoWasUsing = false;
                 m_hasGizmoBeforeTransform = false;
@@ -632,7 +1125,7 @@ void EditorLayer::DrawTransformGizmo()
 
     if (isUsing && !m_gizmoWasUsing) {
         m_gizmoUndoEntity = entity;
-        if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
+        if (editRectWithGizmo) {
             s_rectGizmoBeforeState = *rectTransform;
         } else {
             s_gizmoBeforeState = *transform;
@@ -650,7 +1143,7 @@ void EditorLayer::DrawTransformGizmo()
             parentEntity = transform->parent;
         }
 
-        if (!Entity::IsNull(parentEntity)) {
+        if (!isScreenSpaceOverlay && !Entity::IsNull(parentEntity)) {
             if (auto* parentTransform = registry.GetComponent<TransformComponent>(parentEntity)) {
                 const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
                 localMatrix = worldMatrix * XMMatrixInverse(nullptr, parentWorld);
@@ -669,7 +1162,23 @@ void EditorLayer::DrawTransformGizmo()
             XMStoreFloat4(&localRotation, rotation);
             XMStoreFloat3(&localScale, scale);
 
-            if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
+            if (isScreenSpaceOverlay && rectTransform) {
+                const DirectX::XMFLOAT2 pivotCanvas = { localPosition.x, localPosition.y };
+                rectTransform->anchoredPosition = {
+                    pivotCanvas.x - overlayResolve.anchorCenterCanvas.x,
+                    pivotCanvas.y - overlayResolve.anchorCenterCanvas.y
+                };
+                const DirectX::XMFLOAT4 qf = localRotation;
+                const float sinyCosp = 2.0f * (qf.w * qf.z + qf.x * qf.y);
+                const float cosyCosp = 1.0f - 2.0f * (qf.y * qf.y + qf.z * qf.z);
+                rectTransform->rotationZ = DirectX::XMConvertToDegrees(std::atan2(sinyCosp, cosyCosp));
+                rectTransform->scale2D = {
+                    (std::max)(std::fabs(localScale.x), kMinScaleValue),
+                    (std::max)(std::fabs(localScale.y), kMinScaleValue)
+                };
+                SyncRectTransformToTransform(*rectTransform, *transform);
+                transform->isDirty = true;
+            } else if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
                 rectTransform->anchoredPosition = { localPosition.x, localPosition.y };
                 const DirectX::XMVECTOR q = XMLoadFloat4(&localRotation);
                 const DirectX::XMFLOAT4 qf = localRotation;
@@ -687,16 +1196,18 @@ void EditorLayer::DrawTransformGizmo()
                 NormalizeQuaternion(transform->localRotation);
                 transform->localScale = ClampScale(localScale);
             }
-            DirectX::XMStoreFloat4x4(&transform->localMatrix, localMatrix);
-            DirectX::XMStoreFloat4x4(&transform->worldMatrix, worldMatrix);
-            XMVECTOR worldScale;
-            XMVECTOR worldRotation;
-            XMVECTOR worldTranslation;
-            if (XMMatrixDecompose(&worldScale, &worldRotation, &worldTranslation, worldMatrix)) {
-                XMStoreFloat3(&transform->worldPosition, worldTranslation);
-                XMStoreFloat4(&transform->worldRotation, worldRotation);
-                NormalizeQuaternion(transform->worldRotation);
-                XMStoreFloat3(&transform->worldScale, worldScale);
+            if (!isScreenSpaceOverlay) {
+                DirectX::XMStoreFloat4x4(&transform->localMatrix, localMatrix);
+                DirectX::XMStoreFloat4x4(&transform->worldMatrix, worldMatrix);
+                XMVECTOR worldScale;
+                XMVECTOR worldRotation;
+                XMVECTOR worldTranslation;
+                if (XMMatrixDecompose(&worldScale, &worldRotation, &worldTranslation, worldMatrix)) {
+                    XMStoreFloat3(&transform->worldPosition, worldTranslation);
+                    XMStoreFloat4(&transform->worldRotation, worldRotation);
+                    NormalizeQuaternion(transform->worldRotation);
+                    XMStoreFloat3(&transform->worldScale, worldScale);
+                }
             }
             transform->isDirty = true;
             HierarchySystem::MarkDirtyRecursive(entity, registry);
@@ -713,7 +1224,7 @@ void EditorLayer::DrawTransformGizmo()
         m_hasGizmoBeforeTransform = true;
     }
     if (!isUsing && m_gizmoWasUsing) {
-        if (m_sceneViewMode == SceneViewMode::Mode2D && rectTransform) {
+        if (editRectWithGizmo) {
             if (m_hasGizmoBeforeTransform && s_rectGizmoBeforeState.has_value() && m_gizmoUndoEntity == entity) {
                 auto* currentRect = registry.GetComponent<RectTransformComponent>(entity);
                 if (currentRect && std::memcmp(&*s_rectGizmoBeforeState, currentRect, sizeof(RectTransformComponent)) != 0) {
@@ -790,12 +1301,13 @@ void EditorLayer::HandleScenePicking()
 
     auto& selection = EditorSelection::Instance();
     if (m_sceneViewMode == SceneViewMode::Mode2D) {
-        UIHitTestResult hit = UIHitTestSystem::PickTopmost(
+        UIHitTestResult hit = PickScreenSpaceUITopmost(
             registry,
             m_sceneViewRect,
             view,
             projection,
-            { ImGui::GetMousePos().x, ImGui::GetMousePos().y });
+            ImGui::GetMousePos(),
+            true);
 
         if (!Entity::IsNull(hit.entity)) {
             if (ImGui::GetIO().KeyCtrl) {
@@ -805,6 +1317,22 @@ void EditorLayer::HandleScenePicking()
             }
         } else if (!ImGui::GetIO().KeyCtrl) {
             selection.Clear();
+        }
+        return;
+    }
+
+    UIHitTestResult screenSpaceHit = PickScreenSpaceUITopmost(
+        registry,
+        m_sceneViewRect,
+        view,
+        projection,
+        ImGui::GetMousePos(),
+        false);
+    if (!Entity::IsNull(screenSpaceHit.entity)) {
+        if (ImGui::GetIO().KeyCtrl) {
+            selection.ToggleEntity(screenSpaceHit.entity, true);
+        } else {
+            selection.SelectEntity(screenSpaceHit.entity);
         }
         return;
     }
@@ -868,14 +1396,18 @@ void EditorLayer::HandleSceneAssetDrop()
 
     EntitySnapshot::Snapshot prefabDropSnapshot;
     bool prefabIsUI = false;
+    bool prefabIsScreenOverlay = false;
     if (ext == ".prefab" && PrefabSystem::LoadPrefabSnapshot(assetPath, prefabDropSnapshot)) {
         for (const auto& node : prefabDropSnapshot.nodes) {
             const bool hasRect = std::get<std::optional<RectTransformComponent>>(node.components).has_value();
-            const bool hasCanvas = std::get<std::optional<CanvasItemComponent>>(node.components).has_value();
+            const auto& canvas = std::get<std::optional<CanvasItemComponent>>(node.components);
+            const bool hasCanvas = canvas.has_value();
             const bool hasHPGauge = std::get<std::optional<HPGaugeBindingComponent>>(node.components).has_value();
             if ((node.localID == prefabDropSnapshot.rootLocalID && hasRect && hasCanvas) || hasHPGauge) {
                 prefabIsUI = true;
-                break;
+            }
+            if ((node.localID == prefabDropSnapshot.rootLocalID && hasRect && hasCanvas && canvas->screenSpaceOverlay) || hasHPGauge) {
+                prefabIsScreenOverlay = true;
             }
         }
     }
@@ -914,7 +1446,11 @@ void EditorLayer::HandleSceneAssetDrop()
 
     if (ext == ".prefab" || IsSupportedModelAsset(assetPath) || (m_sceneViewMode == SceneViewMode::Mode2D && (IsSupportedSpriteAsset(assetPath) || IsSupportedFontAsset(assetPath)))) {
         ImVec2 screenPos{};
-        if (ProjectWorldToSceneScreen(m_sceneViewRect, view, projection, placementPosition, screenPos)) {
+        const bool usesScreenOverlayPlacement = ext == ".prefab" && prefabIsScreenOverlay;
+        const bool hasPreviewPosition = usesScreenOverlayPlacement
+            ? ((screenPos = ImGui::GetMousePos()), true)
+            : ProjectWorldToSceneScreen(m_sceneViewRect, view, projection, placementPosition, screenPos);
+        if (hasPreviewPosition) {
             ImDrawList* drawList = ImGui::GetForegroundDrawList();
             const ImU32 ringColor = IM_COL32(96, 196, 255, 220);
             const ImU32 fillColor = IM_COL32(96, 196, 255, 48);
@@ -927,11 +1463,11 @@ void EditorLayer::HandleSceneAssetDrop()
                                            std::fabs(placementPosition.y) < 0.0001f &&
                                            std::fabs(placementPosition.z) < 0.0001f;
             const bool isTextPlacement = (m_sceneViewMode == SceneViewMode::Mode2D && IsSupportedFontAsset(assetPath));
-            const bool isUIPrefabPlacement = (m_sceneViewMode == SceneViewMode::Mode2D && ext == ".prefab" && prefabIsUI);
+            const bool isUIPrefabPlacement = (ext == ".prefab" && (prefabIsScreenOverlay || (m_sceneViewMode == SceneViewMode::Mode2D && prefabIsUI)));
             const std::string previewText = isTextPlacement
                 ? (isOriginPlacement ? "Place Text at Origin" : "Place Text")
                 : (isUIPrefabPlacement
-                    ? (isOriginPlacement ? "Place UI Prefab at Origin" : "Place UI Prefab")
+                    ? (prefabIsScreenOverlay ? "Place Screen UI Prefab" : (isOriginPlacement ? "Place UI Prefab at Origin" : "Place UI Prefab"))
                     : (isOriginPlacement ? "Place at Origin" : "Place on Surface"));
             drawList->AddText(ImVec2(screenPos.x + 16.0f, screenPos.y - 8.0f), IM_COL32(255, 255, 255, 230), previewText.c_str());
         }
@@ -958,7 +1494,9 @@ void EditorLayer::HandleSceneAssetDrop()
     if (ext == ".prefab") {
         EntityID liveRoot = PrefabSystem::InstantiatePrefab(assetPath, registry, Entity::NULL_ID);
         if (!Entity::IsNull(liveRoot) && registry.IsAlive(liveRoot)) {
-            if (prefabIsUI && m_sceneViewMode == SceneViewMode::Mode2D) {
+            if (prefabIsScreenOverlay) {
+                PlaceScreenSpaceOverlayAt(registry, liveRoot, m_sceneViewRect, ImGui::GetMousePos(), view, projection);
+            } else if (prefabIsUI && m_sceneViewMode == SceneViewMode::Mode2D) {
                 if (auto* rect = registry.GetComponent<RectTransformComponent>(liveRoot)) {
                     rect->anchoredPosition = { placementPosition.x, placementPosition.y };
                 }

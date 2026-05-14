@@ -308,6 +308,7 @@ namespace
         rect.sizeDelta = { 128.0f, 128.0f };
 
         CanvasItemComponent canvas{};
+        canvas.screenSpaceOverlay = false;
         SpriteComponent sprite{};
         sprite.textureAssetPath = texturePath;
 
@@ -481,6 +482,7 @@ namespace
             CanvasItemComponent canvas{};
             canvas.orderInLayer = order;
             canvas.pixelSnap = true;
+            canvas.screenSpaceOverlay = true;
 
             std::get<std::optional<NameComponent>>(node.components) = NameComponent{ name };
             std::get<std::optional<TransformComponent>>(node.components) = makeTransform(x, y);

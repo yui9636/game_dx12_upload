@@ -1021,6 +1021,9 @@
     <ClInclude Include="Source\UI\DamageTextManager.h">
       <Filter>Source\UI</Filter>
     </ClInclude>
+    <ClInclude Include="Source\UI\UI2DLayoutResolver.h">
+      <Filter>Source\UI</Filter>
+    </ClInclude>
     <ClInclude Include="Source\UI\UI2DSpriteExtractSystem.h">
       <Filter>Source\UI</Filter>
     </ClInclude>

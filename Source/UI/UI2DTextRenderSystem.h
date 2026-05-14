@@ -18,16 +18,16 @@
 #include "RenderContext/RenderContext.h"
 #include "RenderContext/RenderQueue.h"
 #include "UI/UIHitTestSystem.h"
+#include "UI/UI2DLayoutResolver.h"
 
 class UI2DTextRenderSystem
 {
 public:
-    static void RenderText(const std::vector<UI2DTextPacket>& packets, const RenderContext& rc)
+    static void RenderText(const std::vector<UI2DTextPacket>& packets,
+                           const std::vector<UI2DLayoutNode>& layoutNodes,
+                           const RenderContext& rc)
     {
         if (packets.empty() || !rc.commandList || rc.displayWidth <= 1 || rc.displayHeight <= 1) {
-            return;
-        }
-        if (std::fabs(rc.projectionMatrix._34) > 0.0001f) {
             return;
         }
 
@@ -37,6 +37,7 @@ public:
             static_cast<float>(rc.displayWidth),
             static_cast<float>(rc.displayHeight)
         };
+        UI2DLayoutResolver layoutResolver(layoutNodes, rc);
 
         for (const UI2DTextPacket& packet : packets) {
             TransformComponent transform{};
@@ -49,11 +50,18 @@ public:
             rect.pivot = packet.pivot;
 
             std::array<DirectX::XMFLOAT2, 4> corners{};
-            if (!UIHitTestSystem::ComputeScreenCorners(transform, rect, viewRect, rc.viewMatrix, rc.projectionMatrix, corners)) {
-                continue;
+            bool pixelSnap = packet.pixelSnap;
+            bool screenSpaceOverlay = packet.screenSpaceOverlay;
+            if (!layoutResolver.ResolveCorners(packet.entity, corners, pixelSnap, screenSpaceOverlay)) {
+                if (packet.screenSpaceOverlay) {
+                    continue;
+                }
+                if (!UIHitTestSystem::ComputeScreenCorners(transform, rect, viewRect, rc.viewMatrix, rc.projectionMatrix, corners)) {
+                    continue;
+                }
             }
 
-            if (packet.pixelSnap || rc.cameraPixelSnap) {
+            if (pixelSnap || (screenSpaceOverlay && rc.cameraPixelSnap)) {
                 for (auto& corner : corners) {
                     corner.x = std::round(corner.x);
                     corner.y = std::round(corner.y);
@@ -75,8 +83,11 @@ public:
                 x = maxX;
             }
 
-            const float scale = (std::max)(0.01f, packet.fontSize / 32.0f);
-            const float y = ((minY + maxY) * 0.5f) - packet.fontSize * 0.5f;
+            const std::string fontKey = packet.fontAssetPath.empty() ? std::string("ComboFont") : packet.fontAssetPath;
+            const float fontSize = (std::max)(1.0f, packet.fontSize);
+            const float lineHeight = (std::max)(1.0f, FontManager::Instance().GetLineHeight(fontKey));
+            const float scale = (std::max)(0.01f, fontSize / lineHeight);
+            const float y = ((minY + maxY) * 0.5f) - fontSize * 0.5f;
             const std::wstring wideText = ToWide(packet.text);
             if (wideText.empty()) {
                 continue;
@@ -84,7 +95,7 @@ public:
 
             FontManager::Instance().DrawFormat(
                 rc.commandList,
-                packet.fontAssetPath.empty() ? std::string("ComboFont") : packet.fontAssetPath,
+                fontKey,
                 x,
                 y,
                 packet.color,

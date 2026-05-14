@@ -243,6 +243,23 @@ struct TrailPacket {
     std::vector<uint32_t> indices;
 };
 
+struct UI2DLayoutNode {
+    EntityID entity = Entity::NULL_ID;
+    EntityID parent = Entity::NULL_ID;
+    bool screenSpaceOverlay = true;
+    bool pixelSnap = false;
+    DirectX::XMFLOAT3 worldPosition = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 worldRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+    DirectX::XMFLOAT3 worldScale = { 1.0f, 1.0f, 1.0f };
+    DirectX::XMFLOAT2 anchoredPosition = { 0.0f, 0.0f };
+    DirectX::XMFLOAT2 sizeDelta = { 100.0f, 100.0f };
+    DirectX::XMFLOAT2 anchorMin = { 0.5f, 0.5f };
+    DirectX::XMFLOAT2 anchorMax = { 0.5f, 0.5f };
+    DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
+    DirectX::XMFLOAT2 scale2D = { 1.0f, 1.0f };
+    float rotationZ = 0.0f;
+};
+
 struct UI2DSpritePacket {
     EntityID entity = Entity::NULL_ID;
     std::string textureAssetPath;
@@ -252,6 +269,7 @@ struct UI2DSpritePacket {
     DirectX::XMFLOAT3 worldScale = { 1.0f, 1.0f, 1.0f };
     DirectX::XMFLOAT2 sizeDelta = { 100.0f, 100.0f };
     DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
+    bool screenSpaceOverlay = true;
     bool pixelSnap = false;
     bool fillClipEnabled = false;
     float fillRatio = 1.0f;
@@ -270,6 +288,7 @@ struct UI2DTextPacket {
     DirectX::XMFLOAT3 worldScale = { 1.0f, 1.0f, 1.0f };
     DirectX::XMFLOAT2 sizeDelta = { 100.0f, 32.0f };
     DirectX::XMFLOAT2 pivot = { 0.5f, 0.5f };
+    bool screenSpaceOverlay = true;
     bool pixelSnap = false;
 };
 
@@ -281,6 +300,7 @@ public:
     std::vector<EffectMeshPacket> effectMeshPackets;
     std::vector<EffectParticlePacket> effectParticlePackets;
     std::vector<TrailPacket> trailPackets;
+    std::vector<UI2DLayoutNode> ui2DLayoutNodes;
     std::vector<UI2DSpritePacket> ui2DSpritePackets;
     std::vector<UI2DTextPacket> ui2DTextPackets;
     RenderQueueMetrics metrics;
@@ -292,6 +312,7 @@ public:
         effectMeshPackets.clear();
         effectParticlePackets.clear();
         trailPackets.clear();
+        ui2DLayoutNodes.clear();
         ui2DSpritePackets.clear();
         ui2DTextPackets.clear();
         metrics = {};

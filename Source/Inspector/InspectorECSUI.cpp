@@ -1145,9 +1145,15 @@ bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker =
         HierarchyComponent* hierarchy = registry->GetComponent<HierarchyComponent>(entity);
 
         bool hasBlockingIssue = false;
-        if (!transform || !rect || !canvas) {
+        if (!transform) {
             hasBlockingIssue = true;
-            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Sprite preview needs Transform, RectTransform, and CanvasItem.");
+            ImGui::TextColored(ImVec4(1.0f, 0.74f, 0.28f, 1.0f), "Sprite needs Transform.");
+        }
+        if (!rect) {
+            ImGui::TextDisabled("No RectTransform: rendered as 1 x 1 world units.");
+        }
+        if (!canvas) {
+            ImGui::TextDisabled("No CanvasItem: rendered at Transform world position.");
         }
         if (hierarchy && !hierarchy->isActive) {
             hasBlockingIssue = true;
@@ -1187,7 +1193,9 @@ bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker =
         }
         if (!canvas) {
             if (ImGui::Button("Add CanvasItem")) {
-                ExecuteAddComponent(registry, entity, CanvasItemComponent{}, "Add CanvasItem");
+                CanvasItemComponent value{};
+                value.screenSpaceOverlay = false;
+                ExecuteAddComponent(registry, entity, value, "Add CanvasItem");
                 requestRefresh = true;
             }
             ImGui::SameLine();
@@ -1214,6 +1222,9 @@ bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker =
         if (hasBlockingIssue) {
             ImGui::NewLine();
             ImGui::Separator();
+        }
+        if (canvas) {
+            DrawUndoableValueWidget(registry, entity, *canvas, "Screen Space Overlay", canvas->screenSpaceOverlay);
         }
 
         const SpriteComponent beforeTexture = *sprite;

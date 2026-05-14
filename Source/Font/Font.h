@@ -50,6 +50,9 @@ public:
     // 指定した文字列を現在のフォント情報で描いた場合のおおよその幅を返す。
     float GetTextWidth(const wchar_t* string) const;
 
+    // FNTに記録された1行分の高さを返す。
+    float GetLineHeight() const { return m_fontHeight > 0.0f ? m_fontHeight : 32.0f; }
+
     // 文字の描画倍率を設定する。
     void SetScale(float x, float y) { m_scaleX = x; m_scaleY = y; }
 

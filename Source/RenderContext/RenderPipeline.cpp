@@ -787,12 +787,21 @@ RenderPipeline::RenderViewContext RenderPipeline::BuildPrimaryViewContext(const 
     view.prevSceneTexture = nullptr;
     view.displayColorTexture = nullptr;
 
-    view.panelWidth = panelWidth;
-    view.panelHeight = panelHeight;
-    view.renderWidth = rc.renderWidth;
-    view.renderHeight = rc.renderHeight;
-    view.displayWidth = rc.displayWidth > 0 ? rc.displayWidth : rc.renderWidth;
-    view.displayHeight = rc.displayHeight > 0 ? rc.displayHeight : rc.renderHeight;
+    const bool usePanelSize = panelWidth > 0 && panelHeight > 0;
+    const uint32_t targetRenderWidth = usePanelSize ? panelWidth : rc.renderWidth;
+    const uint32_t targetRenderHeight = usePanelSize ? panelHeight : rc.renderHeight;
+    const uint32_t targetDisplayWidth = usePanelSize
+        ? panelWidth
+        : (rc.displayWidth > 0 ? rc.displayWidth : targetRenderWidth);
+    const uint32_t targetDisplayHeight = usePanelSize
+        ? panelHeight
+        : (rc.displayHeight > 0 ? rc.displayHeight : targetRenderHeight);
+    view.panelWidth = usePanelSize ? panelWidth : rc.panelWidth;
+    view.panelHeight = usePanelSize ? panelHeight : rc.panelHeight;
+    view.renderWidth = targetRenderWidth;
+    view.renderHeight = targetRenderHeight;
+    view.displayWidth = targetDisplayWidth;
+    view.displayHeight = targetDisplayHeight;
     view.viewport = RhiViewport(
         0.0f,
         0.0f,

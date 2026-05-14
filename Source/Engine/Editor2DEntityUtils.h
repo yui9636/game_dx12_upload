@@ -8,8 +8,12 @@
 #include "Component/CanvasItemComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/RectTransformComponent.h"
+#include "Component/SpriteComponent.h"
+#include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
+#include "Component/UIButtonComponent.h"
 #include "Entity/Entity.h"
+#include "Gameplay/HPGaugeComponent.h"
 #include "Hierarchy/HierarchySystem.h"
 #include "Registry/Registry.h"
 
@@ -66,7 +70,16 @@ namespace Editor2D
             registry.AddComponent(entity, rect);
         }
         if (!registry.GetComponent<CanvasItemComponent>(entity)) {
-            registry.AddComponent(entity, CanvasItemComponent{});
+            CanvasItemComponent canvas{};
+            const bool spriteOnly =
+                registry.GetComponent<SpriteComponent>(entity) &&
+                !registry.GetComponent<TextComponent>(entity) &&
+                !registry.GetComponent<UIButtonComponent>(entity) &&
+                !registry.GetComponent<HPGaugeBindingComponent>(entity) &&
+                !registry.GetComponent<HPGaugeFillComponent>(entity) &&
+                !registry.GetComponent<HPGaugeTextComponent>(entity);
+            canvas.screenSpaceOverlay = !spriteOnly;
+            registry.AddComponent(entity, canvas);
         }
 
         auto* rect = registry.GetComponent<RectTransformComponent>(entity);

@@ -142,7 +142,8 @@ namespace
                 {"visible", canvas->visible},
                 {"interactable", canvas->interactable},
                 {"pixelSnap", canvas->pixelSnap},
-                {"lockAspect", canvas->lockAspect}
+                {"lockAspect", canvas->lockAspect},
+                {"screenSpaceOverlay", canvas->screenSpaceOverlay}
                 });
         }
 
@@ -731,12 +732,23 @@ namespace
         if (components.contains("CanvasItemComponent")) {
             CanvasItemComponent component;
             const json& value = components["CanvasItemComponent"];
+            const bool hasExplicitScreenSpace = value.contains("screenSpaceOverlay");
             component.sortingLayer = value.value("sortingLayer", component.sortingLayer);
             component.orderInLayer = value.value("orderInLayer", component.orderInLayer);
             component.visible = value.value("visible", component.visible);
             component.interactable = value.value("interactable", component.interactable);
             component.pixelSnap = value.value("pixelSnap", component.pixelSnap);
             component.lockAspect = value.value("lockAspect", component.lockAspect);
+            component.screenSpaceOverlay = value.value("screenSpaceOverlay", component.screenSpaceOverlay);
+            if (!hasExplicitScreenSpace &&
+                components.contains("SpriteComponent") &&
+                !components.contains("TextComponent") &&
+                !components.contains("UIButtonComponent") &&
+                !components.contains("HPGaugeBindingComponent") &&
+                !components.contains("HPGaugeFillComponent") &&
+                !components.contains("HPGaugeTextComponent")) {
+                component.screenSpaceOverlay = false;
+            }
             SetOptional(node.components, component);
         }
 
@@ -1359,6 +1371,52 @@ namespace
         }
     }
 
+    bool HasHPGaugeMarker(const EntitySnapshot::Node& node)
+    {
+        return std::get<std::optional<HPGaugeBindingComponent>>(node.components).has_value() ||
+            std::get<std::optional<HPGaugeFillComponent>>(node.components).has_value() ||
+            std::get<std::optional<HPGaugeTextComponent>>(node.components).has_value();
+    }
+
+    bool BelongsToHPGaugeTree(const EntitySnapshot::Snapshot& snapshot,
+                              const std::unordered_map<uint32_t, size_t>& nodeIndex,
+                              const EntitySnapshot::Node& node)
+    {
+        const EntitySnapshot::Node* current = &node;
+        for (int guard = 0; guard < 64 && current; ++guard) {
+            if (HasHPGaugeMarker(*current)) {
+                return true;
+            }
+            if (current->parentLocalID == EntitySnapshot::kInvalidLocalID) {
+                break;
+            }
+            const auto it = nodeIndex.find(current->parentLocalID);
+            current = (it != nodeIndex.end() && it->second < snapshot.nodes.size())
+                ? &snapshot.nodes[it->second]
+                : nullptr;
+        }
+        return false;
+    }
+
+    void ApplyCanvasSpaceCompatibility(EntitySnapshot::Snapshot& snapshot)
+    {
+        std::unordered_map<uint32_t, size_t> nodeIndex;
+        nodeIndex.reserve(snapshot.nodes.size());
+        for (size_t i = 0; i < snapshot.nodes.size(); ++i) {
+            nodeIndex[snapshot.nodes[i].localID] = i;
+        }
+
+        for (EntitySnapshot::Node& node : snapshot.nodes) {
+            auto& canvas = std::get<std::optional<CanvasItemComponent>>(node.components);
+            if (!canvas.has_value()) {
+                continue;
+            }
+            if (BelongsToHPGaugeTree(snapshot, nodeIndex, node)) {
+                canvas->screenSpaceOverlay = true;
+            }
+        }
+    }
+
     // Prefab として保存するとき、既存の PrefabInstance 情報を取り除きます。
     void StripPrefabMetadata(EntitySnapshot::Snapshot& snapshot)
     {
@@ -1681,6 +1739,8 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
         snapshot.rootLocalID = document.value("rootLocalId", snapshot.nodes.front().localID);
     }
 
+    ApplyCanvasSpaceCompatibility(snapshot);
+
     // 既存 scene を消してから、読み込んだ Snapshot を復元します。
     ClearRegistryForSceneReplace(registry);
 
@@ -1720,6 +1780,8 @@ bool PrefabSystem::LoadPrefabSnapshot(const std::filesystem::path& prefabPath,
     if (snapshot.nodes.empty()) {
         return false;
     }
+
+    ApplyCanvasSpaceCompatibility(snapshot);
 
     outSnapshot = std::move(snapshot);
     return true;

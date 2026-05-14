@@ -58,6 +58,9 @@ public:
     // 指定キーのフォントを取得する。存在しない場合はnullptrを返す。
     std::shared_ptr<Font> Get(const std::string& key);
 
+    // 指定キーのランタイムフォントの行高さを返す。未登録なら既定フォントを読み込む。
+    float GetLineHeight(const std::string& key);
+
     // ランタイム描画で使用するビューポートサイズを設定する。
     void SetRuntimeViewport(float width, float height);
 

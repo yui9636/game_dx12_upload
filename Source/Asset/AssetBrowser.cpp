@@ -83,6 +83,7 @@ namespace
         rect.sizeDelta = size;
 
         CanvasItemComponent canvas{};
+        canvas.screenSpaceOverlay = asButton;
 
         SpriteComponent sprite{};
         sprite.textureAssetPath = texturePath;

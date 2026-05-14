@@ -12,6 +12,9 @@ public:
     static void Extract(Registry& registry, RenderQueue& queue)
     {
         const std::vector<UI2DDrawEntry> entries = UI2DDrawSystem::CollectDrawEntries(registry);
+        if (queue.ui2DLayoutNodes.empty()) {
+            UI2DDrawSystem::AppendLayoutNodes(entries, queue);
+        }
         for (const UI2DDrawEntry& entry : entries) {
             if (!entry.text || entry.text->text.empty() || !entry.transform || !entry.rect || !entry.canvas) {
                 continue;
@@ -29,6 +32,7 @@ public:
             packet.worldScale = entry.transform->worldScale;
             packet.sizeDelta = entry.rect->sizeDelta;
             packet.pivot = entry.rect->pivot;
+            packet.screenSpaceOverlay = entry.canvas->screenSpaceOverlay;
             packet.pixelSnap = entry.canvas->pixelSnap;
             queue.ui2DTextPackets.push_back(std::move(packet));
         }

@@ -8,7 +8,8 @@
           "orderInLayer": 100,
           "pixelSnap": true,
           "sortingLayer": 0,
-          "visible": true
+          "visible": true,
+          "screenSpaceOverlay": true
         },
         "HPGaugeBindingComponent": {
           "damagePreviewDelay": 0.3499999940395355,
@@ -82,7 +83,8 @@
           "orderInLayer": 3,
           "pixelSnap": true,
           "sortingLayer": 0,
-          "visible": true
+          "visible": true,
+          "screenSpaceOverlay": true
         },
         "HPGaugeTextComponent": {
           "bindingRoot": 18446744073709551615,
@@ -169,7 +171,8 @@
           "orderInLayer": 2,
           "pixelSnap": true,
           "sortingLayer": 0,
-          "visible": true
+          "visible": true,
+          "screenSpaceOverlay": true
         },
         "HPGaugeFillComponent": {
           "bindingRoot": 18446744073709551615,
@@ -279,7 +282,8 @@
           "orderInLayer": 1,
           "pixelSnap": true,
           "sortingLayer": 0,
-          "visible": true
+          "visible": true,
+          "screenSpaceOverlay": true
         },
         "HPGaugeFillComponent": {
           "bindingRoot": 18446744073709551615,
@@ -389,7 +393,8 @@
           "orderInLayer": 0,
           "pixelSnap": true,
           "sortingLayer": 0,
-          "visible": true
+          "visible": true,
+          "screenSpaceOverlay": true
         },
         "HierarchyComponent": {
           "isActive": true

@@ -133,6 +133,13 @@ std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)
     return Get(key);
 }
 
+// 指定キーのランタイムフォントの行高さを返す。
+float FontManager::GetLineHeight(const std::string& key)
+{
+    auto font = GetOrLoadDefault(key);
+    return font ? font->GetLineHeight() : 32.0f;
+}
+
 // RHIコマンドリストを使って、色・倍率・揃え指定ありの2D文字列を描画する。
 void FontManager::DrawFormat(
     ICommandList* commandList,

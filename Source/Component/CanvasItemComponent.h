@@ -1,4 +1,4 @@
-﻿// CanvasItemComponent の ECS コンポーネント定義をまとめます。
+﻿// UI 要素の描画順、入力可否、スクリーン固定/ワールド配置の描画モードを保持する。
 #pragma once
 
 struct CanvasItemComponent
@@ -9,4 +9,5 @@ struct CanvasItemComponent
     bool interactable = true;
     bool pixelSnap = false;
     bool lockAspect = false;
+    bool screenSpaceOverlay = true;
 };

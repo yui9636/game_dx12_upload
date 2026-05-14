@@ -12,16 +12,16 @@
 #include "Sprite/SpriteRenderer.h"
 #include "System/ResourceManager.h"
 #include "UI/UIHitTestSystem.h"
+#include "UI/UI2DLayoutResolver.h"
 
 class UI2DSpriteRenderSystem
 {
 public:
-    static void RenderSprites(const std::vector<UI2DSpritePacket>& packets, const RenderContext& rc)
+    static void RenderSprites(const std::vector<UI2DSpritePacket>& packets,
+                              const std::vector<UI2DLayoutNode>& layoutNodes,
+                              const RenderContext& rc)
     {
         if (packets.empty() || !rc.commandList || rc.displayWidth <= 1 || rc.displayHeight <= 1) {
-            return;
-        }
-        if (std::fabs(rc.projectionMatrix._34) > 0.0001f) {
             return;
         }
 
@@ -31,6 +31,7 @@ public:
             static_cast<float>(rc.displayWidth),
             static_cast<float>(rc.displayHeight)
         };
+        UI2DLayoutResolver layoutResolver(layoutNodes, rc);
 
         for (const UI2DSpritePacket& packet : packets) {
             auto texture = ResourceManager::Instance().GetTexture(packet.textureAssetPath);
@@ -48,11 +49,18 @@ public:
             rect.pivot = packet.pivot;
 
             std::array<DirectX::XMFLOAT2, 4> corners{};
-            if (!UIHitTestSystem::ComputeScreenCorners(transform, rect, viewRect, rc.viewMatrix, rc.projectionMatrix, corners)) {
-                continue;
+            bool pixelSnap = packet.pixelSnap;
+            bool screenSpaceOverlay = packet.screenSpaceOverlay;
+            if (!layoutResolver.ResolveCorners(packet.entity, corners, pixelSnap, screenSpaceOverlay)) {
+                if (packet.screenSpaceOverlay) {
+                    continue;
+                }
+                if (!UIHitTestSystem::ComputeScreenCorners(transform, rect, viewRect, rc.viewMatrix, rc.projectionMatrix, corners)) {
+                    continue;
+                }
             }
 
-            if (packet.pixelSnap || rc.cameraPixelSnap) {
+            if (pixelSnap || (screenSpaceOverlay && rc.cameraPixelSnap)) {
                 for (auto& corner : corners) {
                     corner.x = std::round(corner.x);
                     corner.y = std::round(corner.y);

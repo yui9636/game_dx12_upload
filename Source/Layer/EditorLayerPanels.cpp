@@ -484,9 +484,8 @@ void EditorLayer::DrawGameView()
         }
 
         ImVec2 viewportSize = ImGui::GetContentRegionAvail();
-        m_gameViewSize = { viewportSize.x, viewportSize.y };
 
-        ITexture* gameTexture = m_gameViewTexture ? m_gameViewTexture : m_sceneViewTexture;
+        ITexture* gameTexture = m_gameViewTexture;
         void* gameTextureId = nullptr;
         if (gameTexture) {
             gameTextureId = ImGuiRenderer::GetTextureID(gameTexture);
@@ -541,6 +540,7 @@ void EditorLayer::DrawGameView()
 
         const ImVec2 imageMin = ImGui::GetCursorScreenPos();
         m_gameViewRect = { imageMin.x, imageMin.y, imageSize.x, imageSize.y };
+        m_gameViewSize = { imageSize.x, imageSize.y };
 
         if (gameTextureId) {
             ImGui::Image((ImTextureID)gameTextureId, imageSize);

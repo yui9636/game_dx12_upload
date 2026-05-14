@@ -296,7 +296,8 @@ struct ComponentMeta<CanvasItemComponent> {
         MakeField("visible", &CanvasItemComponent::visible),
         MakeField("interactable", &CanvasItemComponent::interactable),
         MakeField("pixelSnap", &CanvasItemComponent::pixelSnap),
-        MakeField("lockAspect", &CanvasItemComponent::lockAspect)
+        MakeField("lockAspect", &CanvasItemComponent::lockAspect),
+        MakeField("screenSpaceOverlay", &CanvasItemComponent::screenSpaceOverlay)
     );
 };
 

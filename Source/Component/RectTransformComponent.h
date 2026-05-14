@@ -1,4 +1,4 @@
-﻿// RectTransformComponent の ECS コンポーネント定義をまとめます。
+﻿// 2D 矩形のアンカー、サイズ、ピボットを保持する。HUD では画面、ワールドスプライトでは矩形サイズとして使う。
 #pragma once
 
 #include <DirectXMath.h>

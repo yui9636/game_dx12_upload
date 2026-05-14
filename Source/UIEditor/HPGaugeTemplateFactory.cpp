@@ -15,7 +15,7 @@
 
 namespace
 {
-// TemplatePreset は char/char/targetMode/size を中心に、実行時やエディターで共有する状態を保持する。
+// テンプレート名、配置ヒント、対象 HP、基準サイズをまとめてプリセット化する。
     struct TemplatePreset
     {
         const char* name;
@@ -31,10 +31,10 @@ namespace
     {
         switch (kind) {
         case UIEditorTemplateKind::BossHP:
-            return { "BossHP_Widget", "Recommended Level placement: top center", HPGaugeTargetMode::FirstBoss, { 760.0f, 46.0f }, HPGaugeTextFormat::LabelCurrentMax, "BOSS", 22.0f };
+            return { "BossHP_Widget", "Placement is assigned in Level Editor", HPGaugeTargetMode::FirstBoss, { 760.0f, 46.0f }, HPGaugeTextFormat::LabelCurrentMax, "BOSS", 22.0f };
         case UIEditorTemplateKind::PlayerHP:
         default:
-            return { "PlayerHP_Widget", "Recommended Level placement: top left", HPGaugeTargetMode::FirstPlayer, { 440.0f, 56.0f }, HPGaugeTextFormat::CurrentMax, "HP", 24.0f };
+            return { "PlayerHP_Widget", "Placement is assigned in Level Editor", HPGaugeTargetMode::FirstPlayer, { 440.0f, 56.0f }, HPGaugeTextFormat::CurrentMax, "HP", 24.0f };
         }
     }
 
@@ -63,6 +63,7 @@ namespace
         CanvasItemComponent item{};
         item.orderInLayer = order;
         item.pixelSnap = true;
+        item.screenSpaceOverlay = true;
         return item;
     }
 
@@ -85,6 +86,22 @@ namespace
         std::get<std::optional<RectTransformComponent>>(node.components) = MakeRect(position, size);
         std::get<std::optional<CanvasItemComponent>>(node.components) = MakeCanvasItem(order);
         return node;
+    }
+
+    void ApplyTemplateAuthoringRoot(EntitySnapshot::Node& root)
+    {
+        auto& rect = std::get<std::optional<RectTransformComponent>>(root.components);
+        auto& transform = std::get<std::optional<TransformComponent>>(root.components);
+        if (!rect.has_value() || !transform.has_value()) {
+            return;
+        }
+
+        rect->anchorMin = { 0.5f, 0.5f };
+        rect->anchorMax = { 0.5f, 0.5f };
+        rect->pivot = { 0.5f, 0.5f };
+        rect->anchoredPosition = { 0.0f, 0.0f };
+        transform->localPosition = { rect->anchoredPosition.x, rect->anchoredPosition.y, 0.0f };
+        transform->isDirty = true;
     }
 
     SpriteComponent MakeSprite(const DirectX::XMFLOAT4& tint)
@@ -195,6 +212,7 @@ namespace UIEditorTemplates
         snapshot.rootLocalID = 0;
 
         EntitySnapshot::Node root = MakeNode(0, EntitySnapshot::kInvalidLocalID, preset.name, { 0.0f, 0.0f }, preset.size, 100);
+        ApplyTemplateAuthoringRoot(root);
         std::get<std::optional<HPGaugeBindingComponent>>(root.components) = MakeBinding(preset.targetMode);
 
         EntitySnapshot::Node background = MakeNode(1, 0, "Background", { 0.0f, 0.0f }, barSize, 0);

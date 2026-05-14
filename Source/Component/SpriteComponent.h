@@ -1,4 +1,4 @@
-﻿// SpriteComponent の ECS コンポーネント定義をまとめます。
+﻿// 画像アセットと色を持つ 2D スプライト。CanvasItem が無い場合は Transform のワールド座標へ描画する。
 #pragma once
 
 #include <DirectXMath.h>
