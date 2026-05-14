@@ -8,6 +8,9 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <Windows.h>
+#include <commdlg.h>
+#pragma comment(lib, "comdlg32.lib")
 #include <functional>
 #include <iterator>
 #include <limits>
@@ -1188,8 +1191,35 @@ bool UIEditorPanel::SaveSelectedAsPrefab()
         return false;
     }
 
-    std::filesystem::path outPath;
-    if (!PrefabSystem::SaveEntityAsPrefab(root, *m_registry, PrefabDirectory(), &outPath)) {
+    wchar_t fileBuf[MAX_PATH] = {};
+    {
+        const std::filesystem::path defaultDir = PrefabDirectory();
+        std::error_code ec;
+        std::filesystem::create_directories(defaultDir, ec);
+        const std::wstring defaultDirW = defaultDir.wstring();
+
+        std::string defaultName = "NewPrefab";
+        if (auto* n = m_registry->GetComponent<NameComponent>(root)) {
+            defaultName = n->name;
+        }
+        const std::wstring defaultNameW(defaultName.begin(), defaultName.end());
+        wcsncpy_s(fileBuf, (defaultNameW + L".prefab").c_str(), MAX_PATH - 1);
+
+        OPENFILENAMEW ofn{};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = L"Prefab\0*.prefab\0All Files\0*.*\0";
+        ofn.lpstrDefExt = L"prefab";
+        ofn.lpstrFile = fileBuf;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.lpstrInitialDir = defaultDirW.c_str();
+        ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+        if (!GetSaveFileNameW(&ofn)) {
+            return false;
+        }
+    }
+
+    const std::filesystem::path outPath(fileBuf);
+    if (!PrefabSystem::SaveEntityToPrefabPath(root, *m_registry, outPath)) {
         LOG_WARN("[UIEditor] Failed to save HP Gauge prefab.");
         SetStatusMessage("Failed to save HP Gauge prefab.", false);
         return false;
