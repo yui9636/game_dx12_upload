@@ -68,7 +68,7 @@ struct HPGaugeFillComponent
 
     bool useDisplayedRatio = true;
     bool useDelayedRatio = false;
-    bool hideWhenNoTarget = true;
+    bool hideWhenNoTarget = false;
     bool hideWhenFull = false;
 
     float minVisibleRatio = 0.0f;

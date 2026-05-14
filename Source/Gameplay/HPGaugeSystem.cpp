@@ -270,9 +270,13 @@ void HPGaugeSystem::Update(Registry& registry, float deltaTime)
             return;
         }
 
-        float ratio = fill.useDelayedRatio ? binding->delayedRatio : binding->targetRatio;
-        if (fill.useDisplayedRatio && !fill.useDelayedRatio) {
+        float ratio;
+        if (fill.useDelayedRatio) {
+            ratio = binding->delayedRatio;
+        } else if (fill.useDisplayedRatio) {
             ratio = binding->displayedRatio;
+        } else {
+            ratio = binding->targetRatio;
         }
         fill.runtimeRatio = (ratio <= fill.minVisibleRatio) ? 0.0f : Clamp01(ratio);
         SetCanvasVisible(registry, entity, ShouldShowFill(*binding, fill));

@@ -39,7 +39,7 @@ struct UIEditorViewState
     DirectX::XMFLOAT2 referenceResolution = { 1920.0f, 1080.0f };
     DirectX::XMFLOAT2 pan = { 0.0f, 0.0f };
     float zoom = 1.0f;
-    float gridSize = 120.0f;
+    float gridSize = 20.0f;
     bool showSafeArea = true;
     bool showGrid = true;
     bool snapToGrid = true;

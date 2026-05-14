@@ -43,6 +43,8 @@ private:
     Registry* m_registry = nullptr;
     EntityID m_selectedEntity = Entity::NULL_ID;
     EntityID m_selectedGaugeRoot = Entity::NULL_ID;
+    EntityID m_treeExpandTarget = Entity::NULL_ID;
+    EntityID m_pendingFrameEntity = Entity::NULL_ID;
     UIEditorViewState m_viewState;
     UIEditorHPPreviewState m_previewState;
     UIEditorInteractionState m_interactionState;

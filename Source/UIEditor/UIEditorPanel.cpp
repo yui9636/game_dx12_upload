@@ -103,24 +103,7 @@ namespace
         return snapshot;
     }
 
-    std::vector<std::filesystem::path> CollectPrefabs()
-    {
-        std::vector<std::filesystem::path> paths;
-        const std::filesystem::path dir = PrefabDirectory();
 
-        std::error_code ec;
-        if (!std::filesystem::exists(dir, ec)) {
-            return paths;
-        }
-
-        for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
-            if (it->is_regular_file(ec) && it->path().extension() == ".prefab") {
-                paths.push_back(it->path());
-            }
-        }
-        std::sort(paths.begin(), paths.end());
-        return paths;
-    }
 
     template <typename T>
     bool HasComponentChange(const T& before, const T& after)
@@ -221,7 +204,7 @@ namespace
 
     float ClampZoom(float zoom)
     {
-        return (std::max)(0.10f, (std::min)(4.0f, zoom));
+        return (std::max)(1.0f, (std::min)(8.0f, zoom));
     }
 
     bool ContainsPoint(const ImVec2& min, const ImVec2& max, const ImVec2& point)
@@ -395,22 +378,20 @@ void UIEditorPanel::DrawWorkspace(Registry* registry, bool* outFocused)
 
     DrawToolbar();
 
-    const float prefabBarHeight = 58.0f;
-    const float mainHeight = (std::max)(1.0f, ImGui::GetContentRegionAvail().y - prefabBarHeight);
-    ImGui::BeginChild("##UIEditorMain", ImVec2(0.0f, mainHeight), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("##UIEditorMain", ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_NoScrollbar);
 
     const float paletteWidth = 240.0f;
     const float propertiesWidth = 330.0f;
     const float spacing = ImGui::GetStyle().ItemSpacing.x;
 
-    ImGui::BeginChild("##UIEditorPalette", ImVec2(paletteWidth, 0.0f), true);
+    ImGui::BeginChild("##UIEditorLeft", ImVec2(paletteWidth, 0.0f), false);
     DrawPalette();
+    DrawWidgetTree();
     ImGui::EndChild();
 
     ImGui::SameLine(0.0f, spacing);
     ImGui::BeginChild("##UIEditorCenter", ImVec2((std::max)(260.0f, ImGui::GetContentRegionAvail().x - propertiesWidth - spacing), 0.0f), false);
     DrawDesignerView();
-    DrawWidgetTree();
     ImGui::EndChild();
 
     ImGui::SameLine(0.0f, spacing);
@@ -420,54 +401,12 @@ void UIEditorPanel::DrawWorkspace(Registry* registry, bool* outFocused)
 
     ImGui::EndChild();
 
-    ImGui::BeginChild("##UIEditorPrefabBar", ImVec2(0.0f, 0.0f), true);
-    DrawPrefabBar();
-    ImGui::EndChild();
-
     ImGui::End();
 }
 
 void UIEditorPanel::DrawToolbar()
 {
-    const EntityID canvas = FindCanvas();
     m_viewState.zoom = ClampZoom(m_viewState.zoom);
-    ImGui::TextUnformatted(ICON_FA_LAYER_GROUP " UI Editor");
-    ImGui::SameLine();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
-    ImGui::Text("Authoring Canvas: %s", (m_registry ? GetName(*m_registry, canvas, "Not created").c_str() : "No Registry"));
-    ImGui::SameLine();
-    ImGui::TextDisabled("Prefab authoring only. Place saved prefabs in Level Editor.");
-    ImGui::SameLine();
-    ImGui::Checkbox("Snap", &m_viewState.snapToGrid);
-    ImGui::SameLine();
-    ImGui::Checkbox("Safe Area", &m_viewState.showSafeArea);
-    ImGui::SameLine();
-    ImGui::Checkbox("Grid", &m_viewState.showGrid);
-    ImGui::SameLine();
-    ImGui::Text("Zoom: %.0f%%", m_viewState.zoom * 100.0f);
-    ImGui::SameLine();
-    if (ImGui::SmallButton("100%")) {
-        m_viewState.zoom = 1.0f;
-        m_viewState.pan = { 0.0f, 0.0f };
-        SetStatusMessage("Designer view reset to full canvas.", true, 2.5f);
-    }
-    ImGui::SameLine();
-    const std::array<float, 5> gridSizes = { 10.0f, 20.0f, 40.0f, 80.0f, 120.0f };
-    ImGui::SetNextItemWidth(84.0f);
-    if (ImGui::BeginCombo("Grid", (std::to_string(static_cast<int>(m_viewState.gridSize)) + "px").c_str())) {
-        for (float gridSize : gridSizes) {
-            const bool selected = std::fabs(m_viewState.gridSize - gridSize) < 0.001f;
-            if (ImGui::Selectable((std::to_string(static_cast<int>(gridSize)) + "px").c_str(), selected)) {
-                m_viewState.gridSize = gridSize;
-            }
-            if (selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-    ImGui::Separator();
     DrawStatusLine();
 }
 
@@ -477,17 +416,7 @@ void UIEditorPanel::DrawStatusLine()
         m_interactionState.statusTimer = (std::max)(0.0f, m_interactionState.statusTimer - ImGui::GetIO().DeltaTime);
     }
 
-    const EntityID root = FindSelectedGaugeRoot();
-    ImGui::Text("Selected: %s", (m_registry ? GetName(*m_registry, m_selectedEntity, "None").c_str() : "None"));
-    ImGui::SameLine();
-    ImGui::TextDisabled("|");
-    ImGui::SameLine();
-    ImGui::Text("Gauge Root: %s", (m_registry ? GetName(*m_registry, root, "None").c_str() : "None"));
-
     if (!m_interactionState.statusMessage.empty() && m_interactionState.statusTimer > 0.0f) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("|");
-        ImGui::SameLine();
         const ImVec4 color = m_interactionState.statusSuccess ? ImVec4(0.45f, 0.88f, 0.55f, 1.0f) : ImVec4(1.0f, 0.45f, 0.38f, 1.0f);
         ImGui::TextColored(color, "%s", m_interactionState.statusMessage.c_str());
     }
@@ -495,30 +424,23 @@ void UIEditorPanel::DrawStatusLine()
 
 void UIEditorPanel::DrawPalette()
 {
-    ImGui::TextUnformatted("Templates");
-    if (ImGui::Button("Template...", ImVec2(-1.0f, 0.0f))) {
-        ImGui::OpenPopup("UIEditorTemplatePopup");
+    ImGui::SeparatorText("Templates");
+    if (ImGui::Button("Player HP", ImVec2(-1.0f, 0.0f))) {
+        CreateTemplate(UIEditorTemplateKind::PlayerHP);
     }
-    if (ImGui::BeginPopup("UIEditorTemplatePopup")) {
-        if (ImGui::MenuItem("Player HP")) {
-            CreateTemplate(UIEditorTemplateKind::PlayerHP);
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s", UIEditorTemplates::GetTemplatePlacementHint(UIEditorTemplateKind::PlayerHP));
-        }
-        if (ImGui::MenuItem("Boss HP")) {
-            CreateTemplate(UIEditorTemplateKind::BossHP);
-        }
-        if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("%s", UIEditorTemplates::GetTemplatePlacementHint(UIEditorTemplateKind::BossHP));
-        }
-        ImGui::EndPopup();
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", UIEditorTemplates::GetTemplatePlacementHint(UIEditorTemplateKind::PlayerHP));
+    }
+    if (ImGui::Button("Boss HP", ImVec2(-1.0f, 0.0f))) {
+        CreateTemplate(UIEditorTemplateKind::BossHP);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", UIEditorTemplates::GetTemplatePlacementHint(UIEditorTemplateKind::BossHP));
     }
 
     ImGui::Spacing();
     ImGui::SeparatorText("Parts");
-    const std::array<UIEditorPartKind, 6> parts = {
-        UIEditorPartKind::Canvas,
+    const std::array<UIEditorPartKind, 5> parts = {
         UIEditorPartKind::GaugeRoot,
         UIEditorPartKind::Image,
         UIEditorPartKind::FillImage,
@@ -530,105 +452,79 @@ void UIEditorPanel::DrawPalette()
             CreatePart(part);
         }
     }
-
-    ImGui::Spacing();
-    ImGui::SeparatorText("Saved Prefabs");
-    ImGui::TextWrapped("Saved UI prefabs are placed from the Level Editor / SceneView.");
-    const std::vector<std::filesystem::path> prefabs = CollectPrefabs();
-    if (prefabs.empty()) {
-        ImGui::TextDisabled("No prefabs in Data/UI/Prefabs.");
-    } else {
-        for (const std::filesystem::path& path : prefabs) {
-            if (ImGui::Selectable(path.filename().string().c_str(), m_prefabState.lastPrefabPath == path)) {
-                m_prefabState.lastPrefabPath = path;
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Use Asset Browser or Level Editor to place:\n%s", path.string().c_str());
-            }
-        }
-    }
 }
 
 void UIEditorPanel::DrawDesignerView()
 {
-    const float treeHeight = 170.0f;
-    const ImVec2 avail = ImGui::GetContentRegionAvail();
-    ImGui::BeginChild("##UIEditorDesigner", ImVec2(0.0f, (std::max)(180.0f, avail.y - treeHeight)), true, ImGuiWindowFlags_NoScrollbar);
-    ImGui::TextUnformatted("Designer View");
-    ImGui::SameLine();
-    ImGui::TextDisabled("Wheel: zoom | Middle/Space drag: pan | F: frame | Home: canvas | Alt-click: cycle overlap");
+    ImGui::BeginChild("##UIEditorDesigner", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_NoScrollbar);
 
     const ImVec2 canvasAvail = ImGui::GetContentRegionAvail();
-    const float fitScale = (std::min)(canvasAvail.x / m_viewState.referenceResolution.x, (canvasAvail.y - 8.0f) / m_viewState.referenceResolution.y);
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    const ImVec2 viewMax(cursor.x + canvasAvail.x, cursor.y + canvasAvail.y);
+    const ImVec2 viewCenter(cursor.x + canvasAvail.x * 0.5f, cursor.y + canvasAvail.y * 0.5f);
+
+    const float fitScale = (std::min)(canvasAvail.x / m_viewState.referenceResolution.x, canvasAvail.y / m_viewState.referenceResolution.y);
     m_viewState.zoom = ClampZoom(m_viewState.zoom);
     float scale = (std::max)(0.05f, fitScale * m_viewState.zoom);
     ImVec2 canvasSize(m_viewState.referenceResolution.x * scale, m_viewState.referenceResolution.y * scale);
-    const ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 origin(
-        cursor.x + (canvasAvail.x - canvasSize.x) * 0.5f,
-        cursor.y + (canvasAvail.y - canvasSize.y) * 0.5f);
+    ImVec2 origin(viewCenter.x - canvasSize.x * 0.5f, viewCenter.y - canvasSize.y * 0.5f);
     ImVec2 canvasMax(origin.x + canvasSize.x, origin.y + canvasSize.y);
 
     ImGuiIO& io = ImGui::GetIO();
     const bool designerHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-    if (designerHovered && ContainsPoint(origin, canvasMax, io.MousePos) && std::fabs(io.MouseWheel) > 0.0001f) {
-        const ImVec2 viewCenter(origin.x + canvasSize.x * 0.5f, origin.y + canvasSize.y * 0.5f);
-        const DirectX::XMFLOAT2 pointUnderCursor = {
-            (io.MousePos.x - viewCenter.x) / scale - m_viewState.pan.x,
-            -(io.MousePos.y - viewCenter.y) / scale - m_viewState.pan.y
-        };
-        const float zoomFactor = std::pow(1.12f, io.MouseWheel);
-        m_viewState.zoom = ClampZoom(m_viewState.zoom * zoomFactor);
+    if (designerHovered && ContainsPoint(cursor, viewMax, io.MousePos) && std::fabs(io.MouseWheel) > 0.0001f) {
+        m_viewState.zoom = ClampZoom(m_viewState.zoom * std::pow(1.12f, io.MouseWheel));
         scale = (std::max)(0.05f, fitScale * m_viewState.zoom);
         canvasSize = ImVec2(m_viewState.referenceResolution.x * scale, m_viewState.referenceResolution.y * scale);
-        origin = ImVec2(
-            cursor.x + (canvasAvail.x - canvasSize.x) * 0.5f,
-            cursor.y + (canvasAvail.y - canvasSize.y) * 0.5f);
+        origin = ImVec2(viewCenter.x - canvasSize.x * 0.5f, viewCenter.y - canvasSize.y * 0.5f);
         canvasMax = ImVec2(origin.x + canvasSize.x, origin.y + canvasSize.y);
-        const ImVec2 newViewCenter(origin.x + canvasSize.x * 0.5f, origin.y + canvasSize.y * 0.5f);
-        m_viewState.pan.x = (io.MousePos.x - newViewCenter.x) / scale - pointUnderCursor.x;
-        m_viewState.pan.y = -(io.MousePos.y - newViewCenter.y) / scale - pointUnderCursor.y;
     }
 
     ImDrawList* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(origin, canvasMax, IM_COL32(22, 24, 29, 255));
-    draw->AddRect(origin, canvasMax, IM_COL32(90, 96, 112, 255));
-
-    if (m_viewState.showSafeArea) {
-        const float marginX = 64.0f * scale;
-        const float marginY = 36.0f * scale;
-        draw->AddRect(
-            ImVec2(origin.x + marginX, origin.y + marginY),
-            ImVec2(origin.x + canvasSize.x - marginX, origin.y + canvasSize.y - marginY),
-            IM_COL32(80, 170, 255, 120));
-    }
+    draw->AddRectFilled(cursor, viewMax, IM_COL32(22, 24, 29, 255));
 
     if (m_viewState.showGrid) {
         const float grid = (std::max)(8.0f, m_viewState.gridSize);
-        for (float x = grid; x < m_viewState.referenceResolution.x; x += grid) {
-            const float sx = origin.x + x * scale;
-            draw->AddLine(ImVec2(sx, origin.y), ImVec2(sx, canvasMax.y), IM_COL32(255, 255, 255, 18));
-        }
-        for (float y = grid; y < m_viewState.referenceResolution.y; y += grid) {
-            const float sy = origin.y + y * scale;
-            draw->AddLine(ImVec2(origin.x, sy), ImVec2(canvasMax.x, sy), IM_COL32(255, 255, 255, 18));
+        const float gridPx = grid * scale;
+        if (gridPx >= 3.0f) {
+            draw->PushClipRect(cursor, viewMax, true);
+            const float xMin = (cursor.x - origin.x) / scale - m_viewState.pan.x;
+            const float xMax = (viewMax.x - origin.x) / scale - m_viewState.pan.x;
+            for (float x = std::floor(xMin / grid) * grid; x <= xMax + grid; x += grid) {
+                const float sx = origin.x + (x + m_viewState.pan.x) * scale;
+                draw->AddLine(ImVec2(sx, cursor.y), ImVec2(sx, viewMax.y), IM_COL32(255, 255, 255, 18));
+            }
+            const float yMin = (cursor.y - origin.y) / scale + m_viewState.pan.y;
+            const float yMax = (viewMax.y - origin.y) / scale + m_viewState.pan.y;
+            for (float y = std::floor(yMin / grid) * grid; y <= yMax + grid; y += grid) {
+                const float sy = origin.y + (y - m_viewState.pan.y) * scale;
+                draw->AddLine(ImVec2(cursor.x, sy), ImVec2(viewMax.x, sy), IM_COL32(255, 255, 255, 18));
+            }
+            draw->PopClipRect();
         }
     }
 
     std::vector<DesignerScreenRect> screenRects;
     if (m_registry) {
-        HierarchySystem hierarchySystem;
-        hierarchySystem.Update(*m_registry);
-
         const EntityID canvas = FindCanvas();
         if (!Entity::IsNull(canvas)) {
             const std::vector<UIEditorRect> entries = UIEditor::UIRectEvaluator::CollectCanvasWidgets(*m_registry, canvas);
             screenRects = BuildDesignerScreenRects(*m_registry, entries, m_viewState, origin, scale);
 
-            ImGui::SetCursorScreenPos(origin);
-            ImGui::InvisibleButton("##UIEditorDesignerSurface", canvasSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonMiddle);
+            if (!Entity::IsNull(m_pendingFrameEntity)) {
+                if (const DesignerScreenRect* fr = FindDesignerRect(screenRects, m_pendingFrameEntity)) {
+                    const float desiredPixels = (std::max)(180.0f, (std::min)(canvasAvail.x, canvasAvail.y) * 0.45f);
+                    const float fitPixels = (std::max)(1.0f, (std::max)(fr->entry.size.x, fr->entry.size.y)) * fitScale;
+                    m_viewState.zoom = ClampZoom((std::max)(1.0f, desiredPixels / (std::max)(1.0f, fitPixels)));
+                    m_viewState.pan = { -fr->entry.center.x, -fr->entry.center.y };
+                }
+                m_pendingFrameEntity = Entity::NULL_ID;
+            }
+
+            ImGui::SetCursorScreenPos(cursor);
+            ImGui::InvisibleButton("##UIEditorDesignerSurface", canvasAvail, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonMiddle);
             const bool surfaceHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-            const bool inCanvas = surfaceHovered && ContainsPoint(origin, canvasMax, io.MousePos);
+            const bool inCanvas = surfaceHovered && ContainsPoint(cursor, viewMax, io.MousePos);
 
             m_interactionState.hoveredEntity = Entity::NULL_ID;
             std::vector<EntityID> candidates;
@@ -847,7 +743,7 @@ void UIEditorPanel::DrawDesignerView()
         } else {
             const char* text = "Create a Canvas, then add a Template or Parts.";
             const ImVec2 textSize = ImGui::CalcTextSize(text);
-            draw->AddText(ImVec2(origin.x + (canvasSize.x - textSize.x) * 0.5f, origin.y + (canvasSize.y - textSize.y) * 0.5f), IM_COL32(190, 195, 205, 255), text);
+            draw->AddText(ImVec2(viewCenter.x - textSize.x * 0.5f, viewCenter.y - textSize.y * 0.5f), IM_COL32(190, 195, 205, 255), text);
         }
     }
 
@@ -880,6 +776,20 @@ void UIEditorPanel::DrawWidgetTree()
 
         auto* hierarchy = m_registry->GetComponent<HierarchyComponent>(entity);
         const bool hasChildren = hierarchy && !Entity::IsNull(hierarchy->firstChild);
+
+        if (hasChildren && !Entity::IsNull(m_treeExpandTarget) && entity != m_treeExpandTarget) {
+            EntityID check = m_treeExpandTarget;
+            while (!Entity::IsNull(check) && m_registry->IsAlive(check)) {
+                auto* h = m_registry->GetComponent<HierarchyComponent>(check);
+                if (!h) break;
+                if (h->parent == entity) {
+                    ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+                    break;
+                }
+                check = h->parent;
+            }
+        }
+
         ImGuiTreeNodeFlags flags =
             ImGuiTreeNodeFlags_OpenOnArrow |
             ImGuiTreeNodeFlags_SpanAvailWidth |
@@ -917,6 +827,7 @@ void UIEditorPanel::DrawWidgetTree()
     };
 
     drawNode(canvas);
+    m_treeExpandTarget = Entity::NULL_ID;
     ImGui::EndChild();
 }
 
@@ -934,19 +845,6 @@ void UIEditorPanel::DrawProperties()
     }
 
     const EntityID gaugeRoot = FindSelectedGaugeRoot();
-    ImGui::SeparatorText("Selection Summary");
-    ImGui::Text("Entity: %s", GetName(*m_registry, m_selectedEntity).c_str());
-    ImGui::Text("Parent: %s", GetName(*m_registry, GetParent(*m_registry, m_selectedEntity), "None").c_str());
-    ImGui::Text("HP Gauge Root: %s", GetName(*m_registry, gaugeRoot, "None").c_str());
-    if (!Entity::IsNull(gaugeRoot) && m_registry->IsAlive(gaugeRoot)) {
-        if (auto* prefab = m_registry->GetComponent<PrefabInstanceComponent>(gaugeRoot)) {
-            ImGui::Text("Prefab: %s%s", prefab->prefabAssetPath.c_str(), prefab->hasOverrides ? " (override)" : "");
-        } else {
-            ImGui::TextDisabled("Prefab: None");
-        }
-    } else {
-        ImGui::TextDisabled("Prefab: None");
-    }
     DrawPreviewHPPanel(gaugeRoot);
 
     if (auto* name = m_registry->GetComponent<NameComponent>(m_selectedEntity)) {
@@ -1057,17 +955,26 @@ void UIEditorPanel::DrawProperties()
 
         HPGaugeFillComponent before = *fill;
         bool changed = false;
-        changed |= ImGui::Checkbox("Use Displayed Ratio", &fill->useDisplayedRatio);
-        changed |= ImGui::Checkbox("Use Delayed Ratio", &fill->useDelayedRatio);
+        if (ImGui::Checkbox("Use Displayed Ratio", &fill->useDisplayedRatio)) {
+            if (fill->useDisplayedRatio) fill->useDelayedRatio = false;
+            changed = true;
+        }
+        if (ImGui::Checkbox("Use Delayed Ratio", &fill->useDelayedRatio)) {
+            if (fill->useDelayedRatio) fill->useDisplayedRatio = false;
+            changed = true;
+        }
         changed |= ImGui::Checkbox("Hide When No Target", &fill->hideWhenNoTarget);
         changed |= ImGui::Checkbox("Hide When Full", &fill->hideWhenFull);
         changed |= ImGui::DragFloat("Min Visible Ratio", &fill->minVisibleRatio, 0.01f, 0.0f, 1.0f);
-        changed |= ImGui::ColorEdit4("Fixed", &fill->fixedColor.x);
-        changed |= ImGui::ColorEdit4("High", &fill->highColor.x);
-        changed |= ImGui::ColorEdit4("Mid", &fill->midColor.x);
-        changed |= ImGui::ColorEdit4("Low", &fill->lowColor.x);
-        changed |= ImGui::DragFloat("Mid Threshold", &fill->midThreshold, 0.01f, 0.0f, 1.0f);
-        changed |= ImGui::DragFloat("Low Threshold", &fill->lowThreshold, 0.01f, 0.0f, 1.0f);
+        if (fill->colorMode == HPGaugeColorMode::Fixed) {
+            changed |= ImGui::ColorEdit4("Color", &fill->fixedColor.x);
+        } else {
+            changed |= ImGui::ColorEdit4("High", &fill->highColor.x);
+            changed |= ImGui::ColorEdit4("Mid", &fill->midColor.x);
+            changed |= ImGui::ColorEdit4("Low", &fill->lowColor.x);
+            changed |= ImGui::DragFloat("Mid Threshold", &fill->midThreshold, 0.01f, 0.0f, 1.0f);
+            changed |= ImGui::DragFloat("Low Threshold", &fill->lowThreshold, 0.01f, 0.0f, 1.0f);
+        }
         if (changed) {
             RecordComponentChange(*m_registry, m_selectedEntity, before, *fill);
         }
@@ -1114,6 +1021,9 @@ void UIEditorPanel::DrawProperties()
             RecordComponentChange(*m_registry, m_selectedEntity, before, *gaugeText);
         }
     }
+
+    ImGui::Separator();
+    DrawPrefabBar();
 }
 
 void UIEditorPanel::DrawPreviewHPPanel(EntityID gaugeRoot)
@@ -1170,33 +1080,12 @@ void UIEditorPanel::DrawPreviewHPPanel(EntityID gaugeRoot)
 
 void UIEditorPanel::DrawPrefabBar()
 {
-    const EntityID root = FindSelectedGaugeRoot();
-    const bool hasRoot = !Entity::IsNull(root);
-    ImGui::Text("Prefab Target: %s", hasRoot ? GetName(*m_registry, root).c_str() : "None");
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!hasRoot);
-    if (ImGui::Button("Save HP Gauge Prefab")) {
+    const EntityID saveRoot = FindSelectedGaugeRoot();
+    ImGui::BeginDisabled(Entity::IsNull(saveRoot));
+    if (ImGui::Button("Save", ImVec2(-1.0f, 0.0f))) {
         SaveSelectedAsPrefab();
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Apply")) {
-        ApplySelectedPrefab();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Revert")) {
-        RevertSelectedPrefab();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Unpack")) {
-        UnpackSelectedPrefab();
-    }
     ImGui::EndDisabled();
-    ImGui::SameLine();
-    ImGui::TextDisabled("Place saved prefabs from Level Editor / SceneView.");
-
-    if (!m_prefabState.lastPrefabPath.empty()) {
-        ImGui::TextDisabled("%s", m_prefabState.lastPrefabPath.string().c_str());
-    }
 }
 
 EntityID UIEditorPanel::FindOrCreateCanvas()
@@ -1227,14 +1116,8 @@ EntityID UIEditorPanel::CreateTemplate(UIEditorTemplateKind kind)
     EntityID root = ExecuteCreateSnapshot(*m_registry, UIEditorTemplates::BuildTemplateSnapshot(kind), canvas, "Create HP Gauge Template");
     if (!Entity::IsNull(root)) {
         SelectEntity(root);
-        HierarchySystem hierarchySystem;
-        hierarchySystem.Update(*m_registry);
-        UIEditorRect rect;
-        if (UIEditor::UIRectEvaluator::Evaluate(*m_registry, root, rect)) {
-            m_viewState.pan = { -rect.center.x, -rect.center.y };
-            m_viewState.zoom = (std::max)(1.0f, m_viewState.zoom);
-        }
-        SetStatusMessage(std::string(UIEditorTemplates::GetTemplateName(kind)) + " template created. Edit parts, then save as prefab.");
+        m_pendingFrameEntity = root;
+        SetStatusMessage(std::string(UIEditorTemplates::GetTemplateName(kind)) + " created.");
     }
     return root;
 }
@@ -1466,31 +1349,23 @@ EntityID UIEditorPanel::FindCanvas() const
         return Entity::NULL_ID;
     }
 
-    EntityID fallback = Entity::NULL_ID;
     for (Archetype* archetype : m_registry->GetAllArchetypes()) {
         for (EntityID entity : archetype->GetEntities()) {
             if (!m_registry->IsAlive(entity)) {
                 continue;
             }
-
-            auto* rect = m_registry->GetComponent<RectTransformComponent>(entity);
-            auto* canvas = m_registry->GetComponent<CanvasItemComponent>(entity);
-            if (!rect || !canvas) {
+            if (!m_registry->GetComponent<RectTransformComponent>(entity) ||
+                !m_registry->GetComponent<CanvasItemComponent>(entity)) {
                 continue;
             }
-
             if (auto* name = m_registry->GetComponent<NameComponent>(entity)) {
-                if (name->name == UIEditorTemplates::kAuthoringCanvasName || name->name == "BattleHUD_Canvas") {
+                if (name->name == UIEditorTemplates::kAuthoringCanvasName) {
                     return entity;
                 }
             }
-
-            if (Entity::IsNull(fallback) && !m_registry->GetComponent<HPGaugeBindingComponent>(entity)) {
-                fallback = entity;
-            }
         }
     }
-    return fallback;
+    return Entity::NULL_ID;
 }
 
 void UIEditorPanel::SelectEntity(EntityID entity)
@@ -1500,6 +1375,7 @@ void UIEditorPanel::SelectEntity(EntityID entity)
     }
 
     m_selectedEntity = entity;
+    m_treeExpandTarget = entity;
     const EntityID root = ResolveGaugeRoot(entity);
     if (!Entity::IsNull(root)) {
         m_selectedGaugeRoot = root;
