@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <filesystem>
 #include <fstream>
@@ -10,6 +10,7 @@
 #include "Component/PrefabInstanceComponent.h"
 #include "Undo/EntitySnapshot.h"
 #include "Undo/IUndoAction.h"
+// DuplicateEntityAction は m_snapshot/m_parentEntity/m_liveRoot を中心に、実行時やエディターで共有する状態を保持する。
 
 class DuplicateEntityAction : public IUndoAction
 {

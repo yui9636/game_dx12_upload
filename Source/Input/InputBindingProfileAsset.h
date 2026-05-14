@@ -1,3 +1,4 @@
+﻿// InputBindingProfileAsset の入力処理関連宣言をまとめます。
 #pragma once
 #include <string>
 #include <vector>

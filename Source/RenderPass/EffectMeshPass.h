@@ -1,3 +1,4 @@
+﻿// EffectMeshPass のレンダーパス宣言をまとめます。
 #pragma once
 
 #include <memory>

@@ -1,9 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include "FrameGraphTypes.h"
-
-// ============================================================
-// ============================================================
+// レンダーパスの Setup 中に、読み書きするリソースを FrameGraph へ登録するための抽象インターフェース。
 class FrameGraphBuilder {
 public:
     virtual ~FrameGraphBuilder() = default;

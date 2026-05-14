@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 #include <memory>
@@ -7,6 +7,7 @@ class IShader;
 class IPipelineState;
 class IResourceFactory;
 
+// ボリュームフォグを生成し、ブラー後の結果を合成用リソースとして公開する描画パス。
 class VolumetricFogPass : public IRenderPass {
 public:
     VolumetricFogPass(IResourceFactory* factory);
@@ -24,9 +25,6 @@ private:
 
     std::unique_ptr<IPipelineState> m_psoRaymarch;
     std::unique_ptr<IPipelineState> m_psoBlur;
-
-    // ====================================================
-    // ====================================================
     ResourceHandle m_hGBuffer2;
     ResourceHandle m_hVolumetricFog;
     ResourceHandle m_hVolumetricFogBlur;

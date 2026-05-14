@@ -1,3 +1,4 @@
+﻿// CameraBehaviorComponent はカメラ挙動の選択状態を保持する。
 #pragma once
 #include "Entity/Entity.h"
 #include <DirectXMath.h>

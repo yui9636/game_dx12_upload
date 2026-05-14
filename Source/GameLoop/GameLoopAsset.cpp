@@ -1,4 +1,4 @@
-#include "GameLoopAsset.h"
+﻿#include "GameLoopAsset.h"
 
 #include <algorithm>
 #include <cctype>

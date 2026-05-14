@@ -1,42 +1,4 @@
-﻿//#include "GBufferPass.h"
-//#include "Graphics.h"
-//#include "Model/ModelRenderer.h"
-#include "Model/Model.h"
-//#include "RHI/ICommandList.h"
-//
-//void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
-//{
-//}
-//
-//
-//void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) {
-//    Graphics& g = Graphics::Instance();
-//
-//    // 1. GBufferをセット・クリア
-//    FrameBuffer* gbuffer = g.GetFrameBuffer(FrameBufferId::GBuffer);
-//    gbuffer->Clear(rc.commandList, 0.0f, 0.0f, 0.0f, 0.0f);
-//    gbuffer->SetRenderTargets(rc.commandList);
-//
-//    auto renderer = g.GetModelRenderer();
-//    if (!renderer) return;
-//    for (const auto& packet : queue.opaquePackets) {
-//        if (!packet.model) continue;
-//
-//        std::shared_ptr<Model> sharedModel(packet.model, [](Model*) {});
-//
-//        renderer->Draw(
-//            ShaderId::GBufferPBR, sharedModel, packet.worldMatrix, packet.prevWorldMatrix,
-//            packet.baseColor, packet.metallic, packet.roughness, packet.emissive,
-//            packet.blendState, packet.depthState, packet.rasterizerState
-//        );
-//    }
-//
-//    // 3. 不透明オブジェクトだけを一気に描画！
-//    // (内部で rc.commandList が活用されます)
-//    renderer->RenderOpaque(rc);
-//}
-//
-#include "GBufferPass.h"
+﻿#include "GBufferPass.h"
 #include "Graphics.h"
 #include "Model/ModelRenderer.h"
 #include "Model/Model.h"
@@ -58,31 +20,31 @@ void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 
 
     // 1. シェーダーの要求するフォーマットで内部テクスチャを作成
-    TextureDesc desc0{}; // Slot 0: Albedo / Metallic
+    TextureDesc desc0{}; // Slot 0 は Albedo / Metallic。
     desc0.width = w; desc0.height = h;
     desc0.format = TextureFormat::R16G16B16A16_FLOAT;
     desc0.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
     m_hGBuffer0 = builder.CreateTexture("GBuffer0", desc0);
 
-    TextureDesc desc1{}; // Slot 1: Normal / Roughness
+    TextureDesc desc1{}; // Slot 1 は Normal / Roughness。
     desc1.width = w; desc1.height = h;
     desc1.format = TextureFormat::R16G16B16A16_FLOAT;
     desc1.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
     m_hGBuffer1 = builder.CreateTexture("GBuffer1", desc1);
 
-    TextureDesc desc2{}; // Slot 2: WorldPos / Depth
+    TextureDesc desc2{}; // Slot 2 は WorldPos / Depth。
     desc2.width = w; desc2.height = h;
     desc2.format = TextureFormat::R32G32B32A32_FLOAT;
     desc2.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
     m_hGBuffer2 = builder.CreateTexture("GBuffer2", desc2);
 
-    TextureDesc desc3{}; // Slot 3: Velocity
+    TextureDesc desc3{}; // Slot 3 は Velocity。
     desc3.width = w; desc3.height = h;
     desc3.format = TextureFormat::R32G32_FLOAT;
     desc3.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
     m_hGBuffer3 = builder.CreateTexture("GBuffer3", desc3);
 
-    TextureDesc depthDesc{}; // Depth Stencil
+    TextureDesc depthDesc{}; // Depth 用。 Stencil 用。
     depthDesc.width = w; depthDesc.height = h;
     depthDesc.format = TextureFormat::D32_FLOAT;
     depthDesc.bindFlags = TextureBindFlags::DepthStencil | TextureBindFlags::ShaderResource;

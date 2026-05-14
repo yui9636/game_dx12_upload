@@ -1,28 +1,28 @@
-#pragma once
+ï»¿#pragma once
 #include "Entity/Entity.h"
 
 class Registry;
 
-// Hierarchy ƒEƒBƒ“ƒhƒE‚Ì ECS •\¦ UIB
-// Entity ƒcƒŠ[•`‰æAŒŸõƒtƒH[ƒJƒX—v‹AD&D ‚É‚æ‚éeq•ÏX‚â
-// ƒAƒZƒbƒgƒhƒƒbƒv¶¬‚Ì“üŒû‚ğ’S“–‚·‚éB
+// Hierarchy ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã® ECS è¡¨ç¤º UIã€‚
+// Entity ãƒ„ãƒªãƒ¼æç”»ã€æ¤œç´¢ãƒ•ã‚©ãƒ¼ã‚«ã‚¹è¦æ±‚ã€D&D ã«ã‚ˆã‚‹è¦ªå­å¤‰æ›´ã‚„
+// ã‚¢ã‚»ãƒƒãƒˆãƒ‰ãƒ­ãƒƒãƒ—ç”Ÿæˆã®å…¥å£ã‚’æ‹…å½“ã™ã‚‹ã€‚
 class HierarchyECSUI {
 public:
-    // Hierarchy ƒEƒBƒ“ƒhƒE‘S‘Ì‚ğ•`‰æ‚·‚éB
-    // registry ‚ª nullptr ‚Ìê‡‚Í "No Active Scene" ‚ğ•\¦‚·‚éB
-    // p_open ‚ÍƒEƒBƒ“ƒhƒEŠJ•Âƒtƒ‰ƒOAoutFocused ‚ÍƒEƒBƒ“ƒhƒEƒtƒH[ƒJƒXó‘Ô‚Ìo—ÍæB
+    // Hierarchy ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦å…¨ä½“ã‚’æç”»ã™ã‚‹ã€‚
+    // registry ãŒ nullptr ã®å ´åˆã¯ "No Active Scene" ã‚’è¡¨ç¤ºã™ã‚‹ã€‚
+    // p_open ã¯ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦é–‹é–‰ãƒ•ãƒ©ã‚°ã€outFocused ã¯ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ãƒ•ã‚©ãƒ¼ã‚«ã‚¹çŠ¶æ…‹ã®å‡ºåŠ›å…ˆã€‚
     static void Render(Registry* registry, bool* p_open = nullptr, bool* outFocused = nullptr);
 
-    // ŸƒtƒŒ[ƒ€‚ÅŒŸõƒ{ƒbƒNƒX‚ÖƒL[ƒ{[ƒhƒtƒH[ƒJƒX‚ğˆÚ‚·—v‹‚ğo‚·B
+    // æ¬¡ãƒ•ãƒ¬ãƒ¼ãƒ ã§æ¤œç´¢ãƒœãƒƒã‚¯ã‚¹ã¸ã‚­ãƒ¼ãƒœãƒ¼ãƒ‰ãƒ•ã‚©ãƒ¼ã‚«ã‚¹ã‚’ç§»ã™è¦æ±‚ã‚’å‡ºã™ã€‚
     static void RequestSearchFocus();
 
 private:
-    // w’è entity 1 Œ‚Ô‚ñ‚ÌƒcƒŠ[ƒm[ƒh‚ğ•`‰æ‚·‚éB
-    // q‚ª‚¢‚ê‚ÎÄ‹A“I‚É Hierarchy ‚ğ“WŠJ•\¦‚·‚éB
+    // æŒ‡å®š entity 1 ä»¶ã¶ã‚“ã®ãƒ„ãƒªãƒ¼ãƒãƒ¼ãƒ‰ã‚’æç”»ã™ã‚‹ã€‚
+    // å­ãŒã„ã‚Œã°å†å¸°çš„ã« Hierarchy ã‚’å±•é–‹è¡¨ç¤ºã™ã‚‹ã€‚
     static void DrawEntityNode(Registry* registry, EntityID entity);
 
-    // w’è parentEntity ‚ğ D&D ƒ^[ƒQƒbƒg‚Æ‚µ‚Äˆµ‚¤B
-    // entity ƒhƒƒbƒv‚Í ReparentA
-    // asset ƒhƒƒbƒv‚Í‘Î‰‚·‚é entity ¶¬‚â material Š„‚è“–‚Ä‚ğs‚¤B
+    // æŒ‡å®š parentEntity ã‚’ D&D ã‚¿ãƒ¼ã‚²ãƒƒãƒˆã¨ã—ã¦æ‰±ã†ã€‚
+    // entity ãƒ‰ãƒ­ãƒƒãƒ—æ™‚ã¯ Reparentã€
+    // asset ãƒ‰ãƒ­ãƒƒãƒ—æ™‚ã¯å¯¾å¿œã™ã‚‹ entity ç”Ÿæˆã‚„ material å‰²ã‚Šå½“ã¦ã‚’è¡Œã†ã€‚
     static void HandleDragDropTarget(Registry* registry, EntityID parentEntity = Entity::NULL_ID);
 };

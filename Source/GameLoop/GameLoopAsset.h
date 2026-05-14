@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <filesystem>
@@ -9,6 +9,7 @@
 
 constexpr int kGameFlowAssetVersion = 1;
 constexpr uint8_t kGameFlowUnboundGamepadButton = 0xFF;
+// GameLoopNodeType はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 enum class GameLoopNodeType : uint8_t
 {

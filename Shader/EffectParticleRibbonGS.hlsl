@@ -1,8 +1,5 @@
-// ============================================================================
-// Ribbon GS (SoA): Reads AliveList -> Hot + Warm + RibbonHistory
-// Expands point to ribbon strip segments
-// ============================================================================
-
+// リボン GS（SoA）: AliveList から Hot / Warm / RibbonHistory を読む。
+// 点をリボンストリップのセグメントへ展開する。
 #include "compute_particle.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -28,7 +25,7 @@ void main(point GS_IN gin[1], inout TriangleStream<PS_IN> output)
     const uint aliveIndex = gin[0].vertex_id;
     const uint slot = g_AliveList[aliveIndex];
 
-    // Read SoA streams
+    // SoA stream を読む。
     BillboardHot hot = g_BillboardHot[slot];
     BillboardWarm warm = g_BillboardWarm[slot];
 

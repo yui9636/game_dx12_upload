@@ -1,12 +1,12 @@
-#include "DX12RootSignature.h"
+﻿#include "DX12RootSignature.h"
 #include <d3d12.h>
 #include <cassert>
 
 DX12RootSignature::DX12RootSignature(DX12Device* device) {
-    // Root parameters: 8 CBVs (b0-b7) + 1 SRV descriptor table (t0-t15)
+    // root parameter は 8 個の CBV(b0-b7) と 1 個の SRV descriptor table(t0-t15)。
     D3D12_ROOT_PARAMETER1 rootParams[Slot::Count] = {};
 
-    // b0-b7: CBV root parameters
+    // b0-b7 は CBV root parameter。
     for (int i = 0; i <= 7; ++i) {
         rootParams[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         rootParams[i].Descriptor.ShaderRegister = i;
@@ -29,10 +29,10 @@ DX12RootSignature::DX12RootSignature(DX12Device* device) {
     rootParams[Slot::SRVTable].DescriptorTable.pDescriptorRanges = &srvRange;
     rootParams[Slot::SRVTable].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // Static samplers (s0-s3)
+    // s0-s3 の static sampler。
     D3D12_STATIC_SAMPLER_DESC staticSamplers[4] = {};
 
-    // s0: LinearWrap
+    // s0 は LinearWrap。
     staticSamplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
     staticSamplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     staticSamplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -47,7 +47,7 @@ DX12RootSignature::DX12RootSignature(DX12Device* device) {
     staticSamplers[0].RegisterSpace = 0;
     staticSamplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    // s1: ShadowCompare
+    // s1 は ShadowCompare。
     staticSamplers[1] = staticSamplers[0];
     staticSamplers[1].Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
     staticSamplers[1].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -58,7 +58,7 @@ DX12RootSignature::DX12RootSignature(DX12Device* device) {
     staticSamplers[1].MipLODBias = 0.0f;
     staticSamplers[1].ShaderRegister = 1;
 
-    // s2: PointClamp
+    // s2 は PointClamp。
     staticSamplers[2] = staticSamplers[0];
     staticSamplers[2].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
     staticSamplers[2].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
@@ -67,14 +67,14 @@ DX12RootSignature::DX12RootSignature(DX12Device* device) {
     staticSamplers[2].MipLODBias = 0.0f;
     staticSamplers[2].ShaderRegister = 2;
 
-    // s3: LinearClamp
+    // s3 は LinearClamp。
     staticSamplers[3] = staticSamplers[0];
     staticSamplers[3].AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[3].AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[3].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     staticSamplers[3].ShaderRegister = 3;
 
-    // Root signature desc
+    // root signature の desc を組み立てる。
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc = {};
     rsDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
     rsDesc.Desc_1_1.NumParameters = Slot::Count;

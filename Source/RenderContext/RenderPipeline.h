@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <vector>
 #include "../Graphics.h"
@@ -101,8 +101,8 @@ private:
     std::vector<TaskSystem::TaskGraphNode> m_prepGraphScratch;
     std::array<std::vector<std::shared_ptr<DX12CommandList>>, kMaxInFlight> m_workerDx12CommandListPools;
 
-    // Keep GPU buffers alive across frames to prevent use-after-free
-    // (GPU may still be reading previous frame's buffers)
+    // GPU バッファをフレームをまたいで保持し、解放済み参照を防ぐ。
+    // GPU が前フレームのバッファをまだ読んでいる可能性があるため。
     struct FrameGpuResources {
         std::shared_ptr<IBuffer> instanceBuffer;
         std::shared_ptr<IBuffer> instanceStructuredBuffer;

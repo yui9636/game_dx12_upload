@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <string>
 #include <vector>
 #include "Registry/Registry.h"
+// IUndoAction はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class IUndoAction {
 public:

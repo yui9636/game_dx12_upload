@@ -1,103 +1,103 @@
-// CollisionManager.h
+ï»¿// CollisionManager ã¯ collider ç™»éŒ²ã¨è¡çªå•ã„åˆã‚ã›ã‚’ç®¡ç†ã™ã‚‹ã€‚
 #pragma once
 #include <vector>
 #include <cstdint>
 #include "Collision.h"
 
-// 1‘g‚ÌÕ“ËŒ‹‰Ê‚ğ•\‚·\‘¢‘ÌB
-// ‚Ç‚ÌƒRƒ‰ƒCƒ_[“¯m‚ª“–‚½‚Á‚½‚©‚ÆAÚ×‚È HitResult ‚ğ‚Ü‚Æ‚ß‚Ä‚ÂB
+// 1çµ„ã®è¡çªçµæœã‚’è¡¨ã™æ§‹é€ ä½“ã€‚
+// ã©ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼åŒå£«ãŒå½“ãŸã£ãŸã‹ã¨ã€è©³ç´°ãª HitResult ã‚’ã¾ã¨ã‚ã¦æŒã¤ã€‚
 struct CollisionContact
 {
-    // Õ“Ë‚µ‚½•Ğ•û‚ÌƒRƒ‰ƒCƒ_[ IDB
+    // è¡çªã—ãŸç‰‡æ–¹ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ IDã€‚
     uint32_t idA{ 0 };
 
-    // Õ“Ë‚µ‚½‚à‚¤•Ğ•û‚ÌƒRƒ‰ƒCƒ_[ IDB
+    // è¡çªã—ãŸã‚‚ã†ç‰‡æ–¹ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ IDã€‚
     uint32_t idB{ 0 };
 
-    // ÚGˆÊ’uA‚ß‚è‚İ[‚³A‰Ÿ‚µ–ß‚µˆÊ’u‚È‚Ç‚ÌÚ×Œ‹‰ÊB
+    // æ¥è§¦ä½ç½®ã€ã‚ã‚Šè¾¼ã¿æ·±ã•ã€æŠ¼ã—æˆ»ã—ä½ç½®ãªã©ã®è©³ç´°çµæœã€‚
     HitResult hit{};
 };
 
-// ƒV[ƒ““à‚ÌƒRƒ‰ƒCƒ_[‚ğˆêŠ‡ŠÇ—‚·‚éƒ}ƒl[ƒWƒƒB
-// ƒRƒ‰ƒCƒ_[‚Ì’Ç‰ÁEXVEíœA‘SÚG”»’èAƒŒƒCƒLƒƒƒXƒg‚ğ’S“–‚·‚éB
+// ã‚·ãƒ¼ãƒ³å†…ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ä¸€æ‹¬ç®¡ç†ã™ã‚‹ãƒãƒãƒ¼ã‚¸ãƒ£ã€‚
+// ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã®è¿½åŠ ãƒ»æ›´æ–°ãƒ»å‰Šé™¤ã€å…¨æ¥è§¦åˆ¤å®šã€ãƒ¬ã‚¤ã‚­ãƒ£ã‚¹ãƒˆã‚’æ‹…å½“ã™ã‚‹ã€‚
 class CollisionManager
 {
 public:
-    // singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+    // singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
     static CollisionManager& Instance();
 
-    // ‹…ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-    // userPtr ‚ÍŠ—LÒ‚â•R•t‚¯æ‚ğ•Û‚·‚é‚½‚ß‚Ì”CˆÓƒ|ƒCƒ“ƒ^B
-    // attr ‚ÍƒRƒ‰ƒCƒ_[‘®«B
-    // –ß‚è’l‚Í“o˜^‚³‚ê‚½ƒRƒ‰ƒCƒ_[‚ÌˆêˆÓ IDB
+    // çƒã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+    // userPtr ã¯æ‰€æœ‰è€…ã‚„ç´ä»˜ã‘å…ˆã‚’ä¿æŒã™ã‚‹ãŸã‚ã®ä»»æ„ãƒã‚¤ãƒ³ã‚¿ã€‚
+    // attr ã¯ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å±æ€§ã€‚
+    // æˆ»ã‚Šå€¤ã¯ç™»éŒ²ã•ã‚ŒãŸã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã®ä¸€æ„ IDã€‚
     uint32_t AddSphere(const SphereDesc& desc, void* userPtr = nullptr, ColliderAttribute attr = ColliderAttribute::Body);
 
-    // ƒJƒvƒZƒ‹ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-    // –ß‚è’l‚Í“o˜^‚³‚ê‚½ƒRƒ‰ƒCƒ_[‚ÌˆêˆÓ IDB
+    // ã‚«ãƒ—ã‚»ãƒ«ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+    // æˆ»ã‚Šå€¤ã¯ç™»éŒ²ã•ã‚ŒãŸã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã®ä¸€æ„ IDã€‚
     uint32_t AddCapsule(const CapsuleDesc& desc, void* userPtr = nullptr, ColliderAttribute attr = ColliderAttribute::Body);
 
-    // Box ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-    // –ß‚è’l‚Í“o˜^‚³‚ê‚½ƒRƒ‰ƒCƒ_[‚ÌˆêˆÓ IDB
+    // Box ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+    // æˆ»ã‚Šå€¤ã¯ç™»éŒ²ã•ã‚ŒãŸã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã®ä¸€æ„ IDã€‚
     uint32_t AddBox(const BoxDesc& desc, void* userPtr = nullptr, ColliderAttribute attr = ColliderAttribute::Body);
 
-    // w’è ID ‚Ì Box Œ`ó‚ğXV‚·‚éB
+    // æŒ‡å®š ID ã® Box å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
     bool UpdateBox(uint32_t id, const BoxDesc& desc);
 
-    // w’è ID ‚Ì Sphere Œ`ó‚ğXV‚·‚éB
+    // æŒ‡å®š ID ã® Sphere å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
     bool UpdateSphere(uint32_t id, const SphereDesc& desc);
 
-    // w’è ID ‚Ì Capsule Œ`ó‚ğXV‚·‚éB
+    // æŒ‡å®š ID ã® Capsule å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
     bool UpdateCapsule(uint32_t id, const CapsuleDesc& desc);
 
-    // w’è ID ‚Ì enabled ó‘Ô‚ğ•ÏX‚·‚éB
+    // æŒ‡å®š ID ã® enabled çŠ¶æ…‹ã‚’å¤‰æ›´ã™ã‚‹ã€‚
     bool SetEnabled(uint32_t id, bool enabled);
 
-    // w’è ID ‚Ì enabled ó‘Ô‚ğæ“¾‚·‚éB
+    // æŒ‡å®š ID ã® enabled çŠ¶æ…‹ã‚’å–å¾—ã™ã‚‹ã€‚
     bool GetEnabled(uint32_t id) const;
 
-    // w’è ID ‚Ì userPtr ‚ğİ’è‚·‚éB
+    // æŒ‡å®š ID ã® userPtr ã‚’è¨­å®šã™ã‚‹ã€‚
     bool SetUserPtr(uint32_t id, void* p);
 
-    // w’è ID ‚Ì userPtr ‚ğæ“¾‚·‚éB
+    // æŒ‡å®š ID ã® userPtr ã‚’å–å¾—ã™ã‚‹ã€‚
     void* GetUserPtr(uint32_t id) const;
 
-    // w’è ID ‚ÌƒRƒ‰ƒCƒ_[–{‘Ì‚ğæ“¾‚·‚éB
-    // Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š ID ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼æœ¬ä½“ã‚’å–å¾—ã™ã‚‹ã€‚
+    // è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     const Collider* Get(uint32_t id) const;
 
-    // w’è ID ‚ÌƒRƒ‰ƒCƒ_[‚ğíœ‚·‚éB
+    // æŒ‡å®š ID ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’å‰Šé™¤ã™ã‚‹ã€‚
     bool Remove(uint32_t id);
 
-    // ‚·‚×‚Ä‚ÌƒRƒ‰ƒCƒ_[‚ğíœ‚·‚éB
+    // ã™ã¹ã¦ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’å‰Šé™¤ã™ã‚‹ã€‚
     void Clear();
 
-    // “o˜^’†‚Ì‘SƒRƒ‰ƒCƒ_[‘g‚İ‡‚í‚¹‚É‚Â‚¢‚ÄÚG”»’è‚ğs‚¢A
-    // “–‚½‚Á‚Ä‚¢‚é‘g‚ğ outContacts ‚Ö‘‚«o‚·B
+    // ç™»éŒ²ä¸­ã®å…¨ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼çµ„ã¿åˆã‚ã›ã«ã¤ã„ã¦æ¥è§¦åˆ¤å®šã‚’è¡Œã„ã€
+    // å½“ãŸã£ã¦ã„ã‚‹çµ„ã‚’ outContacts ã¸æ›¸ãå‡ºã™ã€‚
     void ComputeAllContacts(std::vector<CollisionContact>& outContacts) const;
 
-    // Œ»İ“o˜^‚³‚ê‚Ä‚¢‚é‘SƒRƒ‰ƒCƒ_[”z—ñ‚ğQÆ‚Å•Ô‚·B
+    // ç¾åœ¨ç™»éŒ²ã•ã‚Œã¦ã„ã‚‹å…¨ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼é…åˆ—ã‚’å‚ç…§ã§è¿”ã™ã€‚
     const std::vector<Collider>& GetAll() const { return colliders_; }
 
-    // ƒŒƒCƒLƒƒƒXƒg‚ğs‚¢AÅ‚à‹ß‚¢ƒqƒbƒg 1 Œ‚ğ outHit ‚É•Ô‚·B
-    // maxDistance ˆÈ“à‚Éƒqƒbƒg‚ª–³‚¯‚ê‚Î false ‚ğ•Ô‚·B
+    // ãƒ¬ã‚¤ã‚­ãƒ£ã‚¹ãƒˆã‚’è¡Œã„ã€æœ€ã‚‚è¿‘ã„ãƒ’ãƒƒãƒˆ 1 ä»¶ã‚’ outHit ã«è¿”ã™ã€‚
+    // maxDistance ä»¥å†…ã«ãƒ’ãƒƒãƒˆãŒç„¡ã‘ã‚Œã° false ã‚’è¿”ã™ã€‚
     bool Raycast(const ::Ray& ray, RaycastHit& outHit, float maxDistance = FLT_MAX);
 
 private:
-    // singleton —p‚È‚Ì‚ÅƒRƒ“ƒXƒgƒ‰ƒNƒ^‚Í privateB
+    // singleton ç”¨ãªã®ã§ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã¯ privateã€‚
     CollisionManager() = default;
 
-    // “Á•Ê‚È”jŠüˆ—‚Í•s—vB
+    // ç‰¹åˆ¥ãªç ´æ£„å‡¦ç†ã¯ä¸è¦ã€‚
     ~CollisionManager() = default;
 
-    // ƒRƒs[‹Ö~B
+    // ã‚³ãƒ”ãƒ¼ç¦æ­¢ã€‚
     CollisionManager(const CollisionManager&) = delete;
 
-    // ‘ã“ü‹Ö~B
+    // ä»£å…¥ç¦æ­¢ã€‚
     void operator=(const CollisionManager&) = delete;
 
-    // Ÿ‚É”­s‚·‚éƒRƒ‰ƒCƒ_[ IDB
+    // æ¬¡ã«ç™ºè¡Œã™ã‚‹ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ IDã€‚
     uint32_t issueId_ = 1;
 
-    // ŠÇ—’†‚Ì‘SƒRƒ‰ƒCƒ_[ˆê——B
+    // ç®¡ç†ä¸­ã®å…¨ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ä¸€è¦§ã€‚
     std::vector<Collider> colliders_;
 };

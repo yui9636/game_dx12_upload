@@ -1,141 +1,141 @@
-#include "ArchetypeGraph.h"
+ï»¿#include "ArchetypeGraph.h"
 
-// ‹ó‚Ì archetype ‚ğæ“¾‚·‚éB
-// ‚Ü‚¾ì‚ç‚ê‚Ä‚¢‚È‚¯‚ê‚ÎA‹ó signature ‚©‚çV‚µ‚­¶¬‚·‚éB
+// ç©ºã® archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+// ã¾ã ä½œã‚‰ã‚Œã¦ã„ãªã‘ã‚Œã°ã€ç©º signature ã‹ã‚‰æ–°ã—ãç”Ÿæˆã™ã‚‹ã€‚
 Archetype* ArchetypeGraph::GetEmptyArchetype() {
-    // ‹ó archetype ‚ª–¢¶¬‚È‚çì‚éB
+    // ç©º archetype ãŒæœªç”Ÿæˆãªã‚‰ä½œã‚‹ã€‚
     if (!m_emptyArchetype) {
         Signature emptySig;
         m_emptyArchetype = CreateArchetype(emptySig);
     }
 
-    // ‹ó archetype ‚ğ•Ô‚·B
+    // ç©º archetype ã‚’è¿”ã™ã€‚
     return m_emptyArchetype;
 }
 
-// w’è signature ‚É‘Î‰‚·‚é archetype ‚ğŒŸõ‚·‚éB
-// Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š signature ã«å¯¾å¿œã™ã‚‹ archetype ã‚’æ¤œç´¢ã™ã‚‹ã€‚
+// è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 Archetype* ArchetypeGraph::GetArchetype(const Signature& sig) {
-    // signature ‚ğƒL[‚É archetype ‚ğŒŸõ‚·‚éB
+    // signature ã‚’ã‚­ãƒ¼ã« archetype ã‚’æ¤œç´¢ã™ã‚‹ã€‚
     auto it = m_archetypes.find(sig);
 
-    // Œ©‚Â‚©‚Á‚½‚ç‚»‚Ì archetype ‚ğ•Ô‚·B
+    // è¦‹ã¤ã‹ã£ãŸã‚‰ãã® archetype ã‚’è¿”ã™ã€‚
     if (it != m_archetypes.end()) {
         return it->second.get();
     }
 
-    // –³‚¯‚ê‚Î nullptrB
+    // ç„¡ã‘ã‚Œã° nullptrã€‚
     return nullptr;
 }
 
-// w’è signature ‚Ì archetype ‚ğV‹Kì¬‚·‚éB
-// Š—LŒ ‚Í m_archetypes ‚ª‚ÂB
+// æŒ‡å®š signature ã® archetype ã‚’æ–°è¦ä½œæˆã™ã‚‹ã€‚
+// æ‰€æœ‰æ¨©ã¯ m_archetypes ãŒæŒã¤ã€‚
 Archetype* ArchetypeGraph::CreateArchetype(const Signature& sig) {
-    // V‚µ‚¢ archetype ‚ğ¶¬‚·‚éB
+    // æ–°ã—ã„ archetype ã‚’ç”Ÿæˆã™ã‚‹ã€‚
     auto archetype = std::make_unique<Archetype>(sig);
 
-    // ¶ƒ|ƒCƒ“ƒ^‚ğT‚¦‚Ä‚¨‚­B
+    // ç”Ÿãƒã‚¤ãƒ³ã‚¿ã‚’æ§ãˆã¦ãŠãã€‚
     Archetype* ptr = archetype.get();
 
-    // ƒ}ƒbƒv‚ÖŠ—LŒ ‚²‚ÆˆÚ‚·B
+    // ãƒãƒƒãƒ—ã¸æ‰€æœ‰æ¨©ã”ã¨ç§»ã™ã€‚
     m_archetypes[sig] = std::move(archetype);
 
-    // ¶¬‚µ‚½ archetype ‚ğ•Ô‚·B
+    // ç”Ÿæˆã—ãŸ archetype ã‚’è¿”ã™ã€‚
     return ptr;
 }
 
-// Œ»İ archetype ‚É component ‚ğ1‚Â’Ç‰Á‚µ‚½æ‚Ì archetype ‚ğæ“¾‚·‚éB
-// ‚Ü‚¾‘¶İ‚µ‚È‚¯‚ê‚Îì¬‚µAadd/remove edge ‚à’£‚éB
+// ç¾åœ¨ archetype ã« component ã‚’1ã¤è¿½åŠ ã—ãŸå…ˆã® archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+// ã¾ã å­˜åœ¨ã—ãªã‘ã‚Œã°ä½œæˆã—ã€add/remove edge ã‚‚å¼µã‚‹ã€‚
 Archetype* ArchetypeGraph::GetOrCreateNextArchetype(Archetype* current, ComponentTypeID typeId, size_t elementSize,
     ComponentColumn::ConstructFn c, ComponentColumn::MoveConstructFn mc,
     ComponentColumn::MoveAssignFn ma, ComponentColumn::DestructFn d) {
-    // Œ»İ archetype ‚É‘Î‰‚·‚é edge î•ñ‚ğæ“¾‚·‚éB
+    // ç¾åœ¨ archetype ã«å¯¾å¿œã™ã‚‹ edge æƒ…å ±ã‚’å–å¾—ã™ã‚‹ã€‚
     auto& edges = m_edges[current];
 
-    // Šù‚É‚±‚Ì component ’Ç‰Áæ‚ª•ª‚©‚Á‚Ä‚¢‚ê‚ÎA‚»‚ê‚ğ•Ô‚·B
+    // æ—¢ã«ã“ã® component è¿½åŠ å…ˆãŒåˆ†ã‹ã£ã¦ã„ã‚Œã°ã€ãã‚Œã‚’è¿”ã™ã€‚
     auto it = edges.addEdges.find(typeId);
     if (it != edges.addEdges.end()) {
         return it->second;
     }
 
-    // Œ»İ signature ‚Ö component ‚ğ1‚Â’Ç‰Á‚µ‚½Ÿ signature ‚ğì‚éB
+    // ç¾åœ¨ signature ã¸ component ã‚’1ã¤è¿½åŠ ã—ãŸæ¬¡ signature ã‚’ä½œã‚‹ã€‚
     Signature nextSig = current->GetSignature();
     nextSig.set(typeId);
 
-    // ‚»‚Ì signature ‚Ì archetype ‚ªŠù‚É‘¶İ‚·‚é‚©’T‚·B
+    // ãã® signature ã® archetype ãŒæ—¢ã«å­˜åœ¨ã™ã‚‹ã‹æ¢ã™ã€‚
     Archetype* nextArchetype = GetArchetype(nextSig);
 
-    // –³‚¯‚ê‚ÎV‹Kì¬‚·‚éB
+    // ç„¡ã‘ã‚Œã°æ–°è¦ä½œæˆã™ã‚‹ã€‚
     if (!nextArchetype) {
         nextArchetype = CreateArchetype(nextSig);
 
-        // Œ»İ archetype ‚Ì—ñ’è‹`‚ğƒRƒs[‚·‚éB
+        // ç¾åœ¨ archetype ã®åˆ—å®šç¾©ã‚’ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
         nextArchetype->CopySchemaFrom(current);
 
-        // V‚µ‚­’Ç‰Á‚³‚ê‚½ component —p‚Ì—ñ‚ğ’Ç‰Á‚·‚éB
+        // æ–°ã—ãè¿½åŠ ã•ã‚ŒãŸ component ç”¨ã®åˆ—ã‚’è¿½åŠ ã™ã‚‹ã€‚
         nextArchetype->AddColumn(typeId, elementSize, c, mc, ma, d);
     }
 
-    // ¡‰ñ‹‚ß‚½ add edge ‚ğƒLƒƒƒbƒVƒ…‚·‚éB
+    // ä»Šå›æ±‚ã‚ãŸ add edge ã‚’ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã™ã‚‹ã€‚
     edges.addEdges[typeId] = nextArchetype;
 
-    // ‹t•ûŒü‚Ì remove edge ‚à’£‚Á‚Ä‚¨‚­B
+    // é€†æ–¹å‘ã® remove edge ã‚‚å¼µã£ã¦ãŠãã€‚
     m_edges[nextArchetype].removeEdges[typeId] = current;
 
-    // ‘JˆÚæ archetype ‚ğ•Ô‚·B
+    // é·ç§»å…ˆ archetype ã‚’è¿”ã™ã€‚
     return nextArchetype;
 }
 
-// Œ»İ archetype ‚©‚ç component ‚ğ1‚Âíœ‚µ‚½æ‚Ì archetype ‚ğæ“¾‚·‚éB
-// ‚Ü‚¾‘¶İ‚µ‚È‚¯‚ê‚Îì¬‚µAadd/remove edge ‚à’£‚éB
+// ç¾åœ¨ archetype ã‹ã‚‰ component ã‚’1ã¤å‰Šé™¤ã—ãŸå…ˆã® archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+// ã¾ã å­˜åœ¨ã—ãªã‘ã‚Œã°ä½œæˆã—ã€add/remove edge ã‚‚å¼µã‚‹ã€‚
 Archetype* ArchetypeGraph::GetOrCreatePreviousArchetype(Archetype* current, ComponentTypeID typeId) {
-    // Œ»İ archetype ‚É‘Î‰‚·‚é edge î•ñ‚ğæ“¾‚·‚éB
+    // ç¾åœ¨ archetype ã«å¯¾å¿œã™ã‚‹ edge æƒ…å ±ã‚’å–å¾—ã™ã‚‹ã€‚
     auto& edges = m_edges[current];
 
-    // Šù‚É‚±‚Ì component íœæ‚ª•ª‚©‚Á‚Ä‚¢‚ê‚ÎA‚»‚ê‚ğ•Ô‚·B
+    // æ—¢ã«ã“ã® component å‰Šé™¤å…ˆãŒåˆ†ã‹ã£ã¦ã„ã‚Œã°ã€ãã‚Œã‚’è¿”ã™ã€‚
     auto it = edges.removeEdges.find(typeId);
     if (it != edges.removeEdges.end()) {
         return it->second;
     }
 
-    // Œ»İ signature ‚©‚ç component ‚ğ1‚ÂŠO‚µ‚½‘O signature ‚ğì‚éB
+    // ç¾åœ¨ signature ã‹ã‚‰ component ã‚’1ã¤å¤–ã—ãŸå‰ signature ã‚’ä½œã‚‹ã€‚
     Signature nextSig = current->GetSignature();
     nextSig.reset(typeId);
 
-    // ‚»‚Ì signature ‚Ì archetype ‚ªŠù‚É‘¶İ‚·‚é‚©’T‚·B
+    // ãã® signature ã® archetype ãŒæ—¢ã«å­˜åœ¨ã™ã‚‹ã‹æ¢ã™ã€‚
     Archetype* prevArchetype = GetArchetype(nextSig);
 
-    // –³‚¯‚ê‚ÎV‹Kì¬‚·‚éB
+    // ç„¡ã‘ã‚Œã°æ–°è¦ä½œæˆã™ã‚‹ã€‚
     if (!prevArchetype) {
         prevArchetype = CreateArchetype(nextSig);
 
-        // Œ»İ archetype ‚Ì—ñ’è‹`‚ğƒRƒs[‚µAíœ‘ÎÛ component ‚¾‚¯œŠO‚·‚éB
+        // ç¾åœ¨ archetype ã®åˆ—å®šç¾©ã‚’ã‚³ãƒ”ãƒ¼ã—ã€å‰Šé™¤å¯¾è±¡ component ã ã‘é™¤å¤–ã™ã‚‹ã€‚
         prevArchetype->CopySchemaFromExcluding(current, typeId);
     }
 
-    // ¡‰ñ‹‚ß‚½ remove edge ‚ğƒLƒƒƒbƒVƒ…‚·‚éB
+    // ä»Šå›æ±‚ã‚ãŸ remove edge ã‚’ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã™ã‚‹ã€‚
     edges.removeEdges[typeId] = prevArchetype;
 
-    // ‹t•ûŒü‚Ì add edge ‚à’£‚Á‚Ä‚¨‚­B
+    // é€†æ–¹å‘ã® add edge ã‚‚å¼µã£ã¦ãŠãã€‚
     m_edges[prevArchetype].addEdges[typeId] = current;
 
-    // ‘JˆÚæ archetype ‚ğ•Ô‚·B
+    // é·ç§»å…ˆ archetype ã‚’è¿”ã™ã€‚
     return prevArchetype;
 }
 
-// Œ»İ•Û‚µ‚Ä‚¢‚é‚·‚×‚Ä‚Ì archetype ‚ğ”z—ñ‚Å•Ô‚·B
+// ç¾åœ¨ä¿æŒã—ã¦ã„ã‚‹ã™ã¹ã¦ã® archetype ã‚’é…åˆ—ã§è¿”ã™ã€‚
 std::vector<Archetype*> ArchetypeGraph::GetAllArchetypes() const {
-    // –ß‚è’l—p‚Ì”z—ñ‚ğ—pˆÓ‚·‚éB
+    // æˆ»ã‚Šå€¤ç”¨ã®é…åˆ—ã‚’ç”¨æ„ã™ã‚‹ã€‚
     std::vector<Archetype*> result;
 
-    // –‘O‚É•K—v”‚Ô‚ñŠm•Û‚µ‚ÄÄŠm•Û‚ğŒ¸‚ç‚·B
+    // äº‹å‰ã«å¿…è¦æ•°ã¶ã‚“ç¢ºä¿ã—ã¦å†ç¢ºä¿ã‚’æ¸›ã‚‰ã™ã€‚
     result.reserve(m_archetypes.size());
 
-    // ‚·‚×‚Ä‚Ì archetype ‚ğ¶ƒ|ƒCƒ“ƒ^‚Å‹l‚ß‚éB
+    // ã™ã¹ã¦ã® archetype ã‚’ç”Ÿãƒã‚¤ãƒ³ã‚¿ã§è©°ã‚ã‚‹ã€‚
     for (const auto& pair : m_archetypes) {
         result.push_back(pair.second.get());
     }
 
-    // ˆê——‚ğ•Ô‚·B
+    // ä¸€è¦§ã‚’è¿”ã™ã€‚
     return result;
 }

@@ -45,7 +45,7 @@ void DX12Device::CreateDevice() {
 #endif
 
 #ifdef _DEBUG
-    // Enable D3D12 debug layer for validation messages
+    // validation message を受けるため D3D12 debug layer を有効化する。
     {
         ComPtr<ID3D12Debug> debugInterface;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)))) {
@@ -63,7 +63,7 @@ void DX12Device::CreateDevice() {
         IID_PPV_ARGS(&m_dxgiFactory));
     assert(SUCCEEDED(hr));
 
-    // Try hardware adapter
+    // hardware adapter を優先して試す。
     ComPtr<IDXGIAdapter1> adapter;
     for (UINT i = 0; m_dxgiFactory->EnumAdapters1(i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
         DXGI_ADAPTER_DESC1 desc;
@@ -77,7 +77,7 @@ void DX12Device::CreateDevice() {
     }
 
     if (!m_device) {
-        // Fallback to WARP
+        // 失敗時は WARP へ fallback する。
         ComPtr<IDXGIAdapter> warpAdapter;
         m_dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter));
         hr = D3D12CreateDevice(warpAdapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device));
@@ -85,7 +85,7 @@ void DX12Device::CreateDevice() {
     }
 
 #ifdef _DEBUG
-    // Prevent debug layer from force-terminating on validation errors
+    // validation error で debug layer が強制終了させないようにする。
     {
         ComPtr<ID3D12InfoQueue> infoQueue;
         if (SUCCEEDED(m_device->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
@@ -134,7 +134,7 @@ void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
         m_commandQueue.Get(), hWnd, &swapChainDesc, nullptr, nullptr, &swapChain1);
     assert(SUCCEEDED(hr));
 
-    // Disable ALT+ENTER fullscreen
+    // ALT+ENTER の fullscreen 切り替えを無効化する。
     m_dxgiFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER);
 
     swapChain1.As(&m_swapChain);
@@ -142,16 +142,16 @@ void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
 }
 
 void DX12Device::CreateDescriptorHeaps() {
-    // RTV heap
+    // RTV を作成する。 heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = FRAME_COUNT + 4096; // back buffers + render targets + editor/history buffers
+        desc.NumDescriptors = FRAME_COUNT + 4096; // back buffer、render target、editor / history buffer 用。
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
         m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     }
-    // DSV heap
+    // DSV を作成する。 heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = 2048;
@@ -172,7 +172,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // CBV/SRV/UAV staging heap (non-shader-visible) - SRV作成用
     // CopyDescriptorsSimple のソースとして使用。Shader-Visible ヒープからの
     // CPU 読み出しは Write-Combined メモリ上で不正確になるため、
-    // SRV は必ずこの Non-Shader-Visible ヒープに作成する。
+    // SRV を作成する。 は必ずこの Non-Shader-Visible ヒープに作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = 16384;
@@ -208,18 +208,18 @@ void DX12Device::ResizeSwapChain(uint32_t width, uint32_t height) {
 
     WaitForGPU();
 
-    // Release back buffer references
+    // back buffer 参照を解放する。
     for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
         m_backBuffers[i].Reset();
     }
 
-    // Resize swap chain buffers
+    // resize 処理。 swap chain buffers
     DXGI_SWAP_CHAIN_DESC1 desc = {};
     m_swapChain->GetDesc1(&desc);
     HRESULT hr = m_swapChain->ResizeBuffers(FRAME_COUNT, width, height, desc.Format, desc.Flags);
     assert(SUCCEEDED(hr));
 
-    // Re-acquire back buffers
+    // back buffer を取り直す。
     for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
         m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_backBuffers[i]));
     }

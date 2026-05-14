@@ -1,4 +1,4 @@
-#include "OffscreenRenderer.h"
+﻿#include "OffscreenRenderer.h"
 #include "ShaderCommon.h"
 #include "Graphics.h"
 #include "FrameBuffer.h"
@@ -109,9 +109,9 @@ std::shared_ptr<FrameBuffer> OffscreenRenderer::CreateFrameBuffer(int w, int h,
 
 void OffscreenRenderer::BeginJob()
 {
-    // Full state reset for shared usage  Edelegates to Begin() which
-    // resets command allocator, descriptor heap, root signature, PSO dirty flag.
-    // UploadScene() overwrites all CbScene fields, so no zero-clear needed.
+    // 共有利用向けに状態を完全リセットする。Begin() に委譲し、
+    // command allocator、descriptor heap、root signature、PSO dirty flag を戻す。
+    // UploadScene() が CbScene 全フィールドを上書きするため、ゼロクリアは不要。
     Begin();
 }
 

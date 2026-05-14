@@ -1,81 +1,81 @@
-#pragma once
+ï»¿#pragma once
 #include <cstddef>
 #include <cstdint>
 
-// 1í—Ş‚Ì component ‚ğ˜A‘±ƒƒ‚ƒŠ‚Å•Û‚·‚é‚½‚ß‚Ì—ñƒNƒ‰ƒXB
-// Archetype “à‚ÅAŒ^‚²‚Æ‚Ìƒf[ƒ^—ñ‚Æ‚µ‚Äg‚¤B
+// 1ç¨®é¡ã® component ã‚’é€£ç¶šãƒ¡ãƒ¢ãƒªã§ä¿æŒã™ã‚‹ãŸã‚ã®åˆ—ã‚¯ãƒ©ã‚¹ã€‚
+// Archetype å†…ã§ã€å‹ã”ã¨ã®ãƒ‡ãƒ¼ã‚¿åˆ—ã¨ã—ã¦ä½¿ã†ã€‚
 class ComponentColumn {
 public:
-    // Šù‘¶ƒf[ƒ^‚©‚ç’Êí\’z‚·‚éŠÖ”B
+    // æ—¢å­˜ãƒ‡ãƒ¼ã‚¿ã‹ã‚‰é€šå¸¸æ§‹ç¯‰ã™ã‚‹é–¢æ•°ã€‚
     using ConstructFn = void(*)(void*, const void*);
 
-    // Šù‘¶ƒf[ƒ^‚©‚çƒ€[ƒu\’z‚·‚éŠÖ”B
+    // æ—¢å­˜ãƒ‡ãƒ¼ã‚¿ã‹ã‚‰ãƒ ãƒ¼ãƒ–æ§‹ç¯‰ã™ã‚‹é–¢æ•°ã€‚
     using MoveConstructFn = void(*)(void*, void*);
 
-    // Šù‘¶ƒf[ƒ^‚ğƒ€[ƒu‘ã“ü‚·‚éŠÖ”B
+    // æ—¢å­˜ãƒ‡ãƒ¼ã‚¿ã‚’ãƒ ãƒ¼ãƒ–ä»£å…¥ã™ã‚‹é–¢æ•°ã€‚
     using MoveAssignFn = void(*)(void*, void*);
 
-    // —v‘f‚ğ”jŠü‚·‚éŠÖ”B
+    // è¦ç´ ã‚’ç ´æ£„ã™ã‚‹é–¢æ•°ã€‚
     using DestructFn = void(*)(void*);
 
-    // 1—v‘fƒTƒCƒY‚ÆA¶¬Eƒ€[ƒuE”jŠüˆ—‚ğó‚¯æ‚Á‚Ä—ñ‚ğì‚éB
+    // 1è¦ç´ ã‚µã‚¤ã‚ºã¨ã€ç”Ÿæˆãƒ»ãƒ ãƒ¼ãƒ–ãƒ»ç ´æ£„å‡¦ç†ã‚’å—ã‘å–ã£ã¦åˆ—ã‚’ä½œã‚‹ã€‚
     ComponentColumn(size_t elementSize, ConstructFn c, MoveConstructFn mc, MoveAssignFn ma, DestructFn d);
 
-    // •Û’†‚Ì—v‘f‚ğ”jŠü‚µ‚Äƒƒ‚ƒŠ‚ğ‰ğ•ú‚·‚éB
+    // ä¿æŒä¸­ã®è¦ç´ ã‚’ç ´æ£„ã—ã¦ãƒ¡ãƒ¢ãƒªã‚’è§£æ”¾ã™ã‚‹ã€‚
     ~ComponentColumn();
 
-    // ƒRƒs[‚Í‹Ö~B
+    // ã‚³ãƒ”ãƒ¼ã¯ç¦æ­¢ã€‚
     ComponentColumn(const ComponentColumn&) = delete;
     ComponentColumn& operator=(const ComponentColumn&) = delete;
 
-    // ƒ€[ƒuƒRƒ“ƒXƒgƒ‰ƒNƒ^B
+    // ãƒ ãƒ¼ãƒ–ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã€‚
     ComponentColumn(ComponentColumn&& other) noexcept;
 
-    // ƒ€[ƒu‘ã“ü‰‰ZqB
+    // ãƒ ãƒ¼ãƒ–ä»£å…¥æ¼”ç®—å­ã€‚
     ComponentColumn& operator=(ComponentColumn&& other) noexcept;
 
-    // ƒRƒs[Œ³ƒf[ƒ^‚ğg‚Á‚Ä 1 —v‘f’Ç‰Á‚·‚éB
+    // ã‚³ãƒ”ãƒ¼å…ƒãƒ‡ãƒ¼ã‚¿ã‚’ä½¿ã£ã¦ 1 è¦ç´ è¿½åŠ ã™ã‚‹ã€‚
     void Add(const void* pData);
 
-    // ƒ€[ƒuŒ³ƒf[ƒ^‚ğg‚Á‚Ä 1 —v‘f’Ç‰Á‚·‚éB
+    // ãƒ ãƒ¼ãƒ–å…ƒãƒ‡ãƒ¼ã‚¿ã‚’ä½¿ã£ã¦ 1 è¦ç´ è¿½åŠ ã™ã‚‹ã€‚
     void MoveAdd(void* pData);
 
-    // w’è index ‚Ì—v‘f‚ğíœ‚·‚éB
-    // ––”ö—v‘f‚ğ‹l‚ß‚é swap-back •û®‚ğ‘z’è‚µ‚Ä‚¢‚éB
+    // æŒ‡å®š index ã®è¦ç´ ã‚’å‰Šé™¤ã™ã‚‹ã€‚
+    // æœ«å°¾è¦ç´ ã‚’è©°ã‚ã‚‹ swap-back æ–¹å¼ã‚’æƒ³å®šã—ã¦ã„ã‚‹ã€‚
     void Remove(size_t index);
 
-    // w’è index ‚Ì—v‘fæ“ªƒAƒhƒŒƒX‚ğ•Ô‚·B
-    // ”ÍˆÍŠO‚È‚ç nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š index ã®è¦ç´ å…ˆé ­ã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¿”ã™ã€‚
+    // ç¯„å›²å¤–ãªã‚‰ nullptr ã‚’è¿”ã™ã€‚
     void* Get(size_t index) const;
 
-    // Œ»İ‚Ì—v‘f”‚ğ•Ô‚·B
+    // ç¾åœ¨ã®è¦ç´ æ•°ã‚’è¿”ã™ã€‚
     size_t GetSize() const { return m_count; }
 
-    // w’è—e—ÊˆÈã‚ğŠm•Û‚·‚éB
+    // æŒ‡å®šå®¹é‡ä»¥ä¸Šã‚’ç¢ºä¿ã™ã‚‹ã€‚
     void Reserve(size_t newCapacity);
 
 private:
-    // ¶ƒf[ƒ^–{‘ÌB
+    // ç”Ÿãƒ‡ãƒ¼ã‚¿æœ¬ä½“ã€‚
     void* m_data = nullptr;
 
-    // 1—v‘f‚ ‚½‚è‚ÌƒTƒCƒYB
+    // 1è¦ç´ ã‚ãŸã‚Šã®ã‚µã‚¤ã‚ºã€‚
     size_t m_elementSize = 0;
 
-    // Œ»İ‚Ì—v‘f”B
+    // ç¾åœ¨ã®è¦ç´ æ•°ã€‚
     size_t m_count = 0;
 
-    // Šm•ÛÏ‚İ—e—ÊB
+    // ç¢ºä¿æ¸ˆã¿å®¹é‡ã€‚
     size_t m_capacity = 0;
 
-    // ’Êí\’zŠÖ”B
+    // é€šå¸¸æ§‹ç¯‰é–¢æ•°ã€‚
     ConstructFn m_constructFn = nullptr;
 
-    // ƒ€[ƒu\’zŠÖ”B
+    // ãƒ ãƒ¼ãƒ–æ§‹ç¯‰é–¢æ•°ã€‚
     MoveConstructFn m_moveConstructFn = nullptr;
 
-    // ƒ€[ƒu‘ã“üŠÖ”B
+    // ãƒ ãƒ¼ãƒ–ä»£å…¥é–¢æ•°ã€‚
     MoveAssignFn m_moveAssignFn = nullptr;
 
-    // ”jŠüŠÖ”B
+    // ç ´æ£„é–¢æ•°ã€‚
     DestructFn m_destructFn = nullptr;
 };

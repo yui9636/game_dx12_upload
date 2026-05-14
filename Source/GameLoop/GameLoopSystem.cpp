@@ -1,3 +1,4 @@
+﻿// GameLoopSystem の GameLoop 関連実装をまとめます。
 #include "GameLoopSystem.h"
 
 #include <algorithm>

@@ -124,19 +124,13 @@ namespace
             return false;
         }
 
-        // Small scenes lose to command-list overhead; only parallelize when work is large enough.
+        // 小さな scene では command-list overhead が勝つため、十分な作業量がある場合だけ並列化する。
         return visibleInstances >= 32 || opaqueWork >= 8;
     }
 }
-
-// ============================================================
-// ============================================================
 ITexture* FrameGraphResources::GetTexture(ResourceHandle handle) {
     return m_graph.GetPhysicalTexture(handle);
 }
-
-// ============================================================
-// ============================================================
 class FrameGraph::BuilderImpl : public FrameGraphBuilder {
 public:
     BuilderImpl(FrameGraph& graph, PassNode& passNode)
@@ -196,10 +190,6 @@ private:
     FrameGraph& m_graph;
     PassNode& m_passNode;
 };
-
-// ============================================================
-// ============================================================
-
 void FrameGraph::AddPass(IRenderPass* pass) {
     if (!pass) return;
 
@@ -261,10 +251,7 @@ void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
     m_adjacency.clear();
     m_inDegree.clear();
 }
-
-// ============================================================
-// Phase 1: Setup
-// ============================================================
+// Phase 1 は setup。
 void FrameGraph::Setup(const RenderContext& rc) {
     m_resourceNodes.reserve(32);
 
@@ -273,10 +260,7 @@ void FrameGraph::Setup(const RenderContext& rc) {
         m_passNodes[i].renderPass->Setup(builder, rc);
     }
 }
-
-// ============================================================
-// Phase 2: Compile
-// ============================================================
+// Phase 2 は compile。
 void FrameGraph::Compile() {
     BuildDAG();
     CullPasses();
@@ -284,13 +268,13 @@ void FrameGraph::Compile() {
     CalculateLifetimes();
 }
 
-// Step 2a: DAG 讒狗ｯ・
+// Step 2a: DAG 構築
 void FrameGraph::BuildDAG() {
     const size_t passCount = m_passNodes.size();
     m_adjacency.resize(passCount);
     m_inDegree.resize(passCount, 0);
 
-    // key: (resourceIndex, version) 竊・producerPassIndex
+    // key は resourceIndex と version、値は producerPassIndex。
     std::unordered_map<uint32_t, uint16_t> producerMap;
 
     for (auto& pass : m_passNodes) {
@@ -465,10 +449,7 @@ void FrameGraph::TopologicalSort() {
             m_executionOrder.size(), nonCulledCount);
     }
 }
-
-// ============================================================
-// Phase 3: Execute
-// ============================================================
+// Phase 3 は execute。
 void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
     IResourceFactory* factory = Graphics::Instance().GetResourceFactory();
     FrameGraphResources resources(*this);
@@ -663,9 +644,6 @@ ITexture* FrameGraph::GetPhysicalTexture(ResourceHandle handle) const {
     if (handle.index >= m_resourceNodes.size()) return nullptr;
     return m_resourceNodes[handle.index].GetPhysical();
 }
-
-// ============================================================
-// ============================================================
 std::string FrameGraph::DumpGraphviz() const {
     std::ostringstream ss;
     ss << "digraph FrameGraph {\n";

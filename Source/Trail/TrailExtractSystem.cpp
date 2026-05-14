@@ -1,4 +1,4 @@
-#include "TrailExtractSystem.h"
+﻿#include "TrailExtractSystem.h"
 #include "Component/TrailComponent.h"
 #include "Component/ComponentSignature.h"
 #include "Archetype/Archetype.h"
@@ -10,6 +10,7 @@
 #include <algorithm>
 
 using namespace DirectX;
+// Sub3 はこのモジュールの実行時処理を構成する補助処理を行う。
 
 static XMFLOAT3 Sub3(const XMFLOAT3& a, const XMFLOAT3& b) {
     return { a.x - b.x, a.y - b.y, a.z - b.z };

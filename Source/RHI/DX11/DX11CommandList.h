@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RHI/ICommandList.h"
 #include <wrl.h>
 
@@ -26,9 +26,6 @@ public:
 
     void PSSetTexture(uint32_t slot, ITexture* texture) override;
     void PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) override;
-
-    // =========================================================
-    // =========================================================
     void VSSetShader(IShader* shader) override;
     void PSSetShader(IShader* shader) override;
     void GSSetShader(IShader* shader) override;
@@ -50,7 +47,7 @@ public:
 
     void UpdateBuffer(IBuffer* buffer, const void* data, uint32_t size) override;
 
-    // RHI/DX11/DX11CommandList.h
+    // DX11 用 command list の interface 実装。
     void SetRenderTargets(uint32_t numRenderTargets, ITexture* const* renderTargets, ITexture* depthStencil) override;
     void SetRenderTarget(ITexture* renderTarget, ITexture* depthStencil)override;
     void ClearColor(ITexture* renderTarget, const float color[4]) override;

@@ -114,7 +114,7 @@ Font::Font(IResourceFactory* factory, const char* filename, int maxSpriteCount)
 }
 
 // FNTファイルを読み込み、文字メトリクスとフォントページテクスチャを構築する。
-bool Font::LoadFontData(IResourceFactory* /*factory*/, const char* filename)
+bool Font::LoadFontData(IResourceFactory*, const char* filename)
 {
     // エンジンのパス解決ルールに従い、実ファイルパスへ変換する。
     const std::string resolvedFilename = PathResolver::Resolve(filename);
@@ -308,7 +308,7 @@ void Font::SetSDFParams(float threshold, float softness)
 }
 
 // 文字描画の開始処理。頂点作成状態とページ分割情報を初期化する。
-void Font::Begin(ICommandList* /*commandList*/, float viewportWidth, float viewportHeight)
+void Font::Begin(ICommandList*, float viewportWidth, float viewportHeight)
 {
     if (!m_isValid || m_vertices.empty()) {
         return;

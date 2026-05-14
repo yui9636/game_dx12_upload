@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
@@ -24,10 +24,10 @@ public:
     uint32_t                    GetDSVDescriptorSize() const { return m_dsvDescriptorSize; }
     uint32_t                    GetCBVSRVUAVDescriptorSize() const { return m_cbvSrvUavDescriptorSize; }
 
-    // Resize
+    // resize 処理。
     void ResizeSwapChain(uint32_t width, uint32_t height);
 
-    // Frame sync
+    // frame 同期処理。
     void WaitForGPU();
     void MoveToNextFrame();
     uint32_t GetCurrentBackBufferIndex() const { return m_frameIndex; }
@@ -40,13 +40,13 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE AllocateDSVDescriptor();
     D3D12_CPU_DESCRIPTOR_HANDLE AllocateSRVDescriptor();
 
-    // Deferred descriptor free: schedule release after GPU completes fence
+    // 遅延 descriptor 解放は GPU fence 完了後に実行するよう予約する。
     enum class DescriptorType { SRV, RTV, DSV };
     void DeferFreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle, ID3D12Fence* fence,
                              uint64_t fenceValue, DescriptorType type);
     void ProcessDeferredFrees();
 
-    // Main fence access (fallback for textures without explicit retire fence)
+    // 明示的な retire fence を持たない texture 用に main fence へアクセスする。
     ID3D12Fence* GetMainFence() const { return m_fence.Get(); }
     uint64_t GetMainFenceCurrentValue() const { return m_fenceValues[m_frameIndex]; }
 
@@ -71,7 +71,7 @@ private:
     ComPtr<ID3D12CommandQueue>       m_computeQueue;
     ComPtr<IDXGISwapChain3>          m_swapChain;
 
-    // Descriptor heaps
+    // descriptor heap 群。
     ComPtr<ID3D12DescriptorHeap>     m_rtvHeap;
     ComPtr<ID3D12DescriptorHeap>     m_dsvHeap;
     ComPtr<ID3D12DescriptorHeap>     m_cbvSrvUavHeap;
@@ -84,11 +84,11 @@ private:
     uint32_t m_nextCbvSrvUavDescriptor = 0;
     uint32_t m_nextStagingSrvDescriptor = 0;
 
-    // Frame resources
+    // frame resource 群。
     ComPtr<ID3D12CommandAllocator>   m_commandAllocators[FRAME_COUNT];
     ComPtr<ID3D12Resource>           m_backBuffers[FRAME_COUNT];
 
-    // Fence
+    // fence 管理。
     ComPtr<ID3D12Fence>              m_fence;
     ComPtr<ID3D12Fence>              m_computeFence;
     HANDLE                           m_fenceEvent = nullptr;
@@ -98,7 +98,7 @@ private:
     uint32_t                         m_frameIndex = 0;
     bool                             m_allowTearing = false;
 
-    // Deferred descriptor free
+    // 遅延 descriptor 解放。
     struct DeferredDescriptorFree {
         D3D12_CPU_DESCRIPTOR_HANDLE handle;
         ID3D12Fence* fence;

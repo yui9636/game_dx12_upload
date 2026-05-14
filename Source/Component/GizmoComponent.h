@@ -1,8 +1,8 @@
-#pragma once
+ï»¿#pragma once
 #include <DirectXMath.h>
 
 /**
- * @brief E½Ä—pE½IE½ÈƒfE½oE½bE½OE½\E½E½E½pE½RE½E½E½|E½[E½lE½E½E½g
+ * @brief æç”»ç”¨ã®ç°¡æ˜“ãƒ‡ãƒãƒƒã‚°å½¢çŠ¶ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã€‚
  */
 struct GizmoComponent {
     enum class Shape { Box, Sphere, Cylinder, Capsule };

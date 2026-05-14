@@ -1,8 +1,8 @@
-#pragma once
+ï»¿#pragma once
 #include <DirectXMath.h>
 
 /**
- * @brief E½JE½E½E½E½E½ÌE¿½E½E½E½YE½E½E½\E½iE½E½E½wE½fE½[E½^E½j
+ * @brief ã‚«ãƒ¡ãƒ©ã®ãƒ¬ãƒ³ã‚ºè¨­å®šï¼ˆæŠ•å½±ãƒ‡ãƒ¼ã‚¿ï¼‰ã€‚
  */
 struct CameraLensComponent {
     float fovY = 0.785398f;
@@ -12,8 +12,8 @@ struct CameraLensComponent {
 };
 
 /**
- * @brief E½VE½XE½eE½E½E½É‚ï¿½E½E½Äï¿½E½E½E½E½E½Ü‚ï¿½E½sE½E½fE½[E½^
- * RenderPass E½Í‚ï¿½E½ÌƒRE½E½E½|E½[E½lE½E½E½gE½E½Ç‚İï¿½E½E½Ä•`E½E½E½sE½E½
+ * @brief ã‚·ã‚¹ãƒ†ãƒ ã«ã‚ˆã£ã¦æ›´æ–°ã•ã‚Œã‚‹è¡Œåˆ—ãƒ‡ãƒ¼ã‚¿ã€‚
+ * RenderPass ã¯ã“ã®ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã‚’èª­ã¿å–ã£ã¦æç”»ã™ã‚‹ã€‚
  */
 struct CameraMatricesComponent {
     DirectX::XMFLOAT4X4 view = {};
@@ -23,6 +23,6 @@ struct CameraMatricesComponent {
 };
 
 /**
- * @brief E½E½E½CE½E½E½JE½E½E½E½E½E½E½Ê—pE½^E½O
+ * @brief ãƒ¡ã‚¤ãƒ³ã‚«ãƒ¡ãƒ©åˆ¤å®šç”¨ã‚¿ã‚°ã€‚
  */
 struct  CameraMainTagComponent {};

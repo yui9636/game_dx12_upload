@@ -1,3 +1,4 @@
+﻿// DX11Shader の RHI バックエンド実装をまとめます。
 #include "DX11Shader.h"
 #include "System/Misc.h"
 #include <vector>

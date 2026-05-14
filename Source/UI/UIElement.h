@@ -1,3 +1,4 @@
+﻿// UIElement の UI 関連宣言をまとめます。
 #pragma once
 #include <DirectXMath.h>
 #include <memory>

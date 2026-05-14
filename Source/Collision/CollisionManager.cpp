@@ -1,17 +1,17 @@
-// CollisionManager.cpp
+ï»¿// CollisionManager ã®å®Ÿè£…ã¯ç™»éŒ²æ¸ˆã¿ collider ã‚’èµ°æŸ»ã—ã¦è¡çªçµæœã‚’æ›´æ–°ã™ã‚‹ã€‚
 #include "CollisionManager.h"
 #include "CollisionFunctions.h"
 #include <algorithm>
 
-// singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+// singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
 CollisionManager& CollisionManager::Instance()
 {
     static CollisionManager instance;
     return instance;
 }
 
-// ‹…ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-// “o˜^¬Œ÷‚ÍˆêˆÓ ID ‚ğ•Ô‚·B
+// çƒã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+// ç™»éŒ²æˆåŠŸæ™‚ã¯ä¸€æ„ ID ã‚’è¿”ã™ã€‚
 uint32_t CollisionManager::AddSphere(const SphereDesc& desc, void* userPtr, ColliderAttribute attr)
 {
     Collider c;
@@ -22,15 +22,15 @@ uint32_t CollisionManager::AddSphere(const SphereDesc& desc, void* userPtr, Coll
     c.enabled = true;
     c.sphere = desc;
 
-    // ”¼Œa‚ª•‰’l‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+    // åŠå¾„ãŒè² å€¤ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
     if (c.sphere.radius < 0.0f) c.sphere.radius = 0.0f;
 
     colliders_.push_back(c);
     return c.id;
 }
 
-// ƒJƒvƒZƒ‹ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-// “o˜^¬Œ÷‚ÍˆêˆÓ ID ‚ğ•Ô‚·B
+// ã‚«ãƒ—ã‚»ãƒ«ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+// ç™»éŒ²æˆåŠŸæ™‚ã¯ä¸€æ„ ID ã‚’è¿”ã™ã€‚
 uint32_t CollisionManager::AddCapsule(const CapsuleDesc& desc, void* userPtr, ColliderAttribute attr)
 {
     Collider c;
@@ -41,7 +41,7 @@ uint32_t CollisionManager::AddCapsule(const CapsuleDesc& desc, void* userPtr, Co
     c.enabled = true;
     c.capsule = desc;
 
-    // ”¼Œa‚Æ‚‚³‚ª•‰’l‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+    // åŠå¾„ã¨é«˜ã•ãŒè² å€¤ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
     if (c.capsule.radius < 0.0f) c.capsule.radius = 0.0f;
     if (c.capsule.height < 0.0f) c.capsule.height = 0.0f;
 
@@ -49,8 +49,8 @@ uint32_t CollisionManager::AddCapsule(const CapsuleDesc& desc, void* userPtr, Co
     return c.id;
 }
 
-// Box ƒRƒ‰ƒCƒ_[‚ğ“o˜^‚·‚éB
-// “o˜^¬Œ÷‚ÍˆêˆÓ ID ‚ğ•Ô‚·B
+// Box ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+// ç™»éŒ²æˆåŠŸæ™‚ã¯ä¸€æ„ ID ã‚’è¿”ã™ã€‚
 uint32_t CollisionManager::AddBox(const BoxDesc& desc, void* userPtr, ColliderAttribute attr)
 {
     Collider c;
@@ -61,7 +61,7 @@ uint32_t CollisionManager::AddBox(const BoxDesc& desc, void* userPtr, ColliderAt
     c.enabled = true;
     c.box = desc;
 
-    // ƒTƒCƒY‚Íí‚É³’l‚Æ‚µ‚Äˆµ‚¤B
+    // ã‚µã‚¤ã‚ºã¯å¸¸ã«æ­£å€¤ã¨ã—ã¦æ‰±ã†ã€‚
     c.box.size.x = std::abs(c.box.size.x);
     c.box.size.y = std::abs(c.box.size.y);
     c.box.size.z = std::abs(c.box.size.z);
@@ -70,14 +70,14 @@ uint32_t CollisionManager::AddBox(const BoxDesc& desc, void* userPtr, ColliderAt
     return c.id;
 }
 
-// w’è ID ‚Ì‹…ƒRƒ‰ƒCƒ_[Œ`ó‚ğXV‚·‚éB
+// æŒ‡å®š ID ã®çƒã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
 bool CollisionManager::UpdateSphere(uint32_t id, const SphereDesc& desc)
 {
     for (auto& c : colliders_) {
         if (c.id == id && c.shape == ColliderShape::Sphere) {
             c.sphere = desc;
 
-            // ”¼Œa‚ª•‰’l‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+            // åŠå¾„ãŒè² å€¤ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
             if (c.sphere.radius < 0.0f) c.sphere.radius = 0.0f;
             return true;
         }
@@ -85,14 +85,14 @@ bool CollisionManager::UpdateSphere(uint32_t id, const SphereDesc& desc)
     return false;
 }
 
-// w’è ID ‚ÌƒJƒvƒZƒ‹ƒRƒ‰ƒCƒ_[Œ`ó‚ğXV‚·‚éB
+// æŒ‡å®š ID ã®ã‚«ãƒ—ã‚»ãƒ«ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
 bool CollisionManager::UpdateCapsule(uint32_t id, const CapsuleDesc& desc)
 {
     for (auto& c : colliders_) {
         if (c.id == id && c.shape == ColliderShape::Capsule) {
             c.capsule = desc;
 
-            // ”¼Œa‚Æ‚‚³‚ª•‰’l‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+            // åŠå¾„ã¨é«˜ã•ãŒè² å€¤ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
             if (c.capsule.radius < 0.0f) c.capsule.radius = 0.0f;
             if (c.capsule.height < 0.0f) c.capsule.height = 0.0f;
             return true;
@@ -101,14 +101,14 @@ bool CollisionManager::UpdateCapsule(uint32_t id, const CapsuleDesc& desc)
     return false;
 }
 
-// w’è ID ‚Ì Box ƒRƒ‰ƒCƒ_[Œ`ó‚ğXV‚·‚éB
+// æŒ‡å®š ID ã® Box ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å½¢çŠ¶ã‚’æ›´æ–°ã™ã‚‹ã€‚
 bool CollisionManager::UpdateBox(uint32_t id, const BoxDesc& desc)
 {
     for (auto& c : colliders_) {
         if (c.id == id && c.shape == ColliderShape::Box) {
             c.box = desc;
 
-            // ƒTƒCƒY‚Íí‚É³’l‚Æ‚µ‚Äˆµ‚¤B
+            // ã‚µã‚¤ã‚ºã¯å¸¸ã«æ­£å€¤ã¨ã—ã¦æ‰±ã†ã€‚
             c.box.size.x = std::abs(c.box.size.x);
             c.box.size.y = std::abs(c.box.size.y);
             c.box.size.z = std::abs(c.box.size.z);
@@ -118,7 +118,7 @@ bool CollisionManager::UpdateBox(uint32_t id, const BoxDesc& desc)
     return false;
 }
 
-// w’è ID ‚Ì enabled ó‘Ô‚ğ•ÏX‚·‚éB
+// æŒ‡å®š ID ã® enabled çŠ¶æ…‹ã‚’å¤‰æ›´ã™ã‚‹ã€‚
 bool CollisionManager::SetEnabled(uint32_t id, bool enabled)
 {
     for (auto& c : colliders_) {
@@ -130,8 +130,8 @@ bool CollisionManager::SetEnabled(uint32_t id, bool enabled)
     return false;
 }
 
-// w’è ID ‚Ì enabled ó‘Ô‚ğæ“¾‚·‚éB
-// Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î false ‚ğ•Ô‚·B
+// æŒ‡å®š ID ã® enabled çŠ¶æ…‹ã‚’å–å¾—ã™ã‚‹ã€‚
+// è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° false ã‚’è¿”ã™ã€‚
 bool CollisionManager::GetEnabled(uint32_t id) const
 {
     for (auto& c : colliders_) {
@@ -140,7 +140,7 @@ bool CollisionManager::GetEnabled(uint32_t id) const
     return false;
 }
 
-// w’è ID ‚Ì userPtr ‚ğXV‚·‚éB
+// æŒ‡å®š ID ã® userPtr ã‚’æ›´æ–°ã™ã‚‹ã€‚
 bool CollisionManager::SetUserPtr(uint32_t id, void* p)
 {
     for (auto& c : colliders_) {
@@ -152,8 +152,8 @@ bool CollisionManager::SetUserPtr(uint32_t id, void* p)
     return false;
 }
 
-// w’è ID ‚Ì userPtr ‚ğæ“¾‚·‚éB
-// Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š ID ã® userPtr ã‚’å–å¾—ã™ã‚‹ã€‚
+// è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 void* CollisionManager::GetUserPtr(uint32_t id) const
 {
     for (auto& c : colliders_) {
@@ -162,8 +162,8 @@ void* CollisionManager::GetUserPtr(uint32_t id) const
     return nullptr;
 }
 
-// w’è ID ‚ÌƒRƒ‰ƒCƒ_[–{‘Ì‚ğæ“¾‚·‚éB
-// Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š ID ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼æœ¬ä½“ã‚’å–å¾—ã™ã‚‹ã€‚
+// è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 const Collider* CollisionManager::Get(uint32_t id) const
 {
     for (auto& c : colliders_) {
@@ -172,7 +172,7 @@ const Collider* CollisionManager::Get(uint32_t id) const
     return nullptr;
 }
 
-// w’è ID ‚ÌƒRƒ‰ƒCƒ_[‚ğíœ‚·‚éB
+// æŒ‡å®š ID ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’å‰Šé™¤ã™ã‚‹ã€‚
 bool CollisionManager::Remove(uint32_t id)
 {
     auto it = std::find_if(colliders_.begin(), colliders_.end(),
@@ -184,15 +184,15 @@ bool CollisionManager::Remove(uint32_t id)
     return true;
 }
 
-// ‚·‚×‚Ä‚ÌƒRƒ‰ƒCƒ_[‚ğíœ‚µAID ”­sƒJƒEƒ“ƒ^‚à‰Šú‰»‚·‚éB
+// ã™ã¹ã¦ã®ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’å‰Šé™¤ã—ã€ID ç™ºè¡Œã‚«ã‚¦ãƒ³ã‚¿ã‚‚åˆæœŸåŒ–ã™ã‚‹ã€‚
 void CollisionManager::Clear()
 {
     colliders_.clear();
     issueId_ = 1;
 }
 
-// “o˜^’†‚Ì‘SƒRƒ‰ƒCƒ_[‘g‚İ‡‚í‚¹‚É‚Â‚¢‚ÄÚG”»’è‚ğs‚¢A
-// ÚG‚µ‚Ä‚¢‚éƒyƒA‚ğ outContacts ‚É‘‚«o‚·B
+// ç™»éŒ²ä¸­ã®å…¨ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼çµ„ã¿åˆã‚ã›ã«ã¤ã„ã¦æ¥è§¦åˆ¤å®šã‚’è¡Œã„ã€
+// æ¥è§¦ã—ã¦ã„ã‚‹ãƒšã‚¢ã‚’ outContacts ã«æ›¸ãå‡ºã™ã€‚
 void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outContacts) const
 {
     outContacts.clear();
@@ -209,7 +209,7 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
             HitResult hit{};
             bool ok = false;
 
-            // Œ`ó‚Ì‘g‚İ‡‚í‚¹‚²‚Æ‚É‘Î‰‚·‚é”»’èŠÖ”‚ğŒÄ‚ÔB
+            // å½¢çŠ¶ã®çµ„ã¿åˆã‚ã›ã”ã¨ã«å¯¾å¿œã™ã‚‹åˆ¤å®šé–¢æ•°ã‚’å‘¼ã¶ã€‚
             if (A.shape == ColliderShape::Sphere && B.shape == ColliderShape::Sphere) {
                 ok = CollisionFunctions::IntersectSphereVsSphere(
                     A.sphere.center, A.sphere.radius,
@@ -228,7 +228,7 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
                     A.capsule.base, A.capsule.radius, A.capsule.height,
                     hit);
 
-                // ”»’èŠÖ”‚Í Sphere ‚ğ self ˆµ‚¢‚·‚é‚Ì‚ÅA‡”Ô‚ğ“ü‚ê‘Ö‚¦‚½‚Ô‚ñŒ‹‰Ê‚à”½“]‚·‚éB
+                // åˆ¤å®šé–¢æ•°ã¯ Sphere ã‚’ self æ‰±ã„ã™ã‚‹ã®ã§ã€é †ç•ªã‚’å…¥ã‚Œæ›¿ãˆãŸã¶ã‚“çµæœã‚‚åè»¢ã™ã‚‹ã€‚
                 if (ok) std::swap(hit.selfOutPosition, hit.otherOutPosition);
             }
             else if (A.shape == ColliderShape::Capsule && B.shape == ColliderShape::Capsule) {
@@ -249,7 +249,7 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
                     A.box.center, A.box.size,
                     hit);
 
-                // ”»’è‡‚ğ“ü‚ê‘Ö‚¦‚½‚Ì‚Å‰Ÿ‚µ–ß‚µŒ‹‰Ê‚à”½“]‚·‚éB
+                // åˆ¤å®šé †ã‚’å…¥ã‚Œæ›¿ãˆãŸã®ã§æŠ¼ã—æˆ»ã—çµæœã‚‚åè»¢ã™ã‚‹ã€‚
                 if (ok) std::swap(hit.selfOutPosition, hit.otherOutPosition);
             }
             else if (A.shape == ColliderShape::Box && B.shape == ColliderShape::Box) {
@@ -259,7 +259,7 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
                     hit);
             }
 
-            // ÚG‚µ‚Ä‚¢‚ê‚Î contact ‚Æ‚µ‚Ä’Ç‰Á‚·‚éB
+            // æ¥è§¦ã—ã¦ã„ã‚Œã° contact ã¨ã—ã¦è¿½åŠ ã™ã‚‹ã€‚
             if (ok) {
                 CollisionContact c;
                 c.idA = (uint32_t)A.id;
@@ -271,8 +271,8 @@ void CollisionManager::ComputeAllContacts(std::vector<CollisionContact>& outCont
     }
 }
 
-// ƒŒƒC‚ğ‘SƒRƒ‰ƒCƒ_[‚Ö”ò‚Î‚µAÅ‚à‹ß‚¢ƒqƒbƒg 1 Œ‚ğ•Ô‚·B
-// maxDistance ˆÈ“à‚Éƒqƒbƒg‚ª–³‚¯‚ê‚Î falseB
+// ãƒ¬ã‚¤ã‚’å…¨ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã¸é£›ã°ã—ã€æœ€ã‚‚è¿‘ã„ãƒ’ãƒƒãƒˆ 1 ä»¶ã‚’è¿”ã™ã€‚
+// maxDistance ä»¥å†…ã«ãƒ’ãƒƒãƒˆãŒç„¡ã‘ã‚Œã° falseã€‚
 bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDistance)
 {
     bool hasHit = false;
@@ -280,14 +280,14 @@ bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDist
 
     for (const auto& c : colliders_)
     {
-        // –³ŒøƒRƒ‰ƒCƒ_[‚Í–³‹‚·‚éB
+        // ç„¡åŠ¹ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã¯ç„¡è¦–ã™ã‚‹ã€‚
         if (!c.enabled) continue;
 
         float t = FLT_MAX;
         DirectX::XMFLOAT3 normal;
         bool hit = false;
 
-        // Œ`ó‚²‚Æ‚É‘Î‰‚·‚éƒŒƒC”»’èŠÖ”‚ğŒÄ‚ÔB
+        // å½¢çŠ¶ã”ã¨ã«å¯¾å¿œã™ã‚‹ãƒ¬ã‚¤åˆ¤å®šé–¢æ•°ã‚’å‘¼ã¶ã€‚
         switch (c.shape)
         {
         case ColliderShape::Sphere:
@@ -306,7 +306,7 @@ bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDist
             break;
         }
 
-        // ‚æ‚è‹ß‚¢ƒqƒbƒg‚¾‚¯‚ğÌ—p‚·‚éB
+        // ã‚ˆã‚Šè¿‘ã„ãƒ’ãƒƒãƒˆã ã‘ã‚’æ¡ç”¨ã™ã‚‹ã€‚
         if (hit && t >= 0.0f && t < closestDist)
         {
             closestDist = t;
@@ -316,14 +316,14 @@ bool CollisionManager::Raycast(const Ray& ray, RaycastHit& outHit, float maxDist
             outHit.normal = normal;
             outHit.userPtr = c.userPtr;
 
-            // ƒqƒbƒgˆÊ’u‚ğŒvZ‚µ‚Ä‚¢‚é‚ªAŒ»ó outHit ‚Ö‚Í•Û‘¶‚µ‚Ä‚¢‚È‚¢B
+            // ãƒ’ãƒƒãƒˆä½ç½®ã‚’è¨ˆç®—ã—ã¦ã„ã‚‹ãŒã€ç¾çŠ¶ outHit ã¸ã¯ä¿å­˜ã—ã¦ã„ãªã„ã€‚
             DirectX::XMVECTOR Dir = DirectX::XMLoadFloat3(&ray.direction);
             DirectX::XMVECTOR HitPoint = DirectX::XMVectorAdd(
                 DirectX::XMLoadFloat3(&ray.origin),
                 DirectX::XMVectorScale(Dir, t)
             );
 
-            // •K—v‚È‚ç‚±‚±‚Å outHit.hitPosition ‚È‚Ç‚Ö•Û‘¶‚·‚éŠg’£—]’n‚ª‚ ‚éB
+            // å¿…è¦ãªã‚‰ã“ã“ã§ outHit.hitPosition ãªã©ã¸ä¿å­˜ã™ã‚‹æ‹¡å¼µä½™åœ°ãŒã‚ã‚‹ã€‚
         }
     }
 

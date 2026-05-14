@@ -34,12 +34,12 @@ void TimelineShakeSystem::Update(Registry& registry, float dt) {
                 if (item.type != 4) continue;
                 bool inside = tl.currentFrame >= item.start && tl.currentFrame <= item.end;
 
-                // Reset fire flag when leaving or before entering
+                // 範囲外へ出たとき、または入る前に fire flag をリセットする。
                 if (tl.currentFrame < item.start) {
                     item.fired = false;
                 }
 
-                // Fire hitstop on enter (once)
+                // 進入時に hitstop を 1 回発火する。
                 if (inside && !item.fired) {
                     item.fired = true;
                     if (item.shake.hitStopDuration > 0.0f && hsCol) {
@@ -49,7 +49,7 @@ void TimelineShakeSystem::Update(Registry& registry, float dt) {
                     }
                 }
 
-                // Compute shake offset while inside
+                // 範囲内にいる間、揺れ offset を計算する。
                 if (inside && tl.fps > 0.0f) {
                     float elapsed = static_cast<float>(tl.currentFrame - item.start) / tl.fps;
                     float duration = item.shake.duration;
@@ -63,7 +63,7 @@ void TimelineShakeSystem::Update(Registry& registry, float dt) {
                     if (amp > 0.001f) {
                         const float seed = static_cast<float>(item.start) * 0.173f + static_cast<float>(item.end) * 0.071f;
                         float t = elapsed * item.shake.frequency + seed;
-                        // Procedural noise — layered sin/cos for organic feel
+                        // 手続き型ノイズ。自然さのため sin/cos を重ねる。
                         float nx = sinf(t) + sinf(t * 0.5f + 1.5f) * 0.5f;
                         float ny = cosf(t * 1.1f) + sinf(t * 0.8f + 2.0f) * 0.5f;
                         float nz = sinf(t * 0.3f) * 0.3f;

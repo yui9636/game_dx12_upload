@@ -1,3 +1,4 @@
+﻿// BattleFlowSystem の Gameplay 関連実装をまとめます。
 #include "BattleFlowSystem.h"
 
 #include "Component/TransformComponent.h"

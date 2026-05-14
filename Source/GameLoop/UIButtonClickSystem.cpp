@@ -1,4 +1,4 @@
-#include "UIButtonClickSystem.h"
+﻿#include "UIButtonClickSystem.h"
 
 #include "Component/HierarchyComponent.h"
 #include "Component/UIButtonComponent.h"
@@ -94,7 +94,7 @@ void UIButtonClickSystem::Update(
             continue;
         }
         if (ev.mouseButton.button != 1) {
-            continue; // SDL: 1 = left
+            continue; // SDL では 1 が left button。
         }
 
         const DirectX::XMFLOAT2 screenPoint{ ev.mouseButton.x, ev.mouseButton.y };

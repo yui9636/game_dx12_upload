@@ -1,3 +1,4 @@
+﻿// UI2DDrawSystem の UI 関連宣言をまとめます。
 #pragma once
 
 #include <algorithm>

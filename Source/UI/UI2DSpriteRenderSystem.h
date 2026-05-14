@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <array>
@@ -118,25 +118,25 @@ private:
         const auto c3 = corners[3];
 
         switch (direction) {
-        case 1: // RightToLeft
+        case 1: // 右から左へ塗る。
             corners[0] = Lerp(c1, c0, ratio);
             corners[1] = c1;
             corners[2] = c2;
             corners[3] = Lerp(c2, c3, ratio);
             break;
-        case 2: // BottomToTop
+        case 2: // 下から上へ塗る。
             corners[0] = Lerp(c3, c0, ratio);
             corners[1] = Lerp(c2, c1, ratio);
             corners[2] = c2;
             corners[3] = c3;
             break;
-        case 3: // TopToBottom
+        case 3: // 上から下へ塗る。
             corners[0] = c0;
             corners[1] = c1;
             corners[2] = Lerp(c1, c2, ratio);
             corners[3] = Lerp(c0, c3, ratio);
             break;
-        case 0: // LeftToRight
+        case 0: // 左から右へ塗る。
         default:
             corners[0] = c0;
             corners[1] = Lerp(c0, c1, ratio);
@@ -150,25 +150,25 @@ private:
     {
         ratio = Clamp01(ratio);
         switch (direction) {
-        case 1: // RightToLeft
+        case 1: // 右から左へ塗る。
             uvs[0] = { 1.0f - ratio, 0.0f };
             uvs[1] = { 1.0f, 0.0f };
             uvs[2] = { 1.0f, 1.0f };
             uvs[3] = { 1.0f - ratio, 1.0f };
             break;
-        case 2: // BottomToTop
+        case 2: // 下から上へ塗る。
             uvs[0] = { 0.0f, 1.0f - ratio };
             uvs[1] = { 1.0f, 1.0f - ratio };
             uvs[2] = { 1.0f, 1.0f };
             uvs[3] = { 0.0f, 1.0f };
             break;
-        case 3: // TopToBottom
+        case 3: // 上から下へ塗る。
             uvs[0] = { 0.0f, 0.0f };
             uvs[1] = { 1.0f, 0.0f };
             uvs[2] = { 1.0f, ratio };
             uvs[3] = { 0.0f, ratio };
             break;
-        case 0: // LeftToRight
+        case 0: // 左から右へ塗る。
         default:
             uvs[0] = { 0.0f, 0.0f };
             uvs[1] = { ratio, 0.0f };

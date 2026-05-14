@@ -2,7 +2,7 @@
 
 GS_IN main(uint vertex_id : SV_VertexID)
 {
-    //  ’¸“_”Ô†‚ğ‘—‚é‚¾‚¯
+    //  é ‚ç‚¹ç•ªå·ã‚’é€ã‚‹ã ã‘
     GS_IN vout;
     vout.vertex_id = vertex_id;
     return vout;

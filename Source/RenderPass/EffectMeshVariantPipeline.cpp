@@ -1,3 +1,4 @@
+﻿// EffectMeshVariantPipeline のレンダーパス実装をまとめます。
 #include "EffectMeshVariantPipeline.h"
 
 #include <d3d12.h>

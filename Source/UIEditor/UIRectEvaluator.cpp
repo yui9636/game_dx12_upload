@@ -1,4 +1,4 @@
-#include "UIEditor/UIRectEvaluator.h"
+﻿#include "UIEditor/UIRectEvaluator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +15,7 @@
 
 namespace
 {
+// AncestorsVisible はこのモジュールの実行時処理を構成する補助処理を行う。
     bool AncestorsVisible(Registry& registry, EntityID entity)
     {
         auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity);

@@ -1,3 +1,4 @@
+﻿// DodgeSystem のシステム宣言をまとめます。
 #pragma once
 class Registry;
 class DodgeSystem {

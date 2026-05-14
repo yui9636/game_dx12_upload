@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
-// Faction tag used by DamageSystem to filter friendly fire.
-// Convention: 0 = Player side, 1 = Enemy side. NPC may use other ids (>=2).
+// DamageSystem が味方判定を除外するために使う陣営タグ。
+// 規約: 0 はプレイヤー側、1 は敵側。NPC は 2 以上を使える。
 struct TeamComponent {
     uint8_t teamId = 0;
 };

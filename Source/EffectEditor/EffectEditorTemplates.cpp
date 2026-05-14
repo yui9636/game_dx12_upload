@@ -1,4 +1,4 @@
-#include "EffectEditorTemplates.h"
+﻿#include "EffectEditorTemplates.h"
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"
 
@@ -37,7 +37,7 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
                                    float vortexStrength,
                                    const DirectX::XMFLOAT4& startColor,
                                    const DirectX::XMFLOAT4& endColor) {
-        const auto resolveTemplateMaxParticles = [](float duration, float spawnRate, uint32_t burstCount, float particleLifetime, EffectParticleDrawMode /*drawMode*/) {
+        const auto resolveTemplateMaxParticles = [](float duration, float spawnRate, uint32_t burstCount, float particleLifetime, EffectParticleDrawMode) {
             return static_cast<int>(ResolveEffectParticleMaxParticles(
                 0, spawnRate, burstCount, particleLifetime, duration));
         };
@@ -45,7 +45,7 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
         panel.m_asset.name = effectName;
         panel.m_asset.previewDefaults.duration = duration;
 
-        // Remove mesh-only nodes so particle graph has no side-effect fan-out on Lifetime.
+        // Lifetime から副作用付き fan-out が起きないよう、mesh 専用ノードを除去する。
         const auto removeNodeIfExists = [&](EffectGraphNodeType type) {
             while (EffectGraphNode* n = panel.FindNodeByType(type)) {
                 const uint32_t nid = n->id;
@@ -65,9 +65,9 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
         };
         removeNodeIfExists(EffectGraphNodeType::MeshRenderer);
         removeNodeIfExists(EffectGraphNodeType::MeshSource);
-        // Ensure all nodes exist first. Pointers returned by EnsureNodeByType
-        // can be invalidated by subsequent push_back into m_asset.nodes, so we
-        // re-query via FindNodeByType after every node has been created.
+        // 先に全ノードを作成する。EnsureNodeByType が返した pointer は
+        // m_asset.nodes への push_back で無効化される可能性があるため、
+        // 全ノード作成後に FindNodeByType で取り直す。
         panel.EnsureNodeByType(EffectGraphNodeType::Spawn);
         panel.EnsureNodeByType(EffectGraphNodeType::Output);
         panel.EnsureNodeByType(EffectGraphNodeType::Lifetime);
@@ -155,22 +155,22 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
     ImGui::Separator();
     ImGui::TextDisabled("-- Mesh Effects --");
 
-    // applyMeshTemplate: sets up MeshSource + MeshRenderer nodes
+    // applyMeshTemplate は MeshSource と MeshRenderer ノードを設定する。
     const auto applyMeshTemplate = [&](
         const char* effectName,
         float duration,
         const char* meshPath,
-        int blendState,          // 2=Additive
+        int blendState,          // 2 は Additive。
         int shaderFlags,
         const DirectX::XMFLOAT4& tint,
-        // vectorValue2: {dissolveAmount, dissolveEdge, fresnelPower, flowStrength}
+        // vectorValue2 は dissolveAmount、dissolveEdge、fresnelPower、flowStrength を保持する。
         float dissolveAmount, float dissolveEdge, float fresnelPower, float flowStrength,
-        // vectorValue3: {flowSpeedX, flowSpeedY, scrollSpeedX, scrollSpeedY}
+        // vectorValue3 は flowSpeedX、flowSpeedY、scrollSpeedX、scrollSpeedY を保持する。
         float flowSpeedX, float flowSpeedY, float scrollSpeedX, float scrollSpeedY,
-        // colors
+        // 色パラメータ。
         const DirectX::XMFLOAT4& dissolveGlowColor,
         const DirectX::XMFLOAT4& fresnelColor,
-        // textures
+        // テクスチャパラメータ。
         const char* baseTexPath,
         const char* maskTexPath,
         const char* flowMapPath)
@@ -242,13 +242,13 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
         ImGui::CloseCurrentPopup();
     };
 
-    // Texture | Dissolve | DissolveGlow | AlphaFade | Scroll | FlowMap
+    // text 用色。ure、Dissolve、DissolveGlow、AlphaFade、Scroll、FlowMap を有効にする。
     static constexpr int kMeshFlag_SlashGlow  = 0x001 | 0x002 | 0x200 | 0x4000 | 0x100000 | 0x1000;
-    // Texture | FlowMap | Scroll | AlphaFade
+    // text 用色。ure、FlowMap、Scroll、AlphaFade を有効にする。
     static constexpr int kMeshFlag_MagicCircle = 0x001 | 0x1000 | 0x100000 | 0x4000;
-    // Texture | Dissolve | AlphaFade
+    // text 用色。ure、Dissolve、AlphaFade を有効にする。
     static constexpr int kMeshFlag_Shockwave  = 0x001 | 0x002 | 0x4000;
-    // Texture | Fresnel | FlowMap | AlphaFade
+    // text 用色。ure、Fresnel、FlowMap、AlphaFade を有効にする。
     static constexpr int kMeshFlag_TornadoAura = 0x001 | 0x020 | 0x1000 | 0x4000;
 
     if (ImGui::MenuItem("Sword Slash Glow")) {
@@ -307,8 +307,8 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
     ImGui::Separator();
     ImGui::TextDisabled("-- Mesh Particle Effects --");
 
-    // Mesh-mode particles: SoA v3. Reuses applyTemplate (drawMode=Mesh) and
-    // stamps mesh-only slots on the SpriteRenderer node afterwards.
+    // Mesh mode particle は SoA v3 を使う。applyTemplate(drawMode=Mesh) を再利用し、
+    // 後から SpriteRenderer ノードへ mesh 専用 slot を設定する。
     const auto applyMeshParticleTemplate = [&](
         const char* effectName,
         float duration,
@@ -374,9 +374,9 @@ void EffectEditorTemplates::DrawMenuContents(EffectEditorPanel& panel)
     }
 
     ImGui::Separator();
-    // ---- CharacterTrailEffects templates (spec 2026-04-25, reworked) ----
-    // Pair these with EffectAttachmentComponent on the entity to follow
-    // a socket; enable velocityModulate to drive spawn rate by speed.
+    // CharacterTrailEffects 用テンプレート。2026-04-25 仕様の再構成版。
+    // 追従させたい entity の EffectAttachmentComponent と組み合わせる。
+    // socket へ追従し、velocityModulate を有効にすると速度で spawn rate を駆動する。
     const auto stampBlendMode = [&](EffectParticleBlendMode mode) {
         if (EffectGraphNode* sn = panel.FindNodeByType(EffectGraphNodeType::SpriteRenderer)) {
             sn->scalar2 = static_cast<float>(mode);

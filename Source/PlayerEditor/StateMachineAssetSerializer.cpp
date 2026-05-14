@@ -1,12 +1,8 @@
-#include "StateMachineAssetSerializer.h"
+﻿#include "StateMachineAssetSerializer.h"
 #include "StateMachineAsset.h"
 #include "JSONManager.h"
 #include <fstream>
-
-// ============================================================================
-// JSON helpers
-// ============================================================================
-
+// JSON 変換用の補助処理。
 static nlohmann::json ConditionToJson(const TransitionCondition& c)
 {
     return {
@@ -78,7 +74,7 @@ static nlohmann::json StateToJson(const StateNode& s)
     j["posX"]              = s.position.x;
     j["posY"]              = s.position.y;
 
-    // v2.0: state-bound BT path + designer note (omit when empty for cleaner JSON).
+    // v2.0 のステート紐づけ BT パスとメモは、空なら JSON へ出さず保存内容を小さくする。
     if (!s.behaviorTreePath.empty()) j["behaviorTreePath"] = s.behaviorTreePath;
     if (!s.aiNote.empty())           j["aiNote"]           = s.aiNote;
 
@@ -104,7 +100,7 @@ static StateNode StateFromJson(const nlohmann::json& j)
     s.position.x        = j.value("posX", 0.0f);
     s.position.y        = j.value("posY", 0.0f);
 
-    // v2.0: state-bound BT path + designer note (default: empty).
+    // v2.0 のステート紐づけ BT パスとメモは、未設定なら空として復元する。
     s.behaviorTreePath  = j.value("behaviorTreePath", std::string{});
     s.aiNote            = j.value("aiNote", std::string{});
 
@@ -132,11 +128,7 @@ static ParameterDef ParamFromJson(const nlohmann::json& j)
     p.defaultValue = j.value("defaultValue", 0.0f);
     return p;
 }
-
-// ============================================================================
-// Save / Load
-// ============================================================================
-
+// 保存と読み込みの入口。
 nlohmann::json StateMachineAssetSerializer::ToJson(const StateMachineAsset& asset)
 {
     nlohmann::json root;

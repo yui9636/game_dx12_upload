@@ -8,10 +8,7 @@
 #include <algorithm>
 
 using namespace DirectX;
-
-// =========================================================
-// CameraFreeControlComponent を持つカメラを、ImGui 入力に応じて操作します。
-// =========================================================
+// FreeControlComponent を持つカメラを ImGui 入力に応じて操作する。
 void FreeCameraSystem::Update(Registry& registry, float dt) {
     // 対象となるコンポーネント構成を作成します。
     auto archetypes = registry.GetAllArchetypes();
@@ -43,11 +40,8 @@ void FreeCameraSystem::Update(Registry& registry, float dt) {
             XMVECTOR forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
             XMVECTOR right = XMVector3Rotate(XMVectorSet(1, 0, 0, 0), rot);
             XMVECTOR up = XMVector3Rotate(XMVectorSet(0, 1, 0, 0), rot);
-
-            // =========================================================
-            // 右クリック中は、マウス移動で向き変更、WASD/EQ で移動します。
-            // =========================================================
-            if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
+// 右クリック中は、マウス移動で向き変更、WASD/EQ で移動します。
+if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Right] && !io.KeyAlt) {
                 // マウス移動量を yaw / pitch に加算します。
                 ctrl.yaw += io.MouseDelta.x * ctrl.rotateSpeed;
                 ctrl.pitch += io.MouseDelta.y * ctrl.rotateSpeed;
@@ -78,21 +72,15 @@ void FreeCameraSystem::Update(Registry& registry, float dt) {
                 // Transform に回転を反映します。
                 XMStoreFloat4(&trans.localRotation, rot);
             }
-
-            // =========================================================
-            // 中クリックドラッグ中は、現在のカメラ平面上でパン移動します。
-            // =========================================================
-            if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Middle]) {
+// 中クリックドラッグ中は、現在のカメラ平面上でパン移動します。
+if (ctrl.isHovered && io.MouseDown[ImGuiMouseButton_Middle]) {
                 // マウス移動量をカメラの right / up 方向に変換します。
                 float panSpeed = ctrl.moveSpeed * io.DeltaTime * 0.5f;
                 pos -= right * io.MouseDelta.x * panSpeed;
                 pos += up * io.MouseDelta.y * panSpeed;
             }
-
-            // =========================================================
-            // マウスホイールで、カメラの前後方向へズーム移動します。
-            // =========================================================
-            if (ctrl.isHovered && io.MouseWheel != 0.0f) {
+// マウスホイールで、カメラの前後方向へズーム移動します。
+if (ctrl.isHovered && io.MouseWheel != 0.0f) {
                 // ホイール量に応じて前後移動距離を計算します。
                 float zoomDist = io.MouseWheel * (ctrl.moveSpeed * 0.5f);
                 pos += forward * zoomDist;

@@ -1,3 +1,4 @@
+﻿// DX12Shader の RHI バックエンド実装をまとめます。
 #include "DX12Shader.h"
 #include <fstream>
 #include <cassert>

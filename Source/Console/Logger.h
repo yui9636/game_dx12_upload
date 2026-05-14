@@ -1,71 +1,68 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 #include <mutex>
 #include <filesystem>
 
-// ���O�̏d�v�x��\���񋓌^�B
+// ログの重要度を表す列挙型。
 enum class LogLevel {
-    Info,     // �ʏ���
-    Warning,  // �x��
-    Error     // �G���[
+    Info,     // 通常情報
+    Warning,  // 警告
+    Error     // エラー
 };
 
-// 1���Ԃ�̃��O���B
-// ImGui ��̃��O�r���[�Ȃǂŕ\�����邽�߂Ɏg���B
+// 1件ぶんのログ情報。
+// ImGui 上のログビューなどで表示するために使う。
 struct LogEntry {
-    // ���O�̎�ށB
+    // ログの種類。
     LogLevel level;
 
-    // ���O�{���B
+    // ログ本文。
     std::string message;
 };
 
-// ���O�o�͂��Ǘ����� singleton �N���X�B
-// Visual Studio �o�̓E�B���h�E�A���O�t�@�C���AImGui �\���p������3�������Ǘ�����B
+// ログ出力を管理する singleton クラス。
+// Visual Studio 出力ウィンドウ、ログファイル、ImGui 表示用履歴の3か所を管理する。
 class Logger
 {
 public:
-    // singleton �C���X�^���X��Ԃ��B
+    // singleton インスタンスを返す。
     static Logger& Instance() {
         static Logger instance;
         return instance;
     }
 
-    // �ϒ������t���Ń��O���o�͂���B
-    // ImGui �����AVS �o�́A���O�t�@�C���֓����ɏ������ށB
+    // 可変長引数付きでログを出力する。
+    // ImGui 履歴、VS 出力、ログファイルへ同時に書き込む。
     void Print(LogLevel level, const char* format, ...);
 
-    // ���ݕێ����Ă��郍�O������Ԃ��B
+    // 現在保持しているログ履歴を返す。
     const std::vector<LogEntry>& GetLogs() { return m_logs; }
 
-    // �ێ����̃��O��������������B
+    // 保持中のログ履歴を消去する。
     void ClearLogs() {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_logs.clear();
     }
 
 private:
-    // singleton �p�Ȃ̂ŃR���X�g���N�^�� private�B
+    // singleton 用なのでコンストラクタは private。
     Logger() = default;
 
-    // ���ʂȔj�������͕s�v�B
+    // 特別な破棄処理は不要。
     ~Logger() = default;
 
-    // ���ۂ̃��O�t�@�C���p�X��Ԃ��B
+    // 実際のログファイルパスを返す。
     std::filesystem::path GetLogFilePath() const;
 
-    // ��������ɕێ����Ă��郍�O�����B
+    // メモリ上に保持しているログ履歴。
     std::vector<LogEntry> m_logs;
 
-    // �����X���b�h����̓����������݂���邽�߂� mutex�B
+    // 複数スレッドからの同時書き込みを守るための mutex。
     std::mutex m_mutex;
 };
-
-// ==========================================================
-// �f�o�b�O�r���h�������L���ȃ��O�o�̓}�N���B
-// Info / Warn / Error ��3��ނ��ȒP�ɌĂׂ�悤�ɂ���B
-// ==========================================================
+// デバッグビルド時だけ有効なログ出力マクロ。
+// Info / Warn / Error の3種類を簡単に呼べるようにする。
 #if defined(_DEBUG)
 #define LOG_INFO(...)  { Logger::Instance().Print(LogLevel::Info, __VA_ARGS__); }
 #define LOG_WARN(...)  { Logger::Instance().Print(LogLevel::Warning, __VA_ARGS__); }

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -7,9 +7,9 @@
 #include <system_error>
 #include <vector>
 
-// Internal helpers shared between EffectEditorPanel.cpp and its extracted
-// sibling modules (EffectEditorTemplates.cpp / EffectEditorAssetPicker.cpp etc.).
-// Authoring helpers operate on EffectGraphAsset directly.
+// EffectEditorPanel.cpp と分離済みファイルで共有する内部補助処理。
+// EffectEditorTemplates.cpp や EffectEditorAssetPicker.cpp などから使う。
+// authoring 補助処理は EffectGraphAsset を直接操作する。
 
 #include <cstdint>
 #include <imgui.h>
@@ -60,7 +60,7 @@ namespace EffectEditorInternal
         }
     }
 
-    // ---- Path / asset utilities (inline so no separate .cpp needed) ----
+    // パスと asset 操作用の inline 補助関数。別 .cpp を持たない。
 
     inline bool HasModelExtension(const std::filesystem::path& path)
     {

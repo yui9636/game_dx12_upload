@@ -1,5 +1,5 @@
-// Runtime parameter-override authoring section for EffectEditorPanel.
-// Extracted from EffectEditorPanel.cpp; method bodies stay on the panel class.
+﻿// EffectEditorPanel 上で runtime parameter override を編集するセクション。
+// EffectEditorPanel.cpp から分離しているが、メソッド本体は panel class に属する。
 
 #include "EffectEditorPanel.h"
 

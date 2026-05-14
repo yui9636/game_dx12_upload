@@ -1,4 +1,4 @@
-#include "AnimatorSystem.h"
+﻿#include "AnimatorSystem.h"
 
 #include "AnimatorComponent.h"
 #include "AnimatorRuntime.h"
@@ -184,9 +184,9 @@ namespace
             blendFromPoses.size() == runtime.bindPoses.size() &&
             !blendFromPoses.empty();
 
-        // Seed 'out' with the previous pose during a blend so that bones
-        // without a fresh keyframe value at this time stay at their last
-        // animated value instead of snapping to bind (T) pose.
+        // ブレンド中は out を前回 pose で初期化し、
+        // 現在時刻に新しい keyframe 値がない bone でも最後の
+        // animation 値を維持して bind / T pose へ戻らないようにする。
         if (useBlendFromAsBase) {
             out = blendFromPoses;
         }

@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <wrl.h>
 #include <d3d11.h>
 #include <DirectXMath.h>
+// PrimitiveRenderer は DirectX/DirectX/primitiveTopology/VertexCapacity を中心に、実行時やエディターで共有する状態を保持する。
 
 class PrimitiveRenderer
 {

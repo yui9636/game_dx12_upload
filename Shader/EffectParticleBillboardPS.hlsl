@@ -3,6 +3,7 @@
 Texture2D color_map : register(t0);
 Texture2D<float> scene_depth : register(t1);
 SamplerState LinearSamp : register(s1);
+// main はビルボードパーティクルのテクスチャ色と頂点色を合成し、必要に応じて深度によるソフトフェードを適用する。
 
 float4 main(PS_IN pin) : SV_TARGET0
 {

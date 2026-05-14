@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <d3d11.h>
 #include <wrl.h>
@@ -66,11 +66,11 @@ public:
 
 	GraphicsAPI GetAPI() const { return m_api; }
 
-	// DX11 accessors (nullptr when DX12)
+	// DX11 用アクセサ（DX12 時は nullptr）
 	ID3D11Device* GetDevice() { return device.Get(); }
 	ID3D11DeviceContext* GetDeviceContext() { return immediateContext.Get(); }
 
-	// DX12 accessor (nullptr when DX11)
+	// DX12 用アクセサ（DX11 時は nullptr）
 	DX12Device* GetDX12Device() { return m_dx12Device.get(); }
 
 	std::unique_ptr<IPipelineState> CreatePipelineState(const PipelineStateDesc& desc);
@@ -122,7 +122,7 @@ private:
 	std::shared_ptr<ITexture> backBufferTexture;
 	std::unique_ptr<IResourceFactory> resourceFactory;
 
-	// DX12 backend
+	// DX12 バックエンド
 	std::unique_ptr<DX12Device> m_dx12Device;
 	std::shared_ptr<DX12Texture> m_dx12BackBuffers[DX12Device::FRAME_COUNT];
 	GraphicsAPI m_api = GraphicsAPI::DX11;

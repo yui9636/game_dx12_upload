@@ -1,4 +1,4 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <memory>
 #include <assert.h>
 #include <tchar.h>
@@ -10,19 +10,20 @@ const LONG SCREEN_HEIGHT = 720;
 
 
 
+// fnWndProc は Win32 message を Framework に委譲し、未初期化時だけ既定処理へ流す。
 LRESULT CALLBACK fnWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	Framework *f = reinterpret_cast<Framework*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
 	return f ? f->HandleMessage(hwnd, msg, wparam, lparam) : DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
+// wWinMain は PathResolver と Win32 window を初期化し、Framework の main loop を開始する。
 INT WINAPI wWinMain(HINSTANCE instance, HINSTANCE prev_instance, LPWSTR cmd_line, INT cmd_show)
 {
 	PathResolver::Initialize();
 
 #if defined(DEBUG) | defined(_DEBUG)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-	//_CrtSetBreakAlloc(237);
 #endif
 	WNDCLASSEX wcex;
 	wcex.cbSize = sizeof(WNDCLASSEX);

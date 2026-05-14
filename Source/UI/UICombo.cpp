@@ -1,4 +1,4 @@
-#include "UICombo.h"
+﻿#include "UICombo.h"
 #include "Font/FontManager.h"
 #include "Graphics.h"
 #include "Sprite/Sprite.h" 
@@ -11,14 +11,11 @@ using namespace DirectX;
 
 UICombo::UICombo()
 {
-    //position = { 420.0f, 290.0f };
-
-    //ID3D11Device* device = Graphics::Instance().GetDevice();
-    //gaugeSprite = std::make_shared<Sprite>(device, "Data/Texture/UI/white0.png");
 
 
 }
 
+// コンボ数が増えた瞬間に表示時間と揺れ演出を再始動する。
 void UICombo::SetCombo(int count)
 {
     if (currentCombo != count)
@@ -33,12 +30,14 @@ void UICombo::SetCombo(int count)
     }
 }
 
+// 残り表示時間と揺れ時間をフレーム時間で減衰させる。
 void UICombo::Update(float dt)
 {
     if (displayTimer > 0.0f) displayTimer -= dt;
     if (shakeTimer > 0.0f) shakeTimer -= dt;
 }
 
+// コンボ数、ラベル、残り時間ゲージをフェードと揺れ付きで描画する。
 void UICombo::Render(const RenderContext& rc)
 {
     if (currentCombo <= 0 || displayTimer <= 0.0f) return;
@@ -58,9 +57,6 @@ void UICombo::Render(const RenderContext& rc)
 
     float drawX = position.x + shakeX;
     float drawY = position.y + shakeY;
-
-    // ---------------------------------------------------
-    // ---------------------------------------------------
     float numberScale = 1.5f;
 
     FontManager::Instance().DrawFormat(
@@ -72,9 +68,6 @@ void UICombo::Render(const RenderContext& rc)
         FontAlign::Right,
         L"%d", currentCombo
     );
-
-    // ---------------------------------------------------
-    // ---------------------------------------------------
     FontManager::Instance().DrawFormat(
         rc.commandList,
         "ComboFont",
@@ -84,9 +77,6 @@ void UICombo::Render(const RenderContext& rc)
         FontAlign::Left,
         L"Combo"
     );
-
-    // ---------------------------------------------------
-    // ---------------------------------------------------
     if (gaugeSprite)
     {
         float gaugeWidth = 150.0f * (displayTimer / MAX_DISPLAY_TIME);

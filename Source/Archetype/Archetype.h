@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Entity/Entity.h"
 #include "Component/ComponentSignature.h"
@@ -6,90 +6,90 @@
 #include <vector>
 #include <unordered_map>
 
-// Archetype ‚ÍA“¯‚¶ component \¬‚ğ‚Â entity ŒQ‚ğ‚Ü‚Æ‚ß‚Ä•Û‚·‚éƒNƒ‰ƒXB
-// ECS ‚Ì archetype •û®‚É‚¨‚¯‚é 1 ‚Â‚Ìƒe[ƒuƒ‹‚É‘Š“–‚µA
-// entity ID ”z—ñ‚Æ component —ñ”z—ñ‚ğ•Às‚µ‚Ä‚ÂB
+// Archetype ã¯ã€åŒã˜ component æ§‹æˆã‚’æŒã¤ entity ç¾¤ã‚’ã¾ã¨ã‚ã¦ä¿æŒã™ã‚‹ã‚¯ãƒ©ã‚¹ã€‚
+// ECS ã® archetype æ–¹å¼ã«ãŠã‘ã‚‹ 1 ã¤ã®ãƒ†ãƒ¼ãƒ–ãƒ«ã«ç›¸å½“ã—ã€
+// entity ID é…åˆ—ã¨ component åˆ—é…åˆ—ã‚’ä¸¦è¡Œã—ã¦æŒã¤ã€‚
 class Archetype {
 public:
-    // w’è signature ‚ğ‚Â archetype ‚ğ¶¬‚·‚éB
+    // æŒ‡å®š signature ã‚’æŒã¤ archetype ã‚’ç”Ÿæˆã™ã‚‹ã€‚
     explicit Archetype(Signature sig);
 
-    // “Á•Ê‚È‰ğ•úˆ—‚Í•s—v‚È‚Ì‚Å default destructor ‚ğg‚¤B
+    // ç‰¹åˆ¥ãªè§£æ”¾å‡¦ç†ã¯ä¸è¦ãªã®ã§ default destructor ã‚’ä½¿ã†ã€‚
     ~Archetype() = default;
 
-    // ‚±‚Ì archetype ‚ª•\‚· component \¬‚ğ•Ô‚·B
+    // ã“ã® archetype ãŒè¡¨ã™ component æ§‹æˆã‚’è¿”ã™ã€‚
     Signature GetSignature() const { return m_signature; }
 
-    // entity ‚ğ archetype ‚É’Ç‰Á‚·‚éB
-    // –ß‚è’l‚Í’Ç‰Á‚³‚ê‚½s indexB
+    // entity ã‚’ archetype ã«è¿½åŠ ã™ã‚‹ã€‚
+    // æˆ»ã‚Šå€¤ã¯è¿½åŠ ã•ã‚ŒãŸè¡Œ indexã€‚
     size_t AddEntity(EntityID entity);
 
-    // w’è index ‚Ì entity ‚ğíœ‚·‚éB
-    // –ß‚è’l‚Í swap-back “™‚ÅˆÚ“®‚µ‚Ä‚«‚½ entity IDB
-    // À‘•Ÿ‘æ‚Å‚ÍAˆÚ“®‚ª–³‚¢ê‡‚É“¯‚¶ entity ‚Ü‚½‚Í–³Œø’l‚ğ•Ô‚·‚±‚Æ‚ª‚ ‚éB
+    // æŒ‡å®š index ã® entity ã‚’å‰Šé™¤ã™ã‚‹ã€‚
+    // æˆ»ã‚Šå€¤ã¯ swap-back ç­‰ã§ç§»å‹•ã—ã¦ããŸ entity IDã€‚
+    // å®Ÿè£…æ¬¡ç¬¬ã§ã¯ã€ç§»å‹•ãŒç„¡ã„å ´åˆã«åŒã˜ entity ã¾ãŸã¯ç„¡åŠ¹å€¤ã‚’è¿”ã™ã“ã¨ãŒã‚ã‚‹ã€‚
     EntityID RemoveEntity(size_t index);
 
-    // V‚µ‚¢ component —ñ‚ğ’Ç‰Á‚·‚éB
-    // typeId ‚É‘Î‰‚·‚é—ñ‚ğì‚èA1 —v‘fƒTƒCƒY‚Æ¶¬EˆÚ“®E”jŠüŠÖ”‚ğ“o˜^‚·‚éB
+    // æ–°ã—ã„ component åˆ—ã‚’è¿½åŠ ã™ã‚‹ã€‚
+    // typeId ã«å¯¾å¿œã™ã‚‹åˆ—ã‚’ä½œã‚Šã€1 è¦ç´ ã‚µã‚¤ã‚ºã¨ç”Ÿæˆãƒ»ç§»å‹•ãƒ»ç ´æ£„é–¢æ•°ã‚’ç™»éŒ²ã™ã‚‹ã€‚
     void AddColumn(ComponentTypeID typeId, size_t elementSize,
         ComponentColumn::ConstructFn c, ComponentColumn::MoveConstructFn mc,
         ComponentColumn::MoveAssignFn ma, ComponentColumn::DestructFn d);
 
-    // ‘¼ archetype ‚Ì—ñ’è‹`‚Æ schema î•ñ‚ğ‚»‚Ì‚Ü‚ÜƒRƒs[‚·‚éB
-    // entity ‚Ì’†g‚Ü‚Å‚ÍƒRƒs[‚¹‚¸Au‚Ç‚ñ‚È—ñ‚ğ‚Â‚©v‚¾‚¯•¡»‚·‚é—p“rB
+    // ä»– archetype ã®åˆ—å®šç¾©ã¨ schema æƒ…å ±ã‚’ãã®ã¾ã¾ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
+    // entity ã®ä¸­èº«ã¾ã§ã¯ã‚³ãƒ”ãƒ¼ã›ãšã€ã€Œã©ã‚“ãªåˆ—ã‚’æŒã¤ã‹ã€ã ã‘è¤‡è£½ã™ã‚‹ç”¨é€”ã€‚
     void CopySchemaFrom(const Archetype* other);
 
-    // ‘¼ archetype ‚Ì—ñ’è‹`‚ğƒRƒs[‚·‚é‚ªAw’è typeId ‚Ì—ñ‚¾‚¯œŠO‚·‚éB
-    // component íœ‘JˆÚ‚ÌV archetype \’z‚È‚Ç‚Åg‚¤‘z’èB
+    // ä»– archetype ã®åˆ—å®šç¾©ã‚’ã‚³ãƒ”ãƒ¼ã™ã‚‹ãŒã€æŒ‡å®š typeId ã®åˆ—ã ã‘é™¤å¤–ã™ã‚‹ã€‚
+    // component å‰Šé™¤é·ç§»æ™‚ã®æ–° archetype æ§‹ç¯‰ãªã©ã§ä½¿ã†æƒ³å®šã€‚
     void CopySchemaFromExcluding(const Archetype* other, ComponentTypeID excludeTypeId);
 
-    // w’è component typeId ‚É‘Î‰‚·‚é—ñ‚ğæ“¾‚·‚éB
-    // ‘¶İ‚µ‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š component typeId ã«å¯¾å¿œã™ã‚‹åˆ—ã‚’å–å¾—ã™ã‚‹ã€‚
+    // å­˜åœ¨ã—ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     ComponentColumn* GetColumn(ComponentTypeID typeId);
 
-    // Œ»İ‚±‚Ì archetype ‚ÉŠ‘®‚·‚é entity ”‚ğ•Ô‚·B
+    // ç¾åœ¨ã“ã® archetype ã«æ‰€å±ã™ã‚‹ entity æ•°ã‚’è¿”ã™ã€‚
     size_t GetEntityCount() const { return m_entityIDs.size(); }
 
-    // archetype ‚É‘®‚·‚é entity ID ”z—ñ‚ğ•Ô‚·B
+    // archetype ã«å±ã™ã‚‹ entity ID é…åˆ—ã‚’è¿”ã™ã€‚
     const std::vector<EntityID>& GetEntities() const { return m_entityIDs; }
 
 private:
-    // ‚±‚Ì archetype ‚ª•\‚· component \¬B
+    // ã“ã® archetype ãŒè¡¨ã™ component æ§‹æˆã€‚
     Signature m_signature;
 
-    // archetype ‚É‘®‚·‚é entity ID ‚Ì”z—ñB
-    // Še—ñ‚Ì“¯‚¶ index s‚ªA‚±‚Ì entity ‚É‘Î‰‚·‚éB
+    // archetype ã«å±ã™ã‚‹ entity ID ã®é…åˆ—ã€‚
+    // å„åˆ—ã®åŒã˜ index è¡ŒãŒã€ã“ã® entity ã«å¯¾å¿œã™ã‚‹ã€‚
     std::vector<EntityID> m_entityIDs;
 
-    // component typeId ‚©‚ç m_columns ‚Ì index ‚ğˆø‚­‚½‚ß‚Ì‘Î‰•\B
+    // component typeId ã‹ã‚‰ m_columns ã® index ã‚’å¼•ããŸã‚ã®å¯¾å¿œè¡¨ã€‚
     std::unordered_map<ComponentTypeID, size_t> m_typeToIndex;
 
-    // Še component —ñ‚Ì¶¬EˆÚ“®E”jŠü•û–@‚ğ•Û‚·‚é schema î•ñB
+    // å„ component åˆ—ã®ç”Ÿæˆãƒ»ç§»å‹•ãƒ»ç ´æ£„æ–¹æ³•ã‚’ä¿æŒã™ã‚‹ schema æƒ…å ±ã€‚
     struct ColumnSchema {
-        // 1 —v‘f‚ ‚½‚è‚ÌƒTƒCƒYB
+        // 1 è¦ç´ ã‚ãŸã‚Šã®ã‚µã‚¤ã‚ºã€‚
         size_t elementSize;
 
-        // ƒfƒtƒHƒ‹ƒg\’zŠÖ”B
+        // ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆæ§‹ç¯‰é–¢æ•°ã€‚
         ComponentColumn::ConstructFn constructFn;
 
-        // ƒ€[ƒu\’zŠÖ”B
+        // ãƒ ãƒ¼ãƒ–æ§‹ç¯‰é–¢æ•°ã€‚
         ComponentColumn::MoveConstructFn moveConstructFn;
 
-        // ƒ€[ƒu‘ã“üŠÖ”B
+        // ãƒ ãƒ¼ãƒ–ä»£å…¥é–¢æ•°ã€‚
         ComponentColumn::MoveAssignFn moveAssignFn;
 
-        // ”jŠüŠÖ”B
+        // ç ´æ£„é–¢æ•°ã€‚
         ComponentColumn::DestructFn destructFn;
     };
 
-    // component typeId ‚²‚Æ‚Ì schema ˆê——B
+    // component typeId ã”ã¨ã® schema ä¸€è¦§ã€‚
     std::unordered_map<ComponentTypeID, ColumnSchema> m_schemas;
 
-    // component typeId ‚²‚Æ‚Ì—v‘fƒTƒCƒYB
-    // schema ‚Æˆê•”d•¡‚·‚é‚ªA—p“r‚ğ•ª‚¯‚Ä•Û‚µ‚Ä‚¢‚éB
+    // component typeId ã”ã¨ã®è¦ç´ ã‚µã‚¤ã‚ºã€‚
+    // schema ã¨ä¸€éƒ¨é‡è¤‡ã™ã‚‹ãŒã€ç”¨é€”ã‚’åˆ†ã‘ã¦ä¿æŒã—ã¦ã„ã‚‹ã€‚
     std::unordered_map<ComponentTypeID, size_t> m_elementSizes;
 
-    // ÀÛ‚Ì component —ñ–{‘ÌB
-    // m_typeToIndex ‚ğg‚Á‚Ä typeId ‚©‚ç‘Î‰—ñ‚ÖƒAƒNƒZƒX‚·‚éB
+    // å®Ÿéš›ã® component åˆ—æœ¬ä½“ã€‚
+    // m_typeToIndex ã‚’ä½¿ã£ã¦ typeId ã‹ã‚‰å¯¾å¿œåˆ—ã¸ã‚¢ã‚¯ã‚»ã‚¹ã™ã‚‹ã€‚
     std::vector<ComponentColumn> m_columns;
 };

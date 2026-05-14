@@ -1,30 +1,30 @@
-#include "ComponentColumn.h"
+ï»¿#include "ComponentColumn.h"
 #include <cstring>
 #include <cstdlib>
 
-// ComponentColumn ‚ğ¶¬‚·‚éB
-// 1—v‘fƒTƒCƒY‚ÆA¶¬Eƒ€[ƒu¶¬Eƒ€[ƒu‘ã“üE”jŠü‚ÌŠÖ”ƒ|ƒCƒ“ƒ^‚ğ•Û‘¶‚·‚éB
+// ComponentColumn ã‚’ç”Ÿæˆã™ã‚‹ã€‚
+// 1è¦ç´ ã‚µã‚¤ã‚ºã¨ã€ç”Ÿæˆãƒ»ãƒ ãƒ¼ãƒ–ç”Ÿæˆãƒ»ãƒ ãƒ¼ãƒ–ä»£å…¥ãƒ»ç ´æ£„ã®é–¢æ•°ãƒã‚¤ãƒ³ã‚¿ã‚’ä¿å­˜ã™ã‚‹ã€‚
 ComponentColumn::ComponentColumn(size_t elementSize, ConstructFn c, MoveConstructFn mc, MoveAssignFn ma, DestructFn d)
     : m_elementSize(elementSize), m_count(0), m_capacity(0), m_data(nullptr),
     m_constructFn(c), m_moveConstructFn(mc), m_moveAssignFn(ma), m_destructFn(d) {
 }
 
-// ComponentColumn ‚ğ”jŠü‚·‚éB
-// •Û’†‚Ì‘S—v‘f‚É‘Î‚µ‚Ä destructor ‚ğŒÄ‚ÑA‚»‚ÌŒãƒƒ‚ƒŠ‚ğ‰ğ•ú‚·‚éB
+// ComponentColumn ã‚’ç ´æ£„ã™ã‚‹ã€‚
+// ä¿æŒä¸­ã®å…¨è¦ç´ ã«å¯¾ã—ã¦ destructor ã‚’å‘¼ã³ã€ãã®å¾Œãƒ¡ãƒ¢ãƒªã‚’è§£æ”¾ã™ã‚‹ã€‚
 ComponentColumn::~ComponentColumn() {
     if (m_data) {
-        // ¶‘¶’†‚Ì‘S—v‘f‚ğ‡‚É”jŠü‚·‚éB
+        // ç”Ÿå­˜ä¸­ã®å…¨è¦ç´ ã‚’é †ã«ç ´æ£„ã™ã‚‹ã€‚
         for (size_t i = 0; i < m_count; ++i) {
             m_destructFn(static_cast<char*>(m_data) + i * m_elementSize);
         }
 
-        // ¶ƒƒ‚ƒŠ—Ìˆæ‚ğ‰ğ•ú‚·‚éB
+        // ç”Ÿãƒ¡ãƒ¢ãƒªé ˜åŸŸã‚’è§£æ”¾ã™ã‚‹ã€‚
         std::free(m_data);
     }
 }
 
-// ƒ€[ƒuƒRƒ“ƒXƒgƒ‰ƒNƒ^B
-// ‘¼ƒIƒuƒWƒFƒNƒg‚ÌŠ—L‚µ‚Ä‚¢‚éƒoƒbƒtƒ@‚ğ‚»‚Ì‚Ü‚Ü’D‚¤B
+// ãƒ ãƒ¼ãƒ–ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã€‚
+// ä»–ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã®æ‰€æœ‰ã—ã¦ã„ã‚‹ãƒãƒƒãƒ•ã‚¡ã‚’ãã®ã¾ã¾å¥ªã†ã€‚
 ComponentColumn::ComponentColumn(ComponentColumn&& other) noexcept
     : m_data(other.m_data),
     m_elementSize(other.m_elementSize),
@@ -35,17 +35,17 @@ ComponentColumn::ComponentColumn(ComponentColumn&& other) noexcept
     m_moveAssignFn(other.m_moveAssignFn),
     m_destructFn(other.m_destructFn)
 {
-    // ’D‚Á‚½‚ ‚Æ‚ÌŒ³ƒIƒuƒWƒFƒNƒg‚Í‹ó‚É‚µ‚Ä‚¨‚­B
+    // å¥ªã£ãŸã‚ã¨ã®å…ƒã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆã¯ç©ºã«ã—ã¦ãŠãã€‚
     other.m_data = nullptr;
     other.m_count = 0;
     other.m_capacity = 0;
 }
 
-// ƒ€[ƒu‘ã“ü‰‰ZqB
-// Šù‘¶‚Ì©‘Oƒf[ƒ^‚ğ”jŠü‚µ‚Ä‚©‚çA‘Šè‚ÌŠ—LŒ ‚ğ’D‚¤B
+// ãƒ ãƒ¼ãƒ–ä»£å…¥æ¼”ç®—å­ã€‚
+// æ—¢å­˜ã®è‡ªå‰ãƒ‡ãƒ¼ã‚¿ã‚’ç ´æ£„ã—ã¦ã‹ã‚‰ã€ç›¸æ‰‹ã®æ‰€æœ‰æ¨©ã‚’å¥ªã†ã€‚
 ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
     if (this != &other) {
-        // ‚Ü‚¸©•ª‚ª¡‚Á‚Ä‚¢‚éƒf[ƒ^‚ğˆÀ‘S‚É”jŠü‚·‚éB
+        // ã¾ãšè‡ªåˆ†ãŒä»ŠæŒã£ã¦ã„ã‚‹ãƒ‡ãƒ¼ã‚¿ã‚’å®‰å…¨ã«ç ´æ£„ã™ã‚‹ã€‚
         if (m_data) {
             for (size_t i = 0; i < m_count; ++i) {
                 m_destructFn(static_cast<char*>(m_data) + i * m_elementSize);
@@ -53,7 +53,7 @@ ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
             std::free(m_data);
         }
 
-        // ‘Šè‚Ìƒf[ƒ^ˆê®‚ğó‚¯æ‚éB
+        // ç›¸æ‰‹ã®ãƒ‡ãƒ¼ã‚¿ä¸€å¼ã‚’å—ã‘å–ã‚‹ã€‚
         m_data = other.m_data;
         m_elementSize = other.m_elementSize;
         m_count = other.m_count;
@@ -63,7 +63,7 @@ ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
         m_moveAssignFn = other.m_moveAssignFn;
         m_destructFn = other.m_destructFn;
 
-        // ‘Šè‚Í‹óó‘Ô‚Ö–ß‚·B
+        // ç›¸æ‰‹ã¯ç©ºçŠ¶æ…‹ã¸æˆ»ã™ã€‚
         other.m_data = nullptr;
         other.m_count = 0;
         other.m_capacity = 0;
@@ -71,97 +71,97 @@ ComponentColumn& ComponentColumn::operator=(ComponentColumn&& other) noexcept {
     return *this;
 }
 
-// w’è—e—ÊˆÈã‚ğŠm•Û‚·‚éB
-// Šù‘¶ƒf[ƒ^‚ª‚ ‚éê‡‚ÍAV—Ìˆæ‚Öƒ€[ƒu\’z‚µ‚Ä‚©‚ç‹Œ—Ìˆæ‚ğ”jŠü‚·‚éB
+// æŒ‡å®šå®¹é‡ä»¥ä¸Šã‚’ç¢ºä¿ã™ã‚‹ã€‚
+// æ—¢å­˜ãƒ‡ãƒ¼ã‚¿ãŒã‚ã‚‹å ´åˆã¯ã€æ–°é ˜åŸŸã¸ãƒ ãƒ¼ãƒ–æ§‹ç¯‰ã—ã¦ã‹ã‚‰æ—§é ˜åŸŸã‚’ç ´æ£„ã™ã‚‹ã€‚
 void ComponentColumn::Reserve(size_t newCapacity) {
-    // Šù‚É\•ª‚È—e—Ê‚ª‚ ‚é‚È‚ç‰½‚à‚µ‚È‚¢B
+    // æ—¢ã«ååˆ†ãªå®¹é‡ãŒã‚ã‚‹ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (newCapacity <= m_capacity) return;
 
-    // V‚µ‚¢¶ƒƒ‚ƒŠ—Ìˆæ‚ğŠm•Û‚·‚éB
+    // æ–°ã—ã„ç”Ÿãƒ¡ãƒ¢ãƒªé ˜åŸŸã‚’ç¢ºä¿ã™ã‚‹ã€‚
     void* newData = std::malloc(newCapacity * m_elementSize);
 
-    // Šù‘¶ƒf[ƒ^‚ª‚ ‚é‚È‚çAV—Ìˆæ‚Ö—v‘f‚ğˆÚ‚µ‘Ö‚¦‚éB
+    // æ—¢å­˜ãƒ‡ãƒ¼ã‚¿ãŒã‚ã‚‹ãªã‚‰ã€æ–°é ˜åŸŸã¸è¦ç´ ã‚’ç§»ã—æ›¿ãˆã‚‹ã€‚
     if (m_data) {
         for (size_t i = 0; i < m_count; ++i) {
             void* src = static_cast<char*>(m_data) + i * m_elementSize;
             void* dst = static_cast<char*>(newData) + i * m_elementSize;
 
-            // V—Ìˆæ‚Öƒ€[ƒu\’z‚·‚éB
+            // æ–°é ˜åŸŸã¸ãƒ ãƒ¼ãƒ–æ§‹ç¯‰ã™ã‚‹ã€‚
             m_moveConstructFn(dst, src);
 
-            // ‹Œ—Ìˆæ‚Ì—v‘f‚ğ”jŠü‚·‚éB
+            // æ—§é ˜åŸŸã®è¦ç´ ã‚’ç ´æ£„ã™ã‚‹ã€‚
             m_destructFn(src);
         }
 
-        // ‹Œƒƒ‚ƒŠ‚ğ‰ğ•ú‚·‚éB
+        // æ—§ãƒ¡ãƒ¢ãƒªã‚’è§£æ”¾ã™ã‚‹ã€‚
         std::free(m_data);
     }
 
-    // V—Ìˆæ‚Ö·‚µ‘Ö‚¦‚éB
+    // æ–°é ˜åŸŸã¸å·®ã—æ›¿ãˆã‚‹ã€‚
     m_data = newData;
     m_capacity = newCapacity;
 }
 
-// ƒRƒs[Œ³ƒf[ƒ^‚ğg‚Á‚Ä 1 —v‘f’Ç‰Á‚·‚éB
-// •K—v‚È‚ç©“®‚Å—e—ÊŠg’£‚·‚éB
+// ã‚³ãƒ”ãƒ¼å…ƒãƒ‡ãƒ¼ã‚¿ã‚’ä½¿ã£ã¦ 1 è¦ç´ è¿½åŠ ã™ã‚‹ã€‚
+// å¿…è¦ãªã‚‰è‡ªå‹•ã§å®¹é‡æ‹¡å¼µã™ã‚‹ã€‚
 void ComponentColumn::Add(const void* pData) {
-    // —e—Ê•s‘«‚È‚çŠg’£‚·‚éB
+    // å®¹é‡ä¸è¶³ãªã‚‰æ‹¡å¼µã™ã‚‹ã€‚
     if (m_count >= m_capacity) Reserve(m_capacity == 0 ? 8 : m_capacity * 2);
 
-    // ’Ç‰ÁæƒAƒhƒŒƒX‚ğŒvZ‚·‚éB
+    // è¿½åŠ å…ˆã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¨ˆç®—ã™ã‚‹ã€‚
     void* dst = static_cast<char*>(m_data) + m_count * m_elementSize;
 
-    // ƒRƒs[Œ³‚©‚ç’Êí\’z‚·‚éB
+    // ã‚³ãƒ”ãƒ¼å…ƒã‹ã‚‰é€šå¸¸æ§‹ç¯‰ã™ã‚‹ã€‚
     m_constructFn(dst, pData);
 
-    // —v‘f”‚ğ‘‚â‚·B
+    // è¦ç´ æ•°ã‚’å¢—ã‚„ã™ã€‚
     m_count++;
 }
 
-// ƒ€[ƒuŒ³ƒf[ƒ^‚ğg‚Á‚Ä 1 —v‘f’Ç‰Á‚·‚éB
-// •K—v‚È‚ç©“®‚Å—e—ÊŠg’£‚·‚éB
+// ãƒ ãƒ¼ãƒ–å…ƒãƒ‡ãƒ¼ã‚¿ã‚’ä½¿ã£ã¦ 1 è¦ç´ è¿½åŠ ã™ã‚‹ã€‚
+// å¿…è¦ãªã‚‰è‡ªå‹•ã§å®¹é‡æ‹¡å¼µã™ã‚‹ã€‚
 void ComponentColumn::MoveAdd(void* pData) {
-    // —e—Ê•s‘«‚È‚çŠg’£‚·‚éB
+    // å®¹é‡ä¸è¶³ãªã‚‰æ‹¡å¼µã™ã‚‹ã€‚
     if (m_count >= m_capacity) Reserve(m_capacity == 0 ? 8 : m_capacity * 2);
 
-    // ’Ç‰ÁæƒAƒhƒŒƒX‚ğŒvZ‚·‚éB
+    // è¿½åŠ å…ˆã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¨ˆç®—ã™ã‚‹ã€‚
     void* dst = static_cast<char*>(m_data) + m_count * m_elementSize;
 
-    // ƒ€[ƒu\’z‚Å’Ç‰Á‚·‚éB
+    // ãƒ ãƒ¼ãƒ–æ§‹ç¯‰ã§è¿½åŠ ã™ã‚‹ã€‚
     m_moveConstructFn(dst, pData);
 
-    // —v‘f”‚ğ‘‚â‚·B
+    // è¦ç´ æ•°ã‚’å¢—ã‚„ã™ã€‚
     m_count++;
 }
 
-// w’è index ‚Ì—v‘f‚ğíœ‚·‚éB
-// ––”ö—v‘f‚ğ‹l‚ß‚é swap-back •û®‚Å O(1) íœ‚·‚éB
+// æŒ‡å®š index ã®è¦ç´ ã‚’å‰Šé™¤ã™ã‚‹ã€‚
+// æœ«å°¾è¦ç´ ã‚’è©°ã‚ã‚‹ swap-back æ–¹å¼ã§ O(1) å‰Šé™¤ã™ã‚‹ã€‚
 void ComponentColumn::Remove(size_t index) {
-    // ”ÍˆÍŠO‚È‚ç‰½‚à‚µ‚È‚¢B
+    // ç¯„å›²å¤–ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (index >= m_count) return;
 
     void* dst = static_cast<char*>(m_data) + (index * m_elementSize);
     size_t lastIndex = m_count - 1;
 
     if (index != lastIndex) {
-        // ––”ö—v‘f‚ğíœˆÊ’u‚Öƒ€[ƒu‘ã“ü‚·‚éB
+        // æœ«å°¾è¦ç´ ã‚’å‰Šé™¤ä½ç½®ã¸ãƒ ãƒ¼ãƒ–ä»£å…¥ã™ã‚‹ã€‚
         void* src = static_cast<char*>(m_data) + (lastIndex * m_elementSize);
         m_moveAssignFn(dst, src);
 
-        // Œ³‚Ì––”ö—v‘f‚ğ”jŠü‚·‚éB
+        // å…ƒã®æœ«å°¾è¦ç´ ã‚’ç ´æ£„ã™ã‚‹ã€‚
         m_destructFn(src);
     }
     else {
-        // ––”ö‚»‚Ì‚à‚Ì‚ğíœ‚·‚é‚¾‚¯‚È‚çA‚»‚Ìê‚Å”jŠü‚·‚éB
+        // æœ«å°¾ãã®ã‚‚ã®ã‚’å‰Šé™¤ã™ã‚‹ã ã‘ãªã‚‰ã€ãã®å ´ã§ç ´æ£„ã™ã‚‹ã€‚
         m_destructFn(dst);
     }
 
-    // —v‘f”‚ğŒ¸‚ç‚·B
+    // è¦ç´ æ•°ã‚’æ¸›ã‚‰ã™ã€‚
     m_count--;
 }
 
-// w’è index ‚Ì—v‘fæ“ªƒAƒhƒŒƒX‚ğ•Ô‚·B
-// ”ÍˆÍŠO‚È‚ç nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š index ã®è¦ç´ å…ˆé ­ã‚¢ãƒ‰ãƒ¬ã‚¹ã‚’è¿”ã™ã€‚
+// ç¯„å›²å¤–ãªã‚‰ nullptr ã‚’è¿”ã™ã€‚
 void* ComponentColumn::Get(size_t index) const {
     if (index >= m_count) return nullptr;
     return static_cast<char*>(m_data) + (index * m_elementSize);

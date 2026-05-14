@@ -16,7 +16,7 @@
 #include "Component/NameComponent.h"
 #include "System/Query.h"
 
-// Gameplay components
+// gameplay component 群。
 #include "Gameplay/PlayerTagComponent.h"
 #include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/HealthComponent.h"
@@ -41,7 +41,7 @@
 #include "Component/EffectSpawnRequestComponent.h"
 #include "Component/SequencerPreviewCameraComponent.h"
 
-// Input components
+// input component 群。
 #include "Input/InputUserComponent.h"
 #include "Input/InputContextComponent.h"
 #include "Input/InputBindingComponent.h"
@@ -97,22 +97,16 @@
 #include <vector>
 
 namespace {
-
-    // ------------------------------------------------------------
-    // shared_ptr 判定用 traits
-    // ------------------------------------------------------------
-    template <typename T>
+// shared_ptr 判定用 traits
+template <typename T>
     struct IsSharedPtr : std::false_type {};
 
     template <typename T>
     struct IsSharedPtr<std::shared_ptr<T>> : std::true_type {};
-
-    // ------------------------------------------------------------
-    // 汎用値描画ウィジェット
+// 汎用値描画ウィジェット
     // label と value を受け取り、型に応じて適切な ImGui 入力 UI を描く。
     // 値が変更されたら true を返す。
-    // ------------------------------------------------------------
-    template <typename T>
+template <typename T>
     bool DrawValueWidget(const char* label, T& value, Registry* registry = nullptr) {
         ImGui::PushID(label);
 
@@ -174,10 +168,10 @@ namespace {
 
         }
         else if constexpr (std::is_same_v<T, EntityID>) {
-            // Entity reference: show the target's NameComponent if reachable,
-            // accept Hierarchy drag-drop, and offer a popup picker over all
-            // named entities. Falls back to a raw id when no registry is
-            // available.
+            // entity 参照では到達できる場合に対象の NameComponent を表示する。
+            // Hierarchy からの drag and drop を受け、全 named entity から選べる
+            // popup picker を出す。registry がない場合は
+            // raw id 表示へ fallback する。
             const char* labelText = "<None>";
             if (!Entity::IsNull(value)) {
                 if (registry && registry->IsAlive(value)) {
@@ -247,12 +241,9 @@ namespace {
         ImGui::TableNextColumn();
         return changed;
     }
-
-    // ------------------------------------------------------------
-    // Undo 用編集セッション
+// Undo 用編集セッション
     // before 値と dirty 状態を保持する。
-    // ------------------------------------------------------------
-    template <typename T>
+template <typename T>
     struct EditSession {
         T before{};
         bool dirty = false;
@@ -276,12 +267,9 @@ namespace {
         static std::unordered_map<uint64_t, RectTransformComponent> sessions;
         return sessions;
     }
-
-    // ------------------------------------------------------------
-    // Undo 対応版の値描画ウィジェット
+// Undo 対応版の値描画ウィジェット
     // 編集開始時に before を記録し、編集終了時に UndoAction を積む。
-    // ------------------------------------------------------------
-    template <typename TComponent, typename TValue>
+template <typename TComponent, typename TValue>
     bool DrawUndoableValueWidget(Registry* registry, EntityID entity, TComponent& component, const char* label, TValue& value) {
         const TComponent beforeWidget = component;
         const bool changed = DrawValueWidget(label, value, registry);
@@ -350,11 +338,8 @@ namespace {
 
         return changed;
     }
-
-    // ------------------------------------------------------------
-    // Component の各 field を meta 情報から一括描画する。
-    // ------------------------------------------------------------
-    template <typename T>
+// Component の各 field を meta 情報から一括描画する。
+template <typename T>
     void DrawComponentBlock(Registry* registry, EntityID entity, const char* label, T& component) {
         if (!ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen)) {
             return;
@@ -380,12 +365,9 @@ namespace {
             DrawComponentBlock(registry, entity, ComponentMeta<T>::Name.data(), *component);
         }
     }
-
-    // ------------------------------------------------------------
-    // 削除ボタン付き Component 描画
+// 削除ボタン付き Component 描画
     // Header の X ボタンで RemoveComponent を行う。
-    // ------------------------------------------------------------
-    template <typename T>
+template <typename T>
     bool DrawComponentRemovable(Registry* registry, EntityID entity) {
         T* component = registry->GetComponent<T>(entity);
         if (!component) return false;
@@ -415,12 +397,9 @@ namespace {
         }
         return false;
     }
-
-    // ------------------------------------------------------------
-    // Add Component 用ヘルパー
+// Add Component 用ヘルパー
     // 未所持ならメニューから追加できる。
-    // ------------------------------------------------------------
-    template <typename T>
+template <typename T>
     bool TryAddComponent(Registry* registry, EntityID entity, const char* label) {
         if (registry->GetComponent<T>(entity)) return false;
         if (ImGui::MenuItem(label)) {
@@ -502,11 +481,8 @@ namespace {
             DrawUndoableValueWidget(registry, entity, *component, "hideWhenFull", component->hideWhenFull);
         });
     }
-
-    // ------------------------------------------------------------
-    // Texture asset inspector
-    // ------------------------------------------------------------
-    void DrawTextureInspector(const std::string& path, const std::string& filename) {
+// text 用色。ure asset 用 Inspector。
+void DrawTextureInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Texture");
         ImGui::TextWrapped("%s", filename.c_str());
         ImGui::Separator();
@@ -534,11 +510,8 @@ namespace {
             }
         }
     }
-
-    // ------------------------------------------------------------
-    // Model asset inspector
-    // ------------------------------------------------------------
-    void DrawModelInspector(const std::string& path, const std::string& filename) {
+// Model asset 用 Inspector。
+void DrawModelInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Model");
         ImGui::TextWrapped("%s", filename.c_str());
         ImGui::Separator();
@@ -554,12 +527,9 @@ namespace {
         ImGui::Text("Nodes: %d", static_cast<int>(model->GetNodes().size()));
         ImGui::Text("Animations: %d", static_cast<int>(model->GetAnimations().size()));
     }
-
-    // ------------------------------------------------------------
-    // テクスチャ選択ポップアップ用キャッシュ
+// テクスチャ選択ポップアップ用キャッシュ
     // AssetManager を再帰走査して texture 一覧を保持する。
-    // ------------------------------------------------------------
-    struct TexturePathCache {
+struct TexturePathCache {
         std::vector<std::string> paths;
         std::vector<std::string> filenames;
         bool initialized = false;
@@ -591,12 +561,9 @@ namespace {
     };
 
     static TexturePathCache s_texCache;
-
-    // ------------------------------------------------------------
-    // Material editor 用テクスチャスロット描画
+// Material editor 用テクスチャスロット描画
     // D&D / ポップアップ選択 / クリアに対応。
-    // ------------------------------------------------------------
-    bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker = true) {
+bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker = true) {
         ImGui::PushID(label);
 
         bool changed = false;
@@ -647,13 +614,13 @@ namespace {
             ImGui::EndDragDropTarget();
         }
 
-        // Material editor keeps the popup picker; SpriteComponent uses AssetBrowser D&D only.
+        // Material editor は popup picker を維持し、SpriteComponent は AssetBrowser の drag and drop だけを使う。
         if (clicked && allowPicker) {
             s_texCache.EnsureBuilt();
             ImGui::OpenPopup("##texPicker");
         }
 
-        // texture picker popup
+        // texture picker の popup。
         if (allowPicker && ImGui::BeginPopup("##texPicker")) {
             static char filterBuf[128] = "";
             ImGui::InputText("Filter", filterBuf, sizeof(filterBuf));
@@ -1635,11 +1602,8 @@ namespace {
             return;
         }
     }
-
-    // ------------------------------------------------------------
-    // MaterialAsset の直接編集 UI
-    // ------------------------------------------------------------
-    void DrawMaterialEditor(MaterialAsset* material) {
+// MaterialAsset の直接編集 UI
+void DrawMaterialEditor(MaterialAsset* material) {
         if (!material) return;
 
         bool changed = false;
@@ -1709,11 +1673,8 @@ namespace {
             }
         }
     }
-
-    // ------------------------------------------------------------
-    // Audio asset inspector
-    // ------------------------------------------------------------
-    void DrawAudioInspector(const std::string& path, const std::string& filename) {
+// Audio asset 用 Inspector。
+void DrawAudioInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Audio");
         ImGui::TextWrapped("%s", filename.c_str());
         ImGui::Separator();
@@ -1765,7 +1726,7 @@ namespace {
         }
     }
 
-    // Material asset inspector
+    // Material asset 用 Inspector。
     void DrawMaterialInspector(const std::string& path, const std::string& filename) {
         ImGui::Text("Material");
         ImGui::TextWrapped("%s", filename.c_str());
@@ -1810,12 +1771,9 @@ namespace {
 
         return snapshot;
     }
-
-    // ------------------------------------------------------------
-    // Asset inspector のディスパッチ
+// Asset inspector のディスパッチ
     // 拡張子に応じて個別 inspector へ振り分ける。
-    // ------------------------------------------------------------
-    void DrawAssetInspector(const std::string& assetPath) {
+void DrawAssetInspector(const std::string& assetPath) {
         std::filesystem::path path(assetPath);
         const std::string filename = path.filename().string();
 
@@ -1848,12 +1806,9 @@ namespace {
         ImGui::TextWrapped("Path: %s", assetPath.c_str());
     }
 
-} // namespace
-
-// ------------------------------------------------------------
+} // namespace 終端。
 // Inspector ウィンドウ全体描画
 // Asset 選択時は asset inspector、Entity 選択時は component inspector を表示する。
-// ------------------------------------------------------------
 void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) {
     if (!ImGui::Begin(ICON_FA_CIRCLE_INFO " Inspector", p_open)) {
         if (outFocused) {
@@ -1913,11 +1868,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             }
 
             ImGui::Spacing();
-
-            // --------------------------------------------------------
-            // 基本 component 群
-            // --------------------------------------------------------
-            DrawComponentIfPresent<NameComponent>(registry, entity);
+// 基本 component 群
+DrawComponentIfPresent<NameComponent>(registry, entity);
             DrawComponentIfPresent<TransformComponent>(registry, entity);
             DrawComponentIfPresent<AudioEmitterComponent>(registry, entity);
             DrawComponentIfPresent<AudioBusSendComponent>(registry, entity);
@@ -1932,11 +1884,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             }
             DrawTextComponentInspector(registry, entity);
             DrawComponentIfPresent<MeshComponent>(registry, entity);
-
-            // --------------------------------------------------------
-            // MaterialComponent は専用エディタ付き
-            // --------------------------------------------------------
-            if (auto* matComp = registry->GetComponent<MaterialComponent>(entity)) {
+// MaterialComponent は専用エディタ付き
+if (auto* matComp = registry->GetComponent<MaterialComponent>(entity)) {
                 if (ImGui::CollapsingHeader("MaterialComponent", ImGuiTreeNodeFlags_DefaultOpen)) {
                     char matBuf[512];
                     strcpy_s(matBuf, matComp->materialAssetPath.c_str());
@@ -1983,16 +1932,13 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
                     }
                 }
             }
-
-            // --------------------------------------------------------
-            // PrefabInstanceComponent は Apply / Revert / Unpack を持つ
-            // --------------------------------------------------------
-            if (auto* prefabInstance = registry->GetComponent<PrefabInstanceComponent>(entity)) {
+// PrefabInstanceComponent は Apply / Revert / Unpack を持つ
+if (auto* prefabInstance = registry->GetComponent<PrefabInstanceComponent>(entity)) {
                 if (ImGui::CollapsingHeader("Prefab", ImGuiTreeNodeFlags_DefaultOpen)) {
                     ImGui::TextWrapped("Source: %s", prefabInstance->prefabAssetPath.c_str());
                     ImGui::Text("Overrides: %s", prefabInstance->hasOverrides ? "Yes" : "No");
 
-                    // Apply
+                    // 変更を適用する。
                     if (ImGui::Button("Apply Prefab")) {
                         const std::filesystem::path prefabPath = prefabInstance->prefabAssetPath;
                         const std::string beforeText = ReadAllText(prefabPath);
@@ -2013,7 +1959,7 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
 
                     ImGui::SameLine();
 
-                    // Revert
+                    // 変更前の状態へ戻す。
                     if (ImGui::Button("Revert Prefab")) {
                         EntityID parentEntity = Entity::NULL_ID;
                         if (auto* hierarchy = registry->GetComponent<HierarchyComponent>(entity)) {
@@ -2038,7 +1984,7 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
 
                     ImGui::SameLine();
 
-                    // Unpack
+                    // Prefab instance を展開する。
                     if (ImGui::Button("Unpack Prefab")) {
                         UndoSystem::Instance().ExecuteAction(
                             std::make_unique<OptionalComponentUndoAction<PrefabInstanceComponent>>(
@@ -2061,11 +2007,8 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentIfPresent<PostEffectComponent>(registry, entity);
             DrawComponentIfPresent<ReflectionProbeComponent>(registry, entity);
             DrawComponentIfPresent<ShadowSettingsComponent>(registry, entity);
-
-            // --------------------------------------------------------
-            // Gameplay / Effect / NodeAttachment 系 removable components
-            // --------------------------------------------------------
-            ImGui::Spacing();
+// Gameplay / Effect / NodeAttachment 系 removable components
+ImGui::Spacing();
             DrawComponentRemovable<PlayerTagComponent>(registry, entity);
             DrawComponentRemovable<CharacterPhysicsComponent>(registry, entity);
             DrawComponentRemovable<HealthComponent>(registry, entity);
@@ -2092,21 +2035,15 @@ void InspectorECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             DrawComponentRemovable<EffectPreviewTagComponent>(registry, entity);
             DrawComponentRemovable<NodeAttachmentComponent>(registry, entity);
             DrawComponentRemovable<NodeSocketComponent>(registry, entity);
-
-            // --------------------------------------------------------
-            // Input 系 removable components
-            // --------------------------------------------------------
-            DrawComponentRemovable<InputUserComponent>(registry, entity);
+// Input 系 removable components
+DrawComponentRemovable<InputUserComponent>(registry, entity);
             DrawComponentRemovable<InputContextComponent>(registry, entity);
             DrawComponentRemovable<InputBindingComponent>(registry, entity);
             DrawComponentRemovable<ResolvedInputStateComponent>(registry, entity);
             DrawComponentRemovable<InputTextFieldComponent>(registry, entity);
             DrawComponentRemovable<VibrationRequestComponent>(registry, entity);
-
-            // --------------------------------------------------------
-            // Add Component ボタン
-            // --------------------------------------------------------
-            ImGui::Spacing();
+// Add Component ボタン
+ImGui::Spacing();
             ImGui::Separator();
 
             float width = ImGui::GetContentRegionAvail().x;

@@ -1,4 +1,4 @@
-// FinalBlitPS.hlsl
+// main は最終描画結果を表示用ターゲットへ書き出す。
 // SceneColor (HDR) をトーンマップしてバックバッファ (LDR) に出力する
 // DX12パス専用（DX11はFSR2/PostEffectが担当）
 

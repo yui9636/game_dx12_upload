@@ -1,4 +1,4 @@
-#include "HierarchySystem.h"
+ï»¿#include "HierarchySystem.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/TransformComponent.h"
 #include <DirectXMath.h>
@@ -8,16 +8,16 @@ using namespace DirectX;
 
 namespace
 {
-    // ‹ŒÀ‘•‚Å parent=0 ‚ğg‚Á‚Ä‚¢‚½ê‡‚É”õ‚¦‚ÄA
-    // 0 ‚ğ Entity::NULL_ID ‚É³‹K‰»‚·‚éB
+    // æ—§å®Ÿè£…ã§ parent=0 ã‚’ä½¿ã£ã¦ã„ãŸå ´åˆã«å‚™ãˆã¦ã€
+    // 0 ã‚’ Entity::NULL_ID ã«æ­£è¦åŒ–ã™ã‚‹ã€‚
     EntityID NormalizeLegacyParent(EntityID parent)
     {
         return parent == 0 ? Entity::NULL_ID : parent;
     }
 
-    // entity ‚Ìe‚ğæ“¾‚·‚éB
-    // HierarchyComponent ‚ª‚ ‚ê‚Î‚»‚¿‚ç‚ğ—Dæ‚µA
-    // –³‚¯‚ê‚Î TransformComponent ‚Ì‹Œ parent ’l‚ğŒ©‚éB
+    // entity ã®è¦ªã‚’å–å¾—ã™ã‚‹ã€‚
+    // HierarchyComponent ãŒã‚ã‚Œã°ãã¡ã‚‰ã‚’å„ªå…ˆã—ã€
+    // ç„¡ã‘ã‚Œã° TransformComponent ã®æ—§ parent å€¤ã‚’è¦‹ã‚‹ã€‚
     EntityID GetParent(EntityID entity, Registry& registry)
     {
         if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
@@ -29,8 +29,8 @@ namespace
         return Entity::NULL_ID;
     }
 
-    // TransformComponent ‘¤‚Ìeî•ñ‚ğ“¯Šú‚·‚éB
-    // ‹Œ parent ƒtƒB[ƒ‹ƒh‚àˆÛ‚µ‚Ä‚¢‚é\¬Œü‚¯B
+    // TransformComponent å´ã®è¦ªæƒ…å ±ã‚’åŒæœŸã™ã‚‹ã€‚
+    // æ—§ parent ãƒ•ã‚£ãƒ¼ãƒ«ãƒ‰ã‚‚ç¶­æŒã—ã¦ã„ã‚‹æ§‹æˆå‘ã‘ã€‚
     void SyncTransformParent(EntityID entity, EntityID parent, Registry& registry)
     {
         if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
@@ -39,7 +39,7 @@ namespace
         }
     }
 
-    // localMatrix ‚ğ•ª‰ğ‚µ‚Ä localPosition / localRotation / localScale ‚Ö–ß‚·B
+    // localMatrix ã‚’åˆ†è§£ã—ã¦ localPosition / localRotation / localScale ã¸æˆ»ã™ã€‚
     void DecomposeToLocal(const XMMATRIX& localMatrix, TransformComponent& transform)
     {
         XMVECTOR scale;
@@ -53,12 +53,12 @@ namespace
     }
 }
 
-// ŠK‘wXVB
-// ‚Ü‚¸e‚ª dirty ‚Èq‚ğ dirty ‚É‚µA‚»‚ÌŒã dirty ‚È transform ‚Ì worldMatrix ‚ğÄŒvZ‚·‚éB
+// éšå±¤æ›´æ–°ã€‚
+// ã¾ãšè¦ªãŒ dirty ãªå­ã‚’ dirty ã«ã—ã€ãã®å¾Œ dirty ãª transform ã® worldMatrix ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
 void HierarchySystem::Update(Registry& registry) {
     Query<TransformComponent> query(registry);
 
-    // e‚ª dirty ‚È‚çq‚à dirty ‚É‚·‚éB
+    // è¦ªãŒ dirty ãªã‚‰å­ã‚‚ dirty ã«ã™ã‚‹ã€‚
     query.ForEachWithEntity([&](EntityID entity, TransformComponent& trans) {
         const EntityID parent = GetParent(entity, registry);
         if (!Entity::IsNull(parent)) {
@@ -69,7 +69,7 @@ void HierarchySystem::Update(Registry& registry) {
         }
         });
 
-    // dirty ‚È‚à‚Ì‚¾‚¯ worldMatrix ‚ğÄŒvZ‚·‚éB
+    // dirty ãªã‚‚ã®ã ã‘ worldMatrix ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
     query.ForEachWithEntity([&](EntityID entity, TransformComponent& trans) {
         if (trans.isDirty) {
             ComputeWorldMatrix(entity, registry);
@@ -78,7 +78,7 @@ void HierarchySystem::Update(Registry& registry) {
         });
 }
 
-// entity ‚ğ newParent ‚Ìq‚É‚µ‚½‚Æ‚«zŠÂQÆ‚ª”­¶‚·‚é‚©”»’è‚·‚éB
+// entity ã‚’ newParent ã®å­ã«ã—ãŸã¨ãå¾ªç’°å‚ç…§ãŒç™ºç”Ÿã™ã‚‹ã‹åˆ¤å®šã™ã‚‹ã€‚
 bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Registry& registry)
 {
     if (Entity::IsNull(entity) || Entity::IsNull(newParent)) {
@@ -88,7 +88,7 @@ bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Regi
         return true;
     }
 
-    // newParent ‚©‚çe•ûŒü‚Ö‚½‚Ç‚Á‚Ä entity ‚É“’B‚µ‚½‚çzŠÂ‚É‚È‚éB
+    // newParent ã‹ã‚‰è¦ªæ–¹å‘ã¸ãŸã©ã£ã¦ entity ã«åˆ°é”ã—ãŸã‚‰å¾ªç’°ã«ãªã‚‹ã€‚
     EntityID cursor = newParent;
     while (!Entity::IsNull(cursor)) {
         if (cursor == entity) {
@@ -99,7 +99,7 @@ bool HierarchySystem::WouldCreateCycle(EntityID entity, EntityID newParent, Regi
     return false;
 }
 
-// entity ‚ğŒ»İ‚ÌeqŠÖŒW‚©‚çØ‚è—£‚·B
+// entity ã‚’ç¾åœ¨ã®è¦ªå­é–¢ä¿‚ã‹ã‚‰åˆ‡ã‚Šé›¢ã™ã€‚
 void HierarchySystem::Detach(EntityID entity, Registry& registry)
 {
     if (Entity::IsNull(entity)) {
@@ -114,7 +114,7 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
 
     const EntityID parent = hierarchy->parent;
 
-    // e‚Ì firstChild ‚ª©•ª‚È‚ç·‚µ‘Ö‚¦‚éB
+    // è¦ªã® firstChild ãŒè‡ªåˆ†ãªã‚‰å·®ã—æ›¿ãˆã‚‹ã€‚
     if (!Entity::IsNull(parent)) {
         if (auto* parentHierarchy = registry.GetComponent<HierarchyComponent>(parent)) {
             if (parentHierarchy->firstChild == entity) {
@@ -123,7 +123,7 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
         }
     }
 
-    // ‘OŒã sibling ‚ÌƒŠƒ“ƒN‚ğ‚Â‚È‚¬’¼‚·B
+    // å‰å¾Œ sibling ã®ãƒªãƒ³ã‚¯ã‚’ã¤ãªãç›´ã™ã€‚
     if (!Entity::IsNull(hierarchy->prevSibling)) {
         if (auto* prevHierarchy = registry.GetComponent<HierarchyComponent>(hierarchy->prevSibling)) {
             prevHierarchy->nextSibling = hierarchy->nextSibling;
@@ -135,24 +135,24 @@ void HierarchySystem::Detach(EntityID entity, Registry& registry)
         }
     }
 
-    // ©g‚ÌeqƒŠƒ“ƒN‚ğƒNƒŠƒA‚·‚éB
+    // è‡ªèº«ã®è¦ªå­ãƒªãƒ³ã‚¯ã‚’ã‚¯ãƒªã‚¢ã™ã‚‹ã€‚
     hierarchy->parent = Entity::NULL_ID;
     hierarchy->prevSibling = Entity::NULL_ID;
     hierarchy->nextSibling = Entity::NULL_ID;
     SyncTransformParent(entity, Entity::NULL_ID, registry);
 }
 
-// parent ‚Ìq‚Æ‚µ‚Ä child ‚ğ•t‚¯’¼‚·B
-// Àˆ—‚Í Reparent ‚ÉˆÏ÷‚·‚éB
+// parent ã®å­ã¨ã—ã¦ child ã‚’ä»˜ã‘ç›´ã™ã€‚
+// å®Ÿå‡¦ç†ã¯ Reparent ã«å§”è­²ã™ã‚‹ã€‚
 void HierarchySystem::AttachChild(EntityID parent, EntityID child, Registry& registry, bool keepWorldTransform)
 {
     Reparent(child, parent, registry, keepWorldTransform);
 }
 
-// entity ‚Ìe‚ğ newParent ‚É•t‚¯‘Ö‚¦‚éB
+// entity ã®è¦ªã‚’ newParent ã«ä»˜ã‘æ›¿ãˆã‚‹ã€‚
 void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& registry, bool keepWorldTransform)
 {
-    // –³Œø entity ‚Í–³‹‚·‚éB
+    // ç„¡åŠ¹ entity ã¯ç„¡è¦–ã™ã‚‹ã€‚
     if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
         return;
     }
@@ -163,24 +163,24 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
         return;
     }
 
-    // keepWorldTransform —p‚ÉA•t‚¯‘Ö‚¦‘O‚Ì worldMatrix ‚ğ•Û‚µ‚Ä‚¨‚­B
+    // keepWorldTransform ç”¨ã«ã€ä»˜ã‘æ›¿ãˆå‰ã® worldMatrix ã‚’ä¿æŒã—ã¦ãŠãã€‚
     auto* childTransform = registry.GetComponent<TransformComponent>(entity);
     XMMATRIX childWorld = XMMatrixIdentity();
     if (childTransform) {
         childWorld = XMLoadFloat4x4(&childTransform->worldMatrix);
     }
 
-    // q‘¤‚É HierarchyComponent ‚ª–³‚¯‚ê‚Î’Ç‰Á‚·‚éB
+    // å­å´ã« HierarchyComponent ãŒç„¡ã‘ã‚Œã°è¿½åŠ ã™ã‚‹ã€‚
     auto* childHierarchy = registry.GetComponent<HierarchyComponent>(entity);
     if (!childHierarchy) {
         registry.AddComponent(entity, HierarchyComponent{});
         childHierarchy = registry.GetComponent<HierarchyComponent>(entity);
     }
 
-    // ‚Ü‚¸Œ»İ‚ÌeqŠÖŒW‚©‚çŠO‚·B
+    // ã¾ãšç¾åœ¨ã®è¦ªå­é–¢ä¿‚ã‹ã‚‰å¤–ã™ã€‚
     Detach(entity, registry);
 
-    // V‚µ‚¢e‚ÖÚ‘±‚·‚éB
+    // æ–°ã—ã„è¦ªã¸æ¥ç¶šã™ã‚‹ã€‚
     if (!Entity::IsNull(newParent)) {
         auto* parentHierarchy = registry.GetComponent<HierarchyComponent>(newParent);
         if (!parentHierarchy) {
@@ -188,7 +188,7 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
             parentHierarchy = registry.GetComponent<HierarchyComponent>(newParent);
         }
 
-        // V‚µ‚¢e‚Ì firstChild ‚Ìæ“ª‚Ö‘}“ü‚·‚éB
+        // æ–°ã—ã„è¦ªã® firstChild ã®å…ˆé ­ã¸æŒ¿å…¥ã™ã‚‹ã€‚
         childHierarchy->parent = newParent;
         childHierarchy->prevSibling = Entity::NULL_ID;
         childHierarchy->nextSibling = parentHierarchy->firstChild;
@@ -202,7 +202,7 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
 
     SyncTransformParent(entity, newParent, registry);
 
-    // world ‚ğˆÛ‚µ‚½‚¢ê‡‚ÍAVeŠî€‚Ì local ‚ğ‹tZ‚µ’¼‚·B
+    // world ã‚’ç¶­æŒã—ãŸã„å ´åˆã¯ã€æ–°è¦ªåŸºæº–ã® local ã‚’é€†ç®—ã—ç›´ã™ã€‚
     if (keepWorldTransform && childTransform) {
         XMMATRIX local = childWorld;
         if (!Entity::IsNull(newParent)) {
@@ -214,11 +214,11 @@ void HierarchySystem::Reparent(EntityID entity, EntityID newParent, Registry& re
         DecomposeToLocal(local, *childTransform);
     }
 
-    // ©•ªˆÈ‰º‚ğ dirty ‚É‚·‚éB
+    // è‡ªåˆ†ä»¥ä¸‹ã‚’ dirty ã«ã™ã‚‹ã€‚
     MarkDirtyRecursive(entity, registry);
 }
 
-// entity ˆÈ‰º‚Ì subtree ‚ğÄ‹A“I‚É dirty ‚É‚·‚éB
+// entity ä»¥ä¸‹ã® subtree ã‚’å†å¸°çš„ã« dirty ã«ã™ã‚‹ã€‚
 void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
 {
     if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
@@ -234,7 +234,7 @@ void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
         return;
     }
 
-    // firstChild ‚©‚ç sibling ‚ğ‚½‚Ç‚Á‚ÄÄ‹A‚·‚éB
+    // firstChild ã‹ã‚‰ sibling ã‚’ãŸã©ã£ã¦å†å¸°ã™ã‚‹ã€‚
     EntityID child = hierarchy->firstChild;
     while (!Entity::IsNull(child)) {
         EntityID next = Entity::NULL_ID;
@@ -246,12 +246,12 @@ void HierarchySystem::MarkDirtyRecursive(EntityID entity, Registry& registry)
     }
 }
 
-// entity ‚Ì localTransform ‚©‚ç worldMatrix ‚ğÄŒvZ‚·‚éB
+// entity ã® localTransform ã‹ã‚‰ worldMatrix ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
 void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
     auto* trans = registry.GetComponent<TransformComponent>(entity);
     if (!trans) return;
 
-    // local TRS ‚©‚ç localMatrix ‚ğ‘g‚İ—§‚Ä‚éB
+    // local TRS ã‹ã‚‰ localMatrix ã‚’çµ„ã¿ç«‹ã¦ã‚‹ã€‚
     XMMATRIX local = XMMatrixScaling(trans->localScale.x, trans->localScale.y, trans->localScale.z) *
         XMMatrixRotationQuaternion(XMLoadFloat4(&trans->localRotation)) *
         XMMatrixTranslation(trans->localPosition.x, trans->localPosition.y, trans->localPosition.z);
@@ -262,14 +262,14 @@ void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
 
     XMMATRIX world;
 
-    // e‚ª–³‚¯‚ê‚Î world = localB
+    // è¦ªãŒç„¡ã‘ã‚Œã° world = localã€‚
     if (Entity::IsNull(parent)) {
         world = local;
     }
     else {
         auto* parentTrans = registry.GetComponent<TransformComponent>(parent);
         if (parentTrans) {
-            // e‚ª dirty ‚È‚çæ‚Ée‚ğÄŒvZ‚·‚éB
+            // è¦ªãŒ dirty ãªã‚‰å…ˆã«è¦ªã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
             if (parentTrans->isDirty) {
                 ComputeWorldMatrix(parent, registry);
                 parentTrans->isDirty = false;
@@ -283,7 +283,7 @@ void HierarchySystem::ComputeWorldMatrix(EntityID entity, Registry& registry) {
 
     XMStoreFloat4x4(&trans->worldMatrix, world);
 
-    // worldMatrix ‚©‚ç worldPosition / worldRotation / worldScale ‚ğ•ª‰ğ‚·‚éB
+    // worldMatrix ã‹ã‚‰ worldPosition / worldRotation / worldScale ã‚’åˆ†è§£ã™ã‚‹ã€‚
     XMVECTOR vS, vR, vT;
     if (XMMatrixDecompose(&vS, &vR, &vT, world)) {
         XMStoreFloat3(&trans->worldPosition, vT);

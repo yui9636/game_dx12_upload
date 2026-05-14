@@ -1,10 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "RHI/GraphicsAPI.h"
 
 #include <ffx_fsr2.h>
 #include <cstdint>
 #include <memory>
+// IBuffer はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class IBuffer;
 class IPipelineState;

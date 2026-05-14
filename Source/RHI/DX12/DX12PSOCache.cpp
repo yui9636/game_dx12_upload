@@ -1,4 +1,4 @@
-#include "DX12PSOCache.h"
+﻿#include "DX12PSOCache.h"
 #include "DX12Shader.h"
 #include "DX12State.h"
 #include "Console/Logger.h"
@@ -59,7 +59,7 @@ DXGI_FORMAT DX12PSOCache::ToDXGIFormat(TextureFormat format) {
 ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& desc) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
 
-    // Shaders
+    // shader bytecode を設定する。
     if (desc.vertexShader) {
         auto* vs = static_cast<DX12Shader*>(desc.vertexShader);
         psoDesc.VS = { vs->GetByteCode(), vs->GetByteCodeSize() };
@@ -73,13 +73,13 @@ ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& de
         psoDesc.GS = { gs->GetByteCode(), gs->GetByteCodeSize() };
     }
 
-    // Input layout
+    // input layout を設定する。
     if (desc.inputLayout) {
         auto* il = static_cast<DX12InputLayout*>(desc.inputLayout);
         psoDesc.InputLayout = { il->GetElements(), il->GetNumElements() };
     }
 
-    // Depth stencil state
+    // depth stencil state を設定する。
     if (desc.depthStencilState) {
         auto* dss = dynamic_cast<DX12DepthStencilState*>(desc.depthStencilState);
         if (dss) psoDesc.DepthStencilState = dss->GetDesc();
@@ -88,7 +88,7 @@ ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& de
         psoDesc.DepthStencilState.StencilEnable = FALSE;
     }
 
-    // Rasterizer state
+    // rasterizer state を設定する。
     if (desc.rasterizerState) {
         auto* rs = dynamic_cast<DX12RasterizerState*>(desc.rasterizerState);
         if (rs) psoDesc.RasterizerState = rs->GetDesc();
@@ -98,7 +98,7 @@ ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& de
         psoDesc.RasterizerState.DepthClipEnable = TRUE;
     }
 
-    // Blend state
+    // blend state を設定する。
     if (desc.blendState) {
         auto* bs = dynamic_cast<DX12BlendState*>(desc.blendState);
         if (bs) psoDesc.BlendState = bs->GetDesc();
@@ -106,17 +106,17 @@ ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& de
         psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     }
 
-    // Root signature
+    // root signature を設定する。
     psoDesc.pRootSignature = m_rootSig->Get();
 
-    // Render target formats
+    // render target format を設定する。
     psoDesc.NumRenderTargets = desc.numRenderTargets;
     for (uint32_t i = 0; i < desc.numRenderTargets; ++i) {
         psoDesc.RTVFormats[i] = ToDXGIFormat(desc.rtvFormats[i]);
     }
     psoDesc.DSVFormat = ToDXGIFormat(desc.dsvFormat);
 
-    // Primitive topology type
+    // primitive topology type を設定する。
     switch (desc.primitiveTopology) {
     case PrimitiveTopology::TriangleList:
     case PrimitiveTopology::TriangleStrip:
@@ -129,7 +129,7 @@ ComPtr<ID3D12PipelineState> DX12PSOCache::CompilePSO(const PipelineStateDesc& de
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
     }
 
-    // MSAA
+    // MSAA 設定。
     psoDesc.SampleDesc.Count = (desc.sampleCount > 0) ? desc.sampleCount : 1;
     psoDesc.SampleDesc.Quality = 0;
     psoDesc.SampleMask = desc.sampleMask;

@@ -1,3 +1,4 @@
+﻿// SDLInputBackend の入力処理関連宣言をまとめます。
 #pragma once
 #include "IInputBackend.h"
 #include <unordered_map>

@@ -1,126 +1,15 @@
-//#include "FullScreenQuad.hlsli"
-//#include "PostEffect.hlsli"
-
-//Texture2D colorMap : register(t0);
-//Texture2D luminanceMap : register(t1);
-//SamplerState linearSampler : register(s0);
-
-//// RGB Ì HSV •ÏŠ·ŠÖ”
-//float3 RGBtoHSV(float3 c)
-//{
-//    float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-//    float4 p = c.g < c.b ? float4(c.bg, K.wz) : float4(c.gb, K.xy);
-//    float4 q = c.r < p.x ? float4(p.xyw, c.r) : float4(c.r, p.yzx);
-//    float d = q.x - min(q.w, q.y);
-//    float e = 1e-10;
-//    return float3(abs((q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-//}
-
-//float3 HSVtoRGB(float3 c)
-//{
-//    float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-//    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
-//    return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
-//}
-
-//// =========================================================
-//// š ACES Tone Mapping (Fitted Curve)
-//// ‰f‰æ‹ÆŠE•W€‚ÌƒJ[ƒuB‹­—ó‚ÈŒõ‚ğu”’”ò‚Ñv‚³‚¹‚¸A–L‚©‚ÈF‚ğc‚µ‚½‚Ü‚ÜLDR‚Öˆ³k‚µ‚Ü‚·B
-//// =========================================================
-//float3 ACESFilm(float3 x)
-//{
-//    float a = 2.51f;
-//    float b = 0.03f;
-//    float c = 2.43f;
-//    float d = 0.59f;
-//    float e = 0.14f;
-//    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
-//}
-
-//float4 main(VS_OUT pin) : SV_TARGET
-//{
-//    uint width, height;
-//    luminanceMap.GetDimensions(width, height);
-//    float2 texelSize = 1.0f / float2(width, height);
-
-//    // 1. Sceneƒoƒbƒtƒ@iHDRj‚Ì¶‚ÌŒõƒf[ƒ^‚ğæ“¾
-//    float4 color = colorMap.Sample(linearSampler, pin.texcoord);
-//    float alpha = color.a;
-
-//    // =========================================================
-//    // š ì£®iKawasej16ƒ^ƒbƒv ƒuƒ‰[
-//    // =========================================================
-//    float3 blurColor = 0.0f;
-//    float spread = max(gaussianSigma, 1.5f);
-
-//    [unroll]
-//    for (int x = -1; x <= 2; ++x)
-//    {
-//        [unroll]
-//        for (int y = -1; y <= 2; ++y)
-//        {
-//            float2 offset = float2(x - 0.5f, y - 0.5f) * texelSize * spread;
-//            blurColor += luminanceMap.Sample(linearSampler, pin.texcoord + offset).rgb;
-//        }
-//    }
-//    blurColor /= 16.0f;
-
-//    // 2. ƒuƒ‹[ƒ€‚ğ‰ÁZ (‚±‚±‚Ü‚Å‚Íâ‘Î’l‚ª1.0‚ğ’´‚¦‚éHDR‹óŠÔ‚Å‚ÌŒvZ)
-//    color.rgb += blurColor * bloomIntensity;
-
-//    // =========================================================
-//    // š ˜Io•â³ & ACES ƒg[ƒ“ƒ}ƒbƒsƒ“ƒO (HDR -> LDR)
-//    // =========================================================
-//    const float exposure = 1.2f;
-//    color.rgb *= exposure; // ƒŒƒ“ƒY‚Ì˜Ioi–¾‚é‚³j‚ğ“K—p
-//    color.rgb = ACESFilm(color.rgb); // š‚±‚±‚ÅHDR‚ÌŒõ‚ğ [0.0 ~ 1.0] ‚É‰f‰æ“I‚Éˆ³k
-
-//    // =========================================================
-//    // š ƒJƒ‰[ƒOƒŒ[ƒfƒBƒ“ƒO (ˆ³kŒã‚ÌLDR‹óŠÔ‚Åˆ—‚·‚é‚Ì‚ª³‰ğ)
-//    // =========================================================
-//    // ƒ‚ƒmƒNƒ•âŠÔ
-//    float mono = dot(color.rgb, float3(0.299, 0.587, 0.114));
-//    color.rgb = lerp(color.rgb, mono.xxx, monoBlend);
-    
-//    // F‘ŠƒVƒtƒg
-//    if (hueShift > 0.001f || hueShift < -0.001f)
-//    {
-//        float3 hsv = RGBtoHSV(color.rgb);
-//        hsv.x = frac(hsv.x + hueShift);
-//        color.rgb = HSVtoRGB(hsv);
-//    }
-    
-//    // ƒ”ƒBƒlƒbƒg
-//    float2 uvToCenter = abs(pin.texcoord - float2(0.5f, 0.5f));
-//    float vignette = 1.0f - saturate(length(uvToCenter) * 2.0f);
-//    color.rgb *= lerp(1.0f, vignette, vignetteAmount);
-
-//    // ƒtƒ‰ƒbƒVƒ…
-//    color.rgb = lerp(color.rgb, float3(1.0f, 1.0f, 1.0f), flashAmount);
-
-//    // =========================================================
-//    // š ÅIdã‚°FƒKƒ“ƒ}•â³ (Linear -> sRGB)
-//    // =========================================================
-//    const float INV_GAMMA = 1.0f / 2.2f;
-//    color.rgb = pow(color.rgb, INV_GAMMA);
-
-//    return float4(color.rgb, alpha);
-//}
-
-// ==========================================
-// BloomPS.hlsl (Motion Blur “‡”Å)
-// ==========================================
+// BloomPS.hlsl (ãƒ¢ãƒ¼ã‚·ãƒ§ãƒ³ãƒ–ãƒ©ãƒ¼çµ±åˆç‰ˆ)
 #include "FullScreenQuad.hlsli"
 #include "PostEffect.hlsli"
 
 Texture2D colorMap : register(t0);
 Texture2D luminanceMap : register(t1);
-// Texture2D depthMap : register(t2); // [“x‚Í¡‰ñ‚ÍƒXƒLƒbƒv
-Texture2D velocityMap : register(t3); // š’Ç‰Á: Velocityƒoƒbƒtƒ@
+// text ç”¨è‰²ã€‚ure2D depthMap : register(t2); // æ·±åº¦ã¯ä»Šå›ã¯æœªä½¿ç”¨
+Texture2D velocityMap : register(t3); // é€Ÿåº¦ãƒãƒƒãƒ•ã‚¡
 
 SamplerState linearSampler : register(s0);
 
-// RGB Ì HSV •ÏŠ·ŠÖ”
+// RGB ã‹ã‚‰ HSV ã¸ã®å¤‰æ›é–¢æ•°
 float3 RGBtoHSV(float3 c)
 {
     float4 K = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -150,31 +39,23 @@ float3 ACESFilm(float3 x)
 
 float4 main(VS_OUT pin) : SV_TARGET
 {
-    
-    
-    
-    
-
     uint width, height;
     luminanceMap.GetDimensions(width, height);
     float2 texelSize = 1.0f / float2(width, height);
 
-    // 1. Sceneƒoƒbƒtƒ@iHDRj‚Ì¶‚ÌŒõƒf[ƒ^‚ğæ“¾
+    // 1. ã‚·ãƒ¼ãƒ³ãƒãƒƒãƒ•ã‚¡ã‹ã‚‰ HDR ã®å…‰ãƒ‡ãƒ¼ã‚¿ã‚’å–å¾—
     float4 color = colorMap.Sample(linearSampler, pin.texcoord);
     float alpha = color.a;
-
-    // =========================================================
-    // š ƒIƒuƒWƒFƒNƒgEƒ‚[ƒVƒ‡ƒ“ƒuƒ‰[ (Velocityƒx[ƒX)
-    // =========================================================
-    float2 velocity = velocityMap.Sample(linearSampler, pin.texcoord).xy;
+// ã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆå˜ä½ã®ãƒ¢ãƒ¼ã‚·ãƒ§ãƒ³ãƒ–ãƒ©ãƒ¼ï¼ˆé€Ÿåº¦ãƒ™ãƒ¼ã‚¹ï¼‰
+float2 velocity = velocityMap.Sample(linearSampler, pin.texcoord).xy;
     
-    // ‘¬“x‚ª‚Ù‚Ú0‚Ì”wŒi‚âAƒuƒ‰[‹­“x‚ª0‚Ì‚Æ‚«‚ÍƒXƒLƒbƒv‚µ‚Ä•‰‰×‚ğ—}‚¦‚é
+    // é€Ÿåº¦ãŒã»ã¼ 0 ã®èƒŒæ™¯ã€ã¾ãŸã¯ãƒ–ãƒ©ãƒ¼å¼·åº¦ãŒ 0 ã®ã¨ãã¯å‡¦ç†ã‚’çœãã€‚
     if (motionBlurIntensity > 0.001f && length(velocity) > 0.0001f)
     {
         int numSamples = clamp((int) motionBlurSamples, 2, 32);
         float3 mbColor = 0.0f;
         
-        // ’†S‚©‚ç‘OŒã‚Ì‹OÕi-0.5 ? 0.5j‚ÉŒü‚©‚Á‚ÄƒTƒ“ƒvƒŠƒ“ƒO‚µAc‘œ‚ğ•½‹Ï‰»‚·‚é
+        // ä¸­å¿ƒã‹ã‚‰å‰å¾Œã®è»Œè·¡ã¸ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ã—ã€æ®‹åƒã‚’å¹³å‡åŒ–ã™ã‚‹ã€‚
         [unroll(32)]
         for (int i = 0; i < numSamples; ++i)
         {
@@ -184,11 +65,8 @@ float4 main(VS_OUT pin) : SV_TARGET
         }
         color.rgb = mbColor / (float) numSamples;
     }
-
-    // =========================================================
-    // š ì£®iKawasej16ƒ^ƒbƒv ƒuƒ‰[ (Bloom)
-    // =========================================================
-    float3 blurColor = 0.0f;
+// å·ç€¬å¼ 16 ã‚¿ãƒƒãƒ—ãƒ–ãƒ©ãƒ¼ï¼ˆãƒ–ãƒ«ãƒ¼ãƒ ï¼‰
+float3 blurColor = 0.0f;
     float spread = max(gaussianSigma, 1.5f);
 
     [unroll]
@@ -203,19 +81,13 @@ float4 main(VS_OUT pin) : SV_TARGET
     }
     blurColor /= 16.0f;
 
-    // 2. ƒuƒ‹[ƒ€‚ğ‰ÁZ
+    // 2. ãƒ–ãƒ«ãƒ¼ãƒ ã‚’åŠ ç®—
     color.rgb += blurColor * bloomIntensity;
-
-    // =========================================================
-    // š ˜Io•â³ & ACES ƒg[ƒ“ƒ}ƒbƒsƒ“ƒO
-    // =========================================================
-    color.rgb *= exposure;
+// éœ²å‡ºè£œæ­£ã¨ ACES ãƒˆãƒ¼ãƒ³ãƒãƒƒãƒ”ãƒ³ã‚°
+color.rgb *= exposure;
     color.rgb = ACESFilm(color.rgb);
-
-    // =========================================================
-    // š ƒJƒ‰[ƒOƒŒ[ƒfƒBƒ“ƒO
-    // =========================================================
-    float mono = dot(color.rgb, float3(0.299, 0.587, 0.114));
+// ã‚«ãƒ©ãƒ¼ã‚°ãƒ¬ãƒ¼ãƒ‡ã‚£ãƒ³ã‚°
+float mono = dot(color.rgb, float3(0.299, 0.587, 0.114));
     color.rgb = lerp(color.rgb, mono.xxx, monoBlend);
     
     if (hueShift > 0.001f || hueShift < -0.001f)
@@ -230,11 +102,8 @@ float4 main(VS_OUT pin) : SV_TARGET
     color.rgb *= lerp(1.0f, vignette, vignetteAmount);
 
     color.rgb = lerp(color.rgb, float3(1.0f, 1.0f, 1.0f), flashAmount);
-
-    // =========================================================
-    // š ÅIdã‚°FƒKƒ“ƒ}•â³
-    // =========================================================
-    const float INV_GAMMA = 1.0f / 2.2f;
+// æœ€çµ‚ä»•ä¸Šã’ã®ã‚¬ãƒ³ãƒè£œæ­£
+const float INV_GAMMA = 1.0f / 2.2f;
     color.rgb = pow(color.rgb, INV_GAMMA);
 
     return float4(color.rgb, alpha);

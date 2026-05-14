@@ -1,4 +1,4 @@
-#include "InputTextSystem.h"
+﻿#include "InputTextSystem.h"
 #include "InputTextFieldComponent.h"
 #include "IInputBackend.h"
 #include "InputEventQueue.h"
@@ -25,7 +25,7 @@ void InputTextSystem::Update(Registry& registry, const InputEventQueue& queue, I
 
             anyFocused = true;
 
-            // Process text/composition events
+            // text / composition event を処理する。
             for (auto& ev : queue.GetEvents()) {
                 if (ev.type == InputEventType::TextComposition && field.compositionEnabled) {
                     strncpy(field.compositionText, ev.textComposition.text,
@@ -38,7 +38,7 @@ void InputTextSystem::Update(Registry& registry, const InputEventQueue& queue, I
         }
     }
 
-    // Manage SDL text input state
+    // SDL text input の有効状態を管理する。
     if (anyFocused && !backend.IsTextInputActive()) {
         backend.StartTextInput();
     } else if (!anyFocused && backend.IsTextInputActive()) {

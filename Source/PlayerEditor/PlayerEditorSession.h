@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include "Entity/Entity.h"
+// PlayerEditorPanel は専用エディターパネルの描画と入力処理を担当する。
 
 class PlayerEditorPanel;
 

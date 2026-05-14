@@ -1,4 +1,4 @@
-#include "Console.h"
+﻿#include "Console.h"
 #include "Logger.h"
 #include "Profiler.h"
 #include <imgui.h>
@@ -9,6 +9,7 @@ Console& Console::Instance() {
     return instance;
 }
 
+// コンソールウィンドウを描画し、Profiler とログタブの内容を更新する。
 void Console::Draw(const char* title, bool* p_open, bool* outFocused) {
     if (!ImGui::Begin(title, p_open)) {
         if (outFocused) {
@@ -24,9 +25,6 @@ void Console::Draw(const char* title, bool* p_open, bool* outFocused) {
     }
 
     if (ImGui::BeginTabBar("ConsoleTabs")) {
-
-        // =========================================================
-        // =========================================================
         if (ImGui::BeginTabItem("Profiler")) {
 
             float totalPassTime = 0.0f;
@@ -49,9 +47,6 @@ void Console::Draw(const char* title, bool* p_open, bool* outFocused) {
 
             ImGui::EndTabItem();
         }
-
-        // =========================================================
-        // =========================================================
         if (ImGui::BeginTabItem("Logs")) {
             if (ImGui::Button("Clear Logs")) {
                 Logger::Instance().ClearLogs();

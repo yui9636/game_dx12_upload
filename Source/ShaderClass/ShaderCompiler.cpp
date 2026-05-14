@@ -1,6 +1,7 @@
-#include "ShaderCompiler.h"
+﻿#include "ShaderCompiler.h"
 #include <iostream>
 #include <vector>
+// ShaderCompiler::CompilePixelShader はこのモジュールの実行時処理を構成する補助処理を行う。
 
 HRESULT ShaderCompiler::CompilePixelShader(
     ID3D11Device* device,

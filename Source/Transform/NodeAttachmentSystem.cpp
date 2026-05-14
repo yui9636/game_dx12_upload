@@ -1,4 +1,4 @@
-#include "Transform/NodeAttachmentSystem.h"
+﻿#include "Transform/NodeAttachmentSystem.h"
 
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
@@ -13,6 +13,7 @@ using namespace DirectX;
 
 namespace
 {
+// BuildLocalMatrix はこのモジュールの実行時処理を構成する補助処理を行う。
     XMMATRIX BuildLocalMatrix(const TransformComponent& transform)
     {
         return XMMatrixAffineTransformation(

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CinematicSequenceAsset.h"
 #include "EffectRuntime/EffectService.h"
@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+// Registry はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class Registry;
 struct EngineTime;

@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <algorithm>
 #include <cmath>
+// EffectCurveKey は time/value/inTangent/outTangent を中心に、実行時やエディターで共有する状態を保持する。
 
 struct EffectCurveKey
 {

@@ -1,3 +1,4 @@
+﻿// DX11Texture の RHI バックエンド実装をまとめます。
 #include "DX11Texture.h"
 #include <stdexcept>
 

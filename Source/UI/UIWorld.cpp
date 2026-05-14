@@ -1,3 +1,4 @@
+﻿// UIWorld の UI 関連実装をまとめます。
 #include "UIWorld.h"
 #include "RenderContext/RenderContext.h"
 #include "Graphics.h"

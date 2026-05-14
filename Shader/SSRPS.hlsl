@@ -31,7 +31,6 @@ cbuffer CbScene : register(b7)
 float4 main(VS_OUT pin) : SV_TARGET
 {
     // 【究極のデバッグ】もし画面が真っ黒なら、原因2の「PrevSceneのコピー忘れ」が確定します！
-    // return PrevSceneMap.SampleLevel(linearSampler, pin.texcoord, 0);
 
     float4 wpd = GBuffer2.Sample(pointSampler, pin.texcoord);
     if (wpd.w >= 1.0f)
@@ -50,11 +49,8 @@ float4 main(VS_OUT pin) : SV_TARGET
 
     float3 viewDir = normalize(worldPos - cameraPosition.xyz);
     float3 reflectDir = normalize(reflect(viewDir, normal));
-
-    // =========================================================
-    // ★ 究極設定：GPUの力技で「絶対に反射を見つけ出す」
-    // =========================================================
-    const int MAX_STEPS = 1000; // 限界突破の1000回ループ！
+// ★ 究極設定：GPUの力技で「絶対に反射を見つけ出す」
+const int MAX_STEPS = 1000; // 限界突破の1000回ループ！
     const float STEP_SIZE = 0.1f; // 10cmの超精密な歩幅（100m先まで絶対にすり抜けず探す）
     const float THICKNESS = 0.5f; // 厚み判定も安全マージンを確保
     

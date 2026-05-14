@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -10,6 +10,7 @@
 
 namespace EffectParameterBindings
 {
+// NormalizeName は名前比較用に文字列を正規化する。
     inline std::string NormalizeName(std::string_view name)
     {
         std::string result;

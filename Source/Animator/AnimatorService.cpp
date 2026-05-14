@@ -1,9 +1,10 @@
-#include "AnimatorService.h"
+﻿#include "AnimatorService.h"
 
 #include "AnimatorComponent.h"
 #include "AnimatorRuntime.h"
 #include "Component/MeshComponent.h"
 #include "Registry/Registry.h"
+// AnimatorService::Instance はこのモジュールの実行時処理を構成する補助処理を行う。
 
 AnimatorService& AnimatorService::Instance()
 {

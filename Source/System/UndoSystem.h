@@ -1,13 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include <vector>
 #include <memory>
 #include <string>
 #include <iostream>
 #include "Undo/IUndoAction.h"
-
-// =========================================================
-// =========================================================
+// ECS 操作用の Undo/Redo 履歴を保持し、履歴 revision を更新する。
 class UndoSystem
 {
 public:

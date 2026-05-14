@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <string>
 
 #include <nlohmann/json.hpp>
+// TimelineAsset はエディターで編集した内容を保存するためのデータ構造を表す。
 
 struct TimelineAsset;
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Shader.h"
 
@@ -64,7 +64,7 @@ private:
 
 
 
-	std::shared_ptr<ITexture>      m_whiteTexture; // 1x1 white fallback
+	std::shared_ptr<ITexture>      m_whiteTexture; // 1x1 白 texture の fallback。
 
 	std::unique_ptr<IShader>       m_vs;
 

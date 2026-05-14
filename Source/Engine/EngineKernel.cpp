@@ -1151,7 +1151,7 @@ void EngineKernel::Initialize()
 
     LOG_INFO("[EngineKernel] Initialize API=%s", isDX12 ? "DX12" : "DX11");
 
-    // Load default GameFlow asset (or build an empty flow if missing).
+    // 既定の GameFlow asset を読み込む（無ければ空 flow を作る）。
     {
         const std::filesystem::path gameLoopPath = "Data/GameFlow/Main.gameflow";
         if (!m_gameLoopAsset.LoadFromFile(gameLoopPath)) {
@@ -1160,7 +1160,7 @@ void EngineKernel::Initialize()
         }
     }
 
-    // Create the GameFlow persistent input owner entity (kept across scene loads).
+    // GameFlow 用の永続入力 owner entity を作る（シーン読み込みをまたいで保持）。
     if (!m_gameLoopInputOwnerInitialized) {
         EntityID owner = m_gameLoopRegistry.CreateEntity();
         m_gameLoopRegistry.AddComponent(owner, NameComponent{ "GameFlowInputOwner" });
@@ -1179,30 +1179,30 @@ void EngineKernel::Initialize()
 
         InputActionMapComponent mapComp{};
         mapComp.asset.name = "GameFlow";
-        // Index 0 = Confirm.
+        // index 0 は Confirm。
         {
             ActionBinding b;
             b.actionName = "Confirm";
-            b.scancode = 40;        // SDL Enter
-            b.gamepadButton = 0;    // SDL Gamepad A
+            b.scancode = 40;        // SDL Enter キー。
+            b.gamepadButton = 0;    // SDL Gamepad A ボタン。
             b.trigger = ActionTriggerType::Pressed;
             mapComp.asset.actions.push_back(b);
         }
-        // Index 1 = Cancel.
+        // index 1 は Cancel。
         {
             ActionBinding b;
             b.actionName = "Cancel";
-            b.scancode = 41;        // SDL Escape
-            b.gamepadButton = 1;    // SDL Gamepad B
+            b.scancode = 41;        // SDL Escape キー。
+            b.gamepadButton = 1;    // SDL Gamepad B ボタン。
             b.trigger = ActionTriggerType::Pressed;
             mapComp.asset.actions.push_back(b);
         }
-        // Index 2 = Retry.
+        // index 2 は Retry。
         {
             ActionBinding b;
             b.actionName = "Retry";
-            b.scancode = 21;        // SDL R
-            b.gamepadButton = 2;    // SDL Gamepad X
+            b.scancode = 21;        // SDL R キー。
+            b.gamepadButton = 2;    // SDL Gamepad X ボタン。
             b.trigger = ActionTriggerType::Pressed;
             mapComp.asset.actions.push_back(b);
         }
@@ -2174,7 +2174,6 @@ void EngineKernel::Render()
         LogTextureSnapshot("GBuffer1Snapshot", gbuffer1Snapshot);
         LogTextureSnapshot("GBuffer2Snapshot", gbuffer2Snapshot);
         LogTextureSnapshot("GBufferDepthSnapshot", gbufferDepthSnapshot);
-        /* LogTextureSnapshot("ShadowMapSnapshot", shadowMapSnapshot); */
 
         LogSceneOverGBufferMask(gbuffer0Snapshot, sceneOpaqueSnapshot);
         LogDepthOverGBufferMask(gbuffer0Snapshot, gbufferDepthSnapshot);
@@ -2196,11 +2195,11 @@ void EngineKernel::Play()
         if (m_editorLayer && m_gameLayer) {
             m_editorLayer->GetInputBridge().OnPlayStarted(m_gameLayer->GetRegistry());
 
-            // Save the current editor scene path so we can restore it on Stop.
+            // Stop 時に戻せるよう、現在の editor scene path を保存する。
             m_savedEditorScenePath = m_editorLayer->GetCurrentScenePath();
         }
 
-        // Start GameFlow. The startNode's scene is loaded at end-of-frame.
+        // GameFlow を開始する。startNode の scene はフレーム末尾で読み込む。
         GameLoopRuntime& rt = m_gameLoopRuntime;
         rt.Reset();
         rt.isActive = true;
@@ -2252,13 +2251,13 @@ void EngineKernel::StopImmediate()
             m_editorLayer->GetInputBridge().OnPlayStopped(m_gameLayer->GetRegistry());
         }
 
-        // Reset GameFlow runtime.
+        // GameFlow runtime をリセットする。
         m_gameLoopRuntime.Reset();
         m_uiButtonClickQueue.Clear();
         m_flowEventQueue.Clear();
         BattleFlowSystem::Reset();
 
-        // Restore the editor scene we had open before Play.
+        // Play 前に開いていた editor scene を復元する。
         if (m_editorLayer && !m_savedEditorScenePath.empty()) {
             m_editorLayer->LoadSceneFromPath(m_savedEditorScenePath);
         }

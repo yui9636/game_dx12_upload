@@ -1,4 +1,4 @@
-#include	"HeadUpDisplay.h"
+﻿#include	"HeadUpDisplay.h"
 
 #include	<string.h>
 #include	"Message/MessageData.h"
@@ -10,6 +10,7 @@
 #include	"Sprite/SpriteRenderer.h"
 
 #include <algorithm>
+// HeadUpDisplay::HeadUpDisplay はこのモジュールの実行時処理を構成する補助処理を行う。
 
 HeadUpDisplay::HeadUpDisplay()
 {

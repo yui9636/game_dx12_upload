@@ -91,7 +91,7 @@ int Framework::Run()
 void Framework::Update(float dt)
 {
     EngineKernel::Instance().PollInput();
-    // ImGui NewFrame
+    // ImGui の NewFrame を開始する。
     ImGuiRenderer::Begin();
 
     EngineKernel::Instance().Update(dt);
@@ -188,7 +188,7 @@ LRESULT CALLBACK Framework::HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LP
             if (width > 0 && height > 0) {
                 m_pendingWidth = width;
                 m_pendingHeight = height;
-                // Maximize/restore: resize immediately (not dragging)
+                // maximize / restore 時は drag 中ではないため即座に resize する。
                 if (!m_inSizeMove) {
                     m_needsResize = true;
                 }
@@ -203,7 +203,7 @@ LRESULT CALLBACK Framework::HandleMessage(HWND hWnd, UINT msg, WPARAM wParam, LP
     case WM_EXITSIZEMOVE:
         m_inSizeMove = false;
         timer.Start();
-        // Apply pending resize from drag
+        // 変更を適用する。 pending resize from drag
         if (m_pendingWidth > 0 && m_pendingHeight > 0) {
             m_needsResize = true;
         }

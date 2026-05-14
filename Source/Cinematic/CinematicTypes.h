@@ -60,10 +60,10 @@ namespace Cinematic
     }
 
 
-    // float 用の線形補間。
+    // float 値。 用の線形補間。
     inline float MathLerp(float a, float b, float t) { return a + (b - a) * t; }
 
-    // float 用の Catmull-Rom 補間。
+    // float 値。 用の Catmull-Rom 補間。
     inline float MathCatmullRom(float v0, float v1, float v2, float v3, float t)
     {
         // t の二乗・三乗を先に求めて式を読みやすくする。

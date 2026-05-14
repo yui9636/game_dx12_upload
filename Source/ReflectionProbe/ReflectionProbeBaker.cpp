@@ -1,4 +1,4 @@
-#include "ReflectionProbeBaker.h"
+﻿#include "ReflectionProbeBaker.h"
 #include "Graphics.h"
 #include "Render/GlobalRootSignature.h"
 #include "Scene/SceneDataUploadSystem.h"
@@ -180,10 +180,10 @@ void ReflectionProbeBaker::BakeDX12(ReflectionProbeComponent& probe, const Rende
     ID3D12GraphicsCommandList* nativeCmd = dx12Cmd->GetNativeCommandList();
     if (!nativeCmd) return;
 
-    // Lazy-create the cubemap texture (R16G16B16A16_FLOAT, 6 array slices,
-    // committed in DEFAULT heap). We wrap it with the existing DX12Texture
-    // file-loaded constructor to get a TextureCube SRV; the SRV starts in
-    // ShaderResource state in that wrapper, so we override to CopyDest below.
+    // cubemap texture は必要になった時点で遅延生成する。形式は R16G16B16A16_FLOAT、6 array slice。
+    // DEFAULT heap に確保し、既存の DX12Texture で包む。
+    // file-loaded constructor を使って TextureCube SRV を作る。SRV は
+    // wrapper 内では ShaderResource state から始まるため、下で CopyDest へ上書きする。
     DX12Texture* cubemapDx12 = nullptr;
     if (!probe.cubemapTexture) {
         D3D12_RESOURCE_DESC desc = {};
@@ -210,7 +210,7 @@ void ReflectionProbeBaker::BakeDX12(ReflectionProbeComponent& probe, const Rende
 
         auto wrapper = std::make_shared<DX12Texture>(
             dx12Device, cubemapRes, cubeSize, cubeSize,
-            DXGI_FORMAT_R16G16B16A16_FLOAT, true /*isCubemap*/);
+            DXGI_FORMAT_R16G16B16A16_FLOAT, true /* キューブマップとして作成 */);
         wrapper->SetCurrentState(ResourceState::CopyDest);
         probe.cubemapTexture = wrapper;
     }
@@ -219,7 +219,7 @@ void ReflectionProbeBaker::BakeDX12(ReflectionProbeComponent& probe, const Rende
     ID3D12Resource* cubemapResource = cubemapDx12->GetNativeResource();
     if (!cubemapResource) return;
 
-    // Save and override RenderContext camera state.
+    // RenderContext の camera state を退避し、probe 用に上書きする。
     auto originalView = rc.viewMatrix;
     auto originalProj = rc.projectionMatrix;
     auto originalUnjittered = rc.viewProjectionUnjittered;
@@ -260,9 +260,9 @@ void ReflectionProbeBaker::BakeDX12(ReflectionProbeComponent& probe, const Rende
         lightingPass.Execute(dummyResources, queue, rc);
         skyboxPass.Execute(dummyResources, queue, rc);
 
-        // Copy scene color (cropped center square) into face slice [i].
-        // Transition states to allow the copy, then restore the scene as a
-        // render target for the next iteration.
+        // scene color の中央正方形を切り出し、face slice [i] へ copy する。
+        // copy できる state へ遷移し、その後 scene を
+        // 次 iteration 用の render target へ戻す。
         dx12Cmd->TransitionBarrier(sceneTex, ResourceState::CopySource);
         dx12Cmd->TransitionBarrier(cubemapDx12, ResourceState::CopyDest);
         dx12Cmd->FlushResourceBarriers();
@@ -287,12 +287,12 @@ void ReflectionProbeBaker::BakeDX12(ReflectionProbeComponent& probe, const Rende
 
         nativeCmd->CopyTextureRegion(&dstLoc, 0, 0, 0, &srcLoc, &srcBox);
 
-        // Put the scene texture back into RenderTarget so the next pass /
-        // next iteration can write to it.
+        // 次 pass または次 iteration が書き込めるよう、
+        // scene texture を RenderTarget state へ戻す。
         dx12Cmd->TransitionBarrier(sceneTex, ResourceState::RenderTarget);
     }
 
-    // Final transition: cubemap is now sampled by lighting passes.
+    // 最終遷移として cubemap を lighting pass から sample できる state にする。
     dx12Cmd->TransitionBarrier(cubemapDx12, ResourceState::ShaderResource);
     dx12Cmd->FlushResourceBarriers();
 

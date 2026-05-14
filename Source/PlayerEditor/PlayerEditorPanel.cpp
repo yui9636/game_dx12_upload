@@ -1,14 +1,12 @@
-﻿// ============================================================================
-// PlayerEditor — core panel: lifecycle, top-level Draw / DockSpace, toolbar,
-// preview-entity / model setters, prefab save delegation. Concern-specific
-// drawing lives in sibling files:
-//   PlayerEditorViewportPanel.cpp     — 3D viewport + camera helpers
-//   PlayerEditorSkeletonPanel.cpp     — bone tree, sockets, persistent colliders
-//   PlayerEditorStateMachinePanel.cpp — state-machine UI + presets
-//   PlayerEditorTimelinePanel.cpp     — timeline UI + playback
-//   PlayerEditorInspectorPanel.cpp    — properties / animator / input panels
-// Shared statics live in PlayerEditorPanelInternal.{h,cpp}.
-// ============================================================================
+﻿// PlayerEditor の中核パネル。ライフサイクル、上位 Draw / DockSpace、ツールバー、
+// プレビューエンティティ / モデル設定、プレハブ保存の委譲を扱う。用途別の
+// 描画処理は兄弟ファイルへ分割している:
+//   PlayerEditorViewportPanel.cpp     — 3D ビューポート + カメラ補助
+//   PlayerEditorSkeletonPanel.cpp     — ボーンツリー、ソケット、永続コライダー
+//   PlayerEditorStateMachinePanel.cpp — ステートマシン UI + プリセット
+//   PlayerEditorTimelinePanel.cpp     — タイムライン UI + 再生
+//   PlayerEditorInspectorPanel.cpp    — プロパティ / アニメータ / 入力パネル
+// 共有 static は PlayerEditorPanelInternal.{h,cpp} に置く。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -28,11 +26,7 @@
 #include "System/Dialog.h"
 
 using namespace PlayerEditorInternal;
-
-// ============================================================================
-// Lifecycle / preview-entity / external selection (delegated to session helpers)
-// ============================================================================
-
+// ライフサイクル / プレビューエンティティ / 外部選択（セッション補助へ委譲）
 void PlayerEditorPanel::Suspend()
 {
     PlayerEditorSession::Suspend(*this);
@@ -230,14 +224,10 @@ void PlayerEditorPanel::SetModel(const Model* model)
     m_model = model;
     ResetSelectionState();
 }
-
-// ============================================================================
-// Toolbar / Empty-state placeholder
-// ============================================================================
-
+// ツールバー / 空状態プレースホルダー
 void PlayerEditorPanel::DrawToolbar()
 {
-    // v2.0 ActorEditor: mode dropdown.
+    // v2.0 ActorEditor: モード選択ドロップダウン。
     {
         const char* modeLabels[] = { "Player", "Enemy", "NPC" };
         int modeIdx = static_cast<int>(m_actorEditorMode);
@@ -246,8 +236,8 @@ void PlayerEditorPanel::DrawToolbar()
             const auto newMode = static_cast<ActorEditorMode>(modeIdx);
             if (newMode != m_actorEditorMode) {
                 if (HasAnyDirtyDocument()) {
-                    // Defer destructive switch: warn but still apply (Save/Discard
-                    // dialog can be wired later. v2.0 minimum: log + proceed).
+                    // 破壊的な切り替えは後で警告できるようにする。今は適用だけ行う（Save/Discard
+                    // ダイアログは後で接続可能。v2.0 の最小実装はログ出力 + 続行）。
                 }
                 m_actorEditorMode = newMode;
                 m_inlineBtExpanded = false;
@@ -273,10 +263,10 @@ void PlayerEditorPanel::DrawToolbar()
         SavePrefabDocument(false);
     }
 
-    // Persistent collider add shortcuts. Sit next to Open / Save so the
-    // authoring flow doesn't require navigating into the Skeleton panel
-    // first. Disabled until a model is loaded and a preview entity is
-    // available, which mirrors the gating used inside the Skeleton panel.
+    // 永続コライダー追加ショートカット。Open / Save の隣に置き、
+    // 作業時に Skeleton パネルまで移動しなくても済むようにする。
+    // モデルが読み込まれ、プレビューエンティティが利用可能になるまでは無効。
+    // Skeleton パネル内と同じ有効条件に合わせている。
     const bool canAddCollider = HasOpenModel() && CanUsePreviewEntity();
     ImGui::SameLine();
     if (DrawToolbarButton(ICON_FA_PLUS " Body", canAddCollider)) {
@@ -287,7 +277,7 @@ void PlayerEditorPanel::DrawToolbar()
         AddPersistentCollider(ColliderAttribute::Attack);
     }
 
-    // v2.0 ActorEditor: mode-specific Setup / Repair buttons.
+    // v2.0 ActorEditor: モード別の Setup / Repair ボタン。
     if (m_actorEditorMode == ActorEditorMode::Enemy && m_registry && CanUsePreviewEntity()) {
         ImGui::SameLine();
         if (DrawToolbarButton("Setup Full Enemy")) {
@@ -333,11 +323,7 @@ void PlayerEditorPanel::DrawEmptyState()
         ImGui::TextDisabled("No selected entity with MeshComponent.modelFilePath.");
     }
 }
-
-// ============================================================================
-// Top-level Draw entry points + DockSpace shell
-// ============================================================================
-
+// 上位 Draw 入口と DockSpace の外枠
 void PlayerEditorPanel::Draw(Registry* registry, bool* p_open, bool* outFocused)
 {
     DrawInternal(registry, p_open, outFocused, HostMode::Window);
@@ -447,7 +433,7 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     DrawToolbar();
     ImGui::Separator();
 
-    // ── Create internal DockSpace ──
+    // 内部 DockSpace を作成
     ImGuiID dockId = ImGui::GetID("PlayerEditorDock_v2");
     ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
 
@@ -456,9 +442,9 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
         m_needsLayoutRebuild = false;
     }
 
-    ImGui::End(); // Host window
+    ImGui::End(); // ホストウィンドウ
 
-    // ── Draw each sub-window (they dock into the host's DockSpace) ──
+    // 各サブウィンドウを描画する（ホストの DockSpace にドッキングする）
     DrawSkeletonPanel();
     DrawViewportPanel();
     DrawStateMachinePanel();
@@ -467,11 +453,7 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     DrawAnimatorPanel();
     DrawInputPanel();
 }
-
-// ============================================================================
-// DockSpace Layout Builder  (UE Animation Editor style)
-// ============================================================================
-
+// DockSpace レイアウト構築（UE Animation Editor 風）
 void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)
 {
     ImGuiID dockId = dockspaceId;

@@ -1,6 +1,6 @@
 #include "compute_particle.hlsli"
 
-// t5: color_map (per SoA mesh root signature). s1: linear sampler (static).
+// t5 は SoA mesh root signature の color_map、s1 は static linear sampler。
 Texture2D color_map : register(t5);
 SamplerState LinearSamp : register(s1);
 

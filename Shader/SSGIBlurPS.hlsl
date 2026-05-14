@@ -1,8 +1,8 @@
 #include "FullScreenQuad.hlsli"
 
 Texture2D ssgiMap : register(t0); // 先ほど作った生SSGI
-Texture2D normalMap : register(t1); // Target 1
-Texture2D worldPosMap : register(t2); // Target 2
+Texture2D normalMap : register(t1); // ターゲット 1。
+Texture2D worldPosMap : register(t2); // ターゲット 2。
 
 SamplerState pointSampler : register(s2);
 SamplerState linearSampler : register(s3);

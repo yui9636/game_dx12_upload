@@ -1,33 +1,33 @@
-#include "DuplicateSystem.h"
+ï»¿#include "DuplicateSystem.h"
 
 #include "Component/HierarchyComponent.h"
 #include "Undo/EntitySnapshot.h"
 
-// w’è entity ‚ğ subtree ‚²‚Æ•¡»‚·‚éB
-// ƒ‹[ƒg–¼‚É‚Í " (Clone)" ‚ğ•t‚¯AŒ³‚Æ“¯‚¶e‚Ìq‚Æ‚µ‚Ä•œŒ³‚·‚éB
+// æŒ‡å®š entity ã‚’ subtree ã”ã¨è¤‡è£½ã™ã‚‹ã€‚
+// ãƒ«ãƒ¼ãƒˆåã«ã¯ " (Clone)" ã‚’ä»˜ã‘ã€å…ƒã¨åŒã˜è¦ªã®å­ã¨ã—ã¦å¾©å…ƒã™ã‚‹ã€‚
 EntityID DuplicateSystem::Duplicate(EntityID target, Registry& registry)
 {
-    // –³Œø entityA‚Ü‚½‚ÍŠù‚É€‚ñ‚Å‚¢‚é entity ‚Í•¡»‚Å‚«‚È‚¢B
+    // ç„¡åŠ¹ entityã€ã¾ãŸã¯æ—¢ã«æ­»ã‚“ã§ã„ã‚‹ entity ã¯è¤‡è£½ã§ããªã„ã€‚
     if (Entity::IsNull(target) || !registry.IsAlive(target)) {
         return Entity::NULL_ID;
     }
 
-    // ‘ÎÛ subtree ‘S‘Ì‚ğ snapshot ‚Æ‚µ‚Äæ“¾‚·‚éB
+    // å¯¾è±¡ subtree å…¨ä½“ã‚’ snapshot ã¨ã—ã¦å–å¾—ã™ã‚‹ã€‚
     EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(target, registry);
     if (snapshot.nodes.empty()) {
         return Entity::NULL_ID;
     }
 
-    // Œ³‚Ìe entity ‚ğæ“¾‚µ‚Ä‚¨‚­B
+    // å…ƒã®è¦ª entity ã‚’å–å¾—ã—ã¦ãŠãã€‚
     EntityID parentEntity = Entity::NULL_ID;
     if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(target)) {
         parentEntity = hierarchy->parent;
     }
 
-    // •¡»Œã‚Ìƒ‹[ƒg–¼‚Ö " (Clone)" ‚ğ•t‚¯‚éB
+    // è¤‡è£½å¾Œã®ãƒ«ãƒ¼ãƒˆåã¸ " (Clone)" ã‚’ä»˜ã‘ã‚‹ã€‚
     EntitySnapshot::AppendRootNameSuffix(snapshot, " (Clone)");
 
-    // ƒ‹[ƒg‚¾‚¯ externalParent ‚ğŒ³‚Ìe‚ÖŒü‚¯‚éB
+    // ãƒ«ãƒ¼ãƒˆã ã‘ externalParent ã‚’å…ƒã®è¦ªã¸å‘ã‘ã‚‹ã€‚
     for (auto& node : snapshot.nodes) {
         if (node.localID == snapshot.rootLocalID) {
             node.externalParent = parentEntity;
@@ -35,13 +35,13 @@ EntityID DuplicateSystem::Duplicate(EntityID target, Registry& registry)
         }
     }
 
-    // snapshot ‚©‚ç subtree ‚ğ•œŒ³‚µA‚»‚Ìƒ‹[ƒg entity ‚ğ•Ô‚·B
+    // snapshot ã‹ã‚‰ subtree ã‚’å¾©å…ƒã—ã€ãã®ãƒ«ãƒ¼ãƒˆ entity ã‚’è¿”ã™ã€‚
     const EntitySnapshot::RestoreResult restore = EntitySnapshot::RestoreSubtree(snapshot, registry);
     return restore.root;
 }
 
-// w’è entity ˆÈ‰º‚ÌŠK‘w‚ğûW‚·‚éB
-// Àˆ—‚Í EntitySnapshot ‘¤‚Ì‹¤’ÊŠÖ”‚ÖˆÏ÷‚·‚éB
+// æŒ‡å®š entity ä»¥ä¸‹ã®éšå±¤ã‚’åé›†ã™ã‚‹ã€‚
+// å®Ÿå‡¦ç†ã¯ EntitySnapshot å´ã®å…±é€šé–¢æ•°ã¸å§”è­²ã™ã‚‹ã€‚
 void DuplicateSystem::CollectHierarchy(EntityID target, Registry& registry, std::vector<EntityID>& outList)
 {
     EntitySnapshot::CollectHierarchy(target, registry, outList);

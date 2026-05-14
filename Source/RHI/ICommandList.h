@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include "ITexture.h"
 
-// Forward declarations
+// 前方宣言。
 struct ID3D11DeviceContext;
 class ITexture;
 class IBuffer;
@@ -61,7 +61,7 @@ public:
     virtual void ExecuteIndexedIndirectMulti(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes,
         uint32_t maxCommandCount, uint32_t commandStride,
         IBuffer* countBuffer = nullptr, uint32_t countBufferOffset = 0) {
-        // Default: fall back to single-command calls
+        // 既定では単一 command 呼び出しへ fallback する。
         for (uint32_t i = 0; i < maxCommandCount; ++i) {
             ExecuteIndexedIndirect(argumentBuffer, argumentOffsetBytes + i * commandStride);
         }
@@ -89,13 +89,13 @@ public:
         SetViewport(RhiViewport(x, y, w, h, minD, maxD));
     }
 
-    // Input Assembler (IA)
+    // Input Assembler 設定。
     virtual void SetInputLayout(IInputLayout* layout) = 0;
     virtual void SetPrimitiveTopology(PrimitiveTopology topology) = 0;
     virtual void SetVertexBuffer(uint32_t slot, IBuffer* buffer, uint32_t stride, uint32_t offset = 0) = 0;
     virtual void SetIndexBuffer(IBuffer* buffer, IndexFormat format, uint32_t offset = 0) = 0;
 
-    // Output Merger & Rasterizer (OM / RS)
+    // Output Merger と Rasterizer 設定。
     virtual void SetDepthStencilState(IDepthStencilState* state, uint32_t stencilRef = 0) = 0;
     virtual void SetRasterizerState(IRasterizerState* state) = 0;
     virtual void SetBlendState(IBlendState* state, const float blendFactor[4] = nullptr, uint32_t sampleMask = 0xFFFFFFFF) = 0;

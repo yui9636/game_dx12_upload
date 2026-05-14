@@ -1,4 +1,4 @@
-#include <filesystem>
+﻿#include <filesystem>
 #include <cstring>
 #include <wrl.h>
 #include <DirectXTex.h>
@@ -156,19 +156,6 @@ HRESULT GpuResourceUtils::LoadComputeShader(
 
 	return hr;
 }
-
-
-
-
-
-
-
-
-
-
-
-// ========================================================
-// ========================================================
 HRESULT GpuResourceUtils::LoadImageFromFile(
 	const char* filename,
 	DirectX::ScratchImage& outImage,
@@ -211,9 +198,6 @@ HRESULT GpuResourceUtils::LoadImageFromFile(
 	}
 	return hr;
 }
-
-// ========================================================
-// ========================================================
 HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11Device* device,
 	const char* filename,
@@ -252,7 +236,7 @@ HRESULT GpuResourceUtils::LoadTexture(
 	DirectX::TexMetadata metadata;
 	DirectX::ScratchImage scratch_image;
 
-	// .tga
+	// TGA 形式。
 	{
 		hr = DirectX::GetMetadataFromTGAMemory(data, size, metadata);
 		if (SUCCEEDED(hr))
@@ -260,7 +244,7 @@ HRESULT GpuResourceUtils::LoadTexture(
 			hr = DirectX::LoadFromTGAMemory(data, size, &metadata, scratch_image);
 		}
 	}
-	// .dds
+	// DDS 形式。
 	if (FAILED(hr))
 	{
 		hr = DirectX::GetMetadataFromDDSMemory(data, size, DirectX::DDS_FLAGS_NONE, metadata);
@@ -269,7 +253,7 @@ HRESULT GpuResourceUtils::LoadTexture(
 			hr = DirectX::LoadFromDDSMemory(data, size, DirectX::DDS_FLAGS_NONE, &metadata, scratch_image);
 		}
 	}
-	// .hdr
+	// HDR 形式。
 	if (FAILED(hr))
 	{
 		hr = DirectX::GetMetadataFromHDRMemory(data, size, metadata);

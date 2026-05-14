@@ -1,4 +1,4 @@
-#include "EffectEditorPanel.h"
+﻿#include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"
 #include "EffectEditorTemplates.h"
 
@@ -40,10 +40,10 @@ namespace ed = ax::NodeEditor;
 
 namespace
 {
-    // Window title constants moved to EffectEditorPanelInternal.h for sharing.
+    // window title 定数は共有のため EffectEditorPanelInternal.h へ移動。
     constexpr float kPreviewMinSize = 96.0f;
     constexpr float kPreviewToolbarHeight = 28.0f;
-    // kSystemVisualNodeId / kEmitterVisualNodeId moved to EffectEditorPanelInternal.h.
+    // kSystemVisualNodeId / kEmitterVisualNodeId は EffectEditorPanelInternal.h へ移動。
 
     ImColor GetNodeColor(EffectGraphNodeType type)
     {
@@ -62,7 +62,7 @@ namespace
         }
     }
 
-    // GetValueTypeColor moved to EffectEditorPanelInternal.h.
+    // GetValueTypeColor は EffectEditorPanelInternal.h へ移動。
 
     const char* EffectValueTypeLabel(EffectValueType type)
     {
@@ -106,15 +106,14 @@ namespace
         return (duration > 0.01f) ? duration : 0.01f;
     }
 
-    // Path/asset utilities moved to EffectEditorPanelInternal.h (inline) so
-    // that EffectEditorAssetPicker.cpp / EffectEditorTemplates.cpp can share them.
+    // path / asset utility は inline として EffectEditorPanelInternal.h へ移動。
+    // EffectEditorAssetPicker.cpp / EffectEditorTemplates.cpp から共有できるようにするため。
 
-    // NiagaraSectionColor moved to EffectEditorPanelInternal.h.
+    // NiagaraSectionColor は EffectEditorPanelInternal.h へ移動。
 
-} // close anonymous namespace
+} // anonymous namespace を閉じる
 
-// External-linkage authoring helpers shared between EffectEditorPanel.cpp and
-// its extracted sibling modules (EffectEditorTemplates.cpp etc.).
+// EffectEditorPanel.cpp と、分割された兄弟 module の間で共有する外部 linkage の authoring 補助。
 namespace EffectEditorInternal
 {
     void SanitizeGraphAsset(EffectGraphAsset& asset)
@@ -137,11 +136,11 @@ namespace EffectEditorInternal
                 }),
             asset.links.end());
 
-        // Defensive: side-effect nodes (Spawn/Lifetime/MeshRenderer/ParticleEmitter/SpriteRenderer)
-        // may drive at most ONE Flow output. Left-over links from prior template switches can
-        // otherwise surface as "Side-effect nodes may drive only one flow output." at compile.
-        // Keep the first Flow output per node and drop the rest, logging what we removed.
-        std::unordered_map<uint32_t, uint32_t> flowOutCount; // nodeId -> seen so far
+        // 防御策: side-effect node（Spawn/Lifetime/MeshRenderer/ParticleEmitter/SpriteRenderer）は
+        // 最大 1 本の Flow 出力だけを駆動できる。以前の template 切り替えで残った link があると、
+        // compile 時に「Side-effect nodes may drive only one flow output.」として表面化する。
+        // node ごとに最初の Flow 出力だけを残し、残りはログを出して削除する。
+        std::unordered_map<uint32_t, uint32_t> flowOutCount; // nodeId -> ここまでの検出数
         std::vector<uint32_t> removedLinkIds;
         for (auto it = asset.links.begin(); it != asset.links.end();) {
             const EffectGraphPin* startPin = asset.FindPin(it->startPinId);
@@ -288,7 +287,7 @@ namespace EffectEditorInternal
             }
         }
 
-        // Mesh-only: Lifetime drives MeshRenderer directly (no particle emitter)
+        // Mesh 専用: Lifetime が MeshRenderer を直接駆動する（particle emitter なし）。
         if (lifetimeNode && meshRendererNode && !emitterNode) {
             if (auto* startPin = FindNodePin(asset, lifetimeNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
                 if (auto* endPin = FindNodePin(asset, meshRendererNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
@@ -337,7 +336,7 @@ namespace EffectEditorInternal
             }
         }
     }
-} // namespace EffectEditorInternal
+} // namespace 終端。 EffectEditorInternal
 
 using namespace EffectEditorInternal;
 
@@ -895,9 +894,9 @@ void EffectEditorPanel::DrawGuiPanel()
                     m_compileDirty = true;
                 }
 
-                // MeshParticle Phase 2: only visible when drawMode == Mesh.
-                //   slots: stringValue2=meshPath, vectorValue5=scale+scaleRand,
-                //          vectorValue6=axis+speed, vectorValue7=orientRand+speedRand
+                // MeshParticle フェーズ 2: drawMode == Mesh のときだけ表示する。
+                //   slot では stringValue2 に meshPath、vectorValue5 に scale と scaleRand を入れる。
+                //         vectorValue6 に axis と speed、vectorValue7 に orientRand と speedRand を入れる。
                 if (drawMode == static_cast<int>(EffectParticleDrawMode::Mesh)) {
                     ImGui::Separator();
                     ImGui::TextDisabled("Mesh Particle");
@@ -1133,8 +1132,8 @@ void EffectEditorPanel::DrawDetailsPanel()
             }
             break;
         case EffectGraphNodeType::MeshRenderer: {
-            // Core: tint, blend mode. Variant flags (intValue2) are picked via the
-            // "Effect Presets" section further down; the current value is shown there.
+            // 中核設定: tint と blend mode。variant flag（intValue2）は下の
+            // "Effect Presets" セクションで選び、現在値もそこで表示する。
             if (ImGui::CollapsingHeader("Mesh Renderer", ImGuiTreeNodeFlags_DefaultOpen)) {
                 m_compileDirty |= ImGui::ColorEdit4("Tint", &node->vectorValue.x);
                 int blendState = node->intValue;
@@ -1145,13 +1144,13 @@ void EffectEditorPanel::DrawDetailsPanel()
                 }
             }
 
-            // Textures. Slot->stringValueN mapping matches EffectCompiler.cpp:
-            //   stringValue  : base albedo (t0, MeshFlag_Texture)
-            //   stringValue2 : mask / dissolve noise (t1, MeshFlag_Mask / Dissolve)
-            //   stringValue3 : tangent-space normal map (t2, MeshFlag_NormalMap)
-            //   stringValue4 : flow map / gradient LUT (t3, MeshFlag_FlowMap / GradientMap)
-            //   stringValue5 : sub texture / distort noise (t4, MeshFlag_SubTexture / Distort)
-            //   stringValue6 : emission mask (t5, MeshFlag_Emission)
+            // text 用色。ure 設定。Slot -> stringValueN の対応は EffectCompiler.cpp と合わせる。
+            //   stringValue は base albedo。t0 と MeshFlag_Texture に対応する。
+            //   stringValue2 は mask / dissolve noise。t1 と MeshFlag_Mask / Dissolve に対応する。
+            //   stringValue3 : tangent 空間 normal map（t2, MeshFlag_NormalMap）
+            //   stringValue4 は flow map / gradient LUT。t3 と MeshFlag_FlowMap / GradientMap に対応する。
+            //   stringValue5 は sub texture / distort noise。t4 と MeshFlag_SubTexture / Distort に対応する。
+            //   stringValue6 は emission mask。t5 と MeshFlag_Emission に対応する。
             if (ImGui::CollapsingHeader("Textures", ImGuiTreeNodeFlags_DefaultOpen)) {
                 m_compileDirty |= DrawAssetSlotControl("Base Texture",  node->stringValue,  AssetPickerKind::Texture, node->id, false);
                 m_compileDirty |= DrawAssetSlotControl("Mask / Dissolve Noise", node->stringValue2, AssetPickerKind::Texture, node->id, false);
@@ -1161,10 +1160,10 @@ void EffectEditorPanel::DrawDetailsPanel()
                 m_compileDirty |= DrawAssetSlotControl("Emission Tex",  node->stringValue6, AssetPickerKind::Texture, node->id, false);
             }
 
-            // UV Animation. Controls map to variantParams.constants in the compiler:
-            //   vectorValue3.zw -> scrollSpeed (MeshFlag_Scroll)
-            //   vectorValue2.w  -> flowStrength (MeshFlag_FlowMap)
-            //   vectorValue4.z  -> distortStrength (MeshFlag_Distort / ChromaticAberration)
+            // UV アニメーション。各 control は compiler 内の variantParams.constants へ対応する。
+            //   vectorValue3.zw は scrollSpeed。MeshFlag_Scroll に対応する。
+            //   vectorValue2.w は flowStrength。MeshFlag_FlowMap に対応する。
+            //   vectorValue4.z は distortStrength。MeshFlag_Distort / ChromaticAberration に対応する。
             if (ImGui::CollapsingHeader("UV Animation", ImGuiTreeNodeFlags_None)) {
                 m_compileDirty |= ImGui::DragFloat2("Scroll Speed (XY)", &node->vectorValue3.z, 0.05f, -10.0f, 10.0f);
                 m_compileDirty |= ImGui::DragFloat("Flow Strength",    &node->vectorValue2.w, 0.01f, 0.0f, 5.0f);
@@ -1172,9 +1171,9 @@ void EffectEditorPanel::DrawDetailsPanel()
                 ImGui::TextDisabled("Requires MeshFlag_Scroll / FlowMap / Distort");
             }
 
-            // Dissolve. When MeshFlag_Dissolve is on, EffectSystems overrides
-            // dissolveAmount with (1 - lifetimeFade), so the static value below
-            // becomes the t=0 starting point only.
+            // Dissolve。MeshFlag_Dissolve が有効な場合、EffectSystems が
+            // dissolveAmount を (1 - lifetimeFade) で上書きするため、下の静的値は
+            // t=0 の開始点としてのみ使われる。
             if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_None)) {
                 m_compileDirty |= ImGui::DragFloat("Dissolve Amount", &node->vectorValue2.x, 0.005f, 0.0f, 1.0f);
                 ImGui::TextDisabled("(runtime drives 0->1 over lifetime when MeshFlag_Dissolve is set)");
@@ -1182,9 +1181,9 @@ void EffectEditorPanel::DrawDetailsPanel()
                 m_compileDirty |= ImGui::ColorEdit4("Dissolve Glow Color", &node->vectorValue5.x);
             }
 
-            // Fresnel (view-angle rim, blown-out silhouette) and RimLight
-            // (stylized back-light rim). Both use the same pow(1 - NdotV, k)
-            // but with separate power/color so they can coexist.
+            // Fresnel（視線角 rim、強い silhouette）と RimLight
+            // （スタイライズされた逆光 rim）。どちらも pow(1 - NdotV, k) を使うが、
+            // power / color を分けて共存できるようにしている。
             if (ImGui::CollapsingHeader("Fresnel & Rim", ImGuiTreeNodeFlags_None)) {
                 m_compileDirty |= ImGui::DragFloat("Fresnel Power", &node->vectorValue2.z, 0.05f, 0.0f, 16.0f);
                 m_compileDirty |= ImGui::ColorEdit4("Fresnel Color", &node->vectorValue6.x);
@@ -1192,13 +1191,13 @@ void EffectEditorPanel::DrawDetailsPanel()
                 m_compileDirty |= ImGui::ColorEdit4("Rim Color",    &node->vectorValue7.x);
             }
 
-            // Emission: additive glow multiplied by the emission texture alpha.
+            // Emission: emission texture の alpha を掛けた加算 glow。
             if (ImGui::CollapsingHeader("Emission", ImGuiTreeNodeFlags_None)) {
                 m_compileDirty |= ImGui::DragFloat("Emission Intensity", &node->vectorValue4.y, 0.05f, 0.0f, 16.0f);
                 m_compileDirty |= ImGui::ColorEdit4("Emission Color",    &node->vectorValue8.x);
             }
 
-            // B3: Preset Templates
+            // B3: プリセットテンプレート
             if (ImGui::CollapsingHeader("Effect Presets", ImGuiTreeNodeFlags_None)) {
                 struct PresetEntry { const char* label; uint32_t flags; };
                 static const PresetEntry kPresets[] = {
@@ -1224,7 +1223,7 @@ void EffectEditorPanel::DrawDetailsPanel()
                 ImGui::Text("Current Key: 0x%08X", static_cast<uint32_t>(node->intValue2));
             }
 
-            // B1: Shader Feature Flags
+            // B1: シェーダ機能フラグ
             if (ImGui::CollapsingHeader("Shader Features", ImGuiTreeNodeFlags_DefaultOpen)) {
                 uint32_t flags = static_cast<uint32_t>(node->intValue2);
                 bool dirty = false;
@@ -1275,7 +1274,7 @@ void EffectEditorPanel::DrawDetailsPanel()
                 }
             }
 
-            // B2: Effect Parameters (shown only when relevant flags are set)
+            // B2: エフェクトパラメータ（関連 flag が立っている場合だけ表示）
             {
                 const uint32_t flags = static_cast<uint32_t>(node->intValue2);
 
@@ -1367,7 +1366,7 @@ void EffectEditorPanel::DrawDetailsPanel()
                 }
                 DrawAssetSlotControl("Texture", node->stringValue, AssetPickerKind::Texture, node->id, false);
 
-                // MeshParticle Phase 2: show mesh-only fields when drawMode == Mesh.
+                // MeshParticle フェーズ 2: drawMode == Mesh のときだけ mesh 専用 field を表示する。
                 if (drawMode == static_cast<int>(EffectParticleDrawMode::Mesh)) {
                     ImGui::Separator();
                     ImGui::TextDisabled("Mesh Particle");

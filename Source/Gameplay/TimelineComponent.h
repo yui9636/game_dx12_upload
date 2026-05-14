@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
+// TimelineComponent は fps/currentFrame/frameMin/frameMax を保持し、関連システムが実行時状態として参照する。
 
 struct TimelineComponent {
     float fps = 60.0f;

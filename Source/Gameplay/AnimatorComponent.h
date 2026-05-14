@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
+// AnimatorComponent は LayerState/currentAnimIndex/currentTime/currentSpeed を保持し、関連システムが実行時状態として参照する。
 
 struct AnimatorComponent
 {

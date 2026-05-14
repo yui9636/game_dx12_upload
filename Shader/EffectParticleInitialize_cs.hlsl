@@ -1,8 +1,5 @@
-// ============================================================================
-// Initialize: Zero all SoA streams, fill dead stack, reset counters
-// Dispatch: (capacity + 63) / 64  (runs once at arena creation)
-// ============================================================================
-
+// Initialize: すべての SoA stream を 0 にし、dead stack を埋め、counter をリセットする。
+// ディスパッチ: (capacity + 63) / 64（arena 作成時に 1 回だけ実行）
 #include "EffectParticleRuntimeCommon.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -21,7 +18,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     const uint capacity = (uint)gCameraDirectionCapacity.w;
     if (index >= capacity) return;
 
-    // ── Zero Hot ──
+    // Hot stream を 0 で初期化する。
     BillboardHot hot;
     hot.position = float3(0.0f, 0.0f, 0.0f);
     hot.ageLifePacked = 0u;
@@ -29,7 +26,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     hot.sizeSpin = 0u;
     g_BillboardHot[index] = hot;
 
-    // ── Zero Warm ──
+    // Warm stream を 0 で初期化する。
     BillboardWarm warm;
     warm.packedColor = 0u;
     warm.packedEndColor = 0u;
@@ -37,7 +34,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     warm.flags = 0u;
     g_BillboardWarm[index] = warm;
 
-    // ── Zero Cold ──
+    // Cold stream を 0 で初期化する。
     BillboardCold cold;
     cold.acceleration = float3(0.0f, 0.0f, 0.0f);
     cold.dragSpinPacked = 0u;
@@ -47,16 +44,16 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     cold.emitterSeed = 0u;
     g_BillboardCold[index] = cold;
 
-    // ── Zero Header ──
+    // Header を 0 で初期化する。
     BillboardHeader hdr;
     hdr.slotIndex = index;
-    hdr.packed = 0u; // alive=false
+    hdr.packed = 0u; // alive は false。
     g_BillboardHeader[index] = hdr;
 
-    // ── Dead stack: all slots are dead ──
+    // dead stack へ全 slot を dead として積む。
     g_DeadStack[index] = index;
 
-    // ── Ribbon history ──
+    // ribbon 履歴を初期化する。
     const uint historyBase = index * EffectParticleRibbonHistoryLength;
     [unroll]
     for (uint h = 0u; h < EffectParticleRibbonHistoryLength; ++h)
@@ -64,7 +61,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         g_RibbonHistory[historyBase + h] = float4(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    // ── Counters (thread 0 only) ──
+    // thread 0 だけが counter を初期化する。
     if (index == 0u)
     {
         g_CounterBuffer.Store(COUNTER_ALIVE_BILLBOARD, 0u);

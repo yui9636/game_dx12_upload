@@ -1,9 +1,6 @@
-// ============================================================================
-// Mesh Particle VS (SoA): reads AliveList + BillboardHot/Warm/Header + MeshAttribHot
-// Draw: DrawIndexedInstanced(indexCount, aliveCount, 0, 0, 0)
-// Input: BONE layout retained for compatibility with existing mesh VB
-// ============================================================================
-
+// メッシュパーティクル VS（SoA）: AliveList + BillboardHot/Warm/Header + MeshAttribHot を読む。
+// 描画: DrawIndexedInstanced(indexCount, aliveCount, 0, 0, 0)
+// 入力: 既存 mesh VB との互換性のため BONE レイアウトを維持する。
 #include "compute_particle.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -36,10 +33,10 @@ VS_OUT main(VS_IN input, uint instanceID : SV_InstanceID)
 {
     VS_OUT output = (VS_OUT)0;
 
-    // Instance -> slot via alive list
+    // alive list 経由で Instance から slot へ変換する。
     const uint slot = g_AliveList[instanceID];
 
-    // Safety: skip dead slots by collapsing to degenerate triangle
+    // 安全策: dead slot は縮退三角形へ潰してスキップする。
     const BillboardHeader header = g_BillboardHeader[slot];
     if (!HeaderIsAlive(header.packed)) {
         output.position = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -50,13 +47,13 @@ VS_OUT main(VS_IN input, uint instanceID : SV_InstanceID)
     const BillboardWarm   warm   = g_BillboardWarm[slot];
     const MeshAttribHot   mattr  = g_MeshAttribHot[slot];
 
-    // Per-particle transform:
-    // 1) local scale (per-axis) -> 2) rotate by quaternion -> 3) translate to world position
+    // パーティクルごとの変換手順。
+    // 1. 軸別ローカルスケール、2. quaternion 回転、3. ワールド位置への平行移動。
     const float3 localPosScaled = input.pos * mattr.scale;
     const float3 worldPos = QuatRotate(localPosScaled, mattr.rotation) + hot.position;
     const float3 worldNormal = normalize(QuatRotate(input.normal, mattr.rotation));
 
-    // Color: lifecycle-tinted packed color from Warm stream
+    // 色: Warm stream の packed color にライフサイクル tint を適用する。
     const float4 lifeColor = UnpackRGBA8(warm.packedColor);
 
     output.position = mul(float4(worldPos, 1.0f), viewProjection);

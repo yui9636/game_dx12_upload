@@ -1,14 +1,11 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 #include <cstdint>
 #include <DirectXMath.h>
 #include "Storage/GameplayAsset.h"
 
-// ============================================================================
-// Timeline Track Types
-// ============================================================================
-
+// タイムライン上で扱うトラックの種類を表す。
 enum class TimelineTrackType : uint8_t
 {
     Animation = 0,
@@ -21,30 +18,24 @@ enum class TimelineTrackType : uint8_t
     Custom
 };
 
-// ============================================================================
-// Timeline Item (range-based: hitbox window, vfx span, audio span, etc.)
-// ============================================================================
-
+// ヒットボックス、VFX、音声など、開始フレームと終了フレームを持つ区間アイテム。
 struct TimelineItem
 {
     int startFrame = 0;
     int endFrame   = 10;
 
-    // Payload (only the relevant one is used based on parent track type)
+    // 親トラックの種類に対応するペイロードだけを使用する。
     GEHitboxPayload      hitbox{};
     GEVfxPayload         vfx{};
     GEAudioPayload       audio{};
     GECameraShakePayload shake{};
 
-    // Event payload
+    // Event トラックで発火するイベント名と任意データ。
     char eventName[64] = {};
     char eventData[256] = {};
 };
 
-// ============================================================================
-// Timeline Keyframe (point-based: camera position, event trigger)
-// ============================================================================
-
+// カメラ位置やイベント発火など、単一フレームに置くキーフレーム。
 enum class KeyframeInterpolation : uint8_t
 {
     Step = 0,
@@ -56,14 +47,11 @@ enum class KeyframeInterpolation : uint8_t
 struct TimelineKeyframe
 {
     int   frame = 0;
-    float value[4] = { 0, 0, 0, 0 }; // Generic 4-component value (position, rotation, scalar)
+    float value[4] = { 0, 0, 0, 0 }; // 位置、回転、スカラー値などを共通で扱う 4 成分値。
     KeyframeInterpolation interpolation = KeyframeInterpolation::Linear;
 };
 
-// ============================================================================
-// Camera Payload (for Camera track keyframes)
-// ============================================================================
-
+// Camera トラックのキーフレームが保持する視点、注視点、画角。
 struct CameraPayload
 {
     DirectX::XMFLOAT3 eye{ 0, 5, -10 };
@@ -71,10 +59,7 @@ struct CameraPayload
     float fov = 45.0f;
 };
 
-// ============================================================================
-// Timeline Track
-// ============================================================================
-
+// 同じ種類のタイムラインアイテムやキーフレームを束ねるトラック。
 struct TimelineTrack
 {
     uint32_t          id    = 0;
@@ -84,23 +69,20 @@ struct TimelineTrack
     bool              locked = false;
     uint32_t          color  = 0xFF00A0FF;
 
-    // Range-based items (Hitbox, VFX, Audio, CameraShake)
+    // Hitbox、VFX、Audio、CameraShake で使う区間アイテム。
     std::vector<TimelineItem>     items;
 
-    // Point-based keyframes (Camera, Event, Animation markers)
+    // Camera、Event、Animation marker で使う点キーフレーム。
     std::vector<TimelineKeyframe> keyframes;
 };
 
-// ============================================================================
-// Timeline Asset (top-level document)
-// ============================================================================
-
+// プレイヤーエディターで保存するタイムライン 1 本分の編集データ。
 struct TimelineAsset
 {
     uint32_t      id            = 0;
     std::string   name;
     float         fps           = 60.0f;
-    float         duration      = 0.0f;   // seconds
+    float         duration      = 0.0f;   // 秒単位のタイムライン長。
     std::string   ownerModelPath;
     int           animationIndex = -1;
 
@@ -108,7 +90,7 @@ struct TimelineAsset
 
     uint32_t nextTrackId = 1;
 
-    // Helpers
+    // フレームと秒の相互変換を、アセットに設定された fps で行う。
     int   GetFrameCount() const { return static_cast<int>(duration * fps); }
     float FrameToSeconds(int frame) const { return frame / fps; }
     int   SecondsToFrame(float sec) const { return static_cast<int>(sec * fps); }

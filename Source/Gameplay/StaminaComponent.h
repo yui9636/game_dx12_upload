@@ -1,4 +1,5 @@
-#pragma once
+﻿#pragma once
+// StaminaComponent は current/max/costPerUse/recoveryRate を保持し、関連システムが実行時状態として参照する。
 
 struct StaminaComponent {
     float current = 1000.0f;

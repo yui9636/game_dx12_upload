@@ -1,3 +1,4 @@
+﻿// SceneTransitionSystem のシステム宣言をまとめます。
 #pragma once
 
 #include "Asset/PrefabSystem.h"

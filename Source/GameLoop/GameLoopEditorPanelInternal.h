@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -118,6 +118,7 @@ namespace
         dl->AddTriangleFilled(tip, a, b, col);
     }
 }
+// GameLoopEditorPanelInternal は class を中心に、実行時やエディターで共有する状態を保持する。
 
 class GameLoopEditorPanelInternal
 {

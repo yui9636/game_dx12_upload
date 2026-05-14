@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
 enum class InputContextPriority : uint8_t {
@@ -20,5 +20,5 @@ struct InputContextComponent {
     bool uiNavigationEnabled = false;
     bool pointerEnabled = true;
     bool enabled = true;
-    bool consumed = false; // set by InputContextSystem when suppressed
+    bool consumed = false; // InputContextSystem が抑制時に true にする。
 };

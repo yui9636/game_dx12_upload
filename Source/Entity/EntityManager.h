@@ -1,39 +1,39 @@
-#pragma once
+ï»¿#pragma once
 #include "Entity.h"
 #include <vector>
 
-// Entity ‚Ì¶¬E”jŠüE¶‘¶”»’è‚ğ’S“–‚·‚éŠÇ—ƒNƒ‰ƒXB
-// index Ä—˜—p‚Ì‚½‚ß‚É free list ‚ğ‚¿Ageneration ‚ÅŒÃ‚¢QÆ‚ğ–³Œø‰»‚·‚éB
+// Entity ã®ç”Ÿæˆãƒ»ç ´æ£„ãƒ»ç”Ÿå­˜åˆ¤å®šã‚’æ‹…å½“ã™ã‚‹ç®¡ç†ã‚¯ãƒ©ã‚¹ã€‚
+// index å†åˆ©ç”¨ã®ãŸã‚ã« free list ã‚’æŒã¡ã€generation ã§å¤ã„å‚ç…§ã‚’ç„¡åŠ¹åŒ–ã™ã‚‹ã€‚
 class EntityManager {
 public:
-    // ƒfƒtƒHƒ‹ƒg\’zB
+    // ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆæ§‹ç¯‰ã€‚
     EntityManager() = default;
 
-    // “Á•Ê‚È”jŠüˆ—‚Í•s—vB
+    // ç‰¹åˆ¥ãªç ´æ£„å‡¦ç†ã¯ä¸è¦ã€‚
     ~EntityManager() = default;
 
-    // V‚µ‚¢ Entity ‚ğ¶¬‚µ‚Ä•Ô‚·B
-    // ‹ó‚« index ‚ª‚ ‚ê‚ÎÄ—˜—p‚µA–³‚¯‚ê‚ÎV‹K index ‚ğ’Ç‰Á‚·‚éB
+    // æ–°ã—ã„ Entity ã‚’ç”Ÿæˆã—ã¦è¿”ã™ã€‚
+    // ç©ºã index ãŒã‚ã‚Œã°å†åˆ©ç”¨ã—ã€ç„¡ã‘ã‚Œã°æ–°è¦ index ã‚’è¿½åŠ ã™ã‚‹ã€‚
     EntityID CreateEntity();
 
-    // w’è Entity ‚ğ”jŠü‚·‚éB
-    // generation ‚ği‚ß‚ÄŒÃ‚¢ EntityID ‚ğ–³Œø‰»‚µAindex ‚ğÄ—˜—pƒŠƒXƒg‚Ö–ß‚·B
+    // æŒ‡å®š Entity ã‚’ç ´æ£„ã™ã‚‹ã€‚
+    // generation ã‚’é€²ã‚ã¦å¤ã„ EntityID ã‚’ç„¡åŠ¹åŒ–ã—ã€index ã‚’å†åˆ©ç”¨ãƒªã‚¹ãƒˆã¸æˆ»ã™ã€‚
     void DestroyEntity(EntityID entity);
 
-    // w’è EntityID ‚ªŒ»İ‚à—LŒø‚©‚ğ”»’è‚·‚éB
+    // æŒ‡å®š EntityID ãŒç¾åœ¨ã‚‚æœ‰åŠ¹ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
     bool IsAlive(EntityID entity) const;
 
-    // Œ»İ¶‘¶‚µ‚Ä‚¢‚é Entity ”‚ğ•Ô‚·B
+    // ç¾åœ¨ç”Ÿå­˜ã—ã¦ã„ã‚‹ Entity æ•°ã‚’è¿”ã™ã€‚
     size_t GetActiveCount() const;
 
 private:
-    // Še index ‚É‘Î‰‚·‚éŒ»İ‚Ì generationB
-    // EntityID ‚Ì generation ‚Æˆê’v‚µ‚Ä‚¢‚ê‚Î—LŒø‚Æ‚İ‚È‚·B
+    // å„ index ã«å¯¾å¿œã™ã‚‹ç¾åœ¨ã® generationã€‚
+    // EntityID ã® generation ã¨ä¸€è‡´ã—ã¦ã„ã‚Œã°æœ‰åŠ¹ã¨ã¿ãªã™ã€‚
     std::vector<uint32_t> m_generations;
 
-    // ”jŠüÏ‚İ‚ÅÄ—˜—p‰Â”\‚È index ˆê——B
+    // ç ´æ£„æ¸ˆã¿ã§å†åˆ©ç”¨å¯èƒ½ãª index ä¸€è¦§ã€‚
     std::vector<uint32_t> m_freeIndices;
 
-    // Œ»İ¶‘¶’†‚Ì Entity ”B
+    // ç¾åœ¨ç”Ÿå­˜ä¸­ã® Entity æ•°ã€‚
     size_t m_activeCount = 0;
 };

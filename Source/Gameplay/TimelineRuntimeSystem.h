@@ -1,12 +1,8 @@
-#pragma once
+﻿#pragma once
 
 class Registry;
-
-// ============================================================================
-// Converts TimelineAsset data into TimelineItemBuffer at runtime
-// Bridges editor-authored timeline data to existing gameplay systems
-// ============================================================================
-
+// TimelineAsset のデータを実行時に TimelineItemBuffer へ変換する。
+// エディタで作成したタイムラインデータを既存の Gameplay システムへ橋渡しする。
 class TimelineRuntimeSystem
 {
 public:

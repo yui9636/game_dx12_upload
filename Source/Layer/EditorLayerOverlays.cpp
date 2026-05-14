@@ -1,4 +1,4 @@
-#include "EditorLayerInternal.h"
+﻿#include "EditorLayerInternal.h"
 
 #include "Collision/CollisionManager.h"
 #include "Component/MeshComponent.h"
@@ -6,6 +6,7 @@
 
 namespace
 {
+// ResolveColliderMaxWorldScale は現在の状態から処理対象となる値や参照先を決定する。
     float ResolveColliderMaxWorldScale(const TransformComponent& transform)
     {
         float value = std::fabs(transform.worldScale.x);

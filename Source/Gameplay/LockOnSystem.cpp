@@ -1,4 +1,4 @@
-#include "LockOnSystem.h"
+﻿#include "LockOnSystem.h"
 
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/TransformComponent.h"
@@ -57,7 +57,7 @@ namespace
 
         Query<EnemyTagComponent, TransformComponent> q(registry);
         q.ForEachWithEntity([&](EntityID e, EnemyTagComponent&, TransformComponent& tr) {
-            // Reject dead enemies if they expose Health.
+            // Health を持つ敵が死亡済みなら除外する。
             if (auto* h = registry.GetComponent<HealthComponent>(e)) {
                 if (h->isDead || h->health <= 0) return;
             }
@@ -68,7 +68,7 @@ namespace
             const float distSq = dx * dx + dy * dy + dz * dz;
             if (distSq <= 0.0001f || distSq > maxRangeSq) return;
 
-            // Simple flat fov around the camera forward (xz plane).
+            // カメラ前方を基準にした単純な平面 FOV（XZ 平面）。
             const float horizLen = std::sqrt(dx * dx + dz * dz);
             float dot = 0.0f;
             if (horizLen > 0.0001f) {
@@ -80,7 +80,7 @@ namespace
             }
             if (dot < cosHalfFov) return;
 
-            // Score: distance with a small fov bias (closer to centre wins ties).
+            // スコア: 距離に小さな FOV バイアスを加える（同点なら中心に近いほうが勝つ）。
             const float score = distSq * (2.0f - dot);
             if (score < bestScore) {
                 bestScore = score;
@@ -109,7 +109,7 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
         const int lockOnIndex = FindActionIndex(map, "LockOn");
         const bool toggleRequested = IsActionRisingEdge(input, lockOnIndex);
 
-        // Drop a stale lock target (destroyed / dead).
+        // 古いロック対象（破棄済み / 死亡済み）を落とす。
         if (!Entity::IsNull(lock.currentTarget)) {
             bool stillValid = registry.IsAlive(lock.currentTarget);
             if (stillValid) {
@@ -125,13 +125,13 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
 
         if (toggleRequested) {
             if (Entity::IsNull(lock.currentTarget)) {
-                // Acquire.
+                // 取得。
                 DirectX::XMFLOAT3 forward{ 0.0f, 0.0f, 1.0f };
                 forward.x = cameraTr->worldMatrix._31;
                 forward.y = cameraTr->worldMatrix._32;
                 forward.z = cameraTr->worldMatrix._33;
                 if (std::fabs(forward.x) + std::fabs(forward.z) < 0.0001f) {
-                    // Fall back to player facing if camera matrix not ready.
+                    // カメラ行列が未準備ならプレイヤーの向きへフォールバックする。
                     forward = { std::sin(playerTr.localRotation.y), 0.0f, std::cos(playerTr.localRotation.y) };
                 }
                 const EntityID picked = PickClosestEnemy(
@@ -141,14 +141,14 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
                     cameraTPV->target = picked;
                 }
             } else {
-                // Release.
+                // 解除。
                 lock.currentTarget = Entity::NULL_ID;
                 cameraTPV->target = playerEntity;
             }
         }
 
-        // While locked on, steer the player to face the target. The combat
-        // system's existing magnetism picks up on currentTarget separately.
+        // ロックオン中は対象のほうへプレイヤーを向ける。
+        // 戦闘側の既存 magnetism は currentTarget を別途参照する。
         if (!Entity::IsNull(lock.currentTarget)) {
             if (auto* targetTr = registry.GetComponent<TransformComponent>(lock.currentTarget)) {
                 const float dx = targetTr->worldPosition.x - playerTr.worldPosition.x;

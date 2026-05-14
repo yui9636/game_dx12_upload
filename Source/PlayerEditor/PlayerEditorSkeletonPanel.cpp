@@ -1,7 +1,5 @@
-﻿// ============================================================================
-// PlayerEditor — Skeleton panel (bone tree + sockets) and persistent collider
-// authoring helpers. Sibling of PlayerEditorPanel.cpp; split out for readability.
-// ============================================================================
+﻿// PlayerEditor のスケルトンパネル（ボーンツリー + ソケット）と永続コライダー
+// 作成補助。PlayerEditorPanel.cpp の兄弟ファイルとして、可読性のため分離している。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -23,11 +21,7 @@
 #include "System/Dialog.h"
 
 using namespace PlayerEditorInternal;
-
-// ----------------------------------------------------------------------------
-// Persistent collider authoring (used by Skeleton + Properties panels)
-// ----------------------------------------------------------------------------
-
+// 永続コライダー作成（Skeleton / Properties パネルで使用）
 ColliderComponent* PlayerEditorPanel::GetPreviewColliderComponent(bool createIfMissing)
 {
     if (!m_registry || !CanUsePreviewEntity()) {
@@ -136,11 +130,7 @@ void PlayerEditorPanel::AddPersistentCollider(ColliderAttribute attribute)
     m_colliderDirty = true;
     SelectPersistentCollider(insertIndex);
 }
-
-// ----------------------------------------------------------------------------
-// Socket import/export thin wrappers (delegate to PlayerEditorSession)
-// ----------------------------------------------------------------------------
-
+// ソケット import/export の薄いラッパー（PlayerEditorSession へ委譲）
 void PlayerEditorPanel::ImportSocketsFromPreviewEntity()
 {
     PlayerEditorSession::ImportSocketsFromPreviewEntity(*this);
@@ -150,11 +140,7 @@ void PlayerEditorPanel::ExportSocketsToPreviewEntity()
 {
     PlayerEditorSession::ExportSocketsToPreviewEntity(*this);
 }
-
-// ----------------------------------------------------------------------------
-// Skeleton panel — bone tree + socket list
-// ----------------------------------------------------------------------------
-
+// スケルトンパネル — ボーンツリー + ソケット一覧
 void PlayerEditorPanel::DrawSkeletonPanel()
 {
     if (!ImGui::Begin(kPESkeletonTitle)) { ImGui::End(); return; }
@@ -228,7 +214,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
     if (selected) flags |= ImGuiTreeNodeFlags_Selected;
     if (!hasChildren) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-    // Icon: bone vs joint
+    // アイコン: ボーン / ジョイント
     const char* icon = hasChildren ? ICON_FA_BONE : ICON_FA_CIRCLE;
     std::string label = std::string(icon) + " " + node.name;
 
@@ -238,7 +224,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
         m_hoveredBoneIndex = nodeIndex;
     }
 
-    // Click to select
+    // クリックで選択
     if (ImGui::IsItemClicked(0)) {
         m_selectedBoneIndex = nodeIndex;
         m_selectedBoneName = node.name;
@@ -247,7 +233,7 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
         }
     }
 
-    // Right-click: quick actions
+    // 右クリック: クイック操作
     if (ImGui::IsItemClicked(1)) {
         m_selectedBoneIndex = nodeIndex;
         m_selectedBoneName = node.name;
@@ -274,10 +260,10 @@ void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)
         ImGui::EndPopup();
     }
 
-    // Recurse children
+    // 子を再帰処理
     if (open && hasChildren) {
         for (auto* child : node.children) {
-            // Find child index
+            // 子のインデックスを探す
             int childIdx = (int)(child - &nodes[0]);
             DrawBoneTreeNode(childIdx);
         }
@@ -338,11 +324,7 @@ const char* PlayerEditorPanel::GetBoneNameByIndex(int boneIndex) const
 
     return nodes[boneIndex].name.c_str();
 }
-
-// ----------------------------------------------------------------------------
-// Persistent collider drawing (Properties panel sub-sections)
-// ----------------------------------------------------------------------------
-
+// 永続コライダー描画（Properties パネル内の小セクション）
 void PlayerEditorPanel::DrawPersistentColliderSection()
 {
     ColliderComponent* collider = GetPreviewColliderComponent(false);
@@ -358,8 +340,8 @@ void PlayerEditorPanel::DrawPersistentColliderSection()
 
     ImGui::Text("Persistent Colliders (%d)", persistentCount);
     ImGui::TextDisabled("Use the toolbar's + Body / + Attack buttons to add new colliders.");
-    // (The bone-tree right-click menu also still offers Add Body / Add
-    // Attack with bone context.)
+    // ボーンツリーの右クリックメニューにも Add Body / Add Attack は残す。
+    // ボーン文脈付きで追加できるようにするため。
 
     if (!collider || persistentCount == 0) {
         return;
@@ -482,18 +464,17 @@ void PlayerEditorPanel::DrawPersistentColliderInspector()
         m_colliderDirty = true;
     }
 
-    // Body-only: VFX / SE asset paths fired by HealthSystem when this
-    // body element is struck. DamageSystem reads these from the matching
-    // Element after a Body x Attack contact and forwards them in the
-    // DamageEvent. Empty path = silent. Attack elements ignore these.
-    // The Browse buttons mirror the Audio track UI in the timeline
-    // inspector and run paths through MakeDataRelativePath so saves are
-    // portable.
+    // Body 専用: この Body が被弾したときに HealthSystem が再生する VFX / SE のアセットパス。
+    // DamageSystem は一致した Body 要素からこれらを読み、
+    // Body x Attack 接触のあと DamageEvent へ転送する。
+    // 空パスなら無音・演出なし。Attack 要素では無視される。
+    // Browse ボタンはタイムラインの Audio トラック UI と揃えている。
+    // 保存が移植可能になるよう、パスは MakeDataRelativePath を通す。
     if (element.attribute == ColliderAttribute::Body) {
         ImGui::Separator();
         ImGui::TextDisabled("Hit Reaction (this body's material)");
 
-        // Hit VFX with InputText + Browse + Clear.
+        // 被弾 VFX を InputText + Browse + Clear で編集する。
         {
             char vfxBuf[MAX_PATH] = {};
             strncpy_s(vfxBuf, element.hitVfxPath.c_str(), _TRUNCATE);
@@ -521,7 +502,7 @@ void PlayerEditorPanel::DrawPersistentColliderInspector()
             }
         }
 
-        // Hit SFX with InputText + Browse + Clear.
+        // 被弾 SE を InputText + Browse + Clear で編集する。
         {
             char sfxBuf[MAX_PATH] = {};
             strncpy_s(sfxBuf, element.hitSfxPath.c_str(), _TRUNCATE);

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <d3d11.h>
 #include <string>
@@ -7,9 +7,6 @@
 #include <wrl/client.h>
 
 #pragma comment(lib, "d3dcompiler.lib")
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 enum EffectShaderFlags
 {
     ShaderFlag_None = 0,
@@ -18,7 +15,7 @@ enum EffectShaderFlags
     ShaderFlag_Distort = 1 << 2,
     ShaderFlag_Lighting = 1 << 3,
 
-    ShaderFlag_Mask = 1 << 4, // (16) USE_MASK
+    ShaderFlag_Mask = 1 << 4, // bit 4 は USE_MASK。
     ShaderFlag_Fresnel = 1 << 5,
     ShaderFlag_Flipbook = 1 << 6,
     ShaderFlag_GradientMap = 1 << 7,

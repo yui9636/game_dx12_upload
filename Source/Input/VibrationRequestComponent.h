@@ -1,9 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
 struct VibrationRequestComponent {
     float leftMotor = 0.0f;
     float rightMotor = 0.0f;
-    float duration = 0.0f; // seconds remaining
+    float duration = 0.0f; // 残り秒数。
     uint8_t targetUserId = 0;
 };

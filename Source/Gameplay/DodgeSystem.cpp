@@ -1,4 +1,4 @@
-#include "DodgeSystem.h"
+﻿#include "DodgeSystem.h"
 #include "Animator/AnimatorComponent.h"
 #include "DodgeStateComponent.h"
 #include "ActionStateComponent.h"
@@ -29,7 +29,7 @@ void DodgeSystem::Update(Registry& registry, float dt) {
             auto& phys = *static_cast<CharacterPhysicsComponent*>(physCol->Get(i));
             auto* animator = animatorCol ? static_cast<AnimatorComponent*>(animatorCol->Get(i)) : nullptr;
 
-            // StateMachine owns dodge entry/exit. This system only applies dodge movement while mirrored.
+            // 回避の開始と終了は StateMachine が管理する。このシステムはミラー中の回避移動だけを適用する。
             dodge.dodgeTriggered = false;
 
             if (action.state != CharacterState::Dodge) {

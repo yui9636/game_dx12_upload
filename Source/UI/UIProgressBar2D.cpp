@@ -1,4 +1,4 @@
-#include "UIProgressBar2D.h"
+﻿#include "UIProgressBar2D.h"
 
 #include <algorithm>
 
@@ -57,8 +57,8 @@ void UIProgressBar2D::Render(const RenderContext& rc)
     const float drawX = drawPosition.x - (originalWidth * drawPivot.x);
     const float drawY = drawPosition.y - (drawSize.y * drawPivot.y);
 
-    // Source rect crops the texture to the progress fraction so a full
-    // 256x32 bar texture maps proportionally onto a half-width quad.
+    // source rect を進捗率で切り詰めることで、
+    // 256x32 のバー画像を進捗幅に比例して矩形へ割り当てる。
     const float srcW = static_cast<float>(sprite->GetTextureWidth()) * progress;
     const float srcH = static_cast<float>(sprite->GetTextureHeight());
 

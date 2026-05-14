@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <cstdint>
 #include <string>
@@ -6,8 +6,8 @@
 
 #include "Entity/Entity.h"
 
-// Legacy serialized component. Runtime damage events are now stored in
-// DamageEventRuntimeQueue so no "_DamageEventQueue" entity is required.
+// 旧シリアライズ用 component。実行時の damage event は現在、
+// DamageEventRuntimeQueue に保存されるため "_DamageEventQueue" entity は不要。
 struct DamageEventComponent {
     struct Event {
         EntityID attacker = Entity::NULL_ID;
@@ -17,11 +17,11 @@ struct DamageEventComponent {
         DirectX::XMFLOAT3 knockbackDir{ 0.0f, 0.0f, 0.0f };
         float    knockbackPower = 0.0f;
         float    hitStopSec     = 0.08f;
-        uint8_t  reactionKind   = 0; // 0=light, 1=heavy, 2=launch (v1 = light only)
+        uint8_t  reactionKind   = 0; // 0=軽量、1=重量、2=打ち上げ（v1 は light のみ）
 
-        // Snapshot of the active Hitbox item's hit feedback paths (resolved
-        // by DamageSystem at the moment the event is created). HealthSystem
-        // uses these to spawn VFX / SE at hitPoint. Empty = silent / no VFX.
+        // active Hitbox item の被弾演出パスのスナップショット。
+        // event 作成時に DamageSystem が解決し、HealthSystem が
+        // hitPoint に VFX / SE を出すために使う。空なら無音・VFX なし。
         std::string hitVfxPath;
         std::string hitSfxPath;
     };

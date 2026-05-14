@@ -1,47 +1,47 @@
-// CollisionFunctions.h
+ï»¿// CollisionFunctions ã¯å„ collider å½¢çŠ¶ã®äº¤å·®åˆ¤å®šé–¢æ•°ã‚’å…¬é–‹ã™ã‚‹ã€‚
 #pragma once
 #include "Collision.h"
 
-// ŠeíƒRƒŠƒWƒ‡ƒ“Œ`ó‚Ç‚¤‚µ‚Ì“–‚½‚è”»’èŠÖ”ŒQB
-// d‚È‚è”»’è‚¾‚¯‚Å‚È‚­A•K—v‚É‰‚¶‚Ä‰Ÿ‚µ–ß‚µŒ‹‰Ê‚âƒqƒbƒgî•ñ‚à•Ô‚·B
+// å„ç¨®ã‚³ãƒªã‚¸ãƒ§ãƒ³å½¢çŠ¶ã©ã†ã—ã®å½“ãŸã‚Šåˆ¤å®šé–¢æ•°ç¾¤ã€‚
+// é‡ãªã‚Šåˆ¤å®šã ã‘ã§ãªãã€å¿…è¦ã«å¿œã˜ã¦æŠ¼ã—æˆ»ã—çµæœã‚„ãƒ’ãƒƒãƒˆæƒ…å ±ã‚‚è¿”ã™ã€‚
 namespace CollisionFunctions
 {
-    // ‹… vs ‹… ‚Ì“–‚½‚è”»’è‚ğs‚¤B
-    // ÚG‚µ‚Ä‚¢‚ê‚Î hitResult ‚ÉÚGˆÊ’uA‚ß‚è‚İ[‚³A‰Ÿ‚µ–ß‚µˆÊ’u‚ğ‘‚«‚ŞB
+    // çƒ vs çƒ ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+    // æ¥è§¦ã—ã¦ã„ã‚Œã° hitResult ã«æ¥è§¦ä½ç½®ã€ã‚ã‚Šè¾¼ã¿æ·±ã•ã€æŠ¼ã—æˆ»ã—ä½ç½®ã‚’æ›¸ãè¾¼ã‚€ã€‚
     bool IntersectSphereVsSphere(
         const DirectX::XMFLOAT3& positionA, float radiusA,
         const DirectX::XMFLOAT3& positionB, float radiusB,
         HitResult& hitResult);
 
-    // ‹… vs ƒJƒvƒZƒ‹ ‚Ì“–‚½‚è”»’è‚ğs‚¤B
-    // ƒJƒvƒZƒ‹‚Í positionCapsule ‚ğ’ê–Ê’†S‚Æ‚µA+Y •ûŒü‚Ö heightCapsule ‚¾‚¯L‚Ñ‚é‘O’ñB
+    // çƒ vs ã‚«ãƒ—ã‚»ãƒ« ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+    // ã‚«ãƒ—ã‚»ãƒ«ã¯ positionCapsule ã‚’åº•é¢ä¸­å¿ƒã¨ã—ã€+Y æ–¹å‘ã¸ heightCapsule ã ã‘ä¼¸ã³ã‚‹å‰æã€‚
     bool IntersectSphereVsCapsule(
         const DirectX::XMFLOAT3& positionSphere, float radiusSphere,
         const DirectX::XMFLOAT3& positionCapsule, float radiusCapsule, float heightCapsule,
         HitResult& hitResult);
 
-    // ƒJƒvƒZƒ‹ vs ƒJƒvƒZƒ‹ ‚Ì“–‚½‚è”»’è‚ğs‚¤B
-    // —¼ƒJƒvƒZƒ‹‚Æ‚à’ê–Ê’†S +Y •ûŒü‚Ö‚‚³‚ªL‚Ñ‚é‘O’ñB
+    // ã‚«ãƒ—ã‚»ãƒ« vs ã‚«ãƒ—ã‚»ãƒ« ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+    // ä¸¡ã‚«ãƒ—ã‚»ãƒ«ã¨ã‚‚åº•é¢ä¸­å¿ƒ +Y æ–¹å‘ã¸é«˜ã•ãŒä¼¸ã³ã‚‹å‰æã€‚
     bool IntersectCapsuleVCapsule(
         const DirectX::XMFLOAT3& positionA, float radiusA, float heightA,
         const DirectX::XMFLOAT3& positionB, float radiusB, float heightB,
         HitResult& hitResult);
 
-    // ‹… vs AABB ‚Ì“–‚½‚è”»’è‚ğs‚¤B
-    // boxCenter ‚Í” ’†SAboxSize ‚ÍŠe²‚Ì‘S‘ÌƒTƒCƒYB
+    // çƒ vs AABB ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+    // boxCenter ã¯ç®±ä¸­å¿ƒã€boxSize ã¯å„è»¸ã®å…¨ä½“ã‚µã‚¤ã‚ºã€‚
     bool IntersectSphereVsBox(
         const DirectX::XMFLOAT3& sphereCenter, float sphereRadius,
         const DirectX::XMFLOAT3& boxCenter, const DirectX::XMFLOAT3& boxSize,
         HitResult& hitResult);
 
-    // AABB vs AABB ‚Ì“–‚½‚è”»’è‚ğs‚¤B
+    // AABB vs AABB ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
     bool IntersectBoxVsBox(
         const DirectX::XMFLOAT3& boxACenter, const DirectX::XMFLOAT3& boxASize,
         const DirectX::XMFLOAT3& boxBCenter, const DirectX::XMFLOAT3& boxBSize,
         HitResult& hitResult);
 
-    // ƒŒƒC vs ‹… ‚ÌŒğ·”»’è‚ğs‚¤B
-    // –½’†‚Íƒqƒbƒg‹——£ t ‚Æƒqƒbƒg–Ê–@ü‚ğ•Ô‚·B
+    // ãƒ¬ã‚¤ vs çƒ ã®äº¤å·®åˆ¤å®šã‚’è¡Œã†ã€‚
+    // å‘½ä¸­æ™‚ã¯ãƒ’ãƒƒãƒˆè·é›¢ t ã¨ãƒ’ãƒƒãƒˆé¢æ³•ç·šã‚’è¿”ã™ã€‚
     bool IntersectRayVsSphere(
         const Ray& ray,
         const DirectX::XMFLOAT3& sphereCenter,
@@ -49,8 +49,8 @@ namespace CollisionFunctions
         float& t,
         DirectX::XMFLOAT3& outNormal);
 
-    // ƒŒƒC vs AABB ‚ÌŒğ·”»’è‚ğs‚¤B
-    // –½’†‚Íƒqƒbƒg‹——£ t ‚Æƒqƒbƒg–Ê–@ü‚ğ•Ô‚·B
+    // ãƒ¬ã‚¤ vs AABB ã®äº¤å·®åˆ¤å®šã‚’è¡Œã†ã€‚
+    // å‘½ä¸­æ™‚ã¯ãƒ’ãƒƒãƒˆè·é›¢ t ã¨ãƒ’ãƒƒãƒˆé¢æ³•ç·šã‚’è¿”ã™ã€‚
     bool IntersectRayVsBox(
         const Ray& ray,
         const DirectX::XMFLOAT3& boxCenter,
@@ -58,9 +58,9 @@ namespace CollisionFunctions
         float& t,
         DirectX::XMFLOAT3& outNormal);
 
-    // ƒŒƒC vs ƒJƒvƒZƒ‹ ‚ÌŒğ·”»’è‚ğs‚¤B
-    // ƒJƒvƒZƒ‹‚Í’ê–Ê’†S +Y •ûŒü‚Ö‚‚³‚ªL‚Ñ‚é‘O’ñB
-    // –½’†‚ÍÅ‚à‹ß‚¢ƒqƒbƒg‹——£ t ‚Æ–@ü‚ğ•Ô‚·B
+    // ãƒ¬ã‚¤ vs ã‚«ãƒ—ã‚»ãƒ« ã®äº¤å·®åˆ¤å®šã‚’è¡Œã†ã€‚
+    // ã‚«ãƒ—ã‚»ãƒ«ã¯åº•é¢ä¸­å¿ƒ +Y æ–¹å‘ã¸é«˜ã•ãŒä¼¸ã³ã‚‹å‰æã€‚
+    // å‘½ä¸­æ™‚ã¯æœ€ã‚‚è¿‘ã„ãƒ’ãƒƒãƒˆè·é›¢ t ã¨æ³•ç·šã‚’è¿”ã™ã€‚
     bool IntersectRayVsCapsule(
         const Ray& ray,
         const DirectX::XMFLOAT3& capsuleBase,

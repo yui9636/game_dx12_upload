@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include "Sprite/Sprite.h"
 #include "UI/UIElement.h"
 #include <memory>
+// RenderContext はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 struct RenderContext;
 

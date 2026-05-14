@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 #include <string>
+// PathResolver は s_RootPath を中心に、実行時やエディターで共有する状態を保持する。
 
 
 class PathResolver

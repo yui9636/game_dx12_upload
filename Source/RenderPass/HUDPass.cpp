@@ -1,4 +1,4 @@
-#include "HUDPass.h"
+﻿#include "HUDPass.h"
 
 #include "Graphics.h"
 #include "Font/FontManager.h"
@@ -13,7 +13,7 @@
 #include "UI/UI2DTextRenderSystem.h"
 #include "UI/UIManager.h"
 
-HUDPass::HUDPass(IResourceFactory* /*factory*/)
+HUDPass::HUDPass(IResourceFactory*)
 {
 }
 

@@ -1,12 +1,8 @@
-#pragma once
+﻿#pragma once
 #include "UIWorld.h"
 #include "Sprite/Sprite.h"
 #include <memory>
-
-// ============================================================================
-// UIProgressBar3D
-// 
-// ============================================================================
+// ワールド座標へ追従する 3D 用 HP バー / 進捗バー要素。
 class UIProgressBar3D : public UIWorld
 {
 public:

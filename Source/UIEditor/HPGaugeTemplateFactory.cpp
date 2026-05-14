@@ -1,4 +1,4 @@
-#include "UIEditor/HPGaugeTemplateFactory.h"
+﻿#include "UIEditor/HPGaugeTemplateFactory.h"
 
 #include <algorithm>
 #include <optional>
@@ -15,6 +15,7 @@
 
 namespace
 {
+// TemplatePreset は char/char/targetMode/size を中心に、実行時やエディターで共有する状態を保持する。
     struct TemplatePreset
     {
         const char* name;

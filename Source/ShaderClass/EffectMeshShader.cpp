@@ -16,7 +16,7 @@ EffectMeshShader::EffectMeshShader(IResourceFactory* factory)
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/EffectMeshUberVS.cso");
     m_ps = factory->CreateShader(ShaderType::Pixel,  "Data/Shader/EffectMeshUberPS.cso");
 
-    // Match PBRShader input layout so existing mesh VBs flow through unchanged.
+    // 既存 mesh VB をそのまま流せるよう PBRShader の input layout に合わせる。
     InputLayoutElement elems[] = {
         {"POSITION",     0, TextureFormat::R32G32B32_FLOAT,     0, kAppendAlignedElement},
         {"BONE_WEIGHTS", 0, TextureFormat::R32G32B32A32_FLOAT,  0, kAppendAlignedElement},
@@ -44,7 +44,7 @@ void EffectMeshShader::UploadConstants(ICommandList* cmd, const CbMeshEffect& cb
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         static_cast<DX12CommandList*>(cmd)->PSSetDynamicConstantBuffer(3, &cb, sizeof(cb));
     }
-    // DX11 path is not needed — EffectMesh is DX12-only in Phase B.
+    // Phase B の EffectMesh は DX12 専用のため DX11 経路は不要。
 }
 
 void EffectMeshShader::BindTextures(ICommandList* cmd,

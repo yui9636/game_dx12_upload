@@ -1,3 +1,4 @@
+﻿// TimelineVFXSystem の Gameplay 関連実装をまとめます。
 #include "TimelineVFXSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 
@@ -15,6 +15,7 @@
 
 namespace Camera2DUtils
 {
+// ActiveCamera2D は entity を中心に、実行時やエディターで共有する状態を保持する。
     struct ActiveCamera2D
     {
         EntityID entity = Entity::NULL_ID;

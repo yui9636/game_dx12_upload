@@ -1,4 +1,4 @@
-#include "SSRPass.h"
+﻿#include "SSRPass.h"
 #include "Graphics.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
@@ -11,6 +11,7 @@
 
 SSRPass::~SSRPass() = default;
 
+// レイマーチとブラーの 2 段階で使う SSR 用 PSO を構築する。
 SSRPass::SSRPass(IResourceFactory* factory)
 {
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/DeferredLightingVS.cso");
@@ -36,6 +37,7 @@ SSRPass::SSRPass(IResourceFactory* factory)
     m_psoBlur = factory->CreatePipelineState(desc);
 }
 
+// GBuffer と前フレーム画像を入力に登録し、半解像度の反射バッファを確保する。
 void SSRPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
@@ -53,9 +55,6 @@ void SSRPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
         m_hSSRBlur = {};
         return;
     }
-
-    // =========================================================
-    // =========================================================
     uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
@@ -79,6 +78,7 @@ void SSRPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     builder.RegisterHandle("SSRBlur", m_hSSRBlur);
 }
 
+// 反射のレイマーチ結果を半解像度で描画し、後段で使うブラー結果へ整える。
 void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
     if (!rc.enableSSR) {
@@ -93,14 +93,8 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     rc.commandList->SetIndexBuffer(nullptr, IndexFormat::Uint32, 0);
 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-    // =========================================================
-    // =========================================================
     float halfWidth = (float)ssrTex->GetWidth();
     float halfHeight = (float)ssrTex->GetHeight();
-
-    // ==========================================
-    // ==========================================
     rc.commandList->ClearColor(ssrTex, clearColor);
     rc.commandList->SetRenderTarget(ssrTex, nullptr);
 
@@ -134,9 +128,6 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     }
 
     rc.commandList->Draw(3, 0);
-
-    // ==========================================
-    // ==========================================
     rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTarget(blurTex, nullptr);
 

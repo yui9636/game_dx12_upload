@@ -1,4 +1,4 @@
-#include "GlobalRootSignature.h"
+﻿#include "GlobalRootSignature.h"
 #include "RHI/ICommandList.h"
 #include "RHI/IBuffer.h"
 #include "RHI/DX11/DX11Buffer.h"
@@ -8,7 +8,7 @@
 #include "RHI/ISampler.h"
 #include "RHI/ITexture.h"
 
-// Instance()
+// Instance() はグローバル root signature の singleton 参照を返す。
 GlobalRootSignature& GlobalRootSignature::Instance() {
     static GlobalRootSignature instance;
     return instance;
@@ -51,22 +51,19 @@ void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* 
 
     if (m_isDX12) return;
 
-    // 2. IBL texture binding (DX11 only: t33=DiffIBL, t34=SpecIBL)
+    // 2. IBL テクスチャのバインド。DX11 では t33=DiffIBL、t34=SpecIBL を使う。
     ITexture* ibls[] = { m_diffIBL, m_specIBL };
     commandList->PSSetTextures(33, 2, ibls);
 
-    // ---------------------------------------------------------
-    // ---------------------------------------------------------
-
-    // Slot 0: LinearWrap
+    // Slot 0: 線形補間 + Wrap。
     ISampler* linearSampler = renderState->GetSamplerState(SamplerState::LinearWrap);
     commandList->PSSetSampler(0, linearSampler);
 
-    // Slot 1: ShadowCompare
+    // Slot 1: shadow compare 用サンプラー。
     ISampler* shadowSampler = shadowMap ? shadowMap->GetSamplerState() : nullptr;
     commandList->PSSetSampler(1, shadowSampler);
 
-    // Slot 2: PointClamp
+    // Slot 2: 最近傍 + Clamp。
     ISampler* pointSampler = renderState->GetSamplerState(SamplerState::PointClamp);
     if (!pointSampler) pointSampler = linearSampler;
     commandList->PSSetSampler(2, pointSampler);

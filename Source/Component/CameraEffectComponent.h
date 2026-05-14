@@ -1,8 +1,8 @@
-#pragma once
+ï»¿#pragma once
 #include <DirectXMath.h>
 
 /**
- * @brief E½JE½E½E½E½E½VE½FE½CE½NE½iE½UE½E½E½j
+ * @brief ã‚«ãƒ¡ãƒ©ã‚·ã‚§ã‚¤ã‚¯ç”¨ã®çŠ¶æ…‹ã€‚
  */
 struct CameraShakeComponent {
     float amplitude = 0.0f;

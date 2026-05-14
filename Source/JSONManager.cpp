@@ -1,8 +1,9 @@
-#include "JSONManager.h"
+﻿#include "JSONManager.h"
 #include <fstream>
 #include <iostream>
 #include <filesystem>
 #include "System/PathResolver.h"
+// JSONManager::JSONManager はこのモジュールの実行時処理を構成する補助処理を行う。
 JSONManager::JSONManager(const std::string& filePath) : filePath(filePath) {
     Load();
 }

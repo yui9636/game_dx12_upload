@@ -1,4 +1,4 @@
-#include "GridRenderSystem.h"
+ï»¿#include "GridRenderSystem.h"
 #include "Component/GridComponent.h"
 #include "Component/TransformComponent.h"
 #include "Graphics.h"
@@ -13,18 +13,18 @@
 
 namespace
 {
-    // F‚Ì RGB ‚Í‚»‚Ì‚Ü‚Ü‚ÉAAlpha ‚¾‚¯·‚µ‘Ö‚¦‚½F‚ğ•Ô‚·B
+    // è‰²ã® RGB ã¯ãã®ã¾ã¾ã«ã€Alpha ã ã‘å·®ã—æ›¿ãˆãŸè‰²ã‚’è¿”ã™ã€‚
     DirectX::XMFLOAT4 ScaleAlpha(const DirectX::XMFLOAT4& color, float alpha)
     {
         return DirectX::XMFLOAT4(color.x, color.y, color.z, alpha);
     }
 }
 
-// “Á•Ê‚È”jŠüˆ—‚Í•s—vB
+// ç‰¹åˆ¥ãªç ´æ£„å‡¦ç†ã¯ä¸è¦ã€‚
 GridRenderSystem::~GridRenderSystem() = default;
 
-// Grid •`‰æ‚É•K—v‚ÈƒVƒF[ƒ_E“ü—ÍƒŒƒCƒAƒEƒgE’è”ƒoƒbƒtƒ@‚ğŠm•Û‚·‚éB
-// Šù‚Éì¬Ï‚İ‚È‚ç‚»‚Ì‚Ü‚Ü true ‚ğ•Ô‚·B
+// Grid æç”»ã«å¿…è¦ãªã‚·ã‚§ãƒ¼ãƒ€ãƒ»å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆãƒ»å®šæ•°ãƒãƒƒãƒ•ã‚¡ã‚’ç¢ºä¿ã™ã‚‹ã€‚
+// æ—¢ã«ä½œæˆæ¸ˆã¿ãªã‚‰ãã®ã¾ã¾ true ã‚’è¿”ã™ã€‚
 bool GridRenderSystem::EnsureResources()
 {
     if (m_vertexShader && m_pixelShader && m_inputLayout && m_constantBuffer) {
@@ -36,13 +36,13 @@ bool GridRenderSystem::EnsureResources()
         return false;
     }
 
-    // PrimitiveRenderer —p‚Ì“ü—ÍƒŒƒCƒAƒEƒgB
+    // PrimitiveRenderer ç”¨ã®å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã€‚
     InputLayoutElement layoutElements[] = {
         { "POSITION", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement },
         { "COLOR", 0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement },
     };
 
-    // ƒVƒF[ƒ_‚Æ“ü—ÍƒŒƒCƒAƒEƒg‚ğì¬‚·‚éB
+    // ã‚·ã‚§ãƒ¼ãƒ€ã¨å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã‚’ä½œæˆã™ã‚‹ã€‚
     m_vertexShader = factory->CreateShader(ShaderType::Vertex, "Data/Shader/PrimitiveRendererVS.cso");
     m_pixelShader = factory->CreateShader(ShaderType::Pixel, "Data/Shader/PrimitiveRendererPS.cso");
     if (!m_vertexShader || !m_pixelShader) {
@@ -52,12 +52,12 @@ bool GridRenderSystem::EnsureResources()
     InputLayoutDesc layoutDesc{ layoutElements, _countof(layoutElements) };
     m_inputLayout = factory->CreateInputLayout(layoutDesc, m_vertexShader.get());
 
-    // ViewProjection —p‚Ì’è”ƒoƒbƒtƒ@‚ğì¬‚·‚éB
+    // ViewProjection ç”¨ã®å®šæ•°ãƒãƒƒãƒ•ã‚¡ã‚’ä½œæˆã™ã‚‹ã€‚
     m_constantBuffer = factory->CreateBuffer(sizeof(CbScene), BufferType::Constant);
     return m_inputLayout && m_constantBuffer;
 }
 
-// ’¸“_ƒoƒbƒtƒ@—e—Ê‚ª‘«‚è‚È‚¢ê‡‚¾‚¯Šg’£‚·‚éB
+// é ‚ç‚¹ãƒãƒƒãƒ•ã‚¡å®¹é‡ãŒè¶³ã‚Šãªã„å ´åˆã ã‘æ‹¡å¼µã™ã‚‹ã€‚
 void GridRenderSystem::EnsureVertexCapacity(uint32_t requiredVertexCount)
 {
     if (requiredVertexCount <= m_vertexCapacity && m_vertexBuffer) {
@@ -69,25 +69,25 @@ void GridRenderSystem::EnsureVertexCapacity(uint32_t requiredVertexCount)
         return;
     }
 
-    // ­‚È‚­‚Æ‚à 4096 ’¸“_‚ÍŠm•Û‚·‚éB
+    // å°‘ãªãã¨ã‚‚ 4096 é ‚ç‚¹ã¯ç¢ºä¿ã™ã‚‹ã€‚
     m_vertexCapacity = (std::max)(requiredVertexCount, 4096u);
     const uint32_t byteSize = m_vertexCapacity * static_cast<uint32_t>(sizeof(Vertex));
     m_vertexBuffer = factory->CreateBuffer(byteSize, BufferType::Vertex);
 }
 
-// ü•ª 1 –{‚Ô‚ñ‚Ì’¸“_‚ğ’Ç‰Á‚·‚éB
+// ç·šåˆ† 1 æœ¬ã¶ã‚“ã®é ‚ç‚¹ã‚’è¿½åŠ ã™ã‚‹ã€‚
 void GridRenderSystem::AppendLine(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b, const DirectX::XMFLOAT4& color)
 {
     m_vertices.push_back(Vertex{ a, color });
     m_vertices.push_back(Vertex{ b, color });
 }
 
-// ƒ[ƒ‹ƒhÀ•W‚É‘µ‚Á‚½•½–ÊƒOƒŠƒbƒh‚ğ’Ç‰Á‚·‚éB
-// center Šî€‚Å XZ •½–Ê‚É•À‚×AŒ´“_²‚¾‚¯F‚ğ•Ï‚¦‚éB
+// ãƒ¯ãƒ¼ãƒ«ãƒ‰åº§æ¨™ã«æƒã£ãŸå¹³é¢ã‚°ãƒªãƒƒãƒ‰ã‚’è¿½åŠ ã™ã‚‹ã€‚
+// center åŸºæº–ã§ XZ å¹³é¢ã«ä¸¦ã¹ã€åŸç‚¹è»¸ã ã‘è‰²ã‚’å¤‰ãˆã‚‹ã€‚
 void GridRenderSystem::AppendWorldAlignedGrid(const DirectX::XMFLOAT3& center, int halfLineCount, float cellSize, float y,
     const DirectX::XMFLOAT4& minorColor, const DirectX::XMFLOAT4& axisXColor, const DirectX::XMFLOAT4& axisZColor)
 {
-    // center ‚ğ cellSize ’PˆÊ‚ÅƒXƒiƒbƒv‚³‚¹‚éB
+    // center ã‚’ cellSize å˜ä½ã§ã‚¹ãƒŠãƒƒãƒ—ã•ã›ã‚‹ã€‚
     const float snappedCenterX = std::floor(center.x / cellSize) * cellSize;
     const float snappedCenterZ = std::floor(center.z / cellSize) * cellSize;
 
@@ -96,14 +96,14 @@ void GridRenderSystem::AppendWorldAlignedGrid(const DirectX::XMFLOAT3& center, i
     const float minZ = snappedCenterZ - static_cast<float>(halfLineCount) * cellSize;
     const float maxZ = snappedCenterZ + static_cast<float>(halfLineCount) * cellSize;
 
-    // X •ûŒü‚É•½s‚Èü‚ğ•À‚×‚éB
+    // X æ–¹å‘ã«å¹³è¡Œãªç·šã‚’ä¸¦ã¹ã‚‹ã€‚
     for (int i = -halfLineCount; i <= halfLineCount; ++i) {
         const float worldX = snappedCenterX + static_cast<float>(i) * cellSize;
         const DirectX::XMFLOAT4 color = (std::fabs(worldX) < 0.001f) ? axisXColor : minorColor;
         AppendLine({ worldX, y, minZ }, { worldX, y, maxZ }, color);
     }
 
-    // Z •ûŒü‚É•½s‚Èü‚ğ•À‚×‚éB
+    // Z æ–¹å‘ã«å¹³è¡Œãªç·šã‚’ä¸¦ã¹ã‚‹ã€‚
     for (int i = -halfLineCount; i <= halfLineCount; ++i) {
         const float worldZ = snappedCenterZ + static_cast<float>(i) * cellSize;
         const DirectX::XMFLOAT4 color = (std::fabs(worldZ) < 0.001f) ? axisZColor : minorColor;
@@ -111,8 +111,8 @@ void GridRenderSystem::AppendWorldAlignedGrid(const DirectX::XMFLOAT3& center, i
     }
 }
 
-// ”CˆÓ transform ‚ğ‚ÂƒOƒŠƒbƒh‚ğ’Ç‰Á‚·‚éB
-// ƒ[ƒJƒ‹•½–Êã‚ÌŠiq‚ğ worldMatrix ‚Å•ÏŠ·‚µ‚Ä•`‚­B
+// ä»»æ„ transform ã‚’æŒã¤ã‚°ãƒªãƒƒãƒ‰ã‚’è¿½åŠ ã™ã‚‹ã€‚
+// ãƒ­ãƒ¼ã‚«ãƒ«å¹³é¢ä¸Šã®æ ¼å­ã‚’ worldMatrix ã§å¤‰æ›ã—ã¦æãã€‚
 void GridRenderSystem::AppendTransformedGrid(const DirectX::XMFLOAT4X4& transform, int subdivisions, float scale,
     const DirectX::XMFLOAT4& minorColor, const DirectX::XMFLOAT4& axisXColor, const DirectX::XMFLOAT4& axisZColor)
 {
@@ -122,7 +122,7 @@ void GridRenderSystem::AppendTransformedGrid(const DirectX::XMFLOAT4X4& transfor
     const float halfExtent = 0.5f * static_cast<float>(lineCount) * scale;
     const XMMATRIX world = XMLoadFloat4x4(&transform);
 
-    // ƒ[ƒJƒ‹À•W‚Ì“_‚ğ world ‚Ö•ÏŠ·‚·‚éƒ‰ƒ€ƒ_B
+    // ãƒ­ãƒ¼ã‚«ãƒ«åº§æ¨™ã®ç‚¹ã‚’ world ã¸å¤‰æ›ã™ã‚‹ãƒ©ãƒ ãƒ€ã€‚
     auto transformPoint = [&](float x, float y, float z) {
         XMFLOAT3 result{};
         XMStoreFloat3(&result, XMVector3TransformCoord(XMVectorSet(x, y, z, 1.0f), world));
@@ -132,14 +132,14 @@ void GridRenderSystem::AppendTransformedGrid(const DirectX::XMFLOAT4X4& transfor
     for (int i = 0; i <= lineCount; ++i) {
         const float local = -halfExtent + static_cast<float>(i) * scale;
 
-        // ƒ[ƒJƒ‹ X=0 ²‚¾‚¯ axisXColor ‚Å•`‚­B
+        // ãƒ­ãƒ¼ã‚«ãƒ« X=0 è»¸ã ã‘ axisXColor ã§æãã€‚
         const DirectX::XMFLOAT4 colorX = (std::fabs(local) < 0.001f) ? axisXColor : minorColor;
         AppendLine(
             transformPoint(local, 0.0f, -halfExtent),
             transformPoint(local, 0.0f, halfExtent),
             colorX);
 
-        // ƒ[ƒJƒ‹ Z=0 ²‚¾‚¯ axisZColor ‚Å•`‚­B
+        // ãƒ­ãƒ¼ã‚«ãƒ« Z=0 è»¸ã ã‘ axisZColor ã§æãã€‚
         const DirectX::XMFLOAT4 colorZ = (std::fabs(local) < 0.001f) ? axisZColor : minorColor;
         AppendLine(
             transformPoint(-halfExtent, 0.0f, local),
@@ -148,7 +148,7 @@ void GridRenderSystem::AppendTransformedGrid(const DirectX::XMFLOAT4X4& transfor
     }
 }
 
-// Œ»İ‚½‚Ü‚Á‚Ä‚¢‚é’¸“_‚ğ GPU ‚Ö‘—‚èALineList ‚Æ‚µ‚Ä•`‰æ‚·‚éB
+// ç¾åœ¨ãŸã¾ã£ã¦ã„ã‚‹é ‚ç‚¹ã‚’ GPU ã¸é€ã‚Šã€LineList ã¨ã—ã¦æç”»ã™ã‚‹ã€‚
 void GridRenderSystem::Flush(RenderContext& rc)
 {
     if (m_vertices.empty() || !EnsureResources()) {
@@ -162,7 +162,7 @@ void GridRenderSystem::Flush(RenderContext& rc)
         return;
     }
 
-    // ƒpƒCƒvƒ‰ƒCƒ“ƒXƒe[ƒgİ’èB
+    // ãƒ‘ã‚¤ãƒ—ãƒ©ã‚¤ãƒ³ã‚¹ãƒ†ãƒ¼ãƒˆè¨­å®šã€‚
     rc.commandList->VSSetShader(m_vertexShader.get());
     rc.commandList->PSSetShader(m_pixelShader.get());
     rc.commandList->SetInputLayout(m_inputLayout.get());
@@ -174,13 +174,13 @@ void GridRenderSystem::Flush(RenderContext& rc)
 
     using namespace DirectX;
 
-    // ViewProjection ‚ğ’è”ƒoƒbƒtƒ@‚Öİ’è‚·‚éB
+    // ViewProjection ã‚’å®šæ•°ãƒãƒƒãƒ•ã‚¡ã¸è¨­å®šã™ã‚‹ã€‚
     const XMMATRIX view = XMLoadFloat4x4(&rc.viewMatrix);
     const XMMATRIX projection = XMLoadFloat4x4(&rc.projectionMatrix);
     CbScene cbScene{};
     XMStoreFloat4x4(&cbScene.viewProjection, view * projection);
 
-    // DX12 ‚Í dynamic constant bufferADX11 Œn‚Í’Êí CB XV‚ğg‚¤B
+    // DX12 ã¯ dynamic constant bufferã€DX11 ç³»ã¯é€šå¸¸ CB æ›´æ–°ã‚’ä½¿ã†ã€‚
     if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
         dx12Cmd->VSSetDynamicConstantBuffer(0, &cbScene, sizeof(cbScene));
     }
@@ -189,7 +189,7 @@ void GridRenderSystem::Flush(RenderContext& rc)
         rc.commandList->UpdateBuffer(m_constantBuffer.get(), &cbScene, sizeof(cbScene));
     }
 
-    // ˆê“x‚ÉXV‚µ‚·‚¬‚È‚¢‚æ‚¤ƒ`ƒƒƒ“ƒN•ªŠ„‚µ‚Ä•`‚­B
+    // ä¸€åº¦ã«æ›´æ–°ã—ã™ããªã„ã‚ˆã†ãƒãƒ£ãƒ³ã‚¯åˆ†å‰²ã—ã¦æãã€‚
     constexpr uint32_t kChunkVertexCount = 8192;
     const uint32_t stride = sizeof(Vertex);
     const uint32_t offset = 0;
@@ -209,12 +209,12 @@ void GridRenderSystem::Flush(RenderContext& rc)
         startVertex += drawVertexCount;
     }
 
-    // •`‚«I‚í‚Á‚½‚Ì‚Å CPU ‘¤’¸“_”z—ñ‚ğ‹ó‚É‚·‚éB
+    // æãçµ‚ã‚ã£ãŸã®ã§ CPU å´é ‚ç‚¹é…åˆ—ã‚’ç©ºã«ã™ã‚‹ã€‚
     m_vertices.clear();
 }
 
-// Registry ã‚Ì GridComponent ‚ğ‚Â entity ‚ğ‘–¸‚µA
-// ‚»‚ê‚¼‚ê‚Ì worldMatrix ‚É‰‚¶‚½ƒOƒŠƒbƒh‚ğ•`‰æ‚·‚éB
+// Registry ä¸Šã® GridComponent ã‚’æŒã¤ entity ã‚’èµ°æŸ»ã—ã€
+// ãã‚Œãã‚Œã® worldMatrix ã«å¿œã˜ãŸã‚°ãƒªãƒƒãƒ‰ã‚’æç”»ã™ã‚‹ã€‚
 void GridRenderSystem::Render(Registry& registry, RenderContext& rc)
 {
     Query<GridComponent, TransformComponent> query(registry);
@@ -233,8 +233,8 @@ void GridRenderSystem::Render(Registry& registry, RenderContext& rc)
     Flush(rc);
 }
 
-// Editor —p‚Ìƒ[ƒ‹ƒhŒÅ’èƒOƒŠƒbƒh‚ğ•`‰æ‚·‚éB
-// ’Êí‚Ì scene grid ‚Æ‚µ‚Ä XZ •½–Ê‚É•\¦‚·‚é—p“rB
+// Editor ç”¨ã®ãƒ¯ãƒ¼ãƒ«ãƒ‰å›ºå®šã‚°ãƒªãƒƒãƒ‰ã‚’æç”»ã™ã‚‹ã€‚
+// é€šå¸¸ã® scene grid ã¨ã—ã¦ XZ å¹³é¢ã«è¡¨ç¤ºã™ã‚‹ç”¨é€”ã€‚
 void GridRenderSystem::RenderEditorGrid(RenderContext& rc, const EditorGridSettings& settings)
 {
     const float cellSize = (std::max)(settings.cellSize, 1.0f);

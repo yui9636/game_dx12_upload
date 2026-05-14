@@ -1,4 +1,4 @@
-#include "PlayerModelPreviewStudio.h"
+﻿#include "PlayerModelPreviewStudio.h"
 
 #include "Render/OffscreenRenderer.h"
 #include "Graphics.h"
@@ -9,6 +9,7 @@
 #include "Console/Logger.h"
 
 using namespace DirectX;
+// PlayerModelPreviewStudio::Instance はこのモジュールの実行時処理を構成する補助処理を行う。
 
 PlayerModelPreviewStudio& PlayerModelPreviewStudio::Instance()
 {

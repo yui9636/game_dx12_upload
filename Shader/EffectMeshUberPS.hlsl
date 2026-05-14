@@ -1,4 +1,4 @@
-// EffectMeshUberPS — Phase B Route B
+// EffectMeshUberPS は Phase B Route B のピクセル出力を処理する。
 // 単一 PS で variant flag のランタイム分岐。Route A (変種コンパイル) に戻す場合は
 // MeshFlag_* の if ブロックを #ifdef USE_* に戻すだけで済む。
 
@@ -61,7 +61,7 @@ cbuffer CbMeshEffect : register(b3)
     float  gEffectTime;
     float2 _pad3;
 
-    float4 gBaseColor;      // packet baseColor × material color
+    float4 gBaseColor;      // packet の baseColor と material color を掛けた色。
     uint   gVariantFlags;
     float3 _pad4;
     float4 gLightDirection; // VS の lightDirection を複製 (PS でも使う場合)

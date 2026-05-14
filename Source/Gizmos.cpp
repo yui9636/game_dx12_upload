@@ -1,4 +1,4 @@
-#include "System/Misc.h"
+﻿#include "System/Misc.h"
 #include "GpuResourceUtils.h"
 #include "Gizmos.h"
 #include "RHI/IResourceFactory.h"
@@ -162,7 +162,7 @@ void Gizmos::CreateCylinderMesh(IResourceFactory* factory, float radius, float h
 	CreateMesh(factory, vertices, cylinderMesh);
 }
 
-void Gizmos::CreateCapsuleMesh(IResourceFactory* factory, float /*radius*/, float /*height*/, int subdivision)
+void Gizmos::CreateCapsuleMesh(IResourceFactory* factory, float, float, int subdivision)
 {
 	using namespace DirectX;
 	const int ringSides = 64;
@@ -242,8 +242,8 @@ void Gizmos::Render(const RenderContext& rc)
 	rc.commandList->SetInputLayout(inputLayout.get());
 
     const float blendFactor[4] = { 1.0f,1.0f,1.0f,1.0f };
-    // Gizmos are rendered after the main scene with a read-only depth target.
-    // Do not write depth here or we get unstable overlay results when debug shapes appear.
+    // Gizmo はメインシーン後に、読み取り専用の深度ターゲットで描画する。
+    // ここで深度を書き込むと、デバッグ形状の表示時にオーバーレイが不安定になる。
 	rc.commandList->SetBlendState(rc.renderState->GetBlendState(BlendState::Alpha), blendFactor, 0xFFFFFFFF);
 	rc.commandList->SetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestOnly), 0);
 	rc.commandList->SetRasterizerState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));

@@ -1,76 +1,76 @@
-#pragma once
+ï»¿#pragma once
 
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include "EffectGraphAsset.h"
 
-// Às’†ƒGƒtƒFƒNƒg 1 Œ‚Ô‚ñ‚Ì runtime î•ñB
-// ‚Ç‚Ì compiled asset ‚ğg‚Á‚Ä‚¢‚é‚©AŒo‰ßŠÔ‚â seed ‚È‚Ç‚ğ•Û‚·‚éB
+// å®Ÿè¡Œä¸­ã‚¨ãƒ•ã‚§ã‚¯ãƒˆ 1 ä»¶ã¶ã‚“ã® runtime æƒ…å ±ã€‚
+// ã©ã® compiled asset ã‚’ä½¿ã£ã¦ã„ã‚‹ã‹ã€çµŒéæ™‚é–“ã‚„ seed ãªã©ã‚’ä¿æŒã™ã‚‹ã€‚
 struct EffectRuntimeInstance
 {
-    // runtime instance ‚ÌˆêˆÓ IDB
+    // runtime instance ã®ä¸€æ„ IDã€‚
     uint32_t id = 0;
 
-    // Œ³‚É‚È‚Á‚½ƒAƒZƒbƒgƒL[B
+    // å…ƒã«ãªã£ãŸã‚¢ã‚»ãƒƒãƒˆã‚­ãƒ¼ã€‚
     std::string assetKey;
 
-    // ƒRƒ“ƒpƒCƒ‹Ï‚İƒGƒtƒFƒNƒgƒAƒZƒbƒgQÆB
+    // ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«æ¸ˆã¿ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚¢ã‚»ãƒƒãƒˆå‚ç…§ã€‚
     std::shared_ptr<CompiledEffectAsset> compiledAsset;
 
-    // Ä¶Œo‰ßŠÔB
+    // å†ç”ŸçµŒéæ™‚é–“ã€‚
     float time = 0.0f;
 
-    // —” seedB
+    // ä¹±æ•° seedã€‚
     uint32_t seed = 1;
 
-    // Œ»İƒAƒNƒeƒBƒu‚©‚Ç‚¤‚©B
+    // ç¾åœ¨ã‚¢ã‚¯ãƒ†ã‚£ãƒ–ã‹ã©ã†ã‹ã€‚
     bool active = true;
 };
 
-// ƒGƒtƒFƒNƒg‚Ì compiled asset ƒLƒƒƒbƒVƒ…‚Æ runtime instance ‚ğŠÇ—‚·‚éƒŒƒWƒXƒgƒŠB
-// ‰i‘±ƒLƒƒƒbƒVƒ…Aˆê“o˜^ƒAƒZƒbƒgAÀs’†ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ‚Ü‚Æ‚ß‚Äˆµ‚¤B
+// ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã® compiled asset ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã¨ runtime instance ã‚’ç®¡ç†ã™ã‚‹ãƒ¬ã‚¸ã‚¹ãƒˆãƒªã€‚
+// æ°¸ç¶šã‚­ãƒ£ãƒƒã‚·ãƒ¥ã€ä¸€æ™‚ç™»éŒ²ã‚¢ã‚»ãƒƒãƒˆã€å®Ÿè¡Œä¸­ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’ã¾ã¨ã‚ã¦æ‰±ã†ã€‚
 class EffectRuntimeRegistry
 {
 public:
-    // singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+    // singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
     static EffectRuntimeRegistry& Instance();
 
-    // w’è assetKey ‚Ì compiled asset ‚ğæ“¾‚·‚éB
-    // •K—v‚È‚çƒ[ƒh‚ÆƒRƒ“ƒpƒCƒ‹‚às‚¤B
+    // æŒ‡å®š assetKey ã® compiled asset ã‚’å–å¾—ã™ã‚‹ã€‚
+    // å¿…è¦ãªã‚‰ãƒ­ãƒ¼ãƒ‰ã¨ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã‚‚è¡Œã†ã€‚
     std::shared_ptr<CompiledEffectAsset> GetCompiledAsset(const std::string& assetKey);
 
-    // ˆê“I‚È compiled asset ‚ğ“o˜^‚·‚éB
-    // ƒGƒfƒBƒ^ƒvƒŒƒrƒ…[‚È‚ÇAƒtƒ@ƒCƒ‹•Û‘¶‘O‚Ì·‚µ‘Ö‚¦—p“r‚ğ‘z’è‚·‚éB
-    // nullptr ‚ğ“n‚µ‚½ê‡‚Íˆê“o˜^‚ğ‰ğœ‚·‚éB
+    // ä¸€æ™‚çš„ãª compiled asset ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+    // ã‚¨ãƒ‡ã‚£ã‚¿ãƒ—ãƒ¬ãƒ“ãƒ¥ãƒ¼ãªã©ã€ãƒ•ã‚¡ã‚¤ãƒ«ä¿å­˜å‰ã®å·®ã—æ›¿ãˆç”¨é€”ã‚’æƒ³å®šã™ã‚‹ã€‚
+    // nullptr ã‚’æ¸¡ã—ãŸå ´åˆã¯ä¸€æ™‚ç™»éŒ²ã‚’è§£é™¤ã™ã‚‹ã€‚
     void RegisterTransientAsset(const std::string& assetKey, const std::shared_ptr<CompiledEffectAsset>& compiledAsset);
 
-    // w’è assetKey ‚ÌƒGƒtƒFƒNƒg‚ğ runtime instance ‚Æ‚µ‚Ä¶¬‚·‚éB
-    // ¬Œ÷‚Í instance IDA¸”s‚Í 0 ‚ğ•Ô‚·B
+    // æŒ‡å®š assetKey ã®ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’ runtime instance ã¨ã—ã¦ç”Ÿæˆã™ã‚‹ã€‚
+    // æˆåŠŸæ™‚ã¯ instance IDã€å¤±æ•—æ™‚ã¯ 0 ã‚’è¿”ã™ã€‚
     uint32_t Spawn(const std::string& assetKey, uint32_t seed);
 
-    // w’è instanceId ‚Ì runtime instance ‚ğæ“¾‚·‚éB
-    // Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š instanceId ã® runtime instance ã‚’å–å¾—ã™ã‚‹ã€‚
+    // è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     EffectRuntimeInstance* GetRuntimeInstance(uint32_t instanceId);
 
-    // w’è instanceId ‚Ì runtime instance ‚ğ”jŠü‚·‚éB
+    // æŒ‡å®š instanceId ã® runtime instance ã‚’ç ´æ£„ã™ã‚‹ã€‚
     void Destroy(uint32_t instanceId);
 
 private:
-    // w’è assetKey ‚Ì compiled asset ‚ğ“Ç‚İ‚ŞB
-    // ‚Ü‚¸ transientAŸ‚ÉƒLƒƒƒbƒVƒ…‚ğŒ©‚ÄA–³‚¯‚ê‚ÎŒ³ graph ‚ğƒ[ƒh‚µ‚ÄƒRƒ“ƒpƒCƒ‹‚·‚éB
+    // æŒ‡å®š assetKey ã® compiled asset ã‚’èª­ã¿è¾¼ã‚€ã€‚
+    // ã¾ãš transientã€æ¬¡ã«ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’è¦‹ã¦ã€ç„¡ã‘ã‚Œã°å…ƒ graph ã‚’ãƒ­ãƒ¼ãƒ‰ã—ã¦ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã™ã‚‹ã€‚
     std::shared_ptr<CompiledEffectAsset> LoadCompiledAsset(const std::string& assetKey);
 
-    // ‰i‘±“I‚È compiled asset ƒLƒƒƒbƒVƒ…B
+    // æ°¸ç¶šçš„ãª compiled asset ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã€‚
     std::unordered_map<std::string, std::shared_ptr<CompiledEffectAsset>> m_compiledAssetCache;
 
-    // ˆê·‚µ‘Ö‚¦—p compiled assetB
-    // “¯‚¶ assetKey ‚ª‚ ‚ê‚Î’ÊíƒLƒƒƒbƒVƒ…‚æ‚è—Dæ‚³‚ê‚éB
+    // ä¸€æ™‚å·®ã—æ›¿ãˆç”¨ compiled assetã€‚
+    // åŒã˜ assetKey ãŒã‚ã‚Œã°é€šå¸¸ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚ˆã‚Šå„ªå…ˆã•ã‚Œã‚‹ã€‚
     std::unordered_map<std::string, std::shared_ptr<CompiledEffectAsset>> m_transientAssets;
 
-    // Às’† runtime instance ˆê——B
+    // å®Ÿè¡Œä¸­ runtime instance ä¸€è¦§ã€‚
     std::unordered_map<uint32_t, EffectRuntimeInstance> m_instances;
 
-    // Ÿ‚É•¥‚¢o‚· runtime instance IDB
+    // æ¬¡ã«æ‰•ã„å‡ºã™ runtime instance IDã€‚
     uint32_t m_nextRuntimeInstanceId = 1;
 };

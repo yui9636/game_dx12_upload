@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <memory>
@@ -9,9 +9,6 @@
 #include <nlohmann/json.hpp>
 
 struct RenderContext;
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 enum class EffectBlendMode
 {
     Opaque,
@@ -23,27 +20,27 @@ enum class EffectBlendMode
 
 struct EffectMaterialConstants
 {
-    // [Block 0] Base Color
+    // Block 0 は base color。
     DirectX::XMFLOAT4 baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-    // [Block 1] Time & Main Scroll
+    // Block 1 は time と main scroll。
     float emissiveIntensity = 1.0f;
     float currentTime = 0.0f;
     DirectX::XMFLOAT2 mainUvScrollSpeed = { 0.0f, 0.0f };
 
-    // [Block 2] Distortion Params
+    // Block 2 は distortion parameter。
     float distortionStrength = 0.0f;
     float maskEdgeFade = 0.1f;
     DirectX::XMFLOAT2 distortionUvScrollSpeed = { 0.0f, 0.0f };
 
-    // [Block 3] Dissolve Params
+    // Block 3 は dissolve parameter。
     float dissolveThreshold = 0.0f;
     float dissolveEdgeWidth = 0.05f;
 
     float maskIntensity = 1.0f;
     float maskContrast = 1.0f;
 
-    // [Block 4] Dissolve Color
+    // Block 4 は dissolve color。
     DirectX::XMFLOAT3 dissolveEdgeColor = { 1.0f, 0.5f, 0.2f };
     float _padding3 = 0.0f;
 
@@ -92,20 +89,17 @@ struct EffectMaterialConstants
     float _padding13_2 = 0.0f;
     float _padding13_3 = 0.0f;
 
-    // [Block 14] Flow Map Parameters
+    // Block 14 は flow map parameter。
     int flowTexIndex = -1;
     float flowStrength = 0.1f;
     float flowSpeed = 1.0f;
     float sideFadeWidth = 0.0f;
 
-    // [Block 15]
+    // Block 15 は追加パラメータ領域。
     float visibility = 1.0f;
     float clipStart = 0.0f;
     float clipEnd = 1.0f;
     float _padding15 = 0.0f;
-
-    // --------------------------------------------------------
-    // --------------------------------------------------------
     int subTexIndex = -1;
     int subBlendMode = 0;
     DirectX::XMFLOAT2 subUvScrollSpeed = { 0.0f, 0.0f };
@@ -136,11 +130,6 @@ struct EffectMaterialConstants
     float _padding22_3 = 0.0f;
 
 };
-
-
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 class EffectMaterial
 {
 public:

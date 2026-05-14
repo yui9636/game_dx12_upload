@@ -1,11 +1,11 @@
-#pragma once
+ï»¿#pragma once
 #include <string>
 #include <memory>
 
 class Model;
 
 /**
- * @brief E½`E½æƒŠï¿½\E½[E½XE½Æ•\E½E½E½tE½E½E½OE½E½Ç—ï¿½E½E½E½E½RE½E½E½|E½[E½lE½E½E½g
+ * @brief æç”»ãƒªã‚½ãƒ¼ã‚¹ã¨è¡¨ç¤ºãƒ•ãƒ©ã‚°ã‚’ä¿æŒã™ã‚‹ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã€‚
  */
 struct MeshComponent {
     std::shared_ptr<Model> model;

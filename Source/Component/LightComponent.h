@@ -1,3 +1,4 @@
+﻿// LightComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 #include <DirectXMath.h>
 

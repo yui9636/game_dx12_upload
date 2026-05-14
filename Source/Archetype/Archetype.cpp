@@ -1,39 +1,39 @@
-#include "Archetype.h"
+Ôªø#include "Archetype.h"
 
-// éwíË signature ÇéùÇ¬ archetype Çê∂ê¨Ç∑ÇÈÅB
-// Ç±Ç±Ç≈ÇÕï€éùÇ∑ÇÈ signature Çï€ë∂Ç∑ÇÈÇæÇØÇ≈ÅAóÒÇÕÇ‹ÇæéùÇΩÇ»Ç¢ÅB
+// ÊåáÂÆö signature „ÇíÊåÅ„Å§ archetype „ÇíÁîüÊàê„Åô„Çã„ÄÇ
+// „Åì„Åì„Åß„ÅØ‰øùÊåÅ„Åô„Çã signature „Çí‰øùÂ≠ò„Åô„Çã„Å†„Åë„Åß„ÄÅÂàó„ÅØ„Åæ„Å†ÊåÅ„Åü„Å™„ÅÑ„ÄÇ
 Archetype::Archetype(Signature sig) : m_signature(sig) {
 }
 
-// êVÇµÇ¢ component óÒÇ archetype Ç…í«â¡Ç∑ÇÈÅB
-// typeId Ç≤Ç∆Ç…óÒ index ÇãLò^ÇµÅAé¿ç€ÇÃ ComponentColumn Ç‡ê∂ê¨Ç∑ÇÈÅB
+// Êñ∞„Åó„ÅÑ component Âàó„Çí archetype „Å´ËøΩÂä†„Åô„Çã„ÄÇ
+// typeId „Åî„Å®„Å´Âàó index „ÇíË®òÈå≤„Åó„ÄÅÂÆüÈöõ„ÅÆ ComponentColumn „ÇÇÁîüÊàê„Åô„Çã„ÄÇ
 void Archetype::AddColumn(ComponentTypeID typeId, size_t elementSize,
     ComponentColumn::ConstructFn c, ComponentColumn::MoveConstructFn mc,
     ComponentColumn::MoveAssignFn ma, ComponentColumn::DestructFn d) {
 
-    // typeId Ç©ÇÁ m_columns ì‡ÇÃ index Çà¯ÇØÇÈÇÊÇ§Ç…ãLò^Ç∑ÇÈÅB
+    // typeId „Åã„Çâ m_columns ÂÜÖ„ÅÆ index „ÇíÂºï„Åë„Çã„Çà„ÅÜ„Å´Ë®òÈå≤„Åô„Çã„ÄÇ
     m_typeToIndex[typeId] = m_columns.size();
 
-    // é¿ç€ÇÃ component óÒÇí«â¡Ç∑ÇÈÅB
+    // ÂÆüÈöõ„ÅÆ component Âàó„ÇíËøΩÂä†„Åô„Çã„ÄÇ
     m_columns.emplace_back(elementSize, c, mc, ma, d);
 
-    // å„Ç©ÇÁ schema Çï°êªÇ≈Ç´ÇÈÇÊÇ§Ç…ÅAê∂ê¨èÓïÒÇ‡ï€ë∂ÇµÇƒÇ®Ç≠ÅB
+    // Âæå„Åã„Çâ schema „ÇíË§áË£Ω„Åß„Åç„Çã„Çà„ÅÜ„Å´„ÄÅÁîüÊàêÊÉÖÂ†±„ÇÇ‰øùÂ≠ò„Åó„Å¶„Åä„Åè„ÄÇ
     m_schemas[typeId] = { elementSize, c, mc, ma, d };
 }
 
-// ëº archetype ÇÃóÒíËã`ÇÇ∑Ç◊ÇƒÉRÉsÅ[Ç∑ÇÈÅB
-// entity ÉfÅ[É^ÇªÇÃÇ‡ÇÃÇ≈ÇÕÇ»Ç≠ÅAÅuÇ«ÇÃ component óÒÇéùÇ¬Ç©ÅvÇæÇØÇï°êªÇ∑ÇÈÅB
+// ‰ªñ archetype „ÅÆÂàóÂÆöÁæ©„Çí„Åô„Åπ„Å¶„Ç≥„Éî„Éº„Åô„Çã„ÄÇ
+// entity „Éá„Éº„Çø„Åù„ÅÆ„ÇÇ„ÅÆ„Åß„ÅØ„Å™„Åè„ÄÅ„Äå„Å©„ÅÆ component Âàó„ÇíÊåÅ„Å§„Åã„Äç„Å†„Åë„ÇíË§áË£Ω„Åô„Çã„ÄÇ
 void Archetype::CopySchemaFrom(const Archetype* other) {
-    // ëäéËÇ™éùÇ¬ëS schema ÇèáÇ…í«â¡Ç∑ÇÈÅB
+    // Áõ∏Êâã„ÅåÊåÅ„Å§ÂÖ® schema „ÇíÈ†Ü„Å´ËøΩÂä†„Åô„Çã„ÄÇ
     for (const auto& pair : other->m_schemas) {
         AddColumn(pair.first, pair.second.elementSize, pair.second.constructFn, pair.second.moveConstructFn, pair.second.moveAssignFn, pair.second.destructFn);
     }
 }
 
-// ëº archetype ÇÃóÒíËã`ÇÉRÉsÅ[Ç∑ÇÈÇ™ÅAéwíËÇµÇΩ typeId ÇæÇØÇÕèúäOÇ∑ÇÈÅB
-// component çÌèúëJà⁄éûÇÃêV archetype çÏê¨Ç≈égÇ§ëzíËÅB
+// ‰ªñ archetype „ÅÆÂàóÂÆöÁæ©„Çí„Ç≥„Éî„Éº„Åô„Çã„Åå„ÄÅÊåáÂÆö„Åó„Åü typeId „Å†„Åë„ÅØÈô§Â§ñ„Åô„Çã„ÄÇ
+// component ÂâäÈô§ÈÅ∑ÁßªÊôÇ„ÅÆÊñ∞ archetype ‰ΩúÊàê„Åß‰Ωø„ÅÜÊÉ≥ÂÆö„ÄÇ
 void Archetype::CopySchemaFromExcluding(const Archetype* other, ComponentTypeID excludeTypeId) {
-    // èúäOëŒè€à»äOÇÃ schema ÇæÇØÇí«â¡Ç∑ÇÈÅB
+    // Èô§Â§ñÂØæË±°‰ª•Â§ñ„ÅÆ schema „Å†„Åë„ÇíËøΩÂä†„Åô„Çã„ÄÇ
     for (const auto& pair : other->m_schemas) {
         if (pair.first != excludeTypeId) {
             AddColumn(pair.first, pair.second.elementSize, pair.second.constructFn, pair.second.moveConstructFn, pair.second.moveAssignFn, pair.second.destructFn);
@@ -41,54 +41,54 @@ void Archetype::CopySchemaFromExcluding(const Archetype* other, ComponentTypeID 
     }
 }
 
-// entity Ç archetype Ç…í«â¡Ç∑ÇÈÅB
-// ñﬂÇËílÇÕÅAÇ±ÇÃ entity Ç™äiî[Ç≥ÇÍÇΩçs indexÅB
+// entity „Çí archetype „Å´ËøΩÂä†„Åô„Çã„ÄÇ
+// Êàª„ÇäÂÄ§„ÅØ„ÄÅ„Åì„ÅÆ entity „ÅåÊ†ºÁ¥ç„Åï„Çå„ÅüË°å index„ÄÇ
 size_t Archetype::AddEntity(EntityID entity) {
-    // í«â¡ëOÇÃññîˆ index Ç™ÅAêVÇµÇ¢ entity ÇÃäiî[à íuÇ…Ç»ÇÈÅB
+    // ËøΩÂä†Ââç„ÅÆÊú´Â∞æ index „Åå„ÄÅÊñ∞„Åó„ÅÑ entity „ÅÆÊ†ºÁ¥ç‰ΩçÁΩÆ„Å´„Å™„Çã„ÄÇ
     size_t newIndex = m_entityIDs.size();
 
-    // entity ID ÇññîˆÇ÷í«â¡Ç∑ÇÈÅB
+    // entity ID „ÇíÊú´Â∞æ„Å∏ËøΩÂä†„Åô„Çã„ÄÇ
     m_entityIDs.push_back(entity);
 
-    // í«â¡Ç≥ÇÍÇΩçs index Çï‘Ç∑ÅB
+    // ËøΩÂä†„Åï„Çå„ÅüË°å index „ÇíËøî„Åô„ÄÇ
     return newIndex;
 }
 
-// éwíË index ÇÃ entity Ç archetype Ç©ÇÁçÌèúÇ∑ÇÈÅB
-// ñﬂÇËílÇÕÅAswap-back Ç…ÇÊÇË index à íuÇ÷à⁄ìÆÇµÇƒÇ´ÇΩ entity IDÅB
-// îÕàÕäOÇ»ÇÁ NULL_ID Çï‘Ç∑ÅB
+// ÊåáÂÆö index „ÅÆ entity „Çí archetype „Åã„ÇâÂâäÈô§„Åô„Çã„ÄÇ
+// Êàª„ÇäÂÄ§„ÅØ„ÄÅswap-back „Å´„Çà„Çä index ‰ΩçÁΩÆ„Å∏ÁßªÂãï„Åó„Å¶„Åç„Åü entity ID„ÄÇ
+// ÁØÑÂõ≤Â§ñ„Å™„Çâ NULL_ID „ÇíËøî„Åô„ÄÇ
 EntityID Archetype::RemoveEntity(size_t index) {
-    // îÕàÕäOÉAÉNÉZÉXÇ»ÇÁñ≥å¯ entity Çï‘Ç∑ÅB
+    // ÁØÑÂõ≤Â§ñ„Ç¢„ÇØ„Çª„Çπ„Å™„ÇâÁÑ°Âäπ entity „ÇíËøî„Åô„ÄÇ
     if (index >= m_entityIDs.size()) return Entity::NULL_ID;
 
-    // Ç∑Ç◊ÇƒÇÃ component óÒÇ©ÇÁìØÇ∂çsÇçÌèúÇ∑ÇÈÅB
+    // „Åô„Åπ„Å¶„ÅÆ component Âàó„Åã„ÇâÂêå„ÅòË°å„ÇíÂâäÈô§„Åô„Çã„ÄÇ
     for (auto& column : m_columns) {
         column.Remove(index);
     }
 
-    // çÌèúëOÇÃç≈å„îˆ entity ÇéÊìæÇ∑ÇÈÅB
+    // ÂâäÈô§Ââç„ÅÆÊúÄÂæåÂ∞æ entity „ÇíÂèñÂæó„Åô„Çã„ÄÇ
     size_t lastIndex = m_entityIDs.size() - 1;
     EntityID movedEntity = m_entityIDs[lastIndex];
 
-    // entity ID îzóÒë§Ç‡ swap-back Ç∆ìØÇ∂åãâ Ç…çáÇÌÇπÇÈÅB
+    // entity ID ÈÖçÂàóÂÅ¥„ÇÇ swap-back „Å®Âêå„ÅòÁµêÊûú„Å´Âêà„Çè„Åõ„Çã„ÄÇ
     m_entityIDs[index] = movedEntity;
     m_entityIDs.pop_back();
 
-    // index à íuÇ÷à⁄ìÆÇµÇƒÇ´ÇΩ entity Çï‘Ç∑ÅB
+    // index ‰ΩçÁΩÆ„Å∏ÁßªÂãï„Åó„Å¶„Åç„Åü entity „ÇíËøî„Åô„ÄÇ
     return movedEntity;
 }
 
-// typeId Ç…ëŒâûÇ∑ÇÈ component óÒÇéÊìæÇ∑ÇÈÅB
-// å©Ç¬Ç©ÇÁÇ»ÇØÇÍÇŒ nullptr Çï‘Ç∑ÅB
+// typeId „Å´ÂØæÂøú„Åô„Çã component Âàó„ÇíÂèñÂæó„Åô„Çã„ÄÇ
+// Ë¶ã„Å§„Åã„Çâ„Å™„Åë„Çå„Å∞ nullptr „ÇíËøî„Åô„ÄÇ
 ComponentColumn* Archetype::GetColumn(ComponentTypeID typeId) {
-    // typeId Ç©ÇÁóÒ index ÇåüçıÇ∑ÇÈÅB
+    // typeId „Åã„ÇâÂàó index „ÇíÊ§úÁ¥¢„Åô„Çã„ÄÇ
     auto it = m_typeToIndex.find(typeId);
 
-    // å©Ç¬Ç©Ç¡ÇΩÇÁëŒâûÇ∑ÇÈóÒÇï‘Ç∑ÅB
+    // Ë¶ã„Å§„Åã„Å£„Åü„ÇâÂØæÂøú„Åô„ÇãÂàó„ÇíËøî„Åô„ÄÇ
     if (it != m_typeToIndex.end()) {
         return &m_columns[it->second];
     }
 
-    // ñ≥ÇØÇÍÇŒ nullptrÅB
+    // ÁÑ°„Åë„Çå„Å∞ nullptr„ÄÇ
     return nullptr;
 }

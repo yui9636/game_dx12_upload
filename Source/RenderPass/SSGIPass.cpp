@@ -51,11 +51,8 @@ void SSGIPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
         m_hSSGIBlur = {};
         return;
     }
-
-    // =========================================================
-    // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
-    // =========================================================
-    uint32_t renderW = rc.renderWidth;
+// ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
+uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
         float renderScale = Graphics::Instance().GetRenderScale();
@@ -92,11 +89,8 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     rc.commandList->SetIndexBuffer(nullptr, IndexFormat::Uint32, 0);
 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-    // =========================================================
-    // ★ 修正：ビューポートも 857x482 の半分(428x241)に合わせる
-    // =========================================================
-    float halfWidth = (float)ssgiTex->GetWidth();
+// ★ 修正：ビューポートも 857x482 の半分(428x241)に合わせる
+float halfWidth = (float)ssgiTex->GetWidth();
     float halfHeight = (float)ssgiTex->GetHeight();
 
     // パス1: レイマーチング

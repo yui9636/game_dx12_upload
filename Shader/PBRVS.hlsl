@@ -1,5 +1,6 @@
 #include"Skinning.hlsli"
 #include "PBR.hlsli"
+// main は PBR 描画で使う頂点を変換し、ピクセルシェーダーへ必要な属性を渡す。
 
 VS_OUT main(
 float4 position : POSITION,

@@ -4,61 +4,61 @@ class Registry;
 struct RenderContext;
 class RenderQueue;
 
-// EffectSpawnRequestComponent �� autoPlay ��Ԃ����āA
-// ���ۂ� runtime instance �𐶐�����V�X�e���B
+// EffectSpawnRequestComponent の autoPlay 状態を見て、runtime instance を生成するシステム。
+// 実際の runtime instance を生成する。
 class EffectSpawnSystem
 {
 public:
-    // effect spawn �v������������B
+    // effect spawn 要求を処理する。
     static void Update(Registry& registry, float dt);
 };
 
-// �Đ��� effect �� currentTime �i�s��S������V�X�e���B
+// 再生中 effect の currentTime を進めるシステム。
 class EffectPlaybackSystem
 {
 public:
-    // playback �� dt �����i�߂�B
+    // playback を dt 分だけ進める。
     static void Update(Registry& registry, float dt);
 };
 
-// �e entity �� socket �֒Ǐ]���� effect �� transform ���X�V����V�X�e���B
+// 各 entity の socket に追従する effect の transform を更新するシステム。
 class EffectAttachmentSystem
 {
 public:
-    // attachment world transform / world velocity update.
+    // attachment の world transform と world velocity を更新する。
     static void Update(Registry& registry, float dt);
 };
 
-// effect �̃V�~�����[�V�����⏕�X�V���s���V�X�e���B
-// ����� lifetime fade �Ȃǂ̕⏕�l�X�V��S������B
+// effect のシミュレーションと補助値更新を行うシステム。
+// 揺れや lifetime fade などもここで更新する。
 class EffectSimulationSystem
 {
 public:
-    // �V�~�����[�V�����֘A�̏�Ԃ��X�V����B
+    // シミュレーション関連の状態を更新する。
     static void Update(Registry& registry, float dt);
 };
 
-// ��~�v��������I�������āAeffect �̏I���m����s���V�X�e���B
+// 停止要求を処理し、effect の終了確認を行うシステム。
 class EffectLifetimeSystem
 {
 public:
-    // effect �̎�������ƒ�~�m����s���B
+    // effect の寿命切れと停止を確認する。
     static void Update(Registry& registry, float dt);
 };
 
-// �v���r���[��p effect ���X�V����V�X�e���B
-// �G�f�B�^�m�F�����̓��ʂ� loop �����Ȃǂ����B
+// プレビュー用 effect を更新するシステム。
+// エディタ確認用の特殊な loop 処理などを持つ。
 class EffectPreviewSystem
 {
 public:
-    // preview effect �� playback ���X�V����B
+    // preview effect の playback を更新する。
     static void Update(Registry& registry, float dt);
 };
 
-// �Đ��� effect ����`��p packet �𒊏o���� RenderQueue �֐ςރV�X�e���B
+// 再生中 effect から描画用 packet を抽出して RenderQueue に積むシステム。
 class EffectExtractSystem
 {
 public:
-    // mesh effect / particle effect �̕`�� packet �𒊏o����B
+    // mesh effect / particle effect の描画 packet を抽出する。
     static void Extract(Registry& registry, RenderContext& rc, RenderQueue& queue);
 };

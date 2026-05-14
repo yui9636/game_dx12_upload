@@ -1,4 +1,5 @@
-﻿#include "DX11Buffer.h"
+﻿// DX11Buffer の RHI バックエンド実装をまとめます。
+#include "DX11Buffer.h"
 #include <stdexcept>
 
 DX11Buffer::DX11Buffer(ID3D11Device* device, uint32_t size, BufferType type, const void* initialData, uint32_t stride)

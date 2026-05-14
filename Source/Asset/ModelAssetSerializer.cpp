@@ -1,4 +1,4 @@
-#include "ModelAssetSerializer.h"
+ï»¿#include "ModelAssetSerializer.h"
 
 #include "Console/Logger.h"
 #include "Model/Model.h"
@@ -18,7 +18,7 @@
 #include <fstream>
 #include <vector>
 
-// DirectX ‚ÌŠî–{Œ^‚ğ cereal ‚ÅƒVƒŠƒAƒ‰ƒCƒY‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// DirectX ã®åŸºæœ¬å‹ã‚’ cereal ã§ã‚·ãƒªã‚¢ãƒ©ã‚¤ã‚ºã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 namespace DirectX
 {
     template<class Archive>
@@ -81,7 +81,7 @@ namespace DirectX
     }
 }
 
-// Model::Node ‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// Model::Node ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Node::serialize(Archive& archive)
 {
@@ -93,7 +93,7 @@ void Model::Node::serialize(Archive& archive)
         CEREAL_NVP(scale));
 }
 
-// Model::Material ‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// Model::Material ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Material::serialize(Archive& archive)
 {
@@ -112,7 +112,7 @@ void Model::Material::serialize(Archive& archive)
         CEREAL_NVP(color));
 }
 
-// Model::Vertex ‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// Model::Vertex ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Vertex::serialize(Archive& archive)
 {
@@ -125,7 +125,7 @@ void Model::Vertex::serialize(Archive& archive)
         CEREAL_NVP(tangent));
 }
 
-// Model::Bone ‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// Model::Bone ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Bone::serialize(Archive& archive)
 {
@@ -134,7 +134,7 @@ void Model::Bone::serialize(Archive& archive)
         CEREAL_NVP(offsetTransform));
 }
 
-// Model::Mesh ‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// Model::Mesh ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Mesh::serialize(Archive& archive)
 {
@@ -146,7 +146,7 @@ void Model::Mesh::serialize(Archive& archive)
         CEREAL_NVP(materialIndex));
 }
 
-// ƒxƒNƒgƒ‹ƒL[‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// ãƒ™ã‚¯ãƒˆãƒ«ã‚­ãƒ¼ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::VectorKeyframe::serialize(Archive& archive)
 {
@@ -155,7 +155,7 @@ void Model::VectorKeyframe::serialize(Archive& archive)
         CEREAL_NVP(value));
 }
 
-// ƒNƒH[ƒ^ƒjƒIƒ“ƒL[‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// ã‚¯ã‚©ãƒ¼ã‚¿ãƒ‹ã‚ªãƒ³ã‚­ãƒ¼ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::QuaternionKeyframe::serialize(Archive& archive)
 {
@@ -164,7 +164,7 @@ void Model::QuaternionKeyframe::serialize(Archive& archive)
         CEREAL_NVP(value));
 }
 
-// ƒm[ƒh’PˆÊƒAƒjƒ[ƒVƒ‡ƒ“‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// ãƒãƒ¼ãƒ‰å˜ä½ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::NodeAnim::serialize(Archive& archive)
 {
@@ -174,7 +174,7 @@ void Model::NodeAnim::serialize(Archive& archive)
         CEREAL_NVP(scaleKeyframes));
 }
 
-// ƒAƒjƒ[ƒVƒ‡ƒ“‘S‘Ì‚ğ cereal ‚Å•Û‘¶E“Ç‚Å‚«‚é‚æ‚¤‚É‚·‚éB
+// ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³å…¨ä½“ã‚’ cereal ã§ä¿å­˜ãƒ»èª­è¾¼ã§ãã‚‹ã‚ˆã†ã«ã™ã‚‹ã€‚
 template<class Archive>
 void Model::Animation::serialize(Archive& archive)
 {
@@ -186,7 +186,7 @@ void Model::Animation::serialize(Archive& archive)
 
 namespace
 {
-    // ƒVƒŠƒAƒ‰ƒCƒU“ü—Í‚Æ‚µ‚Ä‹–‰Â‚·‚éŒ³ƒ‚ƒfƒ‹Œ`®‚©‚Ç‚¤‚©‚ğ”»’è‚·‚éB
+    // ã‚·ãƒªã‚¢ãƒ©ã‚¤ã‚¶å…¥åŠ›ã¨ã—ã¦è¨±å¯ã™ã‚‹å…ƒãƒ¢ãƒ‡ãƒ«å½¢å¼ã‹ã©ã†ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
     bool IsSupportedSourceModel(const std::filesystem::path& path)
     {
         std::string extension = path.extension().string();
@@ -197,8 +197,8 @@ namespace
         return extension == ".fbx" || extension == ".obj" || extension == ".blend" || extension == ".gltf" || extension == ".glb";
     }
 
-    // •Û‘¶E“Ç‘ÎÛƒpƒX‚ğâ‘ÎƒpƒXŠñ‚è‚ÌÀ‘ÌƒpƒX‚Ö‰ğŒˆ‚·‚éB
-    // â‘ÎƒpƒX‚È‚ç‚»‚Ì‚Ü‚ÜA‘Š‘ÎƒpƒX‚È‚ç PathResolver ‚ğ’Ê‚·B
+    // ä¿å­˜ãƒ»èª­è¾¼å¯¾è±¡ãƒ‘ã‚¹ã‚’çµ¶å¯¾ãƒ‘ã‚¹å¯„ã‚Šã®å®Ÿä½“ãƒ‘ã‚¹ã¸è§£æ±ºã™ã‚‹ã€‚
+    // çµ¶å¯¾ãƒ‘ã‚¹ãªã‚‰ãã®ã¾ã¾ã€ç›¸å¯¾ãƒ‘ã‚¹ãªã‚‰ PathResolver ã‚’é€šã™ã€‚
     std::string ResolveSerializerPath(const std::string& path)
     {
         if (path.empty()) {
@@ -213,15 +213,15 @@ namespace
         return PathResolver::Resolve(path);
     }
 
-    // OŠpŒ`ƒCƒ“ƒfƒbƒNƒX—ñ‚Æ‚µ‚Ä—LŒø‚ÈŒÂ”‚ÖØ‚è‹l‚ß‚éB
-    // 3 ‚Ì”{”‚Å‚È‚¢’[”‚ğ—‚Æ‚·B
+    // ä¸‰è§’å½¢ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹åˆ—ã¨ã—ã¦æœ‰åŠ¹ãªå€‹æ•°ã¸åˆ‡ã‚Šè©°ã‚ã‚‹ã€‚
+    // 3 ã®å€æ•°ã§ãªã„ç«¯æ•°ã‚’è½ã¨ã™ã€‚
     size_t AlignTriangleIndexCount(size_t indexCount)
     {
         return indexCount - (indexCount % 3);
     }
 
-    // meshoptimizer ‚Ì simplifyWithAttributes —p‚ÉA
-    // –@üEÚüEUV ‚ğ float ”z—ñ‚Ö‹l‚ß’¼‚·B
+    // meshoptimizer ã® simplifyWithAttributes ç”¨ã«ã€
+    // æ³•ç·šãƒ»æ¥ç·šãƒ»UV ã‚’ float é…åˆ—ã¸è©°ã‚ç›´ã™ã€‚
     std::vector<float> BuildSimplifyAttributes(const std::vector<Model::Vertex>& vertices)
     {
         constexpr size_t kAttributeCount = 8;
@@ -244,7 +244,7 @@ namespace
         return attributes;
     }
 
-    // 1ƒƒbƒVƒ…‚Ô‚ñ‚ÌŠÈ—ª‰»E’¸“_ƒLƒƒƒbƒVƒ…Å“K‰»EƒI[ƒo[ƒhƒ[Å“K‰»E’¸“_ƒtƒFƒbƒ`Å“K‰»‚ğs‚¤B
+    // 1ãƒ¡ãƒƒã‚·ãƒ¥ã¶ã‚“ã®ç°¡ç•¥åŒ–ãƒ»é ‚ç‚¹ã‚­ãƒ£ãƒƒã‚·ãƒ¥æœ€é©åŒ–ãƒ»ã‚ªãƒ¼ãƒãƒ¼ãƒ‰ãƒ­ãƒ¼æœ€é©åŒ–ãƒ»é ‚ç‚¹ãƒ•ã‚§ãƒƒãƒæœ€é©åŒ–ã‚’è¡Œã†ã€‚
     void OptimizeMesh(
         std::vector<Model::Vertex>& vertices,
         std::vector<uint32_t>& indices,
@@ -254,15 +254,15 @@ namespace
     {
         outSimplified = false;
 
-        // OŠpŒ`‚ğ‘g‚ß‚È‚¢‚Ù‚Ç¬‚³‚¢‚È‚ç‰½‚à‚µ‚È‚¢B
+        // ä¸‰è§’å½¢ã‚’çµ„ã‚ãªã„ã»ã©å°ã•ã„ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
         if (vertices.size() < 3 || indices.size() < 3) {
             return;
         }
 
-        // ŠÈ—ª‰»‚ğŠó–]‚µA‚©‚Â target ratio ‚ª\•ª¬‚³‚¢ê‡‚¾‚¯ÀsŒó•â‚É‚·‚éB
+        // ç°¡ç•¥åŒ–ã‚’å¸Œæœ›ã—ã€ã‹ã¤ target ratio ãŒååˆ†å°ã•ã„å ´åˆã ã‘å®Ÿè¡Œå€™è£œã«ã™ã‚‹ã€‚
         const bool wantsSimplification = settings.enableSimplification && settings.targetTriangleRatio < 0.999f;
 
-        // ƒXƒLƒjƒ“ƒO•t‚«ƒƒbƒVƒ…‚ÍŒ»ó simplify ‘ÎÛŠO‚É‚·‚éB
+        // ã‚¹ã‚­ãƒ‹ãƒ³ã‚°ä»˜ããƒ¡ãƒƒã‚·ãƒ¥ã¯ç¾çŠ¶ simplify å¯¾è±¡å¤–ã«ã™ã‚‹ã€‚
         if (wantsSimplification && !hasSkinning && indices.size() >= 6) {
             size_t targetIndexCount = AlignTriangleIndexCount(
                 static_cast<size_t>(static_cast<double>(indices.size()) * std::clamp(settings.targetTriangleRatio, 0.01f, 1.0f)));
@@ -273,14 +273,14 @@ namespace
             if (targetIndexCount >= 3 && targetIndexCount < indices.size()) {
                 std::vector<uint32_t> simplified(indices.size());
 
-                // –@üEÚüEUV ‚ğ’Ç‰Á‘®«‚Æ‚µ‚Ä“n‚·B
+                // æ³•ç·šãƒ»æ¥ç·šãƒ»UV ã‚’è¿½åŠ å±æ€§ã¨ã—ã¦æ¸¡ã™ã€‚
                 const std::vector<float> attributes = BuildSimplifyAttributes(vertices);
                 const float attributeWeights[8] = { 0.75f, 0.75f, 0.75f, 0.35f, 0.35f, 0.35f, 0.5f, 0.5f };
 
                 float resultError = 0.0f;
                 const unsigned int options = settings.lockBorder ? meshopt_SimplifyLockBorder : 0;
 
-                // ‘®«•t‚«ŠÈ—ª‰»‚ğÀs‚·‚éB
+                // å±æ€§ä»˜ãç°¡ç•¥åŒ–ã‚’å®Ÿè¡Œã™ã‚‹ã€‚
                 size_t simplifiedCount = meshopt_simplifyWithAttributes(
                     simplified.data(),
                     indices.data(),
@@ -299,7 +299,7 @@ namespace
 
                 simplifiedCount = AlignTriangleIndexCount(simplifiedCount);
 
-                // —LŒø‚ÉŠÈ—ª‰»‚Å‚«‚½ê‡‚Ì‚İ·‚µ‘Ö‚¦‚éB
+                // æœ‰åŠ¹ã«ç°¡ç•¥åŒ–ã§ããŸå ´åˆã®ã¿å·®ã—æ›¿ãˆã‚‹ã€‚
                 if (simplifiedCount >= 3 && simplifiedCount < indices.size()) {
                     simplified.resize(simplifiedCount);
                     indices.swap(simplified);
@@ -308,14 +308,14 @@ namespace
             }
         }
 
-        // ’¸“_ƒLƒƒƒbƒVƒ…Å“K‰»B
+        // é ‚ç‚¹ã‚­ãƒ£ãƒƒã‚·ãƒ¥æœ€é©åŒ–ã€‚
         if (settings.optimizeVertexCache && indices.size() >= 3) {
             std::vector<uint32_t> cacheOptimized(indices.size());
             meshopt_optimizeVertexCache(cacheOptimized.data(), indices.data(), indices.size(), vertices.size());
             indices.swap(cacheOptimized);
         }
 
-        // ƒI[ƒo[ƒhƒ[Å“K‰»B
+        // ã‚ªãƒ¼ãƒãƒ¼ãƒ‰ãƒ­ãƒ¼æœ€é©åŒ–ã€‚
         if (settings.optimizeOverdraw && indices.size() >= 3) {
             std::vector<uint32_t> overdrawOptimized(indices.size());
             meshopt_optimizeOverdraw(
@@ -329,7 +329,7 @@ namespace
             indices.swap(overdrawOptimized);
         }
 
-        // ’¸“_ƒtƒFƒbƒ`Å“K‰»B
+        // é ‚ç‚¹ãƒ•ã‚§ãƒƒãƒæœ€é©åŒ–ã€‚
         if (settings.optimizeVertexFetch && indices.size() >= 3) {
             std::vector<Model::Vertex> fetchOptimized(vertices.size());
             const size_t optimizedVertexCount = meshopt_optimizeVertexFetch(
@@ -344,8 +344,8 @@ namespace
         }
     }
 
-    // o—ÍæƒpƒX‚ğŒˆ’è‚·‚éB
-    // –¾¦w’è‚ª–³‚¯‚ê‚Î sourcePath ‚ğƒx[ƒX‚É‚µAŠg’£q‚Í .cereal ‚É’u‚«Š·‚¦‚éB
+    // å‡ºåŠ›å…ˆãƒ‘ã‚¹ã‚’æ±ºå®šã™ã‚‹ã€‚
+    // æ˜ç¤ºæŒ‡å®šãŒç„¡ã‘ã‚Œã° sourcePath ã‚’ãƒ™ãƒ¼ã‚¹ã«ã—ã€æ‹¡å¼µå­ã¯ .cereal ã«ç½®ãæ›ãˆã‚‹ã€‚
     std::filesystem::path BuildOutputPath(const std::string& sourcePath, const std::string& requestedOutputPath)
     {
         std::filesystem::path output = requestedOutputPath.empty()
@@ -357,7 +357,7 @@ namespace
     }
 }
 
-// ƒ\[ƒXƒ‚ƒfƒ‹‚ğ“Ç‚İ‚İA•K—v‚È‚çÅ“K‰»‚µA.cereal Œ`®‚Ö•Û‘¶‚·‚éB
+// ã‚½ãƒ¼ã‚¹ãƒ¢ãƒ‡ãƒ«ã‚’èª­ã¿è¾¼ã¿ã€å¿…è¦ãªã‚‰æœ€é©åŒ–ã—ã€.cereal å½¢å¼ã¸ä¿å­˜ã™ã‚‹ã€‚
 ModelSerializerResult ModelAssetSerializer::Build(
     const std::string& sourcePath,
     const std::string& outputPath,
@@ -367,34 +367,34 @@ ModelSerializerResult ModelAssetSerializer::Build(
     result.sourcePath = sourcePath;
     result.outputPath = BuildOutputPath(sourcePath, outputPath).string();
 
-    // ƒ\[ƒXƒpƒX–¢w’è‚ÍƒGƒ‰[B
+    // ã‚½ãƒ¼ã‚¹ãƒ‘ã‚¹æœªæŒ‡å®šã¯ã‚¨ãƒ©ãƒ¼ã€‚
     if (sourcePath.empty()) {
         result.message = "Source model path is empty.";
         return result;
     }
 
-    // ‘Î‰Šg’£qˆÈŠO‚Íó‚¯•t‚¯‚È‚¢B
+    // å¯¾å¿œæ‹¡å¼µå­ä»¥å¤–ã¯å—ã‘ä»˜ã‘ãªã„ã€‚
     const std::filesystem::path sourceFsPath(sourcePath);
     if (!IsSupportedSourceModel(sourceFsPath)) {
         result.message = "Drop a source model asset (.fbx/.obj/.blend/.gltf/.glb).";
         return result;
     }
 
-    // ƒ\[ƒXƒpƒX‚ğÀ‘ÌƒpƒX‚Ö‰ğŒˆ‚·‚éB
+    // ã‚½ãƒ¼ã‚¹ãƒ‘ã‚¹ã‚’å®Ÿä½“ãƒ‘ã‚¹ã¸è§£æ±ºã™ã‚‹ã€‚
     const std::string resolvedSource = ResolveSerializerPath(sourcePath);
 
-    // ƒ\[ƒXƒtƒ@ƒCƒ‹‚ª‘¶İ‚µ‚È‚¢‚È‚çƒGƒ‰[B
+    // ã‚½ãƒ¼ã‚¹ãƒ•ã‚¡ã‚¤ãƒ«ãŒå­˜åœ¨ã—ãªã„ãªã‚‰ã‚¨ãƒ©ãƒ¼ã€‚
     if (!std::filesystem::exists(resolvedSource)) {
         result.message = "Source model file was not found.";
         LOG_WARN("[Serializer] Source model not found: %s", resolvedSource.c_str());
         return result;
     }
 
-    // o—ÍƒpƒX‚ğŒˆ’è‚µAÀ‘ÌƒpƒX‚Ö‰ğŒˆ‚·‚éB
+    // å‡ºåŠ›ãƒ‘ã‚¹ã‚’æ±ºå®šã—ã€å®Ÿä½“ãƒ‘ã‚¹ã¸è§£æ±ºã™ã‚‹ã€‚
     const std::filesystem::path outputFsPath = BuildOutputPath(sourcePath, outputPath);
     const std::string resolvedOutput = ResolveSerializerPath(outputFsPath.string());
 
-    // o—ÍæƒfƒBƒŒƒNƒgƒŠ‚ğ•K—v‚È‚çì¬‚·‚éB
+    // å‡ºåŠ›å…ˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’å¿…è¦ãªã‚‰ä½œæˆã™ã‚‹ã€‚
     try {
         const std::filesystem::path parentPath = std::filesystem::path(resolvedOutput).parent_path();
         if (!parentPath.empty()) {
@@ -407,14 +407,14 @@ ModelSerializerResult ModelAssetSerializer::Build(
         return result;
     }
 
-    // ƒ\[ƒXƒ‚ƒfƒ‹‚ğ“Ç‚İ‚ŞB
-    // settings.scaling ‚ğ“K—p‚µA‘æOˆø” true ‚Å“Ç‚İ‚İƒIƒvƒVƒ‡ƒ“‚ğ—LŒø‰»‚µ‚Ä‚¢‚éB
+    // ã‚½ãƒ¼ã‚¹ãƒ¢ãƒ‡ãƒ«ã‚’èª­ã¿è¾¼ã‚€ã€‚
+    // settings.scaling ã‚’é©ç”¨ã—ã€ç¬¬ä¸‰å¼•æ•° true ã§èª­ã¿è¾¼ã¿æ™‚ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã‚’æœ‰åŠ¹åŒ–ã—ã¦ã„ã‚‹ã€‚
     Model workingModel(resolvedSource.c_str(), settings.scaling, true);
 
-    // subset ”‚ğˆ—ƒƒbƒVƒ…”‚Æ‚µ‚Ä‹L˜^‚·‚éB
+    // subset æ•°ã‚’å‡¦ç†ãƒ¡ãƒƒã‚·ãƒ¥æ•°ã¨ã—ã¦è¨˜éŒ²ã™ã‚‹ã€‚
     result.processedMeshCount = static_cast<size_t>(workingModel.GetSubsetCount());
 
-    // ’¸“_”EƒCƒ“ƒfƒbƒNƒX”‚ğWŒv‚·‚é•â•ƒ‰ƒ€ƒ_B
+    // é ‚ç‚¹æ•°ãƒ»ã‚¤ãƒ³ãƒ‡ãƒƒã‚¯ã‚¹æ•°ã‚’é›†è¨ˆã™ã‚‹è£œåŠ©ãƒ©ãƒ ãƒ€ã€‚
     const auto accumulateCounts = [&](size_t& vertexCount, size_t& indexCount) {
         vertexCount = 0;
         indexCount = 0;
@@ -424,22 +424,22 @@ ModelSerializerResult ModelAssetSerializer::Build(
         }
         };
 
-    // Å“K‰»‘O‚Ì‘”‚ğ‹L˜^‚·‚éB
+    // æœ€é©åŒ–å‰ã®ç·æ•°ã‚’è¨˜éŒ²ã™ã‚‹ã€‚
     accumulateCounts(result.sourceVertexCount, result.sourceIndexCount);
 
-    // ŠÈ—ª‰»Šó–]‚©‚Ç‚¤‚©‚ğæ‚É”»’è‚µ‚Ä‚¨‚­B
+    // ç°¡ç•¥åŒ–å¸Œæœ›ã‹ã©ã†ã‹ã‚’å…ˆã«åˆ¤å®šã—ã¦ãŠãã€‚
     const bool wantsSimplification = settings.enableSimplification && settings.targetTriangleRatio < 0.999f;
 
-    // Še subset ‚ğ‡‚ÉÅ“K‰»‚·‚éB
+    // å„ subset ã‚’é †ã«æœ€é©åŒ–ã™ã‚‹ã€‚
     for (int subsetIndex = 0; subsetIndex < workingModel.GetSubsetCount(); ++subsetIndex) {
         const bool hasSkinning = !workingModel.GetMeshes()[subsetIndex].bones.empty();
 
-        // ƒXƒLƒjƒ“ƒO•t‚«‚ÅŠÈ—ª‰»‘ÎÛŠO‚É‚È‚Á‚½”‚ğ‹L˜^‚·‚éB
+        // ã‚¹ã‚­ãƒ‹ãƒ³ã‚°ä»˜ãã§ç°¡ç•¥åŒ–å¯¾è±¡å¤–ã«ãªã£ãŸæ•°ã‚’è¨˜éŒ²ã™ã‚‹ã€‚
         if (wantsSimplification && hasSkinning) {
             ++result.skippedSimplificationMeshCount;
         }
 
-        // •ÒW‰Â”\‚È mesh data ‚ğæ“¾‚·‚éB
+        // ç·¨é›†å¯èƒ½ãª mesh data ã‚’å–å¾—ã™ã‚‹ã€‚
         Model::MeshData meshData = workingModel.GetMeshData(subsetIndex);
         if (!meshData.vertices || !meshData.indices) {
             continue;
@@ -453,10 +453,10 @@ ModelSerializerResult ModelAssetSerializer::Build(
         }
     }
 
-    // Å“K‰»Œã‚Ì‘”‚ğ‹L˜^‚·‚éB
+    // æœ€é©åŒ–å¾Œã®ç·æ•°ã‚’è¨˜éŒ²ã™ã‚‹ã€‚
     accumulateCounts(result.outputVertexCount, result.outputIndexCount);
 
-    // o—Íƒtƒ@ƒCƒ‹‚ğŠJ‚­B
+    // å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ«ã‚’é–‹ãã€‚
     std::ofstream stream(resolvedOutput, std::ios::binary);
     if (!stream.is_open()) {
         result.message = "Failed to open output .cereal file.";
@@ -464,7 +464,7 @@ ModelSerializerResult ModelAssetSerializer::Build(
         return result;
     }
 
-    // cereal ƒoƒCƒiƒŠƒA[ƒJƒCƒu‚ÅŠeƒf[ƒ^‚ğ•Û‘¶‚·‚éB
+    // cereal ãƒã‚¤ãƒŠãƒªã‚¢ãƒ¼ã‚«ã‚¤ãƒ–ã§å„ãƒ‡ãƒ¼ã‚¿ã‚’ä¿å­˜ã™ã‚‹ã€‚
     try {
         cereal::BinaryOutputArchive archive(stream);
         archive(
@@ -484,14 +484,14 @@ ModelSerializerResult ModelAssetSerializer::Build(
         return result;
     }
 
-    // ƒ\[ƒX‚Æo—Í‚Ìƒ‚ƒfƒ‹ƒLƒƒƒbƒVƒ…‚ğ–³Œø‰»‚µ‚ÄAŸ‰ñÄ“Ç‚ğ‹­§‚·‚éB
+    // ã‚½ãƒ¼ã‚¹ã¨å‡ºåŠ›ã®ãƒ¢ãƒ‡ãƒ«ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’ç„¡åŠ¹åŒ–ã—ã¦ã€æ¬¡å›å†èª­è¾¼ã‚’å¼·åˆ¶ã™ã‚‹ã€‚
     ResourceManager::Instance().InvalidateModel(sourcePath);
     ResourceManager::Instance().InvalidateModel(outputFsPath.string());
 
     result.success = true;
     result.message = "Serializer build completed.";
 
-    // Œ‹‰Ê‚ğƒƒO‚Öo‚·B
+    // çµæœã‚’ãƒ­ã‚°ã¸å‡ºã™ã€‚
     LOG_INFO(
         "[Serializer] Built '%s' -> '%s' meshes=%zu simplified=%zu indices=%zu->%zu vertices=%zu->%zu",
         resolvedSource.c_str(),

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <DirectXMath.h>
 
@@ -10,7 +10,7 @@ struct HitResult
     DirectX::XMFLOAT3 otherOutPosition{};
 };
 
-enum class ColliderShape : uint8_t { Sphere = 0, Capsule = 1, Box = 2}; // Capsule: Y-up
+enum class ColliderShape : uint8_t { Sphere = 0, Capsule = 1, Box = 2}; // Capsule は Y-up として扱う。
 
 enum class ColliderAttribute : uint8_t
 {

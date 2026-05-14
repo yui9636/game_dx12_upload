@@ -150,7 +150,7 @@ void ImGuiRenderer::NewFrame()
     ImGui::NewFrame();
 }
 
-void ImGuiRenderer::Render(ID3D11DeviceContext* /*context*/)
+void ImGuiRenderer::Render(ID3D11DeviceContext*)
 {
     ImGui::Render();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -258,8 +258,8 @@ void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
 
 bool ImGuiRenderer::RebuildFontAtlas()
 {
-    // Current DX11/DX12 backends support dynamic font atlas texture updates.
-    // Fonts added to io.Fonts are uploaded by the backend during the next frame/render.
+    // 現在の DX11/DX12 バックエンドは、フォントアトラスの動的更新に対応している。
+    // io.Fonts に追加したフォントは、次フレームの描画時にバックエンド側でアップロードされる。
     return true;
 }
 

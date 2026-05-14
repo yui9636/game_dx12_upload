@@ -3,6 +3,7 @@
 #include "compute_particle_bitonic_sort.hlsli"
 
 [numthreads(BitonicSortB2Thread, 1, 1)]
+// main は bitonic sort の B2 ステージを実行し、パーティクル描画順の並び替えを進める。
 void main(uint3 dispatch_thread_id : SV_DispatchThreadID)
 {
     uint t = dispatch_thread_id.x;

@@ -26,11 +26,7 @@ ID3D11DeviceContext* DX11CommandList::GetNativeContext()
 {
     return m_dc.Get();
 }
-
-// =========================================================
 // 描画・バッファ更新
-// =========================================================
-
 void DX11CommandList::Draw(uint32_t vertexCount, uint32_t startVertexLocation)
 {
     if (m_dc) m_dc->Draw(vertexCount, startVertexLocation);
@@ -70,11 +66,7 @@ void DX11CommandList::UpdateBuffer(IBuffer* buffer, const void* data, uint32_t s
         m_dc->UpdateSubresource(dxBuffer->GetNative(), 0, nullptr, data, 0, 0);
     }
 }
-
-// =========================================================
 // シェーダー・リソースバインド
-// =========================================================
-
 void DX11CommandList::VSSetShader(IShader* shader) {
     auto dxShader = static_cast<DX11Shader*>(shader);
     auto native = dxShader ? static_cast<ID3D11VertexShader*>(dxShader->GetNative()) : nullptr;
@@ -153,11 +145,7 @@ void DX11CommandList::PSSetSamplers(uint32_t startSlot, uint32_t numSamplers, IS
     }
     m_dc->PSSetSamplers(startSlot, numSamplers, nativeSamplers.data());
 }
-
-// =========================================================
 // ステート・パイプライン設定
-// =========================================================
-
 void DX11CommandList::SetViewport(const RhiViewport& viewport)
 {
     D3D11_VIEWPORT dx11vp;
@@ -193,12 +181,9 @@ void DX11CommandList::SetRenderTarget(ITexture* renderTarget, ITexture* depthSte
 }
 
 void DX11CommandList::SetRenderTargets(uint32_t numRenderTargets, ITexture* const* renderTargets, ITexture* depthStencil) {
-    // ====================================================
-    // ❌ 修正：ここにあった早期リターンを完全に削除！！！
+// ❌ 修正：ここにあった早期リターンを完全に削除！！！
     // 0個、かつ depthStencil == nullptr の時は「全解除」の重要コマンドです
-    // ====================================================
-
-    std::vector<ID3D11RenderTargetView*> rtvs;
+std::vector<ID3D11RenderTargetView*> rtvs;
     if (numRenderTargets > 0 && renderTargets) {
         rtvs.resize(numRenderTargets, nullptr);
         for (uint32_t i = 0; i < numRenderTargets; ++i) {

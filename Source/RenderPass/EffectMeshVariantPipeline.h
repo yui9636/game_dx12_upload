@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <vector>
 #include <wrl/client.h>
 #include <d3d12.h>
+// DX12Device はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class DX12Device;
 

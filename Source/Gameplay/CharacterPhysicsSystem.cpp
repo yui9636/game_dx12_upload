@@ -1,4 +1,4 @@
-#include "CharacterPhysicsSystem.h"
+﻿#include "CharacterPhysicsSystem.h"
 #include "CharacterPhysicsComponent.h"
 #include "ActionStateComponent.h"
 #include "StageBoundsComponent.h"
@@ -13,7 +13,7 @@
 void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
     if (dt <= 0.0f) return;
 
-    // Lookup stage radius (first StageBoundsComponent)
+    // ステージ半径を取得する（最初の StageBoundsComponent）。
     float stageRadius = 9999.0f;
     {
         Signature boundsSig = CreateSignature<StageBoundsComponent>();
@@ -39,7 +39,7 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
             auto& phys  = *static_cast<CharacterPhysicsComponent*>(physCol->Get(i));
             auto& trans = *static_cast<TransformComponent*>(transCol->Get(i));
 
-            // Dead entities don't move
+            // 死亡済みエンティティは動かさない。
             if (actionCol) {
                 auto& action = *static_cast<ActionStateComponent*>(actionCol->Get(i));
                 if (action.state == CharacterState::Dead) {
@@ -49,12 +49,12 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
                 }
             }
 
-            // Gravity
+            // 重力
             if (!phys.isGround) {
                 phys.verticalVelocity += phys.gravity * dt;
             }
 
-            // Clamp horizontal movement so bad locomotion tuning cannot teleport the player.
+            // ロコモーション調整が崩れてもプレイヤーが瞬間移動しないよう、水平移動を制限する。
             if (phys.maxMoveSpeed > 0.0f) {
                 const float speedSq = phys.velocity.x * phys.velocity.x + phys.velocity.z * phys.velocity.z;
                 const float maxSpeedSq = phys.maxMoveSpeed * phys.maxMoveSpeed;
@@ -66,19 +66,19 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
                 }
             }
 
-            // Integrate position
+            // 位置を積分する。
             trans.localPosition.x += phys.velocity.x * dt;
             trans.localPosition.y += phys.verticalVelocity * dt;
             trans.localPosition.z += phys.velocity.z * dt;
 
-            // Ground clamp (flat ground at y=0)
+            // 地面へ押し戻す（y=0 の平面地形）。
             if (trans.localPosition.y <= 0.0f) {
                 trans.localPosition.y = 0.0f;
                 phys.verticalVelocity = 0.0f;
                 phys.isGround = true;
             }
 
-            // Stage bounds (circular) with outward velocity removal
+            // 円形ステージ範囲内へ押し戻し、外向き速度を取り除く。
             if (stageRadius < 9000.0f) {
                 float x = trans.localPosition.x;
                 float z = trans.localPosition.z;
@@ -92,7 +92,7 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
                         trans.localPosition.x = nx * limit;
                         trans.localPosition.z = nz * limit;
 
-                        // Remove outward velocity component
+                        // 外向きの速度成分を取り除く。
                         float outward = phys.velocity.x * nx + phys.velocity.z * nz;
                         if (outward > 0.0f) {
                             phys.velocity.x -= nx * outward;

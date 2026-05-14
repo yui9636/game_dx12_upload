@@ -1,10 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <memory>
 #include <vector>
 
 #include "RHI/ITexture.h"
+// IResourceFactory はテンプレートや設定値から編集用・実行用のデータを生成する。
 
 class IResourceFactory;
 

@@ -7,7 +7,7 @@ struct VS_OUT
     float3 tangent : TANGENT;
     float   viewDepth : VIEW_DEPTH;
     
-    // š’Ç‰Á: ‰æ–Êã‚Å‚ÌˆÊ’u‚ğŒvZ‚·‚é‚½‚ß‚Ì•Ï”
+    // â˜…è¿½åŠ : ç”»é¢ä¸Šã§ã®ä½ç½®ã‚’è¨ˆç®—ã™ã‚‹ãŸã‚ã®å¤‰æ•°
     float4 curClipPos : CUR_CLIP_POS;
     float4 prevClipPos : PREV_CLIP_POS;
 };
@@ -15,10 +15,10 @@ struct VS_OUT
 
 struct PointLight
 {
-    float3 position; // ˆÊ’u
-    float range; // ”ÍˆÍ
-    float3 color; // F
-    float intensity; // ‹­“x
+    float3 position; // ä½ç½®
+    float range; // ç¯„å›²
+    float3 color; // è‰²
+    float intensity; // å¼·åº¦
 };
 
 
@@ -39,12 +39,12 @@ cbuffer CbScene : register(b7)
     float renderW;
     float renderH;
     
-    float pointLightCount; // —LŒø‚Èƒ‰ƒCƒg”
+    float pointLightCount; // æœ‰åŠ¹ãªãƒ©ã‚¤ãƒˆæ•°
 
     float prevJitterX;
     float prevJitterY;
     
-    // ”z—ñ (Å‘å8ŒÂ‚Æ‰¼’è)
+    // é…åˆ— (æœ€å¤§8å€‹ã¨ä»®å®š)
     PointLight pointLights[8];
 };
 
@@ -59,9 +59,9 @@ cbuffer CbMesh : register(b1)
 
 cbuffer CbShadowMap : register(b4)
 {
-    row_major float4x4 lightViewProjections[3]; // ŠeƒJƒXƒP[ƒh‚Ìs—ñ
-    float4 cascadeSplits; // •ªŠ„‹——£
-    float4 shadowColor_CSM; // ‰e‚ÌF
-    float4 shadowBias_CSM; // ‰eƒoƒCƒAƒX
+    row_major float4x4 lightViewProjections[3]; // å„ã‚«ã‚¹ã‚±ãƒ¼ãƒ‰ã®è¡Œåˆ—
+    float4 cascadeSplits; // åˆ†å‰²è·é›¢
+    float4 shadowColor_CSM; // å½±ã®è‰²
+    float4 shadowBias_CSM; // å½±ãƒã‚¤ã‚¢ã‚¹
 };
 

@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include <imgui.h>
+// 変更を適用する。EditorGrayTheme は計算済みの結果を対象オブジェクトへ反映する。
 
 inline void ApplyEditorGrayTheme()
 {

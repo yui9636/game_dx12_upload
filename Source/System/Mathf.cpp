@@ -1,5 +1,6 @@
-#include "Mathf.h"
+﻿#include "Mathf.h"
 #include <cstdlib>
+// Mathf::Lerp はこのモジュールの実行時処理を構成する補助処理を行う。
 
 float Mathf::Lerp(float a, float b, float t)
 {

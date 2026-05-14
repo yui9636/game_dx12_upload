@@ -1,4 +1,5 @@
-#include "TransformUtils.h"
+﻿#include "TransformUtils.h"
+// TransformUtils::MatrixToRollPitchYaw はこのモジュールの実行時処理を構成する補助処理を行う。
 
 bool TransformUtils::MatrixToRollPitchYaw(const DirectX::XMFLOAT4X4& m, float& pitch, float& yaw, float& roll)
 {

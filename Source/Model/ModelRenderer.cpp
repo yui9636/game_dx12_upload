@@ -147,7 +147,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
     DepthState lastDepthState = DepthState::EnumCount;
     RasterizerState lastRasterizerState = RasterizerState::EnumCount;
 
-    // Get active buffers
+    // 現在有効な buffer を取得する。
     IBuffer* instanceBuf = rc.activeInstanceBuffer;
     IBuffer* drawArgsBuf = rc.activeDrawArgsBuffer;
     const bool useIndirect = instanceBuf && drawArgsBuf;
@@ -264,7 +264,7 @@ void ModelRenderer::RenderPreparedOpaque(const RenderContext& rc, bool forceShad
                 rc.commandList->ExecuteIndexedIndirect(drawArgsBuf, cmd.drawArgsIndex * DRAW_ARGS_STRIDE);
                 shader->End(rc);
             } else {
-                // CPU fallback
+                // CPU fallback 経路。
                 shader->Begin(rc);
                 const uint32_t begin = cmd.firstInstance;
                 const uint32_t end = cmd.firstInstance + cmd.instanceCount;

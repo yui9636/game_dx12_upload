@@ -119,14 +119,14 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
         }
     }
 
-    // 2b. DX12: Begin command list + back buffer transition + clear
+    // 2b. DX12 では command list 開始、back buffer 遷移、clear を行う。
     if (g.GetAPI() == GraphicsAPI::DX12) {
         auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
         dx12Cmd->Begin();
         ITexture* bb = g.GetBackBufferTexture();
         if (bb) {
             m_commandList->TransitionBarrier(bb, ResourceState::RenderTarget);
-            float bbClear[4] = { 0.0f, 0.2f, 0.4f, 1.0f }; // DX12 test: blue tint
+            float bbClear[4] = { 0.0f, 0.2f, 0.4f, 1.0f }; // DX12 確認用の青み clear 色。
             m_commandList->ClearColor(bb, bbClear);
         }
     }
@@ -168,11 +168,8 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
 
     rc.sceneColorTexture = (!isDx12 && fb) ? fb->GetColorTexture(0) : nullptr;
     rc.sceneDepthTexture = (!isDx12 && fb) ? fb->GetDepthTexture() : nullptr;
-
-    // ====================================================
-    // 4. ECSから「メインカメラ」を探すロジック
-    // ====================================================
-    auto archetypes = registry.GetAllArchetypes();
+// 4. ECSから「メインカメラ」を探すロジック
+auto archetypes = registry.GetAllArchetypes();
     Signature mainCamSig = CreateSignature<CameraMatricesComponent, CameraMainTagComponent>();
 
     bool cameraFound = false;
@@ -250,11 +247,8 @@ RenderContext RenderPipeline::BeginFrame(Registry& registry, FrameBuffer* target
         fb->SetRenderTargets(rc.commandList);
     }
     rc.commandList->SetViewport(rc.mainViewport);
-
-    // ====================================================
-    // 8. アスペクト比・FOV・Near/Far の計算
-    // ====================================================
-    float renderH_Safe = rc.renderHeight > 0 ? static_cast<float>(rc.renderHeight) : 1.0f;
+// 8. アスペクト比・FOV・Near/Far の計算
+float renderH_Safe = rc.renderHeight > 0 ? static_cast<float>(rc.renderHeight) : 1.0f;
     rc.aspect = static_cast<float>(rc.renderWidth) / renderH_Safe;
 
     float m22 = rc.projectionMatrix._22;
@@ -901,12 +895,9 @@ void RenderPipeline::BlitSceneToDisplay(RenderContext& rc)
 void RenderPipeline::EndFrame(RenderContext& rc)
 {
     Graphics& g = Graphics::Instance();
-
-    // ====================================================
-    // バックバッファをレンダーターゲットとしてセット
+// バックバッファをレンダーターゲットとしてセット
     // DX12: コマンドリストはまだ開いたまま（ImGui描画のため）
-    // ====================================================
-    ITexture* backBuffer = g.GetBackBufferTexture();
+ITexture* backBuffer = g.GetBackBufferTexture();
 
     if (backBuffer) {
         rc.commandList->SetRenderTarget(backBuffer, nullptr);
@@ -920,7 +911,7 @@ void RenderPipeline::SubmitFrame(RenderContext& rc)
 
     Graphics& g = Graphics::Instance();
 
-    // Keep GPU buffers alive until GPU finishes (prevents use-after-free)
+    // GPU 完了までバッファを保持し、解放済み参照を防ぐ。
     auto& slot = m_inFlightResources[m_inFlightIndex % kMaxInFlight];
     slot.instanceBuffer = rc.preparedInstanceBuffer;
     slot.instanceStructuredBuffer = rc.preparedVisibleInstanceStructuredBuffer;

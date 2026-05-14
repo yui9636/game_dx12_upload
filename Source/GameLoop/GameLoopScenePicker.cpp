@@ -1,3 +1,4 @@
+﻿// GameLoopScenePicker の GameLoop 関連実装をまとめます。
 #include "GameLoopScenePicker.h"
 
 #include "Asset/AssetManager.h"

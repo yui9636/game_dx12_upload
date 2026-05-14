@@ -1,3 +1,4 @@
+﻿// DX12DescriptorAllocator の RHI バックエンド実装をまとめます。
 #include "DX12DescriptorAllocator.h"
 #include <cassert>
 

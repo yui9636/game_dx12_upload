@@ -1,15 +1,12 @@
-//=============================================================================
-// Hologram.hlsli
-// ƒzƒƒOƒ‰ƒ€c‘œ—p‚Ì‹¤’Ê’è‹`
-//=============================================================================
-
-// ’¸“_ƒVƒF[ƒ_[‚©‚ç‚Ìo—Í\‘¢‘Ì
+// ãƒ›ãƒ­ã‚°ãƒ©ãƒ æç”»ã§å…±æœ‰ã™ã‚‹å®šæ•°ã¨å…¥å‡ºåŠ›æ§‹é€ ã‚’å®šç¾©ã™ã‚‹ã€‚
+// ãƒ›ãƒ­ã‚°ãƒ©ãƒ æ®‹åƒç”¨ã®å…±é€šå®šç¾©
+// é ‚ç‚¹ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã‹ã‚‰ã®å‡ºåŠ›æ§‹é€ ä½“
 struct VS_OUT
 {
-    float4 position : SV_POSITION; // ƒXƒNƒŠ[ƒ“À•W
-    float3 worldPos : POSITION; // ƒ[ƒ‹ƒhÀ•W
-    float3 normal : NORMAL; // –@ü
-    float2 texcoord : TEXCOORD0; // UVÀ•Wi¡‰ñ‚ÍŒvZƒƒCƒ“‚¾‚ª”O‚Ì‚½‚ßj
+    float4 position : SV_POSITION; // ã‚¹ã‚¯ãƒªãƒ¼ãƒ³åº§æ¨™
+    float3 worldPos : POSITION; // ãƒ¯ãƒ¼ãƒ«ãƒ‰åº§æ¨™
+    float3 normal : NORMAL; // æ³•ç·š
+    float2 texcoord : TEXCOORD0; // UVåº§æ¨™ï¼ˆä»Šå›ã¯è¨ˆç®—ãƒ¡ã‚¤ãƒ³ã ãŒå¿µã®ãŸã‚ï¼‰
 };
 
 
@@ -24,16 +21,16 @@ cbuffer CbScene : register(b0)
 
 cbuffer CbHologram : register(b1)
 {
-    float4 baseColor; // ƒx[ƒXF (RGB) + ‘S‘ÌƒAƒ‹ƒtƒ@ (A)
-    float4 rimColor; // ƒŠƒ€”­ŒõF
+    float4 baseColor; // ãƒ™ãƒ¼ã‚¹è‰² (RGB) + å…¨ä½“ã‚¢ãƒ«ãƒ•ã‚¡ (A)
+    float4 rimColor; // ãƒªãƒ ç™ºå…‰è‰²
     
-    float fresnelPower; // 4 bytes
-    float scanlineFreq; // 4 bytes
-    float scanlineSpeed; // 4 bytes
-    float glitchIntensity; // 4 bytes (Œv 16 bytes)
+    float fresnelPower; // 4 ãƒã‚¤ãƒˆã€‚
+    float scanlineFreq; // 4 ãƒã‚¤ãƒˆã€‚
+    float scanlineSpeed; // 4 ãƒã‚¤ãƒˆã€‚
+    float glitchIntensity; // 4 bytes (è¨ˆ 16 bytes)
 
     
-    float time; // 4 bytes (C++‚Æˆê’v)
-    float alpha; // šC³: C++‚É‡‚í‚¹‚Ä float alpha ‚ğ–¾¦
-    float2 _padding; // 8 bytes (Œv 16 bytes)
+    float time; // 4 bytes (C++ã¨ä¸€è‡´)
+    float alpha; // â˜…ä¿®æ­£: C++ã«åˆã‚ã›ã¦ float alpha ã‚’æ˜ç¤º
+    float2 _padding; // 8 bytes (è¨ˆ 16 bytes)
 };

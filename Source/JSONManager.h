@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <nlohmann/json.hpp>
@@ -30,6 +30,7 @@ namespace nlohmann {
         }
     };
 }
+// JSONManager は T/T/filePath/jsonData を中心に、実行時やエディターで共有する状態を保持する。
 
 class JSONManager {
 public:

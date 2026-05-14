@@ -223,8 +223,8 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         ao = m_whiteFallback.get();
     }
 
-    // Use standard PSSetTextures path for all APIs.
-    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
+    // 全 API で標準の PSSetTextures 経路を使う。
+    // SetDescriptorHeaps の多用で root descriptor table が無効化される問題を避ける。
     {
         ITexture* gbuffers[] = { gbuffer0, gbuffer1, gbuffer2, ao };
         rc.commandList->PSSetTextures(0, 4, gbuffers);
@@ -241,7 +241,7 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
 
     rc.commandList->Draw(3, 0);
 
-    // PSSetTextures path uses the frame heap — no heap restore needed.
+    // PSSetTextures 経路は frame heap を使うため、heap restore は不要。
 
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
         rc.commandList->PSSetSampler(2, nullptr);

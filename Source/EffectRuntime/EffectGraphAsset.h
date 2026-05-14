@@ -9,10 +9,7 @@
 #include <DirectXMath.h>
 #include "RenderContext/RenderState.h"
 #include "EffectRuntime/EffectMeshVariant.h"
-
-// ==========================================================
 // Effect Graph のノード種別
-// ==========================================================
 enum class EffectGraphNodeType : uint8_t
 {
     Output = 0,       // グラフ終端
@@ -38,8 +35,8 @@ enum class EffectPinKind : uint8_t
 enum class EffectValueType : uint8_t
 {
     Flow = 0,    // 実行フロー
-    Float,       // float
-    Vec3,        // vec3
+    Float,       // float 値。
+    Vec3,        // vec3 値。
     Color,       // 色
     Mesh,        // メッシュ参照
     Particle     // パーティクルデータ
@@ -73,11 +70,11 @@ enum class EffectParticleSortMode : uint8_t
 // パーティクルブレンド方式。
 enum class EffectParticleBlendMode : uint8_t
 {
-    PremultipliedAlpha = 0,  // ONE / INV_SRC_ALPHA
-    Additive,                // ONE / ONE
-    AlphaBlend,              // SRC_ALPHA / INV_SRC_ALPHA
-    Multiply,                // DEST_COLOR / ZERO
-    SoftAdditive,            // ONE / INV_SRC_COLOR
+    PremultipliedAlpha = 0,  // blend は ONE / INV_SRC_ALPHA。
+    Additive,                // blend は ONE / ONE。
+    AlphaBlend,              // blend は SRC_ALPHA / INV_SRC_ALPHA。
+    Multiply,                // blend は DEST_COLOR / ZERO。
+    SoftAdditive,            // blend は ONE / INV_SRC_COLOR。
     EnumCount
 };
 
@@ -91,10 +88,7 @@ enum class EffectSpawnShapeType : uint8_t
     Circle,
     Line
 };
-
-// ==========================================================
 // パーティクル最大数まわりの定数
-// ==========================================================
 inline constexpr uint32_t kEffectParticleDefaultMaxParticles = 5000000u;
 inline constexpr uint32_t kEffectParticleMinSuggestedMaxParticles = 512u;
 inline constexpr uint32_t kEffectParticleHardMaxParticles = 1u << 23;
@@ -164,11 +158,7 @@ inline bool IsEffectParticleMaxParticlesTooLow(
     return static_cast<uint32_t>(authoredMaxParticles) <
         EstimateEffectParticleRecommendedMaxParticles(spawnRate, burstCount, particleLifetime, duration);
 }
-
-// ==========================================================
 // Graph 基本構造
-// ==========================================================
-
 // グラフ上の 1 ピン。
 struct EffectGraphPin
 {
@@ -295,11 +285,7 @@ struct EffectGraphAsset
         return it != pins.end() ? &(*it) : nullptr;
     }
 };
-
-// ==========================================================
 // ノード種別ユーティリティ
-// ==========================================================
-
 // ノード種別を表示文字列へ変換する。
 inline const char* EffectGraphNodeTypeToString(EffectGraphNodeType type)
 {
@@ -359,11 +345,7 @@ inline bool IsEffectSideEffectNode(EffectGraphNodeType type)
         return false;
     }
 }
-
-// ==========================================================
 // Graph 作成補助
-// ==========================================================
-
 // ノード種別に応じたテンプレートピンを追加する。
 inline void AppendEffectTemplatePins(EffectGraphAsset& asset, const EffectGraphNode& node)
 {
@@ -532,11 +514,7 @@ inline EffectGraphAsset CreateDefaultEffectGraphAsset()
 
     return asset;
 }
-
-// ==========================================================
 // コンパイル後データ
-// ==========================================================
-
 // コンパイル後に残る公開パラメータ情報。
 struct EffectCompiledParameter
 {
@@ -575,7 +553,7 @@ struct EffectMeshRendererDescriptor
     RasterizerState rasterizerState = RasterizerState::SolidCullBack;
     DirectX::XMFLOAT4 tint = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-    // Phase A: Mesh Variant System 用設定。
+    // Phase A は Mesh Variant System。 用設定。
     EffectMeshVariantParams variantParams;
 };
 
@@ -645,13 +623,13 @@ struct EffectParticleSimulationLayout
     DirectX::XMFLOAT2 gradientMidTimes = { 0.33f, 0.66f };
     uint32_t gradientKeyCount = 2;
 
-    // Phase 2: Attractor/Repeller。
+    // Phase 2 は Attractor / Repeller。
     DirectX::XMFLOAT4 attractors[4] = {};
     DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
     DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f };
     uint32_t attractorCount = 0;
 
-    // Phase 2: GPU Collision。
+    // Phase 2 は GPU Collision。
     bool collisionEnabled = false;
     DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 collisionSpheres[4] = {};
@@ -663,7 +641,7 @@ struct EffectParticleSimulationLayout
     DirectX::XMFLOAT3 meshInitialScale = { 1.0f, 1.0f, 1.0f };
     float             meshScaleRandom = 0.0f;        // 0..1: ±一様倍率
     DirectX::XMFLOAT3 meshAngularAxis = { 0.0f, 1.0f, 0.0f };
-    float             meshAngularSpeed = 0.0f;        // rad/s (base)
+    float             meshAngularSpeed = 0.0f;        // 基準角速度を rad/s で保持する。
     DirectX::XMFLOAT3 meshAngularOrientRandom = { 0.0f, 0.0f, 0.0f }; // yaw/pitch/roll の ±範囲 (rad)
     float             meshAngularSpeedRandom = 0.0f;  // 0..1: 角速度の ±倍率
 };

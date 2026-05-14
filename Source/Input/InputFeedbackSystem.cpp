@@ -1,4 +1,4 @@
-#include "InputFeedbackSystem.h"
+﻿#include "InputFeedbackSystem.h"
 #include "VibrationRequestComponent.h"
 #include "InputUserComponent.h"
 #include "IInputBackend.h"
@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 void InputFeedbackSystem::Update(Registry& registry, IInputBackend& backend, float dt) {
-    // Collect vibration requests per user
+    // user ごとに vibration request を集約する。
     struct MergedVibration {
         float left = 0.0f;
         float right = 0.0f;
@@ -19,7 +19,7 @@ void InputFeedbackSystem::Update(Registry& registry, IInputBackend& backend, flo
     Signature vibSig = CreateSignature<VibrationRequestComponent>();
     auto archetypes = registry.GetAllArchetypes();
 
-    // Track entities to remove VibrationRequestComponent from
+    // VibrationRequestComponent を外す entity を記録する。
     std::vector<std::pair<Archetype*, size_t>> expired;
 
     for (auto* arch : archetypes) {
@@ -40,7 +40,7 @@ void InputFeedbackSystem::Update(Registry& registry, IInputBackend& backend, flo
         }
     }
 
-    // Find device IDs for users and apply vibration
+    // user に対応する device ID を探して vibration を適用する。
     Signature userSig = CreateSignature<InputUserComponent>();
     for (auto* arch : archetypes) {
         if (!SignatureMatches(arch->GetSignature(), userSig)) continue;
@@ -51,12 +51,12 @@ void InputFeedbackSystem::Update(Registry& registry, IInputBackend& backend, flo
             auto& user = *static_cast<InputUserComponent*>(userCol->Get(i));
             auto it = merged.find(user.userId);
             if (it != merged.end()) {
-                // Use deviceMask as a rough device ID
+                // deviceMask を簡易的な device ID として扱う。
                 backend.SetVibration(user.deviceMask, it->second.left, it->second.right);
             }
         }
     }
 
-    // Stop vibration for users with no active request
-    // (Not implemented here for simplicity; vibration auto-stops via SDL duration)
+    // active request がない user の vibration を停止する。
+    // ここでは簡略化し、SDL duration による自動停止に任せる。
 }

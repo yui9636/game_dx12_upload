@@ -188,7 +188,7 @@ namespace PlayerEditorInternal
         return false;
     }
 
-    // Spec §9: Setup Full Player generates Move axes + Attack/Dodge actions.
+    // 仕様 §9: Setup Full Player は Move 軸と Attack / Dodge アクションを生成する。
     bool EnsurePlayerInputMap(InputActionMapAsset& map)
     {
         bool changed = false;
@@ -212,7 +212,7 @@ namespace PlayerEditorInternal
         return changed;
     }
 
-    // Spec §11: ActionDatabase Attack1〜3 nodes.
+    // 仕様 §11: ActionDatabase の Attack1〜3 ノードを用意する。
     bool EnsureAttackComboActionNodes(ActionDatabaseComponent& database,
         int (*resolveAnim)(int slot, void* user), void* user)
     {

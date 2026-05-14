@@ -168,7 +168,7 @@ private:
     // GameLayer が存在しない場合の代替 Registry。
     Registry m_emptyRegistry;
 
-    // ---- GameLoop ----
+    // GameLoop 関連の状態。
     // GameLoop の編集用データ。
     GameLoopAsset m_gameLoopAsset;
 

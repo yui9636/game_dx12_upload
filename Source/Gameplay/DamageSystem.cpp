@@ -1,4 +1,4 @@
-#include "DamageSystem.h"
+﻿#include "DamageSystem.h"
 
 #include "Collision/Collision.h"
 #include "Collision/CollisionManager.h"
@@ -66,10 +66,10 @@ namespace
         return dmg > 0 ? dmg : 1;
     }
 
-    // The Body collider element on the victim carries the per-material
-    // hit feedback paths. Look up the element by its CollisionManager
-    // registeredId so we pick the right body part (head / torso / leg
-    // can each have their own VFX / SE).
+    // 被弾側の Body collider 要素が、素材ごとの被弾演出パスを持つ。
+    // CollisionManager の registeredId から要素を引き、
+    // 正しい部位（頭 / 胴 / 脚など）を選ぶ。
+    // 各部位は個別の VFX / SE を持てる。
     const ColliderComponent::Element* ResolveVictimBodyElement(
         Registry& registry,
         EntityID victim,
@@ -101,7 +101,7 @@ void DamageSystem::Update(Registry& registry)
         if (!a || !b) continue;
         if (!a->enabled || !b->enabled) continue;
 
-        // Need exactly one Attack and one Body.
+        // Attack と Body が 1 つずつ必要。
         const Collider* attackCol = nullptr;
         const Collider* bodyCol   = nullptr;
         uint32_t bodyColliderId = 0;
@@ -118,16 +118,16 @@ void DamageSystem::Update(Registry& registry)
         if (Entity::IsNull(attacker) || Entity::IsNull(victim)) continue;
         if (attacker == victim) continue;
 
-        // Friendly fire filter.
+        // 味方への誤爆を除外する。
         const TeamComponent* atkTeam = registry.GetComponent<TeamComponent>(attacker);
         const TeamComponent* vicTeam = registry.GetComponent<TeamComponent>(victim);
         if (atkTeam && vicTeam && atkTeam->teamId == vicTeam->teamId) continue;
 
-        // Multi-hit prevention (same swing).
+        // 同一スイングでの多段ヒットを防ぐ。
         HitboxTrackingComponent* track = registry.GetComponent<HitboxTrackingComponent>(attacker);
         if (track && AlreadyHit(*track, victim)) continue;
 
-        // Skip dead / invincible targets.
+        // 死亡中または無敵中の対象は飛ばす。
         const HealthComponent* vh = registry.GetComponent<HealthComponent>(victim);
         if (!vh || vh->isDead || vh->isInvincible || vh->health <= 0) continue;
 
@@ -142,15 +142,15 @@ void DamageSystem::Update(Registry& registry)
         if (atkTr && vicTr) {
             ev.knockbackDir = HorizontalDirection(atkTr->worldPosition, vicTr->worldPosition);
         }
-        ev.knockbackPower = 0.0f; // v1: reaction-driven, no positional shove
+        ev.knockbackPower = 0.0f; // v1: リアクション主導で、位置押し出しはしない。
         ev.hitStopSec     = 0.08f;
         ev.reactionKind   = 0;
 
-        // Hit feedback paths come from the victim's Body collider element
-        // (i.e. the receiver's material). Authoring lives in the Skeleton
-        // panel where Body colliders are placed. Empty strings mean the
-        // authoring side left them blank, which HealthSystem treats as
-        // silent / no VFX.
+        // 被弾演出パスは被弾側の Body collider 要素から取得する。
+        // つまり受け手側の素材設定であり、編集は Skeleton パネルで行う。
+        // Body collider を置く場所と同じパネルで設定する。空文字なら、
+        // 編集側で未指定という意味になり、HealthSystem はそれを
+        // 無音・VFX なしとして扱う。
         if (const auto* victimBody = ResolveVictimBodyElement(registry, victim, bodyColliderId)) {
             ev.hitVfxPath = victimBody->hitVfxPath;
             ev.hitSfxPath = victimBody->hitSfxPath;

@@ -1,4 +1,4 @@
-
+﻿
 #pragma once
 
 #include <map>
@@ -8,6 +8,7 @@
 #include <assimp/scene.h>
 #include "Model/Model.h"
 
+// AssimpImporter は Assimp の scene から mesh、material、node、animation を Model 用データへ変換する。
 class AssimpImporter
 {
 private:
@@ -15,7 +16,6 @@ private:
 	using MaterialList = std::vector<Model::Material>;
 	using NodeList = std::vector<Model::Node>;
 	using AnimationList = std::vector<Model::Animation>;
-	//using GeometryList = std::vector<Model::Geometry>;
 public:
 	AssimpImporter(const char* filename);
 

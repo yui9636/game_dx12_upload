@@ -1,4 +1,4 @@
-#include "ThumbnailGenerator.h"
+ï»¿#include "ThumbnailGenerator.h"
 #include "Render/OffscreenRenderer.h"
 #include "Graphics.h"
 #include "System/ResourceManager.h"
@@ -15,57 +15,57 @@
 
 using namespace DirectX;
 
-// ƒTƒ€ƒlƒCƒ‹•`‰æ‚ÌƒNƒŠƒAƒJƒ‰[B
+// ã‚µãƒ ãƒã‚¤ãƒ«æç”»æ™‚ã®ã‚¯ãƒªã‚¢ã‚«ãƒ©ãƒ¼ã€‚
 static constexpr float CLEAR_R = 0.2f;
 static constexpr float CLEAR_G = 0.2f;
 static constexpr float CLEAR_B = 0.22f;
 static constexpr float CLEAR_A = 1.0f;
 
-// singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+// singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
 ThumbnailGenerator& ThumbnailGenerator::Instance() {
     static ThumbnailGenerator instance;
     return instance;
 }
 
-// “Á•Ê‚È”jŠüˆ—‚Í•s—v‚È‚Ì‚Å defaultB
+// ç‰¹åˆ¥ãªç ´æ£„å‡¦ç†ã¯ä¸è¦ãªã®ã§ defaultã€‚
 ThumbnailGenerator::~ThumbnailGenerator() = default;
 
-// OffscreenRenderer ‚ª—˜—p‰Â”\‚©‚Ç‚¤‚©‚ğ•Ô‚·B
+// OffscreenRenderer ãŒåˆ©ç”¨å¯èƒ½ã‹ã©ã†ã‹ã‚’è¿”ã™ã€‚
 bool ThumbnailGenerator::IsAvailable() const {
     return m_offscreen && m_offscreen->IsReady();
 }
 
-// •K—v‚É‚È‚Á‚½‚¾‚¯“à•”ƒŠƒ\[ƒX‚ğ‰Šú‰»‚·‚éB
-// ƒeƒNƒXƒ`ƒƒƒv[ƒ‹‚Æ‹¤’Ê‹…ƒ‚ƒfƒ‹‚ğ€”õ‚µ‚ÄA‹N“®ƒRƒXƒg‚ğŒã‚ë“|‚µ‚É‚·‚éB
+// å¿…è¦ã«ãªã£ãŸæ™‚ã ã‘å†…éƒ¨ãƒªã‚½ãƒ¼ã‚¹ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
+// ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒ—ãƒ¼ãƒ«ã¨å…±é€šçƒãƒ¢ãƒ‡ãƒ«ã‚’æº–å‚™ã—ã¦ã€èµ·å‹•ã‚³ã‚¹ãƒˆã‚’å¾Œã‚å€’ã—ã«ã™ã‚‹ã€‚
 bool ThumbnailGenerator::LazyInitialize()
 {
-    // ‰‰ñƒŠƒNƒGƒXƒg‚É‚¾‚¯ƒv[ƒ‹‚Æ‹¤’Ê‹…ƒ‚ƒfƒ‹‚ğ—pˆÓ‚µ‚ÄA‹N“®ƒRƒXƒg‚ğ—}‚¦‚éB
+    // åˆå›ãƒªã‚¯ã‚¨ã‚¹ãƒˆæ™‚ã«ã ã‘ãƒ—ãƒ¼ãƒ«ã¨å…±é€šçƒãƒ¢ãƒ‡ãƒ«ã‚’ç”¨æ„ã—ã¦ã€èµ·å‹•ã‚³ã‚¹ãƒˆã‚’æŠ‘ãˆã‚‹ã€‚
     m_initialized = false;
     m_texturePool = PreviewTexturePool{};
     m_sphereModel.reset();
 
-    // OffscreenRenderer ‚ª–³‚¯‚ê‚Îg‚¦‚È‚¢B
+    // OffscreenRenderer ãŒç„¡ã‘ã‚Œã°ä½¿ãˆãªã„ã€‚
     if (!m_offscreen || !m_offscreen->IsReady()) {
         LOG_ERROR("[ThumbnailGenerator] OffscreenRenderer unavailable.");
         return false;
     }
 
-    // ƒŠƒ\[ƒX¶¬ƒtƒ@ƒNƒgƒŠ‚ğæ“¾‚·‚éB
+    // ãƒªã‚½ãƒ¼ã‚¹ç”Ÿæˆãƒ•ã‚¡ã‚¯ãƒˆãƒªã‚’å–å¾—ã™ã‚‹ã€‚
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) {
         return false;
     }
 
-    // ‹¤’ÊƒNƒŠƒAƒJƒ‰[‚ğw’è‚µ‚ÄAƒTƒ€ƒlƒCƒ‹—pƒeƒNƒXƒ`ƒƒƒv[ƒ‹‚ğ‰Šú‰»‚·‚éB
+    // å…±é€šã‚¯ãƒªã‚¢ã‚«ãƒ©ãƒ¼ã‚’æŒ‡å®šã—ã¦ã€ã‚µãƒ ãƒã‚¤ãƒ«ç”¨ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒ—ãƒ¼ãƒ«ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
     const float clearColor[4] = { CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A };
     m_texturePool.Initialize(factory, THUMB_SIZE, THUMB_SIZE,
         TextureFormat::RGBA8_UNORM, TextureFormat::D24_UNORM_S8_UINT,
         clearColor, static_cast<uint32_t>(MAX_CACHE));
 
-    // ƒ}ƒeƒŠƒAƒ‹ƒvƒŒƒrƒ…[—p‚Ì‹…ƒ‚ƒfƒ‹‚ğ–‘Oæ“¾‚·‚éB
+    // ãƒãƒ†ãƒªã‚¢ãƒ«ãƒ—ãƒ¬ãƒ“ãƒ¥ãƒ¼ç”¨ã®çƒãƒ¢ãƒ‡ãƒ«ã‚’äº‹å‰å–å¾—ã™ã‚‹ã€‚
     m_sphereModel = ResourceManager::Instance().GetModel("Data/Model/sphere/fbx_sphere_001.fbx", 1.0f, true);
 
-    // ‹¤—L depth ‚ªì‚ê‚Ä‚¢‚ê‚Î‰Šú‰»¬Œ÷‚Æ‚İ‚È‚·B
+    // å…±æœ‰ depth ãŒä½œã‚Œã¦ã„ã‚Œã°åˆæœŸåŒ–æˆåŠŸã¨ã¿ãªã™ã€‚
     m_initialized = (m_texturePool.GetSharedDepth() != nullptr);
     if (m_initialized) {
         LOG_INFO("[ThumbnailGenerator] Initialized.");
@@ -73,7 +73,7 @@ bool ThumbnailGenerator::LazyInitialize()
     return m_initialized;
 }
 
-// ThumbnailGenerator ‚É OffscreenRenderer ‚ğ“o˜^‚µ‚Ä‰Šú‰»ó‘Ô‚ğƒŠƒZƒbƒg‚·‚éB
+// ThumbnailGenerator ã« OffscreenRenderer ã‚’ç™»éŒ²ã—ã¦åˆæœŸåŒ–çŠ¶æ…‹ã‚’ãƒªã‚»ãƒƒãƒˆã™ã‚‹ã€‚
 void ThumbnailGenerator::Initialize(OffscreenRenderer* offscreen)
 {
     m_offscreen = offscreen;
@@ -86,17 +86,17 @@ void ThumbnailGenerator::Initialize(OffscreenRenderer* offscreen)
     m_initialized = false;
     m_texturePool = PreviewTexturePool{};
 
-    // —˜—p•s‰Â‚È‚çƒƒO‚ğo‚·B
+    // åˆ©ç”¨ä¸å¯ãªã‚‰ãƒ­ã‚°ã‚’å‡ºã™ã€‚
     if (!m_offscreen || !m_offscreen->IsReady()) {
         LOG_ERROR("[ThumbnailGenerator] OffscreenRenderer unavailable.");
     }
 }
 
-// ƒ‚ƒfƒ‹ƒTƒ€ƒlƒCƒ‹¶¬‚ğ—v‹‚·‚éB
-// ‚Ü‚¾–¢¶¬‚©‚Â–¢ƒLƒ…[‚È‚ç pending queue ‚ÉÏ‚ŞB
+// ãƒ¢ãƒ‡ãƒ«ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆã‚’è¦æ±‚ã™ã‚‹ã€‚
+// ã¾ã æœªç”Ÿæˆã‹ã¤æœªã‚­ãƒ¥ãƒ¼ãªã‚‰ pending queue ã«ç©ã‚€ã€‚
 void ThumbnailGenerator::Request(const std::string& modelPath)
 {
-    // —˜—p•s‰Â‚È‚ç 1 ‰ñ‚¾‚¯Œx‚ğo‚µ‚ÄI—¹‚·‚éB
+    // åˆ©ç”¨ä¸å¯ãªã‚‰ 1 å›ã ã‘è­¦å‘Šã‚’å‡ºã—ã¦çµ‚äº†ã™ã‚‹ã€‚
     if (!IsAvailable()) {
         if (!m_loggedUnavailable) {
             LOG_WARN("[ThumbnailGenerator] Thumbnail generation unavailable.");
@@ -105,46 +105,46 @@ void ThumbnailGenerator::Request(const std::string& modelPath)
         return;
     }
 
-    // ’x‰„‰Šú‰»‚ª‚Ü‚¾‚È‚çs‚¤B
+    // é…å»¶åˆæœŸåŒ–ãŒã¾ã ãªã‚‰è¡Œã†ã€‚
     if (!m_initialized && !LazyInitialize()) return;
 
-    // ‹óƒpƒXAƒLƒƒƒbƒVƒ…Ï‚İAƒLƒ…[Ï‚İ‚È‚ç‰½‚à‚µ‚È‚¢B
+    // ç©ºãƒ‘ã‚¹ã€ã‚­ãƒ£ãƒƒã‚·ãƒ¥æ¸ˆã¿ã€ã‚­ãƒ¥ãƒ¼æ¸ˆã¿ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (modelPath.empty() || m_cache.count(modelPath) || m_pendingSet.count(modelPath)) return;
 
-    // ƒ‚ƒfƒ‹ƒTƒ€ƒlƒCƒ‹¶¬—v‹‚ğƒLƒ…[‚ÖÏ‚ŞB
+    // ãƒ¢ãƒ‡ãƒ«ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆè¦æ±‚ã‚’ã‚­ãƒ¥ãƒ¼ã¸ç©ã‚€ã€‚
     m_pendingQueue.push_back({ modelPath, false });
     m_pendingSet.insert(modelPath);
 }
 
-// ƒ}ƒeƒŠƒAƒ‹ƒTƒ€ƒlƒCƒ‹¶¬‚ğ—v‹‚·‚éB
+// ãƒãƒ†ãƒªã‚¢ãƒ«ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆã‚’è¦æ±‚ã™ã‚‹ã€‚
 void ThumbnailGenerator::RequestMaterial(const std::string& matPath)
 {
-    // —˜—p•s‰Â‚È‚ç‰½‚à‚µ‚È‚¢B
+    // åˆ©ç”¨ä¸å¯ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (!IsAvailable()) return;
 
-    // ’x‰„‰Šú‰»‚ª‚Ü‚¾‚È‚çs‚¤B
+    // é…å»¶åˆæœŸåŒ–ãŒã¾ã ãªã‚‰è¡Œã†ã€‚
     if (!m_initialized && !LazyInitialize()) return;
 
-    // ‹óƒpƒXAƒLƒƒƒbƒVƒ…Ï‚İAƒLƒ…[Ï‚İ‚È‚ç‰½‚à‚µ‚È‚¢B
+    // ç©ºãƒ‘ã‚¹ã€ã‚­ãƒ£ãƒƒã‚·ãƒ¥æ¸ˆã¿ã€ã‚­ãƒ¥ãƒ¼æ¸ˆã¿ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (matPath.empty() || m_cache.count(matPath) || m_pendingSet.count(matPath)) return;
 
-    // ƒ}ƒeƒŠƒAƒ‹ƒTƒ€ƒlƒCƒ‹¶¬—v‹‚ğƒLƒ…[‚ÖÏ‚ŞB
+    // ãƒãƒ†ãƒªã‚¢ãƒ«ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆè¦æ±‚ã‚’ã‚­ãƒ¥ãƒ¼ã¸ç©ã‚€ã€‚
     m_pendingQueue.push_back({ matPath, true });
     m_pendingSet.insert(matPath);
 }
 
-// w’èƒpƒX‚ÌƒTƒ€ƒlƒCƒ‹ƒLƒƒƒbƒVƒ…‚ğ–³Œø‰»‚µA•K—v‚È‚çÄ¶¬—v‹‚ğ“ü‚ê‚éB
+// æŒ‡å®šãƒ‘ã‚¹ã®ã‚µãƒ ãƒã‚¤ãƒ«ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’ç„¡åŠ¹åŒ–ã—ã€å¿…è¦ãªã‚‰å†ç”Ÿæˆè¦æ±‚ã‚’å…¥ã‚Œã‚‹ã€‚
 void ThumbnailGenerator::Invalidate(const std::string& path)
 {
-    // Šù‘¶ƒTƒ€ƒl‚ğÌ‚Ä‚é‚Æ‚«‚ÍAImGui ƒXƒƒbƒg‚Æ texture ‚ğ‘¦Ä—˜—p‚¹‚¸ deferred •Ô‹p‚·‚éB
+    // æ—¢å­˜ã‚µãƒ ãƒã‚’æ¨ã¦ã‚‹ã¨ãã¯ã€ImGui ã‚¹ãƒ­ãƒƒãƒˆã¨ texture ã‚’å³æ™‚å†åˆ©ç”¨ã›ãš deferred è¿”å´ã™ã‚‹ã€‚
     auto it = m_cache.find(path);
     if (it != m_cache.end()) {
         uint64_t fenceValue = m_offscreen ? m_offscreen->GetCurrentFenceValue() : 0;
 
-        // ImGui ‘¤‚Ì“o˜^‚ğˆÀ‘S‚É’x‰„‰ğœ‚·‚éB
+        // ImGui å´ã®ç™»éŒ²ã‚’å®‰å…¨ã«é…å»¶è§£é™¤ã™ã‚‹ã€‚
         ImGuiRenderer::DeferUnregisterTexture(it->second.get(), fenceValue);
 
-        // DX12 ƒeƒNƒXƒ`ƒƒ‚È‚ç retire fence ‚ğİ’è‚µ‚ÄˆÀ‘S‚É‰ğ•ú‚·‚éB
+        // DX12 ãƒ†ã‚¯ã‚¹ãƒãƒ£ãªã‚‰ retire fence ã‚’è¨­å®šã—ã¦å®‰å…¨ã«è§£æ”¾ã™ã‚‹ã€‚
         if (auto* dx12Texture = dynamic_cast<DX12Texture*>(it->second.get())) {
             auto* device = Graphics::Instance().GetDX12Device();
             dx12Texture->SetRetireFence(
@@ -152,12 +152,12 @@ void ThumbnailGenerator::Invalidate(const std::string& path)
                 device ? device->GetMainFenceCurrentValue() : fenceValue);
         }
 
-        // ƒeƒNƒXƒ`ƒƒƒv[ƒ‹‚Ö deferred •Ô‹p‚·‚éB
+        // ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒ—ãƒ¼ãƒ«ã¸ deferred è¿”å´ã™ã‚‹ã€‚
         m_texturePool.DeferRelease(std::move(it->second), fenceValue);
         m_cache.erase(it);
     }
 
-    // LRU ‡ŠÇ—‚©‚ç‚àœ‹‚·‚éB
+    // LRU é †ç®¡ç†ã‹ã‚‰ã‚‚é™¤å»ã™ã‚‹ã€‚
     for (auto it = m_cacheOrder.begin(); it != m_cacheOrder.end(); ++it) {
         if (*it == path) {
             m_cacheOrder.erase(it);
@@ -165,7 +165,7 @@ void ThumbnailGenerator::Invalidate(const std::string& path)
         }
     }
 
-    // ‚Ü‚¾ pending ‚Å‚È‚¢‚È‚çÄ¶¬—v‹‚ğÏ‚ŞB
+    // ã¾ã  pending ã§ãªã„ãªã‚‰å†ç”Ÿæˆè¦æ±‚ã‚’ç©ã‚€ã€‚
     if (!m_pendingSet.count(path)) {
         bool isMat = std::filesystem::path(path).extension().string() == ".mat";
         m_pendingQueue.push_back({ path, isMat });
@@ -173,22 +173,22 @@ void ThumbnailGenerator::Invalidate(const std::string& path)
     }
 }
 
-// Œ»İ‰æ–Ê‚ÉŒ©‚¦‚Ä‚¢‚éƒpƒXW‡‚ğ•Û‘¶‚·‚éB
-// PumpOne ‚Å‰Â‹ƒAƒZƒbƒg‚ğ—Dæˆ—‚·‚é‚½‚ß‚Ég‚¤B
+// ç¾åœ¨ç”»é¢ã«è¦‹ãˆã¦ã„ã‚‹ãƒ‘ã‚¹é›†åˆã‚’ä¿å­˜ã™ã‚‹ã€‚
+// PumpOne ã§å¯è¦–ã‚¢ã‚»ãƒƒãƒˆã‚’å„ªå…ˆå‡¦ç†ã™ã‚‹ãŸã‚ã«ä½¿ã†ã€‚
 void ThumbnailGenerator::SetVisiblePaths(const std::unordered_set<std::string>& paths)
 {
     m_visiblePaths = paths;
 }
 
-// w’èƒpƒX‚ÌƒTƒ€ƒlƒCƒ‹ƒeƒNƒXƒ`ƒƒ‚ğæ“¾‚·‚éB
-// ƒLƒƒƒbƒVƒ…‚É–³‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®šãƒ‘ã‚¹ã®ã‚µãƒ ãƒã‚¤ãƒ«ãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚’å–å¾—ã™ã‚‹ã€‚
+// ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã«ç„¡ã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 std::shared_ptr<ITexture> ThumbnailGenerator::Get(const std::string& path) const
 {
     auto it = m_cache.find(path);
     return (it != m_cache.end()) ? it->second : nullptr;
 }
 
-// ƒLƒƒƒbƒVƒ…ãŒÀ‚ğ’´‚¦‚½AÅ‚àŒÃ‚¢ƒTƒ€ƒlƒCƒ‹‚ğ 1 ‚ÂˆÈã’Ç‚¢o‚·B
+// ã‚­ãƒ£ãƒƒã‚·ãƒ¥ä¸Šé™ã‚’è¶…ãˆãŸæ™‚ã€æœ€ã‚‚å¤ã„ã‚µãƒ ãƒã‚¤ãƒ«ã‚’ 1 ã¤ä»¥ä¸Šè¿½ã„å‡ºã™ã€‚
 void ThumbnailGenerator::EvictOldest()
 {
     while (m_cache.size() >= MAX_CACHE && !m_cacheOrder.empty()) {
@@ -198,10 +198,10 @@ void ThumbnailGenerator::EvictOldest()
         if (it != m_cache.end()) {
             uint64_t fenceValue = m_offscreen ? m_offscreen->GetCurrentFenceValue() : 0;
 
-            // ImGui ‘¤‚Ì“o˜^‰ğœ‚ğ’x‰„‚·‚éB
+            // ImGui å´ã®ç™»éŒ²è§£é™¤ã‚’é…å»¶ã™ã‚‹ã€‚
             ImGuiRenderer::DeferUnregisterTexture(it->second.get(), fenceValue);
 
-            // DX12 ƒeƒNƒXƒ`ƒƒ‚È‚çˆÀ‘S‚È retire fence ‚ğİ’è‚·‚éB
+            // DX12 ãƒ†ã‚¯ã‚¹ãƒãƒ£ãªã‚‰å®‰å…¨ãª retire fence ã‚’è¨­å®šã™ã‚‹ã€‚
             if (auto* dx12Texture = dynamic_cast<DX12Texture*>(it->second.get())) {
                 auto* device = Graphics::Instance().GetDX12Device();
                 dx12Texture->SetRetireFence(
@@ -209,7 +209,7 @@ void ThumbnailGenerator::EvictOldest()
                     device ? device->GetMainFenceCurrentValue() : fenceValue);
             }
 
-            // ƒeƒNƒXƒ`ƒƒƒv[ƒ‹‚Ö•Ô‹p‚·‚éB
+            // ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒ—ãƒ¼ãƒ«ã¸è¿”å´ã™ã‚‹ã€‚
             m_texturePool.DeferRelease(std::move(it->second), fenceValue);
             m_cache.erase(it);
         }
@@ -218,20 +218,20 @@ void ThumbnailGenerator::EvictOldest()
     }
 }
 
-// pending queue ‚©‚ç 1 Œ‚¾‚¯ƒTƒ€ƒlƒCƒ‹¶¬‚ği‚ß‚éB
-// ‰Â‹ƒAƒZƒbƒg‚ğ—Dæ‚µAGPU ‚ª‹ó‚¢‚Ä‚¢‚é‚¾‚¯Às‚·‚éB
+// pending queue ã‹ã‚‰ 1 ä»¶ã ã‘ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆã‚’é€²ã‚ã‚‹ã€‚
+// å¯è¦–ã‚¢ã‚»ãƒƒãƒˆã‚’å„ªå…ˆã—ã€GPU ãŒç©ºã„ã¦ã„ã‚‹æ™‚ã ã‘å®Ÿè¡Œã™ã‚‹ã€‚
 void ThumbnailGenerator::PumpOne()
 {
-    // ƒTƒ€ƒl¶¬‚Í 1 ƒtƒŒ[ƒ€‚É 1 Œ‚¾‚¯i‚ßA‰Â‹€–Ú‚ğ—Dæ‚·‚éB
+    // ã‚µãƒ ãƒç”Ÿæˆã¯ 1 ãƒ•ãƒ¬ãƒ¼ãƒ ã« 1 ä»¶ã ã‘é€²ã‚ã€å¯è¦–é …ç›®ã‚’å„ªå…ˆã™ã‚‹ã€‚
     if (!IsAvailable() || m_pendingQueue.empty()) return;
     if (!m_initialized && !LazyInitialize()) return;
     if (!m_offscreen->IsGpuIdle()) return;
 
-    // Š®—¹Ï‚İ fence ‚Ü‚Å‚Ì deferred release ‚ğˆ—‚·‚éB
+    // å®Œäº†æ¸ˆã¿ fence ã¾ã§ã® deferred release ã‚’å‡¦ç†ã™ã‚‹ã€‚
     const uint64_t completedFenceValue = m_offscreen->GetCompletedFenceValue();
     m_texturePool.ProcessDeferred(completedFenceValue);
 
-    // ‚Ü‚¸‰Â‹ƒAƒZƒbƒg‚Ì’†‚©‚ç 1 Œ‘I‚ÔB
+    // ã¾ãšå¯è¦–ã‚¢ã‚»ãƒƒãƒˆã®ä¸­ã‹ã‚‰ 1 ä»¶é¸ã¶ã€‚
     auto selected = m_pendingQueue.end();
     for (auto it = m_pendingQueue.begin(); it != m_pendingQueue.end(); ++it) {
         if (m_visiblePaths.count(it->path) > 0) {
@@ -240,149 +240,149 @@ void ThumbnailGenerator::PumpOne()
         }
     }
 
-    // ‰Â‹€–Ú‚ª–³‚¯‚ê‚Îæ“ª‚ğ‘I‚ÔB
+    // å¯è¦–é …ç›®ãŒç„¡ã‘ã‚Œã°å…ˆé ­ã‚’é¸ã¶ã€‚
     if (selected == m_pendingQueue.end()) {
         selected = m_pendingQueue.begin();
     }
 
-    // Ä—˜—p‰Â”\‚ÈƒLƒƒƒbƒVƒ…ƒeƒNƒXƒ`ƒƒ‚ğæ“¾‚·‚éB
+    // å†åˆ©ç”¨å¯èƒ½ãªã‚­ãƒ£ãƒƒã‚·ãƒ¥ãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚’å–å¾—ã™ã‚‹ã€‚
     auto cacheTexture = m_texturePool.Acquire();
     if (!cacheTexture) {
         return;
     }
 
-    // ‘I‚Î‚ê‚½—v‹‚ğæ‚èo‚·B
+    // é¸ã°ã‚ŒãŸè¦æ±‚ã‚’å–ã‚Šå‡ºã™ã€‚
     ThumbnailRequest req = *selected;
     m_pendingQueue.erase(selected);
     m_pendingSet.erase(req.path);
 
-    // ƒ‚ƒfƒ‹‚©ƒ}ƒeƒŠƒAƒ‹‚©‚Å¶¬ƒ‹[ƒg‚ğ•ª‚¯‚éB
+    // ãƒ¢ãƒ‡ãƒ«ã‹ãƒãƒ†ãƒªã‚¢ãƒ«ã‹ã§ç”Ÿæˆãƒ«ãƒ¼ãƒˆã‚’åˆ†ã‘ã‚‹ã€‚
     auto texture = req.isMaterial
         ? GenerateMaterialTexture(req.path, cacheTexture)
         : GenerateTexture(req.path, cacheTexture);
 
     if (texture) {
-        // ¬Œ÷‚µ‚½‚çŒÃ‚¢ƒLƒƒƒbƒVƒ…‚ğ’Ç‚¢o‚µ‚Ä‚©‚ç•Û‘¶‚·‚éB
+        // æˆåŠŸã—ãŸã‚‰å¤ã„ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’è¿½ã„å‡ºã—ã¦ã‹ã‚‰ä¿å­˜ã™ã‚‹ã€‚
         EvictOldest();
         m_cache[req.path] = texture;
         m_cacheOrder.push_back(req.path);
     }
     else {
-        // ¸”s‚µ‚½‚çØ‚è‚½ƒeƒNƒXƒ`ƒƒ‚ğ deferred •Ô‹p‚·‚éB
+        // å¤±æ•—ã—ãŸã‚‰å€Ÿã‚ŠãŸãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚’ deferred è¿”å´ã™ã‚‹ã€‚
         uint64_t fenceValue = m_offscreen->GetCurrentFenceValue();
         m_texturePool.DeferRelease(std::move(cacheTexture), fenceValue);
     }
 }
 
-// ƒ‚ƒfƒ‹‘S‘Ì‚ª‰æ–Ê‚Éû‚Ü‚é‚æ‚¤‚ÉƒJƒƒ‰ˆÊ’u‚Æ ViewProjection ‚ğŒvZ‚·‚éB
-// ×’·‚¢ƒGƒtƒFƒNƒgŒ`ó‚ÍŒ©‚â‚·‚³—Dæ‚ÅŠp“x•â³‚ğs‚¤B
+// ãƒ¢ãƒ‡ãƒ«å…¨ä½“ãŒç”»é¢ã«åã¾ã‚‹ã‚ˆã†ã«ã‚«ãƒ¡ãƒ©ä½ç½®ã¨ ViewProjection ã‚’è¨ˆç®—ã™ã‚‹ã€‚
+// ç´°é•·ã„ã‚¨ãƒ•ã‚§ã‚¯ãƒˆå½¢çŠ¶ã¯è¦‹ã‚„ã™ã•å„ªå…ˆã§è§’åº¦è£œæ­£ã‚’è¡Œã†ã€‚
 void ThumbnailGenerator::SetupCamera(Model* model, XMFLOAT4X4& outViewProj, XMFLOAT3& outCamPos)
 {
-    // ƒ‚ƒfƒ‹‘S‘Ì‚ªû‚Ü‚é‹——£‚ğŒvZ‚µA×’·‚¢ƒGƒtƒFƒNƒgŒ`ó‚ÍŒ©‚â‚·‚¢Šp“x‚Ö•â³‚·‚éB
+    // ãƒ¢ãƒ‡ãƒ«å…¨ä½“ãŒåã¾ã‚‹è·é›¢ã‚’è¨ˆç®—ã—ã€ç´°é•·ã„ã‚¨ãƒ•ã‚§ã‚¯ãƒˆå½¢çŠ¶ã¯è¦‹ã‚„ã™ã„è§’åº¦ã¸è£œæ­£ã™ã‚‹ã€‚
     BoundingBox aabb = model->GetWorldBounds();
     XMFLOAT3 center = aabb.Center;
     XMFLOAT3 ex = aabb.Extents;
 
-    // Å‘å¡–@‚ÆÅ¬¡–@‚ğ‹‚ß‚éB
+    // æœ€å¤§å¯¸æ³•ã¨æœ€å°å¯¸æ³•ã‚’æ±‚ã‚ã‚‹ã€‚
     float maxTmp = (ex.x > ex.y) ? ex.x : ex.y;
     float maxDim = (maxTmp > ex.z) ? maxTmp : ex.z;
     float minTmp = (ex.x < ex.y) ? ex.x : ex.y;
     float minDim = (minTmp < ex.z) ? minTmp : ex.z;
 
-    // ”ñí‚É”–‚¢Œ`ó‚È‚çƒGƒtƒFƒNƒg‚Á‚Û‚¢‚Æ‚İ‚È‚·B
+    // éå¸¸ã«è–„ã„å½¢çŠ¶ãªã‚‰ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã£ã½ã„ã¨ã¿ãªã™ã€‚
     bool isEffect = (minDim < maxDim * 0.05f);
 
-    // Šî–{‚Ì˜ëŠpE•ûˆÊŠpB
+    // åŸºæœ¬ã®ä¿¯è§’ãƒ»æ–¹ä½è§’ã€‚
     float pitch = XMConvertToRadians(25.0f);
     float yaw = XMConvertToRadians(45.0f);
 
-    // ×’·‚¢•ûŒü‚É‰‚¶‚ÄŒ©‚â‚·‚¢Œü‚«‚Ö•â³‚·‚éB
+    // ç´°é•·ã„æ–¹å‘ã«å¿œã˜ã¦è¦‹ã‚„ã™ã„å‘ãã¸è£œæ­£ã™ã‚‹ã€‚
     if (isEffect) {
         if (ex.y == minDim) pitch = XMConvertToRadians(60.0f);
         else if (ex.z == minDim) yaw = XMConvertToRadians(10.0f);
         else if (ex.x == minDim) yaw = XMConvertToRadians(80.0f);
     }
 
-    // ƒoƒEƒ“ƒfƒBƒ“ƒOƒ{ƒbƒNƒX extents ‚Ì’·‚³‚©‚ç”¼Œa‘Š“–‚ğì‚éB
+    // ãƒã‚¦ãƒ³ãƒ‡ã‚£ãƒ³ã‚°ãƒœãƒƒã‚¯ã‚¹ extents ã®é•·ã•ã‹ã‚‰åŠå¾„ç›¸å½“ã‚’ä½œã‚‹ã€‚
     float radius = XMVectorGetX(XMVector3Length(XMLoadFloat3(&ex)));
     if (radius < 0.01f) radius = 1.0f;
 
-    // FOV ‚Æ”¼Œa‚©‚çAƒ‚ƒfƒ‹‚ªû‚Ü‚éƒJƒƒ‰‹——£‚ğŒvZ‚·‚éB
+    // FOV ã¨åŠå¾„ã‹ã‚‰ã€ãƒ¢ãƒ‡ãƒ«ãŒåã¾ã‚‹ã‚«ãƒ¡ãƒ©è·é›¢ã‚’è¨ˆç®—ã™ã‚‹ã€‚
     float fov = XMConvertToRadians(45.0f);
     float distance = (radius / sinf(fov * 0.5f)) * 1.3f;
     float nearZ = 0.01f;
     float farZ = distance * 10.0f;
 
-    // ‹…–ÊÀ•W“I‚ÉƒJƒƒ‰ˆÊ’u‚ğŒˆ‚ß‚éB
+    // çƒé¢åº§æ¨™çš„ã«ã‚«ãƒ¡ãƒ©ä½ç½®ã‚’æ±ºã‚ã‚‹ã€‚
     outCamPos = {
         center.x + distance * cosf(pitch) * sinf(yaw),
         center.y + distance * sinf(pitch),
         center.z - distance * cosf(pitch) * cosf(yaw)
     };
 
-    // LookAt ‚Æ Perspective ‚ğŠ|‚¯‚Ä ViewProjection ‚ğì‚éB
+    // LookAt ã¨ Perspective ã‚’æ›ã‘ã¦ ViewProjection ã‚’ä½œã‚‹ã€‚
     XMVECTOR eye = XMLoadFloat3(&outCamPos);
     XMVECTOR at = XMLoadFloat3(&center);
     XMVECTOR upV = XMVectorSet(0, 1, 0, 0);
     XMStoreFloat4x4(&outViewProj, XMMatrixLookAtLH(eye, at, upV) * XMMatrixPerspectiveFovLH(fov, 1.0f, nearZ, farZ));
 }
 
-// 1 –‡‚ÌƒTƒ€ƒlƒCƒ‹‚ğ offscreen ‚Ö•`‰æ‚·‚é‹¤’Êˆ—B
-// RT İ’èAƒNƒŠƒAAviewport İ’èAsubmit ‚Ü‚Å‚ğ’S“–‚·‚éB
+// 1 æšã®ã‚µãƒ ãƒã‚¤ãƒ«ã‚’ offscreen ã¸æç”»ã™ã‚‹å…±é€šå‡¦ç†ã€‚
+// RT è¨­å®šã€ã‚¯ãƒªã‚¢ã€viewport è¨­å®šã€submit ã¾ã§ã‚’æ‹…å½“ã™ã‚‹ã€‚
 void ThumbnailGenerator::RenderThumbnail(ITexture* target, std::function<void()> setupAndDraw)
 {
-    // OffscreenRenderer ‚Í–ˆƒWƒ‡ƒu BeginJob ‚©‚çn‚ßA‘O‰ñó‘Ô‚ğ‚¿‰z‚³‚È‚¢B
+    // OffscreenRenderer ã¯æ¯ã‚¸ãƒ§ãƒ– BeginJob ã‹ã‚‰å§‹ã‚ã€å‰å›çŠ¶æ…‹ã‚’æŒã¡è¶Šã•ãªã„ã€‚
     m_offscreen->BeginJob();
     m_offscreen->ClearExternalRT(target, m_texturePool.GetSharedDepth(), CLEAR_R, CLEAR_G, CLEAR_B, CLEAR_A);
     m_offscreen->SetExternalRenderTarget(target, m_texturePool.GetSharedDepth());
     m_offscreen->SetViewport((float)THUMB_SIZE, (float)THUMB_SIZE);
 
-    // ŒÄ‚Ño‚µ‘¤‚ª scene upload ‚â draw ‚ğs‚¤B
+    // å‘¼ã³å‡ºã—å´ãŒ scene upload ã‚„ draw ã‚’è¡Œã†ã€‚
     setupAndDraw();
 
-    // ÅŒã‚É GPU ‚Ö submit ‚·‚éB
+    // æœ€å¾Œã« GPU ã¸ submit ã™ã‚‹ã€‚
     m_offscreen->SubmitDirect(target);
 }
 
-// ƒ‚ƒfƒ‹ƒtƒ@ƒCƒ‹‚ÌƒTƒ€ƒlƒCƒ‹‚ğ¶¬‚·‚éB
+// ãƒ¢ãƒ‡ãƒ«ãƒ•ã‚¡ã‚¤ãƒ«ã®ã‚µãƒ ãƒã‚¤ãƒ«ã‚’ç”Ÿæˆã™ã‚‹ã€‚
 std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string& modelPath, std::shared_ptr<ITexture> cacheTex)
 {
-    // ƒ‚ƒfƒ‹‚ğæ“¾‚·‚éB
+    // ãƒ¢ãƒ‡ãƒ«ã‚’å–å¾—ã™ã‚‹ã€‚
     auto model = ResourceManager::Instance().GetModel(modelPath, 1.0f, true);
     if (!model) return nullptr;
 
-    // o—ÍæƒeƒNƒXƒ`ƒƒ‚ª–³‚¯‚ê‚Î¸”sB
+    // å‡ºåŠ›å…ˆãƒ†ã‚¯ã‚¹ãƒãƒ£ãŒç„¡ã‘ã‚Œã°å¤±æ•—ã€‚
     if (!cacheTex) return nullptr;
 
-    // ƒ‚ƒfƒ‹ transform ‚ğ’PˆÊs—ñ‚ÖƒŠƒZƒbƒg‚·‚éB
+    // ãƒ¢ãƒ‡ãƒ« transform ã‚’å˜ä½è¡Œåˆ—ã¸ãƒªã‚»ãƒƒãƒˆã™ã‚‹ã€‚
     XMFLOAT4X4 identity;
     XMStoreFloat4x4(&identity, XMMatrixIdentity());
     model->UpdateTransform(identity);
 
-    // ƒ‚ƒfƒ‹‘S‘Ì‚ªû‚Ü‚éƒJƒƒ‰‚ğì‚éB
+    // ãƒ¢ãƒ‡ãƒ«å…¨ä½“ãŒåã¾ã‚‹ã‚«ãƒ¡ãƒ©ã‚’ä½œã‚‹ã€‚
     XMFLOAT4X4 viewProj;
     XMFLOAT3 camPos;
     SetupCamera(model.get(), viewProj, camPos);
 
-    // ƒVƒ“ƒvƒ‹‚Èƒ‰ƒCƒg‚ğ’u‚­B
+    // ã‚·ãƒ³ãƒ—ãƒ«ãªãƒ©ã‚¤ãƒˆã‚’ç½®ãã€‚
     XMFLOAT3 lightDir = { -0.5f, -0.7f, 0.5f };
     XMFLOAT3 lightColor = { 1.0f, 1.0f, 1.0f };
 
     auto modelRes = model->GetModelResource();
 
-    // Œ³‚Ìƒ}ƒeƒŠƒAƒ‹ƒJƒ‰[‚ğ•Û‘¶‚·‚éB
+    // å…ƒã®ãƒãƒ†ãƒªã‚¢ãƒ«ã‚«ãƒ©ãƒ¼ã‚’ä¿å­˜ã™ã‚‹ã€‚
     std::vector<XMFLOAT4> savedColors;
     for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
         auto* mesh = modelRes->GetMeshResource(i);
         savedColors.push_back(mesh->material.color);
 
-        // ƒeƒNƒXƒ`ƒƒ‚ª–³‚¢ƒƒbƒVƒ…‚ÍŒ©•ª‚¯‚â‚·‚¢ƒ}ƒ[ƒ“ƒ^F‚Öˆê“I‚É’u‚«Š·‚¦‚éB
+        // ãƒ†ã‚¯ã‚¹ãƒãƒ£ãŒç„¡ã„ãƒ¡ãƒƒã‚·ãƒ¥ã¯è¦‹åˆ†ã‘ã‚„ã™ã„ãƒã‚¼ãƒ³ã‚¿è‰²ã¸ä¸€æ™‚çš„ã«ç½®ãæ›ãˆã‚‹ã€‚
         if (!mesh->material.diffuseMap) {
             mesh->material.color = { 1.0f, 0.0f, 1.0f, 1.0f };
         }
     }
 
-    // ÀÛ‚É offscreen ‚Ö•`‰æ‚·‚éB
+    // å®Ÿéš›ã« offscreen ã¸æç”»ã™ã‚‹ã€‚
     RenderThumbnail(cacheTex.get(), [&]() {
         m_offscreen->UploadScene(viewProj, camPos, lightDir, lightColor,
             (float)THUMB_SIZE, (float)THUMB_SIZE);
@@ -396,7 +396,7 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
             nullptr, BlendState::Opaque, DepthState::TestAndWrite, RasterizerState::SolidCullNone);
         });
 
-    // ˆê•ÏX‚µ‚½ƒ}ƒeƒŠƒAƒ‹ƒJƒ‰[‚ğŒ³‚Ö–ß‚·B
+    // ä¸€æ™‚å¤‰æ›´ã—ãŸãƒãƒ†ãƒªã‚¢ãƒ«ã‚«ãƒ©ãƒ¼ã‚’å…ƒã¸æˆ»ã™ã€‚
     for (int i = 0; i < modelRes->GetMeshCount(); ++i) {
         modelRes->GetMeshResource(i)->material.color = savedColors[i];
     }
@@ -404,26 +404,26 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateTexture(const std::string&
     return cacheTex;
 }
 
-// ƒ}ƒeƒŠƒAƒ‹ƒAƒZƒbƒg‚ÌƒTƒ€ƒlƒCƒ‹‚ğ¶¬‚·‚éB
-// ‹¤’Ê‹…ƒ‚ƒfƒ‹‚Öƒ}ƒeƒŠƒAƒ‹‚ğ“–‚Ä‚Ä•`‰æ‚·‚éB
+// ãƒãƒ†ãƒªã‚¢ãƒ«ã‚¢ã‚»ãƒƒãƒˆã®ã‚µãƒ ãƒã‚¤ãƒ«ã‚’ç”Ÿæˆã™ã‚‹ã€‚
+// å…±é€šçƒãƒ¢ãƒ‡ãƒ«ã¸ãƒãƒ†ãƒªã‚¢ãƒ«ã‚’å½“ã¦ã¦æç”»ã™ã‚‹ã€‚
 std::shared_ptr<ITexture> ThumbnailGenerator::GenerateMaterialTexture(const std::string& matPath, std::shared_ptr<ITexture> cacheTex)
 {
-    // ‹¤’Ê‹…ƒ‚ƒfƒ‹‚ª–³‚¯‚ê‚Î¸”sB
+    // å…±é€šçƒãƒ¢ãƒ‡ãƒ«ãŒç„¡ã‘ã‚Œã°å¤±æ•—ã€‚
     if (!m_sphereModel) return nullptr;
 
-    // ƒ}ƒeƒŠƒAƒ‹ƒAƒZƒbƒg‚ğæ“¾‚·‚éB
+    // ãƒãƒ†ãƒªã‚¢ãƒ«ã‚¢ã‚»ãƒƒãƒˆã‚’å–å¾—ã™ã‚‹ã€‚
     auto material = ResourceManager::Instance().GetMaterial(matPath);
     if (!material) return nullptr;
 
-    // o—ÍæƒeƒNƒXƒ`ƒƒ‚ª–³‚¯‚ê‚Î¸”sB
+    // å‡ºåŠ›å…ˆãƒ†ã‚¯ã‚¹ãƒãƒ£ãŒç„¡ã‘ã‚Œã°å¤±æ•—ã€‚
     if (!cacheTex) return nullptr;
 
-    // ‹…ƒ‚ƒfƒ‹ transform ‚ğ’PˆÊs—ñ‚ÖƒŠƒZƒbƒg‚·‚éB
+    // çƒãƒ¢ãƒ‡ãƒ« transform ã‚’å˜ä½è¡Œåˆ—ã¸ãƒªã‚»ãƒƒãƒˆã™ã‚‹ã€‚
     XMFLOAT4X4 identity;
     XMStoreFloat4x4(&identity, XMMatrixIdentity());
     m_sphereModel->UpdateTransform(identity);
 
-    // ‹…ƒ‚ƒfƒ‹‚Ì‘Sƒ}ƒeƒŠƒAƒ‹‚Ö‘ÎÛƒ}ƒeƒŠƒAƒ‹‚ğ”½‰f‚·‚éB
+    // çƒãƒ¢ãƒ‡ãƒ«ã®å…¨ãƒãƒ†ãƒªã‚¢ãƒ«ã¸å¯¾è±¡ãƒãƒ†ãƒªã‚¢ãƒ«ã‚’åæ˜ ã™ã‚‹ã€‚
     auto& meshMaterials = m_sphereModel->GetMaterialss();
     for (auto& mat : meshMaterials) {
         mat.color = material->baseColor;
@@ -432,7 +432,7 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateMaterialTexture(const std:
         mat.diffuseMap = ResourceManager::Instance().GetTexture(material->diffuseTexturePath);
         mat.normalMap = ResourceManager::Instance().GetTexture(material->normalTexturePath);
 
-        // metallic/roughness ‹¤’ÊƒeƒNƒXƒ`ƒƒ‚ğİ’è‚·‚éB
+        // metallic/roughness å…±é€šãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚’è¨­å®šã™ã‚‹ã€‚
         if (!material->metallicRoughnessTexturePath.empty()) {
             mat.metallicMap = ResourceManager::Instance().GetTexture(material->metallicRoughnessTexturePath);
             mat.roughnessMap = mat.metallicMap;
@@ -445,19 +445,19 @@ std::shared_ptr<ITexture> ThumbnailGenerator::GenerateMaterialTexture(const std:
         mat.emissiveMap = ResourceManager::Instance().GetTexture(material->emissiveTexturePath);
     }
 
-    // Ş¿”½‰fŒã‚Ì transform ‚ğÄXV‚·‚éB
+    // æè³ªåæ˜ å¾Œã® transform ã‚’å†æ›´æ–°ã™ã‚‹ã€‚
     m_sphereModel->UpdateTransform(identity);
 
-    // ‹…‘S‘Ì‚ªû‚Ü‚éƒJƒƒ‰‚ğì‚éB
+    // çƒå…¨ä½“ãŒåã¾ã‚‹ã‚«ãƒ¡ãƒ©ã‚’ä½œã‚‹ã€‚
     XMFLOAT4X4 viewProj;
     XMFLOAT3 camPos;
     SetupCamera(m_sphereModel.get(), viewProj, camPos);
 
-    // ­‚µ‹­‚ß‚Ìƒ‰ƒCƒg‚ğ’u‚­B
+    // å°‘ã—å¼·ã‚ã®ãƒ©ã‚¤ãƒˆã‚’ç½®ãã€‚
     XMFLOAT3 lightDir = { -0.5f, -0.7f, 0.5f };
     XMFLOAT3 lightColor = { 3.0f, 3.0f, 3.0f };
 
-    // ÀÛ‚É offscreen ‚Ö•`‰æ‚·‚éB
+    // å®Ÿéš›ã« offscreen ã¸æç”»ã™ã‚‹ã€‚
     RenderThumbnail(cacheTex.get(), [&]() {
         m_offscreen->UploadScene(viewProj, camPos, lightDir, lightColor,
             (float)THUMB_SIZE, (float)THUMB_SIZE);

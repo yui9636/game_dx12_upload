@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "Registry/Registry.h"
 #include "RenderContext/RenderContext.h"
 #include <DirectXMath.h>
@@ -9,92 +9,92 @@ class IShader;
 class IBuffer;
 class IInputLayout;
 
-// ƒƒCƒ„[ƒOƒŠƒbƒh‚ğ•`‰æ‚·‚éƒVƒXƒeƒ€B
-// GridComponent ‚ğ‚Â entity —p‚ÌƒOƒŠƒbƒh•`‰æ‚ÆA
-// editor ê—p‚Ìƒ[ƒ‹ƒhŒÅ’èƒOƒŠƒbƒh•`‰æ‚Ì—¼•û‚ğ’S“–‚·‚éB
+// ãƒ¯ã‚¤ãƒ¤ãƒ¼ã‚°ãƒªãƒƒãƒ‰ã‚’æç”»ã™ã‚‹ã‚·ã‚¹ãƒ†ãƒ ã€‚
+// GridComponent ã‚’æŒã¤ entity ç”¨ã®ã‚°ãƒªãƒƒãƒ‰æç”»ã¨ã€
+// editor å°‚ç”¨ã®ãƒ¯ãƒ¼ãƒ«ãƒ‰å›ºå®šã‚°ãƒªãƒƒãƒ‰æç”»ã®ä¸¡æ–¹ã‚’æ‹…å½“ã™ã‚‹ã€‚
 class GridRenderSystem {
 public:
-    // Editor —pƒ[ƒ‹ƒhƒOƒŠƒbƒh‚Ì•`‰æİ’èB
+    // Editor ç”¨ãƒ¯ãƒ¼ãƒ«ãƒ‰ã‚°ãƒªãƒƒãƒ‰ã®æç”»è¨­å®šã€‚
     struct EditorGridSettings
     {
-        // 1 ƒ}ƒX‚Ì‘å‚«‚³B
+        // 1 ãƒã‚¹ã®å¤§ãã•ã€‚
         float cellSize = 20.0f;
 
-        // Œ´“_‚©‚ç•Ğ‘¤‚É‰½–{ü‚ğˆø‚­‚©B
+        // åŸç‚¹ã‹ã‚‰ç‰‡å´ã«ä½•æœ¬ç·šã‚’å¼•ãã‹ã€‚
         int halfLineCount = 32;
 
-        // ƒOƒŠƒbƒh‚ğ•`‚­‚‚³B
+        // ã‚°ãƒªãƒƒãƒ‰ã‚’æãé«˜ã•ã€‚
         float height = 0.01f;
     };
 
-    // ƒfƒtƒHƒ‹ƒg\’zB
+    // ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆæ§‹ç¯‰ã€‚
     GridRenderSystem() = default;
 
-    // “à•” GPU ƒŠƒ\[ƒX‚ğ•Û‚·‚é‚½‚ßƒfƒXƒgƒ‰ƒNƒ^‚ğ’è‹`‚µ‚Ä‚¢‚éB
+    // å†…éƒ¨ GPU ãƒªã‚½ãƒ¼ã‚¹ã‚’ä¿æŒã™ã‚‹ãŸã‚ãƒ‡ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã‚’å®šç¾©ã—ã¦ã„ã‚‹ã€‚
     ~GridRenderSystem();
 
-    // Registry “à‚Ì GridComponent ‚ğ‘–¸‚µA‚»‚ê‚¼‚ê‚Ì transform ‚É‰‚¶‚½ƒOƒŠƒbƒh‚ğ•`‰æ‚·‚éB
+    // Registry å†…ã® GridComponent ã‚’èµ°æŸ»ã—ã€ãã‚Œãã‚Œã® transform ã«å¿œã˜ãŸã‚°ãƒªãƒƒãƒ‰ã‚’æç”»ã™ã‚‹ã€‚
     void Render(Registry& registry, RenderContext& rc);
 
-    // Editor —p‚Ìƒ[ƒ‹ƒhŒÅ’èƒOƒŠƒbƒh‚ğ•`‰æ‚·‚éB
+    // Editor ç”¨ã®ãƒ¯ãƒ¼ãƒ«ãƒ‰å›ºå®šã‚°ãƒªãƒƒãƒ‰ã‚’æç”»ã™ã‚‹ã€‚
     void RenderEditorGrid(RenderContext& rc, const EditorGridSettings& settings);
 
 private:
-    // ƒ‰ƒCƒ“•`‰æ—p‚Ì’¸“_B
+    // ãƒ©ã‚¤ãƒ³æç”»ç”¨ã®é ‚ç‚¹ã€‚
     struct Vertex
     {
-        // ’¸“_ˆÊ’uB
+        // é ‚ç‚¹ä½ç½®ã€‚
         DirectX::XMFLOAT3 position;
 
-        // ’¸“_FB
+        // é ‚ç‚¹è‰²ã€‚
         DirectX::XMFLOAT4 color;
     };
 
-    // ƒVƒF[ƒ_‚Ö“n‚·ƒV[ƒ“’è”B
+    // ã‚·ã‚§ãƒ¼ãƒ€ã¸æ¸¡ã™ã‚·ãƒ¼ãƒ³å®šæ•°ã€‚
     struct CbScene
     {
-        // ViewProjection s—ñB
+        // ViewProjection è¡Œåˆ—ã€‚
         DirectX::XMFLOAT4X4 viewProjection;
     };
 
-    // •`‰æ‚É•K—v‚ÈƒVƒF[ƒ_E“ü—ÍƒŒƒCƒAƒEƒgE’è”ƒoƒbƒtƒ@‚ğì¬‚·‚éB
+    // æç”»ã«å¿…è¦ãªã‚·ã‚§ãƒ¼ãƒ€ãƒ»å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆãƒ»å®šæ•°ãƒãƒƒãƒ•ã‚¡ã‚’ä½œæˆã™ã‚‹ã€‚
     bool EnsureResources();
 
-    // •K—v’¸“_”‚ğ–‚½‚·‚æ‚¤‚É’¸“_ƒoƒbƒtƒ@—e—Ê‚ğŠg’£‚·‚éB
+    // å¿…è¦é ‚ç‚¹æ•°ã‚’æº€ãŸã™ã‚ˆã†ã«é ‚ç‚¹ãƒãƒƒãƒ•ã‚¡å®¹é‡ã‚’æ‹¡å¼µã™ã‚‹ã€‚
     void EnsureVertexCapacity(uint32_t requiredVertexCount);
 
-    // ü•ª 1 –{‚Ô‚ñ‚Ì’¸“_‚ğ CPU ‘¤”z—ñ‚Ö’Ç‰Á‚·‚éB
+    // ç·šåˆ† 1 æœ¬ã¶ã‚“ã®é ‚ç‚¹ã‚’ CPU å´é…åˆ—ã¸è¿½åŠ ã™ã‚‹ã€‚
     void AppendLine(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b, const DirectX::XMFLOAT4& color);
 
-    // ƒ[ƒ‹ƒhÀ•W‚É‘µ‚Á‚½ XZ •½–ÊƒOƒŠƒbƒh‚ğ’Ç‰Á‚·‚éB
+    // ãƒ¯ãƒ¼ãƒ«ãƒ‰åº§æ¨™ã«æƒã£ãŸ XZ å¹³é¢ã‚°ãƒªãƒƒãƒ‰ã‚’è¿½åŠ ã™ã‚‹ã€‚
     void AppendWorldAlignedGrid(const DirectX::XMFLOAT3& center, int halfLineCount, float cellSize, float y,
         const DirectX::XMFLOAT4& minorColor, const DirectX::XMFLOAT4& axisXColor, const DirectX::XMFLOAT4& axisZColor);
 
-    // ”CˆÓ transform ‚ğ‚Âƒ[ƒJƒ‹ƒOƒŠƒbƒh‚ğ’Ç‰Á‚·‚éB
+    // ä»»æ„ transform ã‚’æŒã¤ãƒ­ãƒ¼ã‚«ãƒ«ã‚°ãƒªãƒƒãƒ‰ã‚’è¿½åŠ ã™ã‚‹ã€‚
     void AppendTransformedGrid(const DirectX::XMFLOAT4X4& transform, int subdivisions, float scale,
         const DirectX::XMFLOAT4& minorColor, const DirectX::XMFLOAT4& axisXColor, const DirectX::XMFLOAT4& axisZColor);
 
-    // Œ»İ‚½‚Ü‚Á‚Ä‚¢‚é’¸“_‚ğ GPU ‚Ö‘—‚èAÀÛ‚É•`‰æ‚·‚éB
+    // ç¾åœ¨ãŸã¾ã£ã¦ã„ã‚‹é ‚ç‚¹ã‚’ GPU ã¸é€ã‚Šã€å®Ÿéš›ã«æç”»ã™ã‚‹ã€‚
     void Flush(RenderContext& rc);
 
-    // ’¸“_ƒVƒF[ƒ_B
+    // é ‚ç‚¹ã‚·ã‚§ãƒ¼ãƒ€ã€‚
     std::unique_ptr<IShader> m_vertexShader;
 
-    // ƒsƒNƒZƒ‹ƒVƒF[ƒ_B
+    // ãƒ”ã‚¯ã‚»ãƒ«ã‚·ã‚§ãƒ¼ãƒ€ã€‚
     std::unique_ptr<IShader> m_pixelShader;
 
-    // “ü—ÍƒŒƒCƒAƒEƒgB
+    // å…¥åŠ›ãƒ¬ã‚¤ã‚¢ã‚¦ãƒˆã€‚
     std::unique_ptr<IInputLayout> m_inputLayout;
 
-    // ƒ‰ƒCƒ“’¸“_‚ğ‘—‚é‚½‚ß‚Ì’¸“_ƒoƒbƒtƒ@B
+    // ãƒ©ã‚¤ãƒ³é ‚ç‚¹ã‚’é€ã‚‹ãŸã‚ã®é ‚ç‚¹ãƒãƒƒãƒ•ã‚¡ã€‚
     std::unique_ptr<IBuffer> m_vertexBuffer;
 
-    // ViewProjection s—ñ—p‚Ì’è”ƒoƒbƒtƒ@B
+    // ViewProjection è¡Œåˆ—ç”¨ã®å®šæ•°ãƒãƒƒãƒ•ã‚¡ã€‚
     std::unique_ptr<IBuffer> m_constantBuffer;
 
-    // CPU ‘¤‚Åˆê“I‚É•Û‚·‚é’¸“_—ñB
+    // CPU å´ã§ä¸€æ™‚çš„ã«ä¿æŒã™ã‚‹é ‚ç‚¹åˆ—ã€‚
     std::vector<Vertex> m_vertices;
 
-    // Œ»İŠm•ÛÏ‚İ‚Ì’¸“_ƒoƒbƒtƒ@—e—ÊB
+    // ç¾åœ¨ç¢ºä¿æ¸ˆã¿ã®é ‚ç‚¹ãƒãƒƒãƒ•ã‚¡å®¹é‡ã€‚
     uint32_t m_vertexCapacity = 0;
 };

@@ -1,3 +1,4 @@
+﻿// HPGaugeSystem の Gameplay 関連実装をまとめます。
 #include "HPGaugeSystem.h"
 
 #include "Component/CanvasItemComponent.h"

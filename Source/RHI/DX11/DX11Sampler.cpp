@@ -1,3 +1,4 @@
+﻿// DX11Sampler の RHI バックエンド実装をまとめます。
 #include "DX11Sampler.h"
 
 DX11Sampler::DX11Sampler(ID3D11Device* device, const D3D11_SAMPLER_DESC& desc) {

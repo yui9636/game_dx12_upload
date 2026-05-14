@@ -19,9 +19,9 @@ struct ColliderComponent {
         DirectX::SimpleMath::Vector4 color{ 1.0f, 0.0f, 0.0f, 0.35f };
         ColliderAttribute attribute = ColliderAttribute::Body; //
 
-        // Body-only hit feedback. Read by DamageSystem when this element is
-        // hit by an Attack collider; HealthSystem then plays the VFX/SE at
-        // the contact point. Attack elements ignore these.
+        // Body 専用の被弾フィードバック。DamageSystem がこの要素を
+        // Attack collider に当たった Body として読み取り、HealthSystem が
+        // 接触点で VFX / SE を再生する。Attack 要素では無視される。
         std::string hitVfxPath;
         std::string hitSfxPath;
 

@@ -1,3 +1,4 @@
+﻿// TimelineRuntimeSystem の Gameplay 関連実装をまとめます。
 #include "TimelineRuntimeSystem.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/PlaybackComponent.h"

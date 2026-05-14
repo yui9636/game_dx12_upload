@@ -1,6 +1,6 @@
-#pragma once
+﻿#pragma once
 
-// Tag marking the active Camera2D for 2D rendering.
-// Symmetric to CameraMainTagComponent on the 3D side.
-// If multiple instances exist, the first one found wins and a warning is logged.
+// 2D rendering で使う active Camera2D を示す tag。
+// 3D 側の CameraMainTagComponent と対になる。
+// 複数存在する場合は最初に見つかったものを使い、warning を出す。
 struct Camera2DMainTagComponent {};

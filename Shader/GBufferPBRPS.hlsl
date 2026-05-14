@@ -18,8 +18,7 @@ struct PS_OUTPUT
 PS_OUTPUT main(VS_OUT pin)
 {
     PS_OUTPUT output;
-
-    // --- [ 1. �}�e���A���E�@���̌v�Z ] ---
+    // マテリアルテクスチャと法線マップから GBuffer 出力値を組み立てる。
     float3 albedoLin = pow(AlbedoMap.Sample(LinearSamp, pin.texcoord).rgb, GAMMA);
     albedoLin *= materialColor.rgb;
     
@@ -38,20 +37,20 @@ PS_OUTPUT main(VS_OUT pin)
 
     output.normalRoughness = float4(N, roughness);
 
-    // --- [ 2. WorldPos / Depth ] ---
+    // WorldPos と Depth を GBuffer へ書き込む。
     output.worldPosDepth = float4(pin.position, pin.vertex.z);
 
     float4 stableCurClip = mul(float4(pin.position, 1.0f), viewProjectionUnjittered);
     float2 currentNDC = stableCurClip.xy / stableCurClip.w;
 
-    // �ߋ��̍��W�� VS�Ōv�Z���ꂽ���[�J���̓����iprevWorldMatrix�j�𔽉f������̂���̂܂܎g��
-    // �iprevViewProjection �͌��X�W�b�^�[�����Ȃ̂ň����Z�͐�΂ɍs��Ȃ��j
+    // 直前フレームの座標は VS で計算済みの prevClipPos を使う。
+    // prevViewProjection はジッターなしなので、ここでは再計算しない。
     float2 prevNDC = pin.prevClipPos.xy / pin.prevClipPos.w;
 
     float2 currentUV = currentNDC * float2(0.5f, -0.5f) + 0.5f;
     float2 prevUV = prevNDC * float2(0.5f, -0.5f) + 0.5f;
     
-    // FSR2�̎d�l�ɏ]���u�ߋ� - ���݁v��o�́i����Ŋ��S�ȃW�b�^�[�t���[�ƂȂ�j
+    // FSR2 の仕様に合わせ、「過去 - 現在」を出力する。
     output.velocity = prevUV - currentUV;
     
    

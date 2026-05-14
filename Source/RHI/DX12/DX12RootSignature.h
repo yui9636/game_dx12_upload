@@ -1,13 +1,13 @@
-#pragma once
+﻿#pragma once
 #include "DX12Device.h"
 
-// Universal root signature for DX12 backend
-// Matches existing DX11 slot layout:
-//   b0: Scene CB (VS+PS)
-//   b1: Object CB (VS+PS)
-//   b2: Material CB (PS)
-//   t0~t63: SRV table (PS)
-//   s0~s3: Sampler table (PS)
+// DX12 backend 全体で使う共通 root signature。
+// 既存 DX11 の slot layout と対応させる。
+//   b0: Scene CB。VS と PS で参照する。
+//   b1: Object CB。VS と PS で参照する。
+//   b2: Material CB。PS で参照する。
+//   t0~t63: PS 用 SRV table。
+//   s0~s3: PS 用 Sampler table。
 class DX12RootSignature {
 public:
     DX12RootSignature(DX12Device* device);
@@ -15,7 +15,7 @@ public:
 
     ID3D12RootSignature* Get() const { return m_rootSignature.Get(); }
 
-    // Root parameter indices (b0-b7 CBVs + SRV table)
+    // root parameter index は b0-b7 の CBV と SRV table を並べる。
     enum Slot {
         CBV_b0 = 0, CBV_b1 = 1, CBV_b2 = 2, CBV_b3 = 3,
         CBV_b4 = 4, CBV_b5 = 5, CBV_b6 = 6, CBV_b7 = 7,

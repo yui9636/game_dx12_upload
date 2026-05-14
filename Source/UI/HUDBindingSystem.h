@@ -1,15 +1,15 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <DirectXMath.h>
 #include "Entity/Entity.h"
 
 class Registry;
 
-// Reads HealthComponent + HUDLinkComponent every frame and exposes the
-// resolved values via a process-wide static snapshot. Render code reads
-// the snapshot to drive the actual sprite-based HP bars (which are not
-// yet wired into the render pipeline as of this commit; this system
-// makes the data they will need available regardless).
+// HealthComponent と HUDLinkComponent を毎フレーム読み、
+// 解決済みの値をプロセス内共有の静的スナップショットとして公開する。
+// 描画側はこのスナップショットを読み、スプライトベースの HP バーを駆動する。
+// 現時点では描画パイプラインへ完全接続されていないが、
+// 必要なデータだけはこのシステムが先に用意する。
 class HUDBindingSystem {
 public:
     struct WorldEntry {

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 #include <memory>
@@ -24,11 +24,8 @@ private:
 
     std::unique_ptr<IPipelineState> m_psoRaymarch;
     std::unique_ptr<IPipelineState> m_psoBlur;
-
-    // ====================================================
-    // ====================================================
-    ResourceHandle m_hGBuffer1;  // Normal
-    ResourceHandle m_hGBuffer2;  // WorldPos
+    ResourceHandle m_hGBuffer1;  // 法線。
+    ResourceHandle m_hGBuffer2;  // WorldPos 用。
     ResourceHandle m_hPrevScene;
 
     ResourceHandle m_hSSGI;

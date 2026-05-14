@@ -1,3 +1,4 @@
+﻿// PostProcessPass のレンダーパス実装をまとめます。
 #include "PostProcessPass.h"
 
 #include "../Graphics.h"

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 
@@ -10,8 +10,8 @@ enum class ActorType : uint8_t {
     Neutral = 4,
 };
 
-// Generic actor identification for gameplay / VFX targeting.
-// Coexists with PlayerTagComponent (which is reserved for input device routing).
+// gameplay と VFX のターゲット解決に使う汎用 actor 識別。
+// 入力デバイス routing 用の PlayerTagComponent と併用する。
 struct ActorTypeComponent
 {
     ActorType type       = ActorType::None;

@@ -1,3 +1,4 @@
+﻿// ReflectionProbeComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 #include <wrl.h>
 #include <d3d11.h>

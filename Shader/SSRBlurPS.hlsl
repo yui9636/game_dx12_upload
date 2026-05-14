@@ -1,11 +1,9 @@
-// ==========================================
 // SSRBlurPS.hlsl (材質に応じた反射のぼかし)
-// ==========================================
 #include "FullScreenQuad.hlsli"
 
 Texture2D SSRMap : register(t0); // 生のSSR
-Texture2D GBuffer1 : register(t1); // Normal + Roughness
-Texture2D GBuffer2 : register(t2); // WorldPos
+Texture2D GBuffer1 : register(t1); // 法線と Roughness。
+Texture2D GBuffer2 : register(t2); // WorldPos 用。
 
 SamplerState pointSampler : register(s2);
 SamplerState linearSampler : register(s3);

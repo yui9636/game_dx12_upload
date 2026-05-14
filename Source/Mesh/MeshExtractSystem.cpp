@@ -19,7 +19,7 @@ namespace
         seed ^= value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2);
     }
 
-    // float のビット列をそのまま uint32_t として扱い、マテリアル差分判定用のハッシュに変換する。
+    // float 値。 のビット列をそのまま uint32_t として扱い、マテリアル差分判定用のハッシュに変換する。
     inline uint64_t HashFloat(float value)
     {
         uint32_t bits = 0;

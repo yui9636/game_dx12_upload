@@ -1,4 +1,4 @@
-#include "InputDebugSystem.h"
+﻿#include "InputDebugSystem.h"
 #include "InputActionMapComponent.h"
 #include "InputDebugStateComponent.h"
 #include "InputContextComponent.h"
@@ -14,7 +14,7 @@
 #include <imgui.h>
 #include <cstring>
 
-// ---- Rebind state (file-local) ----
+// このファイル内で保持する rebind 状態。
 void InputDebugSystem::Update(Registry& registry, const InputEventQueue& queue) {
     Signature sig = CreateSignature<InputDebugStateComponent>();
     auto archetypes = registry.GetAllArchetypes();
@@ -55,7 +55,7 @@ static const char* EventTypeName(InputEventType type) {
 }
 
 static const char* GetScancodeLabel(uint32_t scancode) {
-    // Common SDL scancodes
+    // よく使う SDL scancode。
     static char buf[16];
     switch (scancode) {
     case 4: return "A"; case 5: return "B"; case 6: return "C"; case 7: return "D";
@@ -125,7 +125,7 @@ static void DrawBindingsTab(Registry& registry) {
 
             const char* treeLabel = actionMap.name.empty() ? "(embedded input map)" : actionMap.name.c_str();
             if (ImGui::TreeNodeEx(treeLabel, ImGuiTreeNodeFlags_DefaultOpen)) {
-                // Actions table
+                // action 一覧テーブル。
                 if (!actionMap.actions.empty()) {
                     ImGui::Text("Actions:");
                     ImGui::Columns(4, "BindCols");
@@ -155,7 +155,7 @@ static void DrawBindingsTab(Registry& registry) {
                     ImGui::Columns(1);
                 }
 
-                // Axes table
+                // axis 一覧テーブル。
                 if (!actionMap.axes.empty()) {
                     ImGui::Spacing();
                     ImGui::Text("Axes:");
@@ -197,7 +197,7 @@ void InputDebugSystem::DrawDebugWindow(Registry& registry, IInputBackend& backen
     }
 
     if (ImGui::BeginTabBar("InputDebugTabs")) {
-        // Tab: Connected Devices
+        // Connected Devices タブ。
         if (ImGui::BeginTabItem("Devices")) {
             auto devices = backend.GetConnectedDevices();
             ImGui::Columns(3);
@@ -218,7 +218,7 @@ void InputDebugSystem::DrawDebugWindow(Registry& registry, IInputBackend& backen
             ImGui::EndTabItem();
         }
 
-        // Tab: Active Contexts
+        // Active Contexts タブ。
         if (ImGui::BeginTabItem("Contexts")) {
             Signature sig = CreateSignature<InputContextComponent>();
             auto archetypes = registry.GetAllArchetypes();
@@ -244,7 +244,7 @@ void InputDebugSystem::DrawDebugWindow(Registry& registry, IInputBackend& backen
             ImGui::EndTabItem();
         }
 
-        // Tab: Resolved Actions
+        // Resolved Actions タブ。
         if (ImGui::BeginTabItem("Actions")) {
             Signature sig = CreateSignature<ResolvedInputStateComponent>();
             auto archetypes = registry.GetAllArchetypes();
@@ -273,13 +273,13 @@ void InputDebugSystem::DrawDebugWindow(Registry& registry, IInputBackend& backen
             ImGui::EndTabItem();
         }
 
-        // Tab: Bindings (NEW)
+        // Bindings タブ。
         if (ImGui::BeginTabItem("Bindings")) {
             DrawBindingsTab(registry);
             ImGui::EndTabItem();
         }
 
-        // Tab: Event Log
+        // Event Log タブ。
         if (ImGui::BeginTabItem("Event Log")) {
             Signature sig = CreateSignature<InputDebugStateComponent>();
             auto archetypes = registry.GetAllArchetypes();

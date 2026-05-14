@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <d3d11.h>
 
 namespace DirectX { class ScratchImage; struct TexMetadata; }
+// GpuResourceUtils は複数の処理から使う変換・補助関数をまとめて提供する。
 
 class GpuResourceUtils
 {

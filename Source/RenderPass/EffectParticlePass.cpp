@@ -40,11 +40,11 @@ namespace
     constexpr uint32_t kEffectParticleArenaGrowthPages = 64u;
     constexpr uint32_t kEffectParticleCounterReadbackLatency = 3u;
 
-    // Per-renderer budget caps (spec §0: Tiered Performance Targets)
-    constexpr uint32_t kBillboardBudgetCapacity = 2'000'000u;  // Tier 1 must
+    // renderer ごとの予算上限（仕様 §0: 段階別パフォーマンス目標）
+    constexpr uint32_t kBillboardBudgetCapacity = 2'000'000u;  // Tier 1 必須
     constexpr uint32_t kMeshBudgetCapacity      = 250'000u;
     constexpr uint32_t kRibbonBudgetCapacity    = 100'000u;
-    // Readback throttling: only readback every N frames per emitter
+    // readback 間引き: emitter ごとに N フレームおきにだけ readback する。
     constexpr uint32_t kReadbackThrottleInterval = 2u;
 
     enum class ParticlePageState : uint32_t
@@ -105,36 +105,36 @@ namespace
         DirectX::XMFLOAT4 sizeSeed = { 0.18f, 0.04f, 1.0f, 0.0f };
         DirectX::XMFLOAT4 subUvParams = { 1.0f, 1.0f, 0.0f, 0.0f };
         DirectX::XMFLOAT4 motionParams = { 0.0f, 0.18f, 0.20f, 0.0f };
-        DirectX::XMFLOAT4 randomParams = { 0.0f, 0.0f, 0.0f, 0.0f }; // x=speedRange, y=sizeRange, z=lifeRange, w=windStrength
-        DirectX::XMFLOAT4 windDirection = { 1.0f, 0.0f, 0.0f, 0.0f }; // xyz=direction, w=turbulence
-        // Phase 1C: Size curve (4 keys)
+        DirectX::XMFLOAT4 randomParams = { 0.0f, 0.0f, 0.0f, 0.0f }; // x は speedRange、y は sizeRange、z は lifeRange、w は windStrength。
+        DirectX::XMFLOAT4 windDirection = { 1.0f, 0.0f, 0.0f, 0.0f }; // xyz は direction、w は turbulence。
+        // フェーズ 1C: サイズカーブ（4 キー）
         DirectX::XMFLOAT4 sizeCurveValues = { 0.18f, 0.18f, 0.04f, 0.04f }; // s0,s1,s2,s3
         DirectX::XMFLOAT4 sizeCurveTimes  = { 0.0f,  0.33f, 0.66f, 1.0f };  // t0,t1,t2,t3
-        // Phase 1C: Color gradient (4 keys)
+        // フェーズ 1C: 色グラデーション（4 キー）
         DirectX::XMFLOAT4 gradientColor0 = { 1.0f, 1.0f, 1.0f, 1.0f };
         DirectX::XMFLOAT4 gradientColor1 = { 1.0f, 1.0f, 1.0f, 1.0f };
         DirectX::XMFLOAT4 gradientColor2 = { 1.0f, 1.0f, 1.0f, 0.0f };
         DirectX::XMFLOAT4 gradientColor3 = { 1.0f, 1.0f, 1.0f, 0.0f };
         DirectX::XMFLOAT4 gradientTimes  = { 0.0f, 0.33f, 0.66f, 1.0f }; // t0,t1,t2,t3
-        // Phase 2: Attractors
+        // フェーズ 2: Attractor
         DirectX::XMFLOAT4 attractor0 = {};
         DirectX::XMFLOAT4 attractor1 = {};
         DirectX::XMFLOAT4 attractor2 = {};
         DirectX::XMFLOAT4 attractor3 = {};
         DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
         DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f };
-        // Phase 2: Collision
+        // フェーズ 2: コリジョン
         DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
         DirectX::XMFLOAT4 collisionSphere0 = {};
         DirectX::XMFLOAT4 collisionSphere1 = {};
         DirectX::XMFLOAT4 collisionSphere2 = {};
         DirectX::XMFLOAT4 collisionSphere3 = {};
-        DirectX::XMFLOAT4 collisionParams = {}; // x=restitution, y=friction, z=sphereCount, w=attractorCount
-        // Mesh particle params (used only when meshFlags.x != 0; zero-default keeps billboard/ribbon emits unchanged)
-        DirectX::XMFLOAT4 meshInitialScale = { 1.0f, 1.0f, 1.0f, 0.0f };        // xyz=scale, w=scaleRandomRange
-        DirectX::XMFLOAT4 meshAngularAxisSpeed = { 0.0f, 1.0f, 0.0f, 0.0f };    // xyz=axis, w=rad/s
-        DirectX::XMFLOAT4 meshAngularRandomOrient = { 0.0f, 0.0f, 0.0f, 0.0f }; // xyz=yaw/pitch/roll range, w=speed random
-        DirectX::XMFLOAT4 meshFlags = { 0.0f, 0.0f, 0.0f, 0.0f };               // x=isMeshMode (0/1)
+        DirectX::XMFLOAT4 collisionParams = {}; // x は restitution、y は friction、z は sphereCount、w は attractorCount。
+        // メッシュパーティクル設定（meshFlags.x != 0 のときだけ使用。0 既定なら billboard/ribbon の emit は変わらない）
+        DirectX::XMFLOAT4 meshInitialScale = { 1.0f, 1.0f, 1.0f, 0.0f };        // xyz は scale、w は scaleRandomRange。
+        DirectX::XMFLOAT4 meshAngularAxisSpeed = { 0.0f, 1.0f, 0.0f, 0.0f };    // xyz は axis、w は rad/s。
+        DirectX::XMFLOAT4 meshAngularRandomOrient = { 0.0f, 0.0f, 0.0f, 0.0f }; // xyz=yaw / pitch / roll の範囲、w=speed random。
+        DirectX::XMFLOAT4 meshFlags = { 0.0f, 0.0f, 0.0f, 0.0f };               // x=isMeshMode。0 または 1。
     };
 
     struct EffectParticleSortConstants
@@ -185,16 +185,16 @@ namespace
 
     struct ParticleCounterSnapshot
     {
-        // Must match GPU RWByteAddressBuffer layout in EffectParticleSoA.hlsli
-        uint32_t aliveBillboard = 0;   // offset 0  = COUNTER_ALIVE_BILLBOARD
-        uint32_t aliveMesh = 0;        // offset 4  = COUNTER_ALIVE_MESH
-        uint32_t aliveRibbon = 0;      // offset 8  = COUNTER_ALIVE_RIBBON
-        uint32_t aliveTotal = 0;       // offset 12 = COUNTER_ALIVE_TOTAL
-        uint32_t allocatedPages = 0;   // offset 16 = COUNTER_ALLOCATED_PAGES
-        uint32_t sparsePages = 0;      // offset 20 = COUNTER_SPARSE_PAGES
-        uint32_t overflowCount = 0;    // offset 24 = COUNTER_OVERFLOW
-        uint32_t droppedEmit = 0;      // offset 28 = COUNTER_DROPPED_EMIT
-        uint32_t deadStackTop = 0;     // offset 32 = COUNTER_DEAD_STACK_TOP
+        // EffectParticleSoA.hlsli の GPU RWByteAddressBuffer レイアウトと一致させる。
+        uint32_t aliveBillboard = 0;   // offset 0 は COUNTER_ALIVE_BILLBOARD。
+        uint32_t aliveMesh = 0;        // offset 4 は COUNTER_ALIVE_MESH。
+        uint32_t aliveRibbon = 0;      // offset 8 は COUNTER_ALIVE_RIBBON。
+        uint32_t aliveTotal = 0;       // offset 12 は COUNTER_ALIVE_TOTAL。
+        uint32_t allocatedPages = 0;   // offset 16 は COUNTER_ALLOCATED_PAGES。
+        uint32_t sparsePages = 0;      // offset 20 は COUNTER_SPARSE_PAGES。
+        uint32_t overflowCount = 0;    // offset 24 は COUNTER_OVERFLOW。
+        uint32_t droppedEmit = 0;      // offset 28 は COUNTER_DROPPED_EMIT。
+        uint32_t deadStackTop = 0;     // offset 32 は COUNTER_DEAD_STACK_TOP。
     };
 
     struct ParticleCounterReadbackSlot
@@ -242,7 +242,7 @@ namespace
         std::array<ParticleCounterReadbackSlot, kEffectParticleCounterReadbackLatency> counterReadbacks = {};
     };
 
-    // SoA GPU struct sizes (must match HLSL)
+    // SoA GPU 構造体サイズ（HLSL と一致させる）
     constexpr uint32_t kBillboardHotStride = 32u;
     constexpr uint32_t kBillboardWarmStride = 16u;
     constexpr uint32_t kBillboardColdStride = 32u;
@@ -251,30 +251,30 @@ namespace
 
     struct ParticleSharedArenaBuffers
     {
-        // SoA streams (replace single particleDataBuffer)
+        // SoA stream（単一 particleDataBuffer を置き換える）
         std::unique_ptr<IBuffer> billboardHotBuffer;
         std::unique_ptr<IBuffer> billboardWarmBuffer;
         std::unique_ptr<IBuffer> billboardColdBuffer;
         std::unique_ptr<IBuffer> billboardHeaderBuffer;
-        std::unique_ptr<IBuffer> meshAttribHotBuffer; // Mesh renderer bin only; billboards/ribbons ignore
+        std::unique_ptr<IBuffer> meshAttribHotBuffer; // メッシュ renderer bin 専用。billboard/ribbon は無視する。
         std::unique_ptr<IBuffer> ribbonHistoryBuffer;
         std::unique_ptr<IBuffer> deadListBuffer;
-        // Per-frame scratch
+        // フレーム単位の一時領域
         std::unique_ptr<IBuffer> aliveListBuffer;
         std::unique_ptr<IBuffer> pageAliveCountBuffer;
         std::unique_ptr<IBuffer> pageAliveOffsetBuffer;
-        // Bin system (Phase 2)
-        std::unique_ptr<IBuffer> binCounterBuffer;      // 4B * MAX_BINS
-        std::unique_ptr<IBuffer> binIndexBuffer;         // 4B * totalCapacity (bin-sorted indices)
-        std::unique_ptr<IBuffer> binOffsetBuffer;        // 4B * MAX_BINS (exclusive prefix per bin)
-        std::unique_ptr<IBuffer> binIndirectArgsBuffer;  // 16B * MAX_BINS (D3D12_DRAW_ARGUMENTS per bin)
-        // CoarseDepthBin (Phase 3)
+        // bin system（フェーズ 2）
+        std::unique_ptr<IBuffer> binCounterBuffer;      // 4B * MAX_BINS 分の領域。
+        std::unique_ptr<IBuffer> binIndexBuffer;         // 4B * totalCapacity 分の領域。。bin sort 済み index。
+        std::unique_ptr<IBuffer> binOffsetBuffer;        // 4B * MAX_BINS 分の領域。 (exclusive prefix per bin)
+        std::unique_ptr<IBuffer> binIndirectArgsBuffer;  // 16B * MAX_BINS。bin ごとの D3D12_DRAW_ARGUMENTS。
+        // CoarseDepthBin（フェーズ 3）
         std::unique_ptr<IBuffer> depthBinCounterBuffer;    // 4B * 32
-        std::unique_ptr<IBuffer> depthBinIndexBuffer;       // 4B * totalCapacity
+        std::unique_ptr<IBuffer> depthBinIndexBuffer;       // 4B * totalCapacity 分の領域。
         std::unique_ptr<IBuffer> depthBinIndirectArgsBuffer; // 16B * 32
         uint32_t totalPages = 0;
         uint32_t totalCapacity = 0;
-        // Per-renderer budget tracking (allocated slot counts)
+        // renderer ごとの予算追跡（割り当て済み slot 数）
         uint32_t billboardAllocatedSlots = 0u;
         uint32_t meshAllocatedSlots = 0u;
         uint32_t ribbonAllocatedSlots = 0u;
@@ -304,10 +304,10 @@ namespace
         D3D12_GPU_VIRTUAL_ADDRESS aliveListGpuVa = 0ull;
         D3D12_GPU_VIRTUAL_ADDRESS billboardHotGpuVa = 0ull;
         D3D12_GPU_VIRTUAL_ADDRESS billboardWarmGpuVa = 0ull;
-        DX12Buffer* indirectArgsBuffer = nullptr;         // legacy per-emitter indirect args
-        DX12Buffer* binIndirectArgsBuffer = nullptr;      // per-bin indirect args (Phase 2)
-        D3D12_GPU_VIRTUAL_ADDRESS binIndexGpuVa = 0ull;   // bin-sorted particle indices
-        DX12Buffer* depthBinIndirectArgsBuffer = nullptr;  // per-depth-bin indirect args (Phase 3)
+        DX12Buffer* indirectArgsBuffer = nullptr;         // 旧 emitter ごとの indirect args
+        DX12Buffer* binIndirectArgsBuffer = nullptr;      // bin ごとの indirect args（フェーズ 2）
+        D3D12_GPU_VIRTUAL_ADDRESS binIndexGpuVa = 0ull;   // bin ソート済みパーティクル index
+        DX12Buffer* depthBinIndirectArgsBuffer = nullptr;  // depth bin ごとの indirect args（フェーズ 3）
         D3D12_GPU_VIRTUAL_ADDRESS depthBinIndexGpuVa = 0ull;
         EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
     };
@@ -316,12 +316,12 @@ namespace
     {
         const EffectParticlePacket* packet = nullptr;
         D3D12_GPU_VIRTUAL_ADDRESS aliveListGpuVa = 0ull;    // t0
-        D3D12_GPU_VIRTUAL_ADDRESS hotGpuVa = 0ull;          // t1 (BillboardHot - position/velocity)
-        D3D12_GPU_VIRTUAL_ADDRESS warmGpuVa = 0ull;         // t2 (BillboardWarm - packedColor)
-        D3D12_GPU_VIRTUAL_ADDRESS headerGpuVa = 0ull;       // t3 (BillboardHeader - alive flag)
-        D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVa = 0ull;// t4 (MeshAttribHot - rotation/scale)
+        D3D12_GPU_VIRTUAL_ADDRESS hotGpuVa = 0ull;          // t1 は BillboardHot の position / velocity。
+        D3D12_GPU_VIRTUAL_ADDRESS warmGpuVa = 0ull;         // t2 は BillboardWarm の packedColor。
+        D3D12_GPU_VIRTUAL_ADDRESS headerGpuVa = 0ull;       // t3 は BillboardHeader の alive flag。
+        D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVa = 0ull;// t4 は MeshAttribHot の rotation / scale。
         DX12Buffer* indirectArgsBuffer = nullptr;
-        uint32_t drawCount = 0; // CPU-side estimate; DrawIndexedInstanced uses this as instanceCount
+        uint32_t drawCount = 0; // CPU 側推定値。DrawIndexedInstanced はこれを instanceCount として使う。
     };
 
     struct RibbonDrawEntry
@@ -347,8 +347,8 @@ namespace
         ComPtr<ID3D12PipelineState> buildDrawArgsPipelineState;
         ComPtr<ID3D12PipelineState> buildBinsPipelineState;
         ComPtr<ID3D12PipelineState> buildBinArgsPipelineState;
-        ComPtr<ID3D12RootSignature> binRootSignature;      // for BuildBins + BuildBinArgs
-        ComPtr<ID3D12CommandSignature> binCommandSignature; // per-bin ExecuteIndirect
+        ComPtr<ID3D12RootSignature> binRootSignature;      // BuildBins + BuildBinArgs 用
+        ComPtr<ID3D12CommandSignature> binCommandSignature; // bin ごとの ExecuteIndirect
         ComPtr<ID3D12PipelineState> coarseDepthPipelineState;
         ComPtr<ID3D12PipelineState> depthBinArgsPipelineState;
         ComPtr<ID3D12RootSignature> coarseDepthRootSignature;
@@ -377,7 +377,7 @@ namespace
         bool warnedNonDx12 = false;
         bool warnedMissingMesh = false;
 
-        // Trail pipeline
+        // トレイルパイプライン
         ComPtr<ID3D12RootSignature> trailRootSignature;
         ComPtr<ID3D12PipelineState> trailPipelineState;
     };
@@ -444,8 +444,8 @@ namespace
         return dx * dx + dy * dy + dz * dz;
     }
 
-    // D3D12 dispatch limit: 65535 thread groups per dimension × 64 threads = 4,194,240 max.
-    // Capacity beyond this requires 2D dispatch or shader-level offset (future work).
+    // D3D12 の dispatch 上限: 次元ごとに 65535 thread group × 64 thread = 最大 4,194,240。
+    // これを超える容量は 2D dispatch または shader 側 offset が必要（今後対応）。
     constexpr uint32_t kMaxSingleDispatchParticles = 65535u * 64u;
 
     uint32_t AlignParticleCapacity(uint32_t requested)
@@ -568,27 +568,27 @@ namespace
         }
 
         const uint32_t totalCapacity = targetPages * kEffectParticlePageSize;
-        // SoA buffers: Hot(32B), Warm(16B), Cold(32B), Header(8B)
+        // SoA buffer は Hot(32B)、Warm(16B)、Cold(32B)、Header(8B) を持つ。
         auto newHotBuffer = factory->CreateBuffer(kBillboardHotStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newWarmBuffer = factory->CreateBuffer(kBillboardWarmStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newColdBuffer = factory->CreateBuffer(kBillboardColdStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newHeaderBuffer = factory->CreateBuffer(kBillboardHeaderStride * totalCapacity, BufferType::UAVStorage, nullptr);
-        // Mesh attribute hot stream (quaternion + scale + angular velocity). Allocated for every arena so
-        // the u8 slot is always bindable — billboard/ribbon paths simply skip writing it via gMeshFlags.x.
+        // メッシュ属性 hot stream（クォータニオン + スケール + 角速度）。すべての arena で確保するため、
+        // u8 slot は常に bind 可能。billboard/ribbon 経路は gMeshFlags.x で書き込みを省く。
         auto newMeshAttribHotBuffer = factory->CreateBuffer(kMeshAttribHotStride * totalCapacity, BufferType::UAVStorage, nullptr);
         auto newRibbonHistoryBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(DirectX::XMFLOAT4) * totalCapacity * kEffectParticleRibbonHistoryLength), BufferType::UAVStorage, nullptr);
         auto newDeadListBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
-        // Per-frame scratch
+        // フレーム単位の一時領域
         auto newAliveListBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
         auto newPageAliveCountBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * targetPages), BufferType::UAVStorage, nullptr);
         auto newPageAliveOffsetBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * targetPages), BufferType::UAVStorage, nullptr);
-        // Bin system buffers
+        // bin system 用 buffer。
         constexpr uint32_t kMaxBins = 16u;
         auto newBinCounterBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * kMaxBins), BufferType::UAVStorage, nullptr);
         auto newBinIndexBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
         auto newBinOffsetBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * kMaxBins), BufferType::UAVStorage, nullptr);
         auto newBinIndirectArgsBuffer = factory->CreateBuffer(static_cast<uint32_t>(16u * kMaxBins), BufferType::UAVStorage, nullptr);
-        // CoarseDepthBin buffers
+        // CoarseDepthBin 用 buffer。
         constexpr uint32_t kDepthBins = 32u;
         auto newDepthBinCounterBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * kDepthBins), BufferType::UAVStorage, nullptr);
         auto newDepthBinIndexBuffer = factory->CreateBuffer(static_cast<uint32_t>(sizeof(uint32_t) * totalCapacity), BufferType::UAVStorage, nullptr);
@@ -846,7 +846,7 @@ namespace
             rt.SrcBlend = D3D12_BLEND_ONE;         rt.DestBlend = D3D12_BLEND_INV_SRC_COLOR;
             rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_ONE;
             break;
-        default: // PremultipliedAlpha
+        default: // 既定は PremultipliedAlpha。
             rt.SrcBlend = D3D12_BLEND_ONE;         rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
             rt.SrcBlendAlpha = D3D12_BLEND_ONE;    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
             break;
@@ -1148,24 +1148,24 @@ namespace
         D3D12_DESCRIPTOR_RANGE1 srvRange = {};
         srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         srvRange.NumDescriptors = 1;
-        srvRange.BaseShaderRegister = 1;  // t1 for Cold (read-only in Update)
+        srvRange.BaseShaderRegister = 1;  // t1 は Update で読み取り専用の Cold 用。
         srvRange.RegisterSpace = 0;
         srvRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         srvRange.OffsetInDescriptorsFromTableStart = 0;
 
-        // Root params: b0, t0, u0-u8, descriptorTable(CurlNoise t1)
-        // [0] b0  = CBV (simulation params)
-        // [1] t0  = SRV (alive list prev / page table)
-        // [2] u0  = UAV (BillboardHot)
-        // [3] u1  = UAV (BillboardWarm)
-        // [4] u2  = UAV (BillboardCold)
-        // [5] u3  = UAV (BillboardHeader)
-        // [6] u4  = UAV (DeadStack)
-        // [7] u5  = UAV (Counter)
-        // [8] u6  = UAV (RibbonHistory)
-        // [9] u7  = UAV (PageAliveCount) -- only used by Update
-        // [10] u8 = UAV (MeshAttribHot) -- written only when gMeshFlags.x != 0; bound always to satisfy validation
-        // [11] descriptorTable = curl noise SRV
+        // root parameter は b0、t0、u0-u8、CurlNoise t1 の descriptorTable。
+        // [0] b0 は simulation parameter の CBV。
+        // [1] t0 は previous alive list / page table の SRV。
+        // [2] u0 は BillboardHot の UAV。
+        // [3] u1 は BillboardWarm の UAV。
+        // [4] u2 は BillboardCold の UAV。
+        // [5] u3 は BillboardHeader の UAV。
+        // [6] u4 は DeadStack の UAV。
+        // [7] u5 は Counter の UAV。
+        // [8] u6 は RibbonHistory の UAV。
+        // [9] u7 は PageAliveCount の UAV。Update だけで使う。
+        // [10] u8 は MeshAttribHot の UAV。gMeshFlags.x != 0 のときだけ書くが validation のため常に bind する。
+        // [11] は curl noise SRV の descriptorTable。
         D3D12_ROOT_PARAMETER1 params[12] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -1296,13 +1296,13 @@ namespace
             return false;
         }
 
-        // Bin root signature:
-        // [0] SRV t0 = AliveList
-        // [1] SRV t1 = BillboardWarm
-        // [2] SRV t2 = BillboardHeader
-        // [3] UAV u0 = BinIndex
-        // [4] UAV u1 = BinCounter
-        // [5] UAV u2 = CounterBuffer (for aliveCount)
+        // bin 処理用 root signature。
+        // [0] SRV t0 は AliveList。
+        // [1] SRV t1 は BillboardWarm。
+        // [2] SRV t2 は BillboardHeader。
+        // [3] UAV u0 は BinIndex。
+        // [4] UAV u1 は BinCounter。
+        // [5] UAV u2 は aliveCount 用 CounterBuffer。
         D3D12_ROOT_PARAMETER1 binParams[6] = {};
         binParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         binParams[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -1372,12 +1372,12 @@ namespace
             return false;
         }
 
-        // Command signature for per-bin ExecuteIndirect (D3D12_DRAW_ARGUMENTS = 16 bytes)
+        // bin ごとの ExecuteIndirect 用 command signature。D3D12_DRAW_ARGUMENTS は 16 byte。
         D3D12_INDIRECT_ARGUMENT_DESC indirectArg = {};
         indirectArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
 
         D3D12_COMMAND_SIGNATURE_DESC cmdSigDesc = {};
-        cmdSigDesc.ByteStride = 16u; // sizeof(D3D12_DRAW_ARGUMENTS)
+        cmdSigDesc.ByteStride = 16u; // D3D12_DRAW_ARGUMENTS のサイズ。
         cmdSigDesc.NumArgumentDescs = 1;
         cmdSigDesc.pArgumentDescs = &indirectArg;
 
@@ -1402,8 +1402,8 @@ namespace
             return false;
         }
 
-        // CoarseDepth root signature:
-        // [0] CBV b0, [1] SRV t0, [2] SRV t1, [3] UAV u0, [4] UAV u1, [5] UAV u2
+        // CoarseDepth 用 root signature。
+        // [0] は CBV b0、[1] は SRV t0、[2] は SRV t1、[3] は UAV u0、[4] は UAV u1、[5] は UAV u2。
         D3D12_ROOT_PARAMETER1 depthParams[6] = {};
         depthParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         depthParams[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -1565,20 +1565,20 @@ namespace
         textureRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         textureRange.OffsetInDescriptorsFromTableStart = 0;
 
-        // Billboard root sig: b0(scene), t0(AliveList), t2(BillboardHot), t3(BillboardWarm), b2(render), descriptorTable(textures)
+        // Billboard 用 root signature は b0(scene)、t0(AliveList)、t2(BillboardHot)、t3(BillboardWarm)、b2(render)、texture descriptorTable。
         D3D12_ROOT_PARAMETER1 params[6] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
         params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[1].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
-        params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t0 = AliveList
+        params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t0 は AliveList。
         params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[2].Descriptor = { 2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
-        params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t2 = BillboardHot
+        params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t2 は BillboardHot。
         params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[3].Descriptor = { 3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
-        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t3 = BillboardWarm
+        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_GEOMETRY;  // t3 は BillboardWarm。
         params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[4].Descriptor = { 2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
         params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
@@ -1653,7 +1653,7 @@ namespace
             return false;
         }
 
-        // Create blend mode PSO variants
+        // blend mode ごとの PSO variant を作る。
         for (int i = 0; i < static_cast<int>(EffectParticleBlendMode::EnumCount); ++i) {
             psoDesc.BlendState = CreateBlendDesc(static_cast<EffectParticleBlendMode>(i));
             hr = d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&resources.billboardBlendPSOs[i]));
@@ -1699,8 +1699,8 @@ namespace
         textureRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         textureRange.OffsetInDescriptorsFromTableStart = 0;
 
-        // Ribbon root sig: [0]=b0 CbScene, [1]=t0 AliveList, [2]=t1 Hot, [3]=t2 Warm,
-        //                   [4]=t3 RibbonHistory, [5]=b2 RenderConstants, [6]=descriptor table
+        // Ribbon 用 root signature は [0]=b0 CbScene、[1]=t0 AliveList、[2]=t1 Hot、[3]=t2 Warm、
+        // [4] は t3 RibbonHistory、[5] は b2 RenderConstants、[6] は descriptor table。
         D3D12_ROOT_PARAMETER1 params[7] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -1791,7 +1791,7 @@ namespace
             return false;
         }
 
-        // Create blend mode PSO variants for ribbon
+        // blend mode ごとの PSO variant を作る。 for ribbon
         for (int i = 0; i < static_cast<int>(EffectParticleBlendMode::EnumCount); ++i) {
             psoDesc.BlendState = CreateBlendDesc(static_cast<EffectParticleBlendMode>(i));
             hr = d3dDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&resources.ribbonBlendPSOs[i]));
@@ -1815,8 +1815,8 @@ namespace
             return false;
         }
 
-        // SoA mesh VS consumes: AliveList(t0), BillboardHot(t1), BillboardWarm(t2),
-        // BillboardHeader(t3), MeshAttribHot(t4). PS consumes color_map at t5 via table.
+        // SoA mesh VS は AliveList(t0)、BillboardHot(t1)、BillboardWarm(t2) を読む。
+        // BillboardHeader(t3)、MeshAttribHot(t4) も読み、PS は table 経由で t5 の color_map を読む。
         D3D12_DESCRIPTOR_RANGE1 textureRange = {};
         textureRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         textureRange.NumDescriptors = 1;
@@ -1825,14 +1825,14 @@ namespace
         textureRange.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
         textureRange.OffsetInDescriptorsFromTableStart = 0;
 
-        // [0] b0 CBV (CbScene: viewProj/light)
-        // [1] b2 CBV (render cbuffer: velocity stretch / global_alpha / curl_noise)
-        // [2] t0 SRV (AliveList)            [VS]
-        // [3] t1 SRV (BillboardHot)         [VS]
-        // [4] t2 SRV (BillboardWarm)        [VS]
-        // [5] t3 SRV (BillboardHeader)      [VS]
-        // [6] t4 SRV (MeshAttribHot)        [VS]
-        // [7] table t5 (color_map)          [PS]
+        // [0] b0 CBV は CbScene の viewProj / light。
+        // [1] b2 CBV は velocity stretch、global_alpha、curl_noise 用 render cbuffer。
+        // [2] t0 SRV は VS 用 AliveList。
+        // [3] t1 SRV は VS 用 BillboardHot。
+        // [4] t2 SRV は VS 用 BillboardWarm。
+        // [5] t3 SRV は VS 用 BillboardHeader。
+        // [6] t4 SRV は VS 用 MeshAttribHot。
+        // [7] table t5 は PS 用 color_map。
         D3D12_ROOT_PARAMETER1 params[8] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -1949,7 +1949,7 @@ namespace
             return false;
         }
 
-        // Trail root sig: [0]=b0 CbTrail (ViewProjection matrix)
+        // Trail 用 root signature は [0]=b0 CbTrail。ViewProjection matrix を持つ。
         D3D12_ROOT_PARAMETER1 params[1] = {};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -2125,7 +2125,7 @@ namespace
             return nullptr;
         }
 
-        // Per-renderer budget enforcement
+        // renderer ごとの予算適用
         const uint32_t budget = GetRendererBudget(drawMode);
         uint32_t& allocatedSlots = GetRendererAllocatedSlots(resources.sharedArena, drawMode);
         const uint32_t clampedMax = (std::min)(maxParticles, budget);
@@ -2136,14 +2136,14 @@ namespace
         const uint32_t requiredCapacity = AlignParticleCapacity(clampedMax);
         const uint32_t requiredPages = ComputeParticlePageCount(requiredCapacity);
 
-        // Check if this allocation would exceed renderer budget
+        // この割り当てが renderer 予算を超えるか確認する。
         const uint32_t otherAllocated = (allocatedSlots >= allocation.capacity) ? (allocatedSlots - allocation.capacity) : 0u;
         if (otherAllocated + requiredCapacity > budget) {
             const uint32_t remaining = (budget > otherAllocated) ? (budget - otherAllocated) : 0u;
             if (remaining == 0u) {
-                return nullptr;  // budget exhausted
+                return nullptr;  // 予算切れ
             }
-            // fall through with reduced capacity handled by AlignParticleCapacity
+            // 減らした capacity は AlignParticleCapacity 側で処理して続行する。
         }
 
         if (!allocation.counterBuffer) {
@@ -2538,13 +2538,13 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             packet.gradientMidTimes.y,
             1.0f
         };
-        // Phase 2: Attractors
+        // フェーズ 2: Attractor
         for (int ai = 0; ai < 4; ++ai) {
             (&constants.attractor0)[ai] = packet.attractors[ai];
         }
         constants.attractorRadii = packet.attractorRadii;
         constants.attractorFalloff = packet.attractorFalloff;
-        // Phase 2: Collision
+        // フェーズ 2: コリジョン
         constants.collisionPlane = packet.collisionPlane;
         for (int ci = 0; ci < 4; ++ci) {
             (&constants.collisionSphere0)[ci] = packet.collisionSpheres[ci];
@@ -2555,9 +2555,9 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             static_cast<float>(packet.collisionSphereCount),
             static_cast<float>(packet.attractorCount)
         };
-        // MeshParticle Phase 2: copy packet mesh fields into the compute cbuffer.
-        // meshFlags.x == 1.0 turns on the mesh-mode branch in Emit/Update CS;
-        // zero for Billboard/Ribbon keeps the existing fast path unchanged.
+        // MeshParticle フェーズ 2: packet の mesh field を compute cbuffer へコピーする。
+        // meshFlags.x == 1.0 なら Emit/Update CS の mesh mode 分岐を有効化する。
+        // Billboard/Ribbon では 0 のままにして、既存の高速経路を変えない。
         constants.meshInitialScale = {
             packet.meshInitialScale.x,
             packet.meshInitialScale.y,
@@ -2583,10 +2583,10 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         return constants;
     };
 
-    // SoA binding: [0]b0, [1]t0, [2]u0=Hot, [3]u1=Warm, [4]u2=Cold,
-    // [5]u3=Header, [6]u4=Dead, [7]u5=Counter, [8]u6=Ribbon, [9]u7=PageAlive, [10]CurlNoise
-    // meshAttribHotGpuVa is always valid (allocated by EnsureSharedArenaCapacity alongside billboards)
-    // so we can use it as a hard fallback when no billboard buffer is bound.
+    // SoA bind は [0]b0、[1]t0、[2]u0=Hot、[3]u1=Warm、[4]u2=Cold、
+    // [5] は u3 Header、[6] は u4 Dead、[7] は u5 Counter、[8] は u6 Ribbon、[9] は u7 PageAlive、[10] は CurlNoise。
+    // meshAttribHotGpuVa は常に有効（EnsureSharedArenaCapacity で billboard と一緒に確保）。
+    // billboard buffer が bind されていない場合の強制 fallback として使える。
     const D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotFallbackGpuVa = sharedMeshAttribHotBuffer->GetGPUVirtualAddress();
     auto bindSimulationResources = [&](const EffectParticleSimulationConstants& constants,
         D3D12_GPU_VIRTUAL_ADDRESS srvGpuVa,
@@ -2601,13 +2601,13 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         D3D12_GPU_VIRTUAL_ADDRESS meshAttribHotGpuVaLocal)
     {
         const auto allocation = dx12CommandList->AllocateDynamicConstantBuffer(&constants, static_cast<uint32_t>(sizeof(constants)));
-        // DX12 requires non-null root descriptors - find any valid address as fallback
+        // DX12 は non-null root descriptor を要求するため、fallback として有効なアドレスを探す。
         D3D12_GPU_VIRTUAL_ADDRESS fb = hotGpuVa;
         if (fb == 0ull) fb = warmGpuVa;
         if (fb == 0ull) fb = coldGpuVa;
         if (fb == 0ull) fb = headerGpuVaLocal;
         if (fb == 0ull) fb = counterGpuVaLocal;
-        if (fb == 0ull) fb = meshAttribHotFallbackGpuVa; // always valid
+        if (fb == 0ull) fb = meshAttribHotFallbackGpuVa; // 常に有効
         nativeCommandList->SetComputeRootSignature(particleResources.simulationRootSignature.Get());
         nativeCommandList->SetComputeRootConstantBufferView(0, allocation.gpuVA);
         nativeCommandList->SetComputeRootShaderResourceView(1, srvGpuVa != 0ull ? srvGpuVa : fb);
@@ -2701,7 +2701,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             emitCount = (std::min)(emitCount, availableDeadCount);
         }
 
-        // Use GPU readback when available; fall back to CPU estimate for first frames
+        // 利用可能なら GPU readback を使い、最初の数フレームは CPU 推定へ fallback する。
         const uint32_t estimatedAliveBase = (activeCountBeforeEmit > 0u)
             ? activeCountBeforeEmit
             : runtimeBuffers->lastEstimatedAlive;
@@ -2753,7 +2753,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             TransitionBuffer(nativeCommandList, sharedPageAliveCountBuffer->GetNativeResource(), particleResources.sharedArena.pageAliveCountState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
             if (!runtimeBuffers->initialized) {
-                // Initialize: zero all SoA streams, fill dead stack
+                // Initialize: すべての SoA stream を 0 にし、dead stack を埋める。
                 const auto initConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, runtimeBuffers->capacity);
                 nativeCommandList->SetPipelineState(particleResources.initializePipelineState.Get());
                 bindSimulationResources(initConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, 0ull, meshAttribHotGpuVa);
@@ -2768,8 +2768,8 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 runtimeBuffers->initialized = true;
             }
 
-            // Reset counters + zero page alive counts BEFORE Emit/Update write to them
-            // ResetCounters shader: u0=Counter, u1=PageAliveCount; totalPages via gTiming.w
+            // Emit/Update が書き込む前に counter と page alive count をリセットする。
+            // ResetCounters shader は u0=Counter、u1=PageAliveCount を使い、totalPages は gTiming.w で渡す。
             const auto resetConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, particleResources.sharedArena.totalPages);
             nativeCommandList->SetPipelineState(particleResources.resetCountersPipelineState.Get());
             bindSimulationResources(resetConstants, 0ull, counterGpuVa, pageAliveCountGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
@@ -2778,7 +2778,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             AddUavBarrier(nativeCommandList, sharedPageAliveCountBuffer->GetNativeResource());
 
             if (emitCount > 0u) {
-                // Emit: write to Hot/Warm/Cold/Header, pop from dead stack, side-write PageAliveCount
+                // Emit: Hot/Warm/Cold/Header へ書き、dead stack から pop し、PageAliveCount も更新する。
                 const auto emitConstants = makeSimulationConstants(*packet, *runtimeBuffers, simulationDeltaTime, particleLifetime, emitCount);
                 nativeCommandList->SetPipelineState(particleResources.emitPipelineState.Get());
                 bindSimulationResources(emitConstants, 0ull, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa, meshAttribHotGpuVa);
@@ -2793,13 +2793,13 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 AddUavBarrier(nativeCommandList, sharedPageAliveCountBuffer->GetNativeResource());
             }
 
-            // Update: use readback if available, otherwise CPU estimate
+            // Update: readback があれば使い、なければ CPU 推定を使う。
             const uint32_t updateDispatchCount = (std::min)(estimatedAliveBase, 65535u * 64u);
             if (updateDispatchCount > 0u && simulationDeltaTime > 0.0f) {
-                // Update: read Hot+Cold, write Hot+Warm+Header, side-write PageAliveCount
+                // Update: Hot+Cold を読み、Hot+Warm+Header を書き、PageAliveCount も更新する。
                 const auto updateConstants = makeSimulationConstants(*packet, *runtimeBuffers, simulationDeltaTime, particleLifetime, updateDispatchCount);
                 nativeCommandList->SetPipelineState(particleResources.updatePipelineState.Get());
-                // t0=AliveList, u0=Hot, u1=Warm, u2=Cold, u3=Header, u4=Dead, u5=Counter, u6=Ribbon, u7=PageAliveCount
+                // t0 は AliveList、u0 は Hot、u1 は Warm、u2 は Cold、u3 は Header、u4 は Dead、u5 は Counter、u6 は Ribbon、u7 は PageAliveCount。
                 bindSimulationResources(updateConstants, aliveListGpuVa, hotGpuVa, warmGpuVa, coldGpuVa, headerGpuVa, deadListGpuVa, counterGpuVa, ribbonHistoryGpuVa, pageAliveCountGpuVa, meshAttribHotGpuVa);
                 nativeCommandList->Dispatch((updateDispatchCount + 63u) / 64u, 1u, 1u);
                 AddUavBarrier(nativeCommandList, sharedHotBuffer->GetNativeResource());
@@ -2811,8 +2811,8 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 AddUavBarrier(nativeCommandList, sharedPageAliveCountBuffer->GetNativeResource());
             }
 
-            // PrefixSum on g_PageAliveCount -> g_PageAliveOffset
-            // PrefixSum shader: u0=PageAliveCount, u1=PageAliveOffset, u2=Counter; totalPages via gTiming.w
+            // g_PageAliveCount から g_PageAliveOffset への PrefixSum。
+            // PrefixSum shader は u0=PageAliveCount、u1=PageAliveOffset、u2=Counter を使い、totalPages は gTiming.w で渡す。
             TransitionBuffer(nativeCommandList, sharedPageAliveOffsetBuffer->GetNativeResource(), particleResources.sharedArena.pageAliveOffsetState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto prefixConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, particleResources.sharedArena.totalPages);
             nativeCommandList->SetPipelineState(particleResources.prefixSumPipelineState.Get());
@@ -2821,8 +2821,8 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             AddUavBarrier(nativeCommandList, sharedPageAliveOffsetBuffer->GetNativeResource());
             AddUavBarrier(nativeCommandList, counterBuffer->GetNativeResource());
 
-            // ScatterAlive: per-page scatter -> g_AliveList
-            // ScatterAlive shader: u0=AliveList, u1=PageAliveOffset, u2=Header
+            // ScatterAlive: ページごとに g_AliveList へ散布する。
+            // ScatterAlive shader は u0=AliveList、u1=PageAliveOffset、u2=Header を使う。
             TransitionBuffer(nativeCommandList, sharedAliveListBuffer->GetNativeResource(), particleResources.sharedArena.aliveListState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto scatterConstants = makeSimulationConstants(*packet, *runtimeBuffers, 0.0f, particleLifetime, runtimeBuffers->pageCount);
             nativeCommandList->SetPipelineState(particleResources.scatterAlivePipelineState.Get());
@@ -2830,23 +2830,23 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             nativeCommandList->Dispatch(runtimeBuffers->pageCount, 1u, 1u);
             AddUavBarrier(nativeCommandList, sharedAliveListBuffer->GetNativeResource());
 
-            // BuildDrawArgs: read alive count from counter, write indirect args
-            // BuildDrawArgs shader: u0=IndirectArgs, u1=Counter
+            // BuildDrawArgs: counter から alive count を読み、indirect args を書く。
+            // BuildDrawArgs shader は u0=IndirectArgs、u1=Counter を使う。
             TransitionBuffer(nativeCommandList, indirectArgsBuffer->GetNativeResource(), runtimeBuffers->indirectArgsState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             nativeCommandList->SetPipelineState(particleResources.buildDrawArgsPipelineState.Get());
             bindSimulationResources(resetConstants, 0ull, indirectArgsBuffer->GetGPUVirtualAddress(), counterGpuVa, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull, 0ull);
             nativeCommandList->Dispatch(1u, 1u, 1u);
             AddUavBarrier(nativeCommandList, indirectArgsBuffer->GetNativeResource());
 
-            // BuildBins: 2-stage group-local binning on alive list
+            // BuildBins: alive list に対する 2 段階のグループローカル binning。
             if (sharedBinCounterBuffer && sharedBinIndexBuffer) {
                 TransitionBuffer(nativeCommandList, sharedBinCounterBuffer->GetNativeResource(), particleResources.sharedArena.binCounterState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 TransitionBuffer(nativeCommandList, sharedBinIndexBuffer->GetNativeResource(), particleResources.sharedArena.binIndexState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                // Bin counters are zeroed by BuildBinArgs at end of each frame
+                // bin counter は各フレーム末尾に BuildBinArgs が 0 にする。
                 nativeCommandList->SetComputeRootSignature(particleResources.binRootSignature.Get());
                 nativeCommandList->SetPipelineState(particleResources.buildBinsPipelineState.Get());
-                // [0] SRV t0=AliveList, [1] SRV t1=Warm, [2] SRV t2=Header
-                // [3] UAV u0=BinIndex, [4] UAV u1=BinCounter, [5] UAV u2=CounterBuffer
+                // [0] は SRV t0=AliveList、[1] は SRV t1=Warm、[2] は SRV t2=Header。
+                // [3] は UAV u0=BinIndex、[4] は UAV u1=BinCounter、[5] は UAV u2=CounterBuffer。
                 nativeCommandList->SetComputeRootShaderResourceView(0, aliveListGpuVa);
                 nativeCommandList->SetComputeRootShaderResourceView(1, warmGpuVa);
                 nativeCommandList->SetComputeRootShaderResourceView(2, headerGpuVa);
@@ -2858,11 +2858,11 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 AddUavBarrier(nativeCommandList, sharedBinCounterBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedBinIndexBuffer->GetNativeResource());
 
-                // BuildBinArgs: per-bin indirect args from bin counters
+                // BuildBinArgs: bin counter から bin ごとの indirect args を作る。
                 TransitionBuffer(nativeCommandList, sharedBinOffsetBuffer->GetNativeResource(), particleResources.sharedArena.binOffsetState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 TransitionBuffer(nativeCommandList, sharedBinIndirectArgsBuffer->GetNativeResource(), particleResources.sharedArena.binIndirectArgsState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 nativeCommandList->SetPipelineState(particleResources.buildBinArgsPipelineState.Get());
-                // Reuse bin root sig: [3] u0=BinCounter(in), [4] u1=IndirectArgs(out), [5] u2=BinOffset(out)
+                // bin 用 root signature を再利用し、[3] u0=BinCounter 入力、[4] u1=IndirectArgs 出力、[5] u2=BinOffset 出力にする。
                 nativeCommandList->SetComputeRootUnorderedAccessView(3, binCounterGpuVa);
                 nativeCommandList->SetComputeRootUnorderedAccessView(4, binIndirectArgsGpuVa);
                 nativeCommandList->SetComputeRootUnorderedAccessView(5, binOffsetGpuVa);
@@ -2870,11 +2870,11 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 AddUavBarrier(nativeCommandList, sharedBinIndirectArgsBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedBinOffsetBuffer->GetNativeResource());
 
-                // Restore simulation root sig for subsequent emitters
+                // 後続 emitter のため simulation root signature を戻す。
                 nativeCommandList->SetComputeRootSignature(particleResources.simulationRootSignature.Get());
             }
 
-            // CoarseDepthBin: 2-stage depth binning for alpha/premul particles
+            // CoarseDepthBin: alpha / premul particle 向けの 2 段階 depth binning。
             if (sharedDepthBinCounterBuffer && sharedDepthBinIndexBuffer && sharedDepthBinIndirectArgsBuffer &&
                 particleResources.coarseDepthRootSignature && particleResources.coarseDepthPipelineState) {
                 TransitionBuffer(nativeCommandList, sharedDepthBinCounterBuffer->GetNativeResource(), particleResources.sharedArena.depthBinCounterState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2899,7 +2899,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 AddUavBarrier(nativeCommandList, sharedDepthBinCounterBuffer->GetNativeResource());
                 AddUavBarrier(nativeCommandList, sharedDepthBinIndexBuffer->GetNativeResource());
 
-                // DepthBinArgs
+                // Depth 用。BinArgs
                 TransitionBuffer(nativeCommandList, sharedDepthBinIndirectArgsBuffer->GetNativeResource(), particleResources.sharedArena.depthBinIndirectArgsState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 nativeCommandList->SetPipelineState(particleResources.depthBinArgsPipelineState.Get());
                 nativeCommandList->SetComputeRootUnorderedAccessView(3, depthBinCounterGpuVa);
@@ -2910,7 +2910,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                 nativeCommandList->SetComputeRootSignature(particleResources.simulationRootSignature.Get());
             }
 
-            // Readback throttling: skip readback if within throttle interval
+            // readback 間引き: throttle interval 内なら readback を飛ばす。
             const bool shouldReadback = (particleResources.frameCounter - runtimeBuffers->lastReadbackFrame) >= kReadbackThrottleInterval;
             if (shouldReadback) {
                 TransitionBuffer(nativeCommandList, counterBuffer->GetNativeResource(), runtimeBuffers->counterState, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -2984,7 +2984,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         nativeCommandList->SetGraphicsRootSignature(particleResources.billboardRootSignature.Get());
         nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
-        EffectParticleBlendMode currentBillboardBlend = EffectParticleBlendMode::EnumCount; // force first set
+        EffectParticleBlendMode currentBillboardBlend = EffectParticleBlendMode::EnumCount; // 初回設定を強制する
 
         for (const auto& drawEntry : billboardDrawEntries) {
             if (drawEntry.blendMode != currentBillboardBlend) {
@@ -3026,7 +3026,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                  drawEntry.packet->sortMode == EffectParticleSortMode::FrontToBack);
 
             if (useDepthBins) {
-                // CoarseDepthBin: far-to-near (or near-to-far) per-depth-bin ExecuteIndirect
+                // CoarseDepthBin は depth bin ごとに far-to-near または near-to-far で ExecuteIndirect する。
                 nativeCommandList->SetGraphicsRootShaderResourceView(1, drawEntry.depthBinIndexGpuVa);
                 constexpr uint32_t kDepthBins = 32u;
                 const bool farToNear = (drawEntry.packet->sortMode == EffectParticleSortMode::BackToFront);
@@ -3036,12 +3036,12 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                         particleResources.depthBinCommandSignature.Get(),
                         1u,
                         drawEntry.depthBinIndirectArgsBuffer->GetNativeResource(),
-                        bin * 16u,  // byte offset to this bin's D3D12_DRAW_ARGUMENTS
+                        bin * 16u,  // この bin の D3D12_DRAW_ARGUMENTS への byte offset。
                         nullptr,
                         0u);
                 }
             } else if (drawEntry.binIndirectArgsBuffer && drawEntry.binIndexGpuVa != 0ull) {
-                // Per-renderer-bin ExecuteIndirect (unsorted / additive)
+                // renderer bin ごとの ExecuteIndirect（未ソート / additive）
                 nativeCommandList->SetGraphicsRootShaderResourceView(1, drawEntry.binIndexGpuVa);
                 constexpr uint32_t kMaxBins = 16u;
                 nativeCommandList->ExecuteIndirect(
@@ -3052,7 +3052,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
                     nullptr,
                     0u);
             } else {
-                // Fallback: single ExecuteIndirect from alive list
+                // fallback: alive list から単一 ExecuteIndirect を実行する。
                 nativeCommandList->SetGraphicsRootShaderResourceView(1, drawEntry.aliveListGpuVa);
                 nativeCommandList->ExecuteIndirect(
                     particleResources.billboardCommandSignature.Get(),
@@ -3137,7 +3137,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             }
 
             d3dDevice->CopyDescriptorsSimple(1, particleResources.textureHeapCpu, texture->GetSRV(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            // SoA mesh root sig: [2]=AliveList(t0) [3]=Hot(t1) [4]=Warm(t2) [5]=Header(t3) [6]=MeshAttribHot(t4) [7]=table t5 color_map
+            // SoA mesh 用 root signature は [2]=AliveList(t0)、[3]=Hot(t1)、[4]=Warm(t2)、[5]=Header(t3)、[6]=MeshAttribHot(t4)、[7]=table t5 color_map。
             nativeCommandList->SetGraphicsRootShaderResourceView(2, drawEntry.aliveListGpuVa);
             nativeCommandList->SetGraphicsRootShaderResourceView(3, drawEntry.hotGpuVa);
             nativeCommandList->SetGraphicsRootShaderResourceView(4, drawEntry.warmGpuVa);
@@ -3169,8 +3169,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             }
         }
     }
-
-    // --- Trail rendering ---
+    // トレイルパケットを専用パイプラインで描画する。
     if (!queue.trailPackets.empty() && particleResources.trailPipelineState)
     {
         nativeCommandList->SetGraphicsRootSignature(particleResources.trailRootSignature.Get());
@@ -3210,7 +3209,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     for (auto it = particleResources.runtimeAllocations.begin(); it != particleResources.runtimeAllocations.end(); ) {
         if (particleResources.frameCounter > it->second.lastSeenFrame &&
             (particleResources.frameCounter - it->second.lastSeenFrame) > 240u) {
-            // Decrement per-renderer budget tracking before releasing
+            // 解放前に renderer ごとの予算追跡を減算する。
             uint32_t& slots = GetRendererAllocatedSlots(particleResources.sharedArena, it->second.rendererType);
             slots -= (std::min)(slots, it->second.capacity);
             ReleaseArenaPages(particleResources.sharedArena, it->second);

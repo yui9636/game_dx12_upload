@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <limits>
@@ -245,7 +245,7 @@ namespace EntitySnapshot
 
         if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
             if (!mesh->modelFilePath.empty()) {
-                // Each ECS entity needs its own mutable model state for transform/animation updates.
+                // 各 ECS entity は transform / animation 更新用に個別の変更可能な model state を持つ必要がある。
                 mesh->model = ResourceManager::Instance().CreateModelInstance(mesh->modelFilePath);
             }
         }

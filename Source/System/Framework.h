@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 #include "HighResolutionTimer.h"
+// Framework は hWnd/timer/m_minimized/m_needsResize を中心に、実行時やエディターで共有する状態を保持する。
 
 class Framework
 {

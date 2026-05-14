@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
-#include <cstddef> // size_t
+#include <cstddef> // size_t 定義用。
 
 using ComponentTypeID = uint32_t;
 
-// The generated component set already exceeds 64 entries.
-// Keep enough headroom so ECS signature tests do not throw while editing/saving prefabs.
+// 生成済みコンポーネント数がすでに 64 を超える。
+// Prefab の編集や保存中に ECS signature の検査で例外が出ないよう余裕を持たせる。
 constexpr uint32_t MAX_COMPONENTS = 128;
 
 struct ComponentMetadata {

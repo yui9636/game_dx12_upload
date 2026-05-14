@@ -11,10 +11,7 @@
 #include <algorithm>
 
 using namespace DirectX;
-
-// =========================================================
-// CameraTPVControlComponent を持つ三人称カメラを更新します。
-// =========================================================
+// TPVControlComponent を持つ三人称カメラを更新する。
 void ThirdPersonCameraSystem::Update(Registry& registry, float dt) {
     // エディタプレビュー中にゲーム入力や戦闘用シェイクを消費しないよう、
     // Play 中だけ三人称カメラを動かします。

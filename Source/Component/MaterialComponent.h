@@ -1,3 +1,4 @@
+﻿// MaterialComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 #include <string>
 #include <memory>

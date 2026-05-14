@@ -1,21 +1,17 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <DirectXMath.h>
 #include <memory>
-#include "RenderQueue.h"   // DrawBatchKey, InstanceData
-
-// ============================================================
-// Indirect Draw shared constants and structures
-// C++ and HLSL (IndirectDrawCommon.hlsli) use the same values
-// ============================================================
-
-// --- Constants ---
-static constexpr uint32_t DRAW_ARGS_STRIDE               = 20;   // sizeof(DrawArgs)
-static constexpr uint32_t DRAW_ARGS_INSTANCE_COUNT_OFFSET = 4;    // byte offset of instanceCount
-static constexpr uint32_t INSTANCE_DATA_STRIDE            = 128;  // sizeof(InstanceData)
+#include "RenderQueue.h"   // DrawBatchKey と InstanceData を参照するため。
+// Indirect Draw で共有する定数と構造体。
+// C++ と HLSL 側の IndirectDrawCommon.hlsli で同じ値を使う。
+// 共通定数。
+static constexpr uint32_t DRAW_ARGS_STRIDE               = 20;   // DrawArgs のサイズ。
+static constexpr uint32_t DRAW_ARGS_INSTANCE_COUNT_OFFSET = 4;    // instanceCount のバイトオフセット。
+static constexpr uint32_t INSTANCE_DATA_STRIDE            = 128;  // InstanceData のサイズ。
 static constexpr uint32_t CULL_THREAD_GROUP_SIZE          = 64;
 
-// --- DrawArgs (D3D12_DRAW_INDEXED_ARGUMENTS compatible, 20 bytes) ---
+// D3D12_DRAW_INDEXED_ARGUMENTS と互換の 20 バイト draw args。
 struct DrawArgs {
     uint32_t indexCountPerInstance;
     uint32_t instanceCount;
@@ -26,18 +22,18 @@ struct DrawArgs {
 static_assert(sizeof(DrawArgs) == DRAW_ARGS_STRIDE, "DrawArgs must be 20 bytes");
 static_assert(sizeof(InstanceData) == INSTANCE_DATA_STRIDE, "InstanceData must be 128 bytes");
 
-// --- IndirectDrawCommand (CPU metadata for draw loop) ---
+// CPU 側の描画ループで使う indirect draw メタデータ。
 struct IndirectDrawCommand {
     DrawBatchKey              key;
     std::shared_ptr<ModelResource> modelResource;
-    uint32_t meshIndex       = 0;   // mesh index within model
-    uint32_t drawArgsIndex   = 0;   // index into DrawArgs buffer
-    uint32_t firstInstance   = 0;   // start position in instance buffer
-    uint32_t instanceCount   = 0;   // number of instances
-    bool     supportsInstancing = false;  // false = skinned mesh
+    uint32_t meshIndex       = 0;   // モデル内の mesh index。
+    uint32_t drawArgsIndex   = 0;   // DrawArgs バッファ内の index。
+    uint32_t firstInstance   = 0;   // instance バッファ内の開始位置。
+    uint32_t instanceCount   = 0;   // instance 数。
+    bool     supportsInstancing = false;  // false の場合は skinned mesh。
 };
 
-// --- CullCommandMeta (Compute Culling input, Phase 2) ---
+// Compute Culling へ渡す cull command メタデータ。
 struct CullCommandMeta {
     uint32_t firstInstance;
     uint32_t instanceCount;

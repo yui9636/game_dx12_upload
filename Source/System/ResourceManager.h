@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -7,6 +7,7 @@
 #include <wrl/client.h>
 #include "Material/MaterialAsset.h"
 #include "RHI/ITexture.h"
+// Model はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class Model;
 

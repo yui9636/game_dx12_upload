@@ -1,4 +1,4 @@
-#include "CurlNoiseGenerator.h"
+﻿#include "CurlNoiseGenerator.h"
 #include "FastNoiseLite.h"
 #include <vector>
 #include <algorithm>
@@ -16,18 +16,12 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     ComPtr<ID3D11ShaderResourceView>& outSRV)
 {
     if (!device) return E_INVALIDARG;
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
     FastNoiseLite noise;
     noise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
     noise.SetFrequency(config.frequency);
     noise.SetSeed(config.seed);
     noise.SetFractalType(FastNoiseLite::FractalType_FBm);
     noise.SetFractalOctaves(3);
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
     size_t totalPixels = (size_t)config.width * config.height * config.depth;
 
     std::vector<float> data(totalPixels * 4);
@@ -36,9 +30,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
 
     const float offset_y = 1000.0f;
     const float offset_z = 2000.0f;
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
     for (int z = 0; z < config.depth; ++z)
     {
         for (int y = 0; y < config.height; ++y)
@@ -50,9 +41,9 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
                 float fz = (float)z;
 
                 auto samplePotential = [&](float _x, float _y, float _z) {
-                    float p1 = noise.GetNoise(_x, _y, _z);            // Psi_x
-                    float p2 = noise.GetNoise(_x, _y + offset_y, _z); // Psi_y
-                    float p3 = noise.GetNoise(_x, _y, _z + offset_z); // Psi_z
+                    float p1 = noise.GetNoise(_x, _y, _z);            // Psi_x のノイズポテンシャル。
+                    float p2 = noise.GetNoise(_x, _y + offset_y, _z); // Psi_y のノイズポテンシャル。
+                    float p3 = noise.GetNoise(_x, _y, _z + offset_z); // Psi_z のノイズポテンシャル。
                     return XMFLOAT3(p1, p2, p3);
                     };
 
@@ -67,14 +58,14 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
 
                 float div = 1.0f / (2.0f * e);
 
-                float dP3_dy = (p_y1.z - p_y0.z) * div; // d(Psi_z)/dy
-                float dP2_dz = (p_z1.y - p_z0.y) * div; // d(Psi_y)/dz
+                float dP3_dy = (p_y1.z - p_y0.z) * div; // Psi_z の y 偏微分。
+                float dP2_dz = (p_z1.y - p_z0.y) * div; // Psi_y の z 偏微分。
 
-                float dP1_dz = (p_z1.x - p_z0.x) * div; // d(Psi_x)/dz
-                float dP3_dx = (p_x1.z - p_x0.z) * div; // d(Psi_z)/dx
+                float dP1_dz = (p_z1.x - p_z0.x) * div; // Psi_x の z 偏微分。
+                float dP3_dx = (p_x1.z - p_x0.z) * div; // Psi_z の x 偏微分。
 
-                float dP2_dx = (p_x1.y - p_x0.y) * div; // d(Psi_y)/dx
-                float dP1_dy = (p_y1.x - p_y0.x) * div; // d(Psi_x)/dy
+                float dP2_dx = (p_x1.y - p_x0.y) * div; // Psi_y の x 偏微分。
+                float dP1_dy = (p_y1.x - p_y0.x) * div; // Psi_x の y 偏微分。
 
                 float vx = dP3_dy - dP2_dz;
                 float vy = dP1_dz - dP3_dx;
@@ -88,9 +79,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
             }
         }
     }
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
     D3D11_TEXTURE3D_DESC desc = {};
     desc.Width = config.width;
     desc.Height = config.height;
@@ -110,9 +98,6 @@ HRESULT CurlNoiseGenerator::CreateCurlNoiseTexture(
     ComPtr<ID3D11Texture3D> texture;
     HRESULT hr = device->CreateTexture3D(&desc, &initData, texture.GetAddressOf());
     if (FAILED(hr)) return hr;
-
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = desc.Format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE3D;

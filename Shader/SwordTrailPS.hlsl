@@ -1,8 +1,8 @@
 #include "SwordTrail.hlsli"
 
-Texture2D BaseTex : register(t0); // ÉRÉAã≠ìx
-Texture2D MaskTex : register(t1); // É}ÉXÉN
-Texture2D NoiseTex : register(t2); // ÉmÉCÉY
+Texture2D BaseTex : register(t0); // „Ç≥„Ç¢Âº∑Â∫¶
+Texture2D MaskTex : register(t1); // „Éû„Çπ„ÇØ
+Texture2D NoiseTex : register(t2); // „Éé„Ç§„Ç∫
 SamplerState LinearClamp : register(s0);
 
 float4 main(VS_OUT pin) : SV_TARGET
@@ -10,47 +10,47 @@ float4 main(VS_OUT pin) : SV_TARGET
     float2 uv = pin.uv;
     uv.x = clamp(uv.x, 0.004, 0.996);
 
-    // É}ÉXÉN
+    // „Éû„Çπ„ÇØ
     float mask = MaskTex.Sample(LinearClamp, uv).r;
     if (mask < 0.01)
         discard;
 
-    // ÉAÉãÉtÉ@ÇÃäÓñ{
+    // „Ç¢„É´„Éï„Ç°„ÅÆÂü∫Êú¨
     float a = smoothstep(0.0, 0.02, mask);
 
-    // ÉeÉCÉãë§ÅiU=1ÅjÇÉtÉFÅ[Éh
+    // „ÉÜ„Ç§„É´ÂÅ¥ÔºàU=1Ôºâ„Çí„Éï„Çß„Éº„Éâ
     float tailSideFade = 1.0 - smoothstep(0.9, 1.0, uv.x);
     a *= tailSideFade;
 
-    // íÜâõècê¸Çó}Ç¶ÇÈ
+    // ‰∏≠Â§ÆÁ∏¶Á∑ö„ÇíÊäë„Åà„Çã
     float centerSoft = smoothstep(0.45, 0.55, abs(uv.x - 0.5));
     a *= 1.0 - centerSoft * 0.5;
 
-    // êÊí[ÅEññí[ÇÃÉtÉFÅ[Éh
-    // vCoord Ç™ïKóv Å® uv.y Çó¨óp
-    float headFade = smoothstep(0.0, 0.1, uv.y); // 0?0.1Ç≈ÉtÉFÅ[ÉhÉCÉì
-    float tailFade = 1.0 - smoothstep(0.9, 1.0, uv.y); // 0.9?1.0Ç≈ÉtÉFÅ[ÉhÉAÉEÉg
+    // ÂÖàÁ´Ø„ÉªÊú´Á´Ø„ÅÆ„Éï„Çß„Éº„Éâ
+    // vCoord „ÅåÂøÖË¶Å ‚Üí uv.y „ÇíÊµÅÁî®
+    float headFade = smoothstep(0.0, 0.1, uv.y); // 0?0.1„Åß„Éï„Çß„Éº„Éâ„Ç§„É≥
+    float tailFade = 1.0 - smoothstep(0.9, 1.0, uv.y); // 0.9?1.0„Åß„Éï„Çß„Éº„Éâ„Ç¢„Ç¶„Éà
     a *= headFade * tailFade;
 
-    // ÉRÉA
+    // „Ç≥„Ç¢
     float coreTex = BaseTex.Sample(LinearClamp, uv).r;
 
-    // ÉmÉCÉY
+    // „Éé„Ç§„Ç∫
     float noiseVal = NoiseTex.Sample(LinearClamp, uv).r;
     float flicker = lerp(0.8, 1.2, noiseVal);
 
-    // íÜêSÉuÅ[ÉXÉg
+    // ‰∏≠ÂøÉ„Éñ„Éº„Çπ„Éà
     float center = saturate(1.0 - abs(uv.x * 2.0 - 1.0));
     center = pow(center, 3.0);
 
     float lum = mask * flicker * (0.5 + 0.5 * center) * (1.0 + coreTex);
 
-    // ê^çgÇÃÉOÉâÉf
-    const float3 colCore = float3(1.8, 0.1, 0.1); // ÇÊÇËê‘Ç¢
+    // ÁúüÁ¥Ö„ÅÆ„Ç∞„É©„Éá
+    const float3 colCore = float3(1.8, 0.1, 0.1); // „Çà„ÇäËµ§„ÅÑ
     const float3 colEdge = float3(0.15, 0.00, 0.00);
 
     float3 color = lerp(colEdge, colCore, center);
-    color *= lum * 4.0; // ãPìxí≤êÆ
+    color *= lum * 4.0; // ËºùÂ∫¶Ë™øÊï¥
 
     return float4(color, a);
 }

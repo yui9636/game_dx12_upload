@@ -1,3 +1,4 @@
+﻿// text 用色。Component の ECS コンポーネント定義をまとめます。
 #pragma once
 
 #include <DirectXMath.h>

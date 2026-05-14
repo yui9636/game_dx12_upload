@@ -1,7 +1,5 @@
-﻿// ============================================================================
-// PlayerEditor — State machine panel, presets, node graph and condition editor.
-// Sibling of PlayerEditorPanel.cpp; split out for readability.
-// ============================================================================
+﻿// PlayerEditor のステートマシンパネル、プリセット、ノードグラフ、条件エディタ。
+// PlayerEditorPanel.cpp の兄弟ファイルとして、可読性のため分離している。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -33,11 +31,7 @@
 #include "Registry/Registry.h"
 
 using namespace PlayerEditorInternal;
-
-// ----------------------------------------------------------------------------
-// Asset lookup helpers
-// ----------------------------------------------------------------------------
-
+// アセット検索補助
 StateNode* PlayerEditorPanel::FindStateByName(const char* name)
 {
     if (!name || name[0] == '\0') {
@@ -83,11 +77,7 @@ void PlayerEditorPanel::EnsureStateMachineParameter(const char* name, ParameterT
     parameter.defaultValue = defaultValue;
     m_stateMachineAsset.parameters.push_back(std::move(parameter));
 }
-
-// ----------------------------------------------------------------------------
-// Animation auto-matching helpers (Spec §12)
-// ----------------------------------------------------------------------------
-
+// アニメーション自動マッチング補助（仕様 §12）
 int PlayerEditorPanel::FindAnimationIndexByKeyword(std::initializer_list<const char*> keywords) const
 {
     if (!m_model) {
@@ -267,11 +257,7 @@ int PlayerEditorPanel::FindDamageAnimation() const
         m_model, { "damage" }, false,
         { "down", "knockdown" });
 }
-
-// ----------------------------------------------------------------------------
-// Preset application
-// ----------------------------------------------------------------------------
-
+// プリセット適用
 void PlayerEditorPanel::ApplyLocomotionTransitionPreset(StateTransition& trans, bool enteringMove)
 {
     trans.conditions.clear();
@@ -288,9 +274,9 @@ void PlayerEditorPanel::ApplyLocomotionTransitionPreset(StateTransition& trans, 
     trans.conditions.push_back(condition);
 }
 
-// Spec §6: Setup Full Player creates Idle / Walk / Jog / Run (loop=true).
-// Spec §7.1: Gait-based transitions (6 total).
-// Spec §3.3: Idempotent — find by name, only add if missing.
+// 仕様 §6: Setup Full Player は Idle / Walk / Jog / Run（loop=true）を作成する。
+// 仕様 §7.1: 歩容ベースの遷移（合計 6 本）。
+// 仕様 §3.3: 冪等。名前で検索し、無い場合だけ追加する。
 void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
 {
     EnsureStateMachineParameter("MoveX", ParameterType::Float, 0.0f);
@@ -363,13 +349,13 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
         t->conditions.push_back(cond);
     };
 
-    // Idle <-> Walk (Gait 1)
+    // Idle <-> Walk（歩容 1）
     applyGaitTransition(ids[0], ids[1], 1, true);
     applyGaitTransition(ids[1], ids[0], 0, false);
-    // Walk <-> Jog (Gait 2)
+    // Walk <-> Jog（歩容 2）
     applyGaitTransition(ids[1], ids[2], 2, true);
     applyGaitTransition(ids[2], ids[1], 1, false);
-    // Jog <-> Run (Gait 3)
+    // Jog <-> Run（歩容 3）
     applyGaitTransition(ids[2], ids[3], 3, true);
     applyGaitTransition(ids[3], ids[2], 2, false);
 
@@ -379,9 +365,9 @@ void PlayerEditorPanel::ApplyLocomotionStateMachinePreset()
     m_stateMachineDirty = true;
 }
 
-// Spec §6: Setup Full Player creates Attack1〜3 (Action, loop=false).
-// Spec §7.2 / §7.5 / §7.7: Loco→Atk1 (×4), Atk1→Atk2, Atk2→Atk3, Atk{1,2,3}→Idle (AnimEnd).
-// Spec §11: ActionDatabase node index links via properties["ActionNodeIndex"].
+// 仕様 §6: Setup Full Player は Attack1〜3（Action, loop=false）を作成する。
+// 仕様 §7.2 / §7.5 / §7.7: Loco→Atk1（4 本）、Atk1→Atk2、Atk2→Atk3、Atk{1,2,3}→Idle（AnimEnd）。
+// 仕様 §11: ActionDatabase のノードインデックスは properties["ActionNodeIndex"] で紐づける。
 void PlayerEditorPanel::ApplyAttackComboPreset()
 {
     EnsureStateMachineParameter("Attack", ParameterType::Trigger, 0.0f);
@@ -467,17 +453,17 @@ void PlayerEditorPanel::ApplyAttackComboPreset()
         if (t) configure(*t);
     };
 
-    // §7.2: Locomotion -> Attack1 (4 transitions)
+    // §7.2: Locomotion -> Attack1（4 遷移）
     StateNode* locos[4] = { idle, walk, jog, run };
     for (StateNode* loco : locos) {
         if (loco) upsertTransition(loco->id, attackIds[0], setAttackTrigger);
     }
 
-    // §7.5: Attack combo (Attack1->Attack2, Attack2->Attack3)
+    // §7.5: 攻撃コンボ（Attack1->Attack2、Attack2->Attack3）
     upsertTransition(attackIds[0], attackIds[1], [&](StateTransition& t) { setAttackTriggerWithExitTime(t, 0.4f); });
     upsertTransition(attackIds[1], attackIds[2], [&](StateTransition& t) { setAttackTriggerWithExitTime(t, 0.4f); });
 
-    // §7.7: Attack{1,2,3} -> Idle (AnimEnd)
+    // §7.7: Attack{1,2,3} から Idle へ AnimEnd で戻す。
     if (idle) {
         for (int i = 0; i < 3; ++i) {
             upsertTransition(attackIds[i], idle->id, setAnimEnd);
@@ -487,8 +473,8 @@ void PlayerEditorPanel::ApplyAttackComboPreset()
     m_stateMachineDirty = true;
 }
 
-// Spec §6: Setup Full Player creates Dodge (Type Dodge, loop=false).
-// Spec §7.3 / §7.6 / §7.7: Loco→Dodge (×4), Atk→Dodge with cancel exitTime (×3), Dodge→Idle (AnimEnd).
+// 仕様 §6: Setup Full Player は Dodge（Type Dodge, loop=false）を作成する。
+// 仕様 §7.3 / §7.6 / §7.7: Loco→Dodge（4 本）、Atk→Dodge（cancel exitTime 付きで 3 本）、Dodge→Idle（AnimEnd）。
 void PlayerEditorPanel::ApplyDodgePreset()
 {
     EnsureStateMachineParameter("Dodge", ParameterType::Trigger, 0.0f);
@@ -555,26 +541,26 @@ void PlayerEditorPanel::ApplyDodgePreset()
         if (t) configure(*t);
     };
 
-    // §7.3: Locomotion -> Dodge (4)
+    // §7.3: Locomotion -> Dodge（4 本）
     StateNode* locos[4] = { idle, walk, jog, run };
     for (StateNode* loco : locos) {
         if (loco) upsertTransition(loco->id, dodge->id, [&](StateTransition& t) { setDodgeTrigger(t, 0.0f); });
     }
 
-    // §7.6: Action -> Dodge cancel (3) with exitTime>=0.2
+    // §7.6: Action -> Dodge キャンセル（3 本、exitTime>=0.2）
     StateNode* atks[3] = { atk1, atk2, atk3 };
     for (StateNode* atk : atks) {
         if (atk) upsertTransition(atk->id, dodge->id, [&](StateTransition& t) { setDodgeTrigger(t, 0.2f); });
     }
 
-    // §7.7: Dodge -> Idle (AnimEnd)
+    // §7.7: Dodge から Idle へ AnimEnd で戻す。
     if (idle) upsertTransition(dodge->id, idle->id, setAnimEnd);
 
     m_stateMachineDirty = true;
 }
 
-// Spec §6: Setup Full Player creates Damage (Type Damage, loop=false).
-// Spec §7.4 / §7.7: 7 transitions Loco/Action -> Damage (Damaged==1, priority 500), 1 Damage -> Idle (AnimEnd).
+// 仕様 §6: Setup Full Player は Damage（Type Damage, loop=false）を作成する。
+// 仕様 §7.4 / §7.7: Loco/Action -> Damage（Damaged==1、priority 500）を 7 本、Damage -> Idle（AnimEnd）を 1 本。
 void PlayerEditorPanel::ApplyDamagePreset()
 {
     EnsureStateMachineParameter("Damaged", ParameterType::Trigger, 0.0f);
@@ -641,22 +627,22 @@ void PlayerEditorPanel::ApplyDamagePreset()
         if (t) configure(*t);
     };
 
-    // §7.4: Loco/Action -> Damage (7 transitions). Dodge is excluded (invincibility).
+    // §7.4: Loco/Action -> Damage（7 遷移）。Dodge は無敵扱いなので除外する。
     StateNode* sources[7] = { idle, walk, jog, run, atk1, atk2, atk3 };
     for (StateNode* source : sources) {
         if (source) upsertTransition(source->id, damage->id, setDamagedTrigger);
     }
 
-    // §7.7: Damage -> Idle (AnimEnd)
+    // §7.7: Damage から Idle へ AnimEnd で戻す。
     if (idle) upsertTransition(damage->id, idle->id, setAnimEnd);
 
     m_stateMachineDirty = true;
 }
 
-// Remove transitions whose fromState or toState does not correspond to any
-// existing state in the asset. This purges stale entries written by older code
-// versions that could leave garbage IDs (e.g. 0xDDDDDDDD) blocking correct
-// transitions added by the preset functions that follow.
+// fromState または toState が現在のアセット内ステートに対応しない遷移を削除する。
+// 古いコードが書き込んだ古い遷移をここで取り除く。
+// 0xDDDDDDDD などのゴミ ID が残ると正しい遷移を阻害するため。
+// 後続のプリセット関数が追加する遷移を安全に通す。
 void PlayerEditorPanel::RemoveBrokenTransitions()
 {
     auto isValidId = [&](uint32_t id) {
@@ -675,15 +661,15 @@ void PlayerEditorPanel::RemoveBrokenTransitions()
         transitions.end());
 }
 
-// Spec §1: Setup Full Player composes all sub-presets in one click.
-// Spec §3.3: Idempotent — running twice yields the same counts.
+// 仕様 §1: Setup Full Player は 1 クリックですべてのサブプリセットを合成する。
+// 仕様 §3.3: 冪等。2 回実行しても件数は変わらない。
 void PlayerEditorPanel::ApplyFullPlayerPreset()
 {
-    // Purge any stale transitions referencing dead state IDs (e.g. 0xDDDDDDDD
-    // legacy debug-heap garbage) BEFORE the presets run. Otherwise broken
-    // entries can shadow the freshly-added ones during runtime evaluation
-    // (transitions with equal priority resolve in vector order, so a broken
-    // entry sitting earlier wins and silently blocks the correct path).
+    // 死んだステート ID（例: 0xDDDDDDDD の旧デバッグヒープ値）を参照する古い遷移を、
+    // プリセット実行前に削除する。壊れた遷移が残っていると、
+    // 実行時評価で新しく追加した正しい遷移を覆い隠すことがある。
+    // 同じ priority の遷移は vector 順で解決されるため、
+    // 先にある壊れた遷移が勝って正しい経路を黙って塞いでしまう。
     RemoveBrokenTransitions();
 
     ApplyLocomotionStateMachinePreset();
@@ -691,9 +677,9 @@ void PlayerEditorPanel::ApplyFullPlayerPreset()
     ApplyDodgePreset();
     ApplyDamagePreset();
 
-    // Final sweep — the presets only ever insert valid transitions, but call
-    // this again so the asset is guaranteed clean even if a future preset
-    // mistakenly forwards a stale id.
+    // 最終掃除。プリセットは有効な遷移だけを追加する想定だが、
+    // 将来のプリセットが誤って古い ID を渡しても、
+    // アセットを必ずクリーンに保つ。
     RemoveBrokenTransitions();
 
     InputActionMapAsset& inputMap = m_inputMappingTab.GetEditingMapMutable();
@@ -723,11 +709,7 @@ void PlayerEditorPanel::ApplyFullPlayerPreset()
     m_selectedTransitionId = 0;
     m_stateMachineDirty = true;
 }
-
-// ----------------------------------------------------------------------------
-// Runtime status panel (sidebar inside Properties when nothing is selected)
-// ----------------------------------------------------------------------------
-
+// 実行時ステータスパネル（未選択時に Properties 内サイドバーへ表示）
 void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
 {
     ImGui::Text(ICON_FA_PERSON_RUNNING " Preview Runtime");
@@ -823,11 +805,7 @@ void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
         ImGui::TextDisabled("Gait: %u  InputStrength: %.3f", static_cast<unsigned>(locomotion->gaitIndex), locomotion->inputStrength);
     }
 }
-
-// ----------------------------------------------------------------------------
-// State Machine Panel & node graph
-// ----------------------------------------------------------------------------
-
+// ステートマシンパネルとノードグラフ
 void PlayerEditorPanel::DrawStateMachinePanel()
 {
     if (!ImGui::Begin(kPEStateMachineTitle)) { ImGui::End(); return; }
@@ -851,11 +829,11 @@ void PlayerEditorPanel::DrawStateMachinePanel()
         ImGui::OpenPopup("AddStateTemplatePopup");
     }
     ImGui::SameLine();
-    // v2.0: setup button switches by ActorEditorMode.
-    // Player -> ApplyFullPlayerPreset()
-    // Enemy  -> EnemyEditorSetupFullEnemy()  (toolbar version is upstream;
-    //          this in-graph mirror is here so users don't have to scroll up)
-    // NPC    -> EnemyEditorSetupFullNPC()
+    // v2.0: setup ボタンは ActorEditorMode によって切り替える。
+    // Player では ApplyFullPlayerPreset() を実行する。
+    // Enemy  -> EnemyEditorSetupFullEnemy()（ツールバー版は上流にあり、
+    //          スクロールせず使えるようグラフ内にも置く）
+    // NPC では EnemyEditorSetupFullNPC() を実行する。
     switch (m_actorEditorMode) {
     case ActorEditorMode::Player:
         if (ImGui::Button(ICON_FA_PERSON_RUNNING " Setup Full Player")) {
@@ -895,9 +873,9 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     }
     ImGui::SameLine();
     if (ImGui::Button(ICON_FA_ARROWS_TO_CIRCLE " Fit")) {
-        // The actual fit math runs inside DrawNodeGraph where the canvas
-        // size is known; flagging a request keeps the camera computation
-        // colocated with the graph rendering.
+        // 実際のフィット計算はキャンバスサイズが分かる DrawNodeGraph 内で行う。
+        // ここではリクエストフラグだけ立てて、
+        // カメラ計算をグラフ描画側へ寄せる。
         m_graphFitRequested = true;
     }
     ImGui::SameLine();
@@ -964,10 +942,10 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     ImGui::Text(ICON_FA_LIST " States (%d)", static_cast<int>(m_stateMachineAsset.states.size()));
     ImGui::Separator();
 
-    // Each row: a single Selectable spans the full entry height so the click
-    // hit-area covers name + sub-info, with text drawn on top via overlap so
-    // the state name and metadata are clearly readable (the previous compact
-    // layout vertically clipped the name).
+    // 各行は高さ全体を 1 つの Selectable にしてクリック範囲を広げる。
+    // 名前と補助情報の両方をヒット範囲に含め、文字は重ね描きで読ませる。
+    // 以前の詰めたレイアウトでステート名が縦に切れていたため、
+    // メタ情報まで見える行高を確保している。
     constexpr float kEntryHeight   = 56.0f;
     constexpr float kColorBarWidth = 4.0f;
     constexpr float kPaddingX      = 10.0f;
@@ -993,12 +971,12 @@ void PlayerEditorPanel::DrawStateMachinePanel()
             ImGui::SetTooltip("%s\nDouble-click to preview", state.name.c_str());
         }
 
-        // Draw on top of the selectable.
+        // Selectable の上に描画する。
         const ImVec2 itemMin = ImGui::GetItemRectMin();
         const ImVec2 itemMax = ImGui::GetItemRectMax();
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
-        // Left color bar — gives a quick visual hint of the state type.
+        // 左の色バー。ステート種別を素早く見分けるための目印。
         dl->AddRectFilled(
             itemMin,
             ImVec2(itemMin.x + kColorBarWidth, itemMax.y),
@@ -1006,13 +984,13 @@ void PlayerEditorPanel::DrawStateMachinePanel()
 
         const float textX = itemMin.x + kColorBarWidth + kPaddingX;
 
-        // State name (primary).
+        // ステート名（主表示）。
         dl->AddText(
             ImVec2(textX, itemMin.y + kNameY),
             ImGui::GetColorU32(ImGuiCol_Text),
             state.name.c_str());
 
-        // Default badge to the right of the name.
+        // 名前右側の Default バッジ。
         if (m_stateMachineAsset.defaultStateId == state.id) {
             const float nameWidth = ImGui::CalcTextSize(state.name.c_str()).x;
             dl->AddText(
@@ -1021,7 +999,7 @@ void PlayerEditorPanel::DrawStateMachinePanel()
                 "[Default]");
         }
 
-        // Type / outgoing-transition counter.
+        // 種別 / 出力遷移数カウンタ。
         const int outgoing = static_cast<int>(m_stateMachineAsset.GetTransitionsFrom(state.id).size());
         char subBuffer[96];
         std::snprintf(subBuffer, sizeof(subBuffer), "%s  |  %d transition%s",
@@ -1033,7 +1011,7 @@ void PlayerEditorPanel::DrawStateMachinePanel()
             ImGui::GetColorU32(ImGuiCol_TextDisabled),
             subBuffer);
 
-        // Animation row.
+        // アニメーション行。
         const char* animationText = "(No Animation)";
         if (m_model
             && state.animationIndex >= 0
@@ -1045,8 +1023,8 @@ void PlayerEditorPanel::DrawStateMachinePanel()
             ImGui::GetColorU32(ImGuiCol_TextDisabled),
             animationText);
 
-        // Bottom hairline separator drawn manually so the rounded corners of
-        // the Selectable are not interrupted by ImGui::Separator().
+        // 下端の細い区切り線は手動描画し、Selectable の角丸表示を崩さない。
+        // ImGui::Separator() で角丸が途切れないようにしている。
         dl->AddLine(
             ImVec2(itemMin.x, itemMax.y - 0.5f),
             ImVec2(itemMax.x, itemMax.y - 0.5f),
@@ -1120,11 +1098,11 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         m_graphFitRequested = false;
     }
 
-    // Background
+    // 背景
     dl->AddRectFilled(origin, ImVec2(origin.x + canvasSize.x, origin.y + canvasSize.y),
         IM_COL32(22, 22, 28, 255));
 
-    // Grid
+    // グリッド
     float gridStep = 32.0f * m_graphZoom;
     if (gridStep > 4.0f) {
         for (float x = fmodf(m_graphOffset.x, gridStep); x < canvasSize.x; x += gridStep)
@@ -1145,7 +1123,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         return ImVec2(p.x + kNodeWidth * 0.5f * m_graphZoom, p.y + kNodeHeight * 0.5f * m_graphZoom);
     };
 
-    // ── Draw transitions (arrows) ──
+    // 遷移（矢印）を描画
     for (auto& trans : m_stateMachineAsset.transitions) {
         auto* from = m_stateMachineAsset.FindState(trans.fromState);
         auto* to   = m_stateMachineAsset.FindState(trans.toState);
@@ -1159,7 +1137,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         float thickness = isSel ? 3.0f : 2.0f;
         dl->AddLine(p1, p2, lineCol, thickness);
 
-        // Arrowhead at midpoint
+        // 中点に矢じりを描画
         ImVec2 dir(p2.x - p1.x, p2.y - p1.y);
         float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
         if (len > 1.0f) {
@@ -1173,7 +1151,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
                 ImVec2(mid.x - dir.x * as * 0.6f - perp.x * as * 0.5f, mid.y - dir.y * as * 0.6f - perp.y * as * 0.5f),
                 lineCol);
 
-            // Click on midpoint to select transition
+            // 中点クリックで遷移を選択
             ImVec2 hitMin(mid.x - 12, mid.y - 12);
             ImVec2 hitMax(mid.x + 12, mid.y + 12);
             ImGui::SetCursorScreenPos(hitMin);
@@ -1185,7 +1163,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             }
         }
 
-        // Condition count badge
+        // 条件数バッジ
         if (!trans.conditions.empty()) {
             ImVec2 mid((p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f);
             char badge[8];
@@ -1194,7 +1172,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         }
     }
 
-    // ── Draw connection wire (while connecting) ──
+    // 接続中のワイヤを描画
     const bool connectingActive = m_isConnecting || m_graphConnectDragActive;
     const uint32_t connectFromId = m_isConnecting ? m_connectFromNodeId : m_graphConnectDragFrom;
     if (connectingActive) {
@@ -1203,7 +1181,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             ImVec2 p1 = NodeScreenCenter(*from);
             ImVec2 p2 = ImGui::GetMousePos();
             dl->AddLine(p1, p2, IM_COL32(255, 200, 50, 220), 2.5f);
-            // Arrowhead at the cursor end so it reads as a directional connection.
+            // 方向付き接続として読めるよう、カーソル端に矢じりを置く。
             const ImVec2 dirVec(p2.x - p1.x, p2.y - p1.y);
             const float lenVec = sqrtf(dirVec.x * dirVec.x + dirVec.y * dirVec.y);
             if (lenVec > 1.0f) {
@@ -1220,7 +1198,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         }
     }
 
-    // ── Draw state nodes ──
+    // ステートノードを描画
     for (auto& state : m_stateMachineAsset.states) {
         ImVec2 nPos = NodeScreenPos(state);
         ImVec2 nSize(kNodeWidth * m_graphZoom, kNodeHeight * m_graphZoom);
@@ -1229,21 +1207,21 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         bool isSel     = (m_selectedNodeId == state.id);
         bool isDefault = (m_stateMachineAsset.defaultStateId == state.id);
 
-        // Shadow
+        // 影
         dl->AddRectFilled(ImVec2(nPos.x + 3, nPos.y + 3), ImVec2(nEnd.x + 3, nEnd.y + 3),
             IM_COL32(0, 0, 0, 80), 8.0f);
 
-        // Body
+        // 本体
         ImU32 nodeCol = StateNodeColor(state.type);
         dl->AddRectFilled(nPos, nEnd, nodeCol, 8.0f);
 
-        // Selection / default border
+        // 選択 / デフォルト枠
         if (isSel) dl->AddRect(nPos, nEnd, IM_COL32(255, 255, 255, 255), 8.0f, 0, 3.0f);
         if (isDefault) dl->AddRect(
             ImVec2(nPos.x - 2, nPos.y - 2), ImVec2(nEnd.x + 2, nEnd.y + 2),
             IM_COL32(255, 200, 50, 200), 10.0f, 0, 2.0f);
 
-        // Label — centered, clipped horizontally so long names truncate cleanly.
+        // ラベルは中央寄せし、長い名前は横方向にクリップして破綻を防ぐ。
         const float fontSize = ImGui::GetFontSize();
         const float textW = ImGui::CalcTextSize(state.name.c_str()).x;
         const float availTextW = nSize.x - 16.0f * m_graphZoom;
@@ -1257,7 +1235,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         dl->AddText(textPos, IM_COL32(255, 255, 255, 255), state.name.c_str());
         dl->PopClipRect();
 
-        // Type badge (small text)
+        // 種別バッジ（小テキスト）
         const char* typeLabels[] = { "LOCO", "ACT", "DODGE", "JUMP", "DMG", "DEAD", "CUSTOM" };
         int ti = (int)state.type;
         if (ti >= 0 && ti < 7 && m_graphZoom > 0.5f) {
@@ -1265,15 +1243,15 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             dl->AddText(badgePos, IM_COL32(255, 255, 255, 120), typeLabels[ti]);
         }
 
-        // Output port — small circle on the right edge. Drag from here to
-        // create a transition (Unreal-style). Drawn before the node hit area
-        // so the port sits visually on top.
+        // 出力ポートは右端の小さな円として描き、ここからドラッグして
+        // Unreal 風に遷移を作成できる。ノード本体より先に描画し、
+        // 見た目上ポートが前面に出るようにする。
         const float portRadius = (std::max)(4.0f, 6.0f * m_graphZoom);
         const ImVec2 portCenter(nEnd.x, nPos.y + nSize.y * 0.5f);
         dl->AddCircleFilled(portCenter, portRadius, IM_COL32(40, 40, 40, 255));
         dl->AddCircleFilled(portCenter, portRadius - 1.5f, IM_COL32(220, 220, 220, 255));
 
-        // Port hit area — sits above the node body, so handle it first.
+        // ポート判定領域。ノード本体より上にあるため先に処理する。
         ImGui::SetCursorScreenPos(ImVec2(portCenter.x - portRadius - 2.0f, portCenter.y - portRadius - 2.0f));
         const std::string portId = "node_port_" + std::to_string(state.id);
         ImGui::InvisibleButton(portId.c_str(), ImVec2(portRadius * 2.0f + 4.0f, portRadius * 2.0f + 4.0f));
@@ -1287,14 +1265,14 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             m_graphConnectDragFrom = state.id;
         }
 
-        // Node body interaction (positioned after the port so the port wins on overlap).
+        // ノード本体の操作はポートの後に判定し、重なった場合はポート操作を優先する。
         ImGui::SetCursorScreenPos(nPos);
         ImGui::InvisibleButton(("node_" + std::to_string(state.id)).c_str(), nSize);
         const bool nodeHovered = ImGui::IsItemHovered();
 
         if (ImGui::IsItemClicked(0)) {
             if (m_isConnecting) {
-                // Finish connection started via right-click "Connect From Here..."
+                // 右クリックの「Connect From Here...」から始めた接続を確定する。
                 if (m_connectFromNodeId != state.id) {
                     m_stateMachineAsset.AddTransition(m_connectFromNodeId, state.id);
                     m_stateMachineDirty = true;
@@ -1308,12 +1286,12 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             }
         }
 
-        // Double-click: preview this state using the embedded timeline selection
+        // ダブルクリック: 埋め込みタイムライン選択を使ってこのステートをプレビューする。
         if (nodeHovered && ImGui::IsMouseDoubleClicked(0)) {
             PreviewStateNode(state.id, true);
         }
 
-        // Drag node
+        // ノードをドラッグ
         if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0) && !m_isConnecting && !m_graphConnectDragActive) {
             ImVec2 delta = ImGui::GetMouseDragDelta(0);
             state.position.x += delta.x / m_graphZoom;
@@ -1322,7 +1300,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             ImGui::ResetMouseDragDelta();
         }
 
-        // Drop target while a connection drag is active.
+        // 接続ドラッグ中のドロップ先としてこのノードを扱う。
         if (m_graphConnectDragActive
             && nodeHovered
             && state.id != m_graphConnectDragFrom
@@ -1331,7 +1309,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             m_stateMachineDirty = true;
         }
 
-        // Right-click context
+        // 右クリックコンテキスト
         if (ImGui::IsItemClicked(1)) {
             m_selectedNodeId = state.id;
             m_selectionCtx = SelectionContext::StateNode;
@@ -1339,13 +1317,13 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         }
     }
 
-    // Cancel connection drag on left release if no node accepted it.
+    // どのノードも受け取らず左ボタンが離されたら、接続ドラッグをキャンセルする。
     if (m_graphConnectDragActive && ImGui::IsMouseReleased(0)) {
         m_graphConnectDragActive = false;
         m_graphConnectDragFrom = 0;
     }
 
-    // ── Node context menu ──
+    // ノードコンテキストメニュー
     if (ImGui::BeginPopup("NodeCtx")) {
         if (ImGui::MenuItem(ICON_FA_STAR " Set Default")) {
             m_stateMachineAsset.defaultStateId = m_selectedNodeId;
@@ -1365,15 +1343,15 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         ImGui::EndPopup();
     }
 
-    // ── Background interaction ──
+    // 背景操作
     ImGui::SetCursorScreenPos(origin);
     ImGui::InvisibleButton("graph_bg", canvasSize);
     const bool bgHovered = ImGui::IsItemHovered();
 
-    // Right-button pan: track press point so a click without movement still
-    // opens the context menu. We use IO::MouseDelta for the actual pan because
-    // the standard drag-delta tracking gets reset every frame and would lose
-    // accumulated movement.
+    // 右ボタンパンでは押下位置を保持し、移動しないクリックなら
+    // コンテキストメニューを開けるようにする。実際のパンには IO::MouseDelta を使い、
+    // 標準の drag-delta が毎フレームリセットされて移動量を失う問題を避ける。
+    // 蓄積した移動量を取りこぼさないようにしている。
     if (bgHovered && ImGui::IsMouseClicked(1)) {
         m_graphRightPanActive = true;
         const ImVec2 mp = ImGui::GetMousePos();
@@ -1398,7 +1376,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         }
     }
 
-    // Middle-button drag also pans, kept for users used to that gesture.
+    // 中ボタンドラッグでもパンできる。慣れているユーザー向けに残す。
     if (ImGui::IsItemActive() && ImGui::IsMouseDragging(2)) {
         ImVec2 d = ImGui::GetMouseDragDelta(2);
         m_graphOffset.x += d.x;
@@ -1406,7 +1384,7 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
         ImGui::ResetMouseDragDelta(2);
     }
 
-    // Zoom with scroll wheel
+    // ホイールでズーム
     if (bgHovered) {
         float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f) {
@@ -1511,8 +1489,8 @@ void PlayerEditorPanel::DrawNodeGraph(ImVec2 canvasSize)
             IM_COL32(180, 180, 180, 255),
             "Right-click graph to add states");
     } else {
-        // Persistent gesture cheat-sheet so users do not have to discover the
-        // pan / connect / fit shortcuts by trial and error.
+        // 操作を探り当てなくて済むよう、ジェスチャーの早見表示を常に出す。
+        // パン、接続、フィット操作のショートカットを確認できる。
         const ImVec2 hintPos(origin.x + 8.0f, origin.y + 8.0f);
         const char* hints[] = {
             "Pan: right-drag    Zoom: wheel    Fit: toolbar button",
@@ -1577,11 +1555,7 @@ void PlayerEditorPanel::PreviewStateNode(uint32_t stateId, bool restartTimeline)
         }
     }
 }
-
-// ----------------------------------------------------------------------------
-// Inspector panes (state node, parameter list, transition condition editor)
-// ----------------------------------------------------------------------------
-
+// インスペクタペイン（ステートノード、パラメータ一覧、遷移条件エディタ）
 void PlayerEditorPanel::DrawStateNodeInspector()
 {
     auto* state = m_stateMachineAsset.FindState(m_selectedNodeId);
@@ -1635,7 +1609,7 @@ void PlayerEditorPanel::DrawStateNodeInspector()
         }
     }
 
-    // v2.0 ActorEditor: state-bound BT inspector (Enemy / NPC only).
+    // v2.0 ActorEditor: ステート紐づけ BT インスペクタ（Enemy / NPC のみ）。
     if (m_actorEditorMode != ActorEditorMode::Player) {
         ImGui::Separator();
         DrawStateAISection(*state);
@@ -1839,13 +1813,9 @@ void PlayerEditorPanel::DrawTransitionConditionEditor(StateTransition* trans)
     }
     ImGui::PopStyleColor();
 }
-
-// ============================================================================
-// State-bound BT Inspector (v2.0)
-// Embedded inside DrawStateNodeInspector when ActorEditorMode != Player.
-// See Docs/ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md sections 3, 5, 6.
-// ============================================================================
-
+// ステート紐づけ BT インスペクタ（v2.0）
+// ActorEditorMode != Player のとき、DrawStateNodeInspector 内へ埋め込む。
+// ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md の 3 / 5 / 6 章を参照。
 namespace
 {
     bool ContainsCaseInsensitive(const std::string& haystack, const char* needle)
@@ -2183,7 +2153,7 @@ void PlayerEditorPanel::GenerateDefaultSubtreeForState(StateNode& state)
 
     const std::string& sname = state.name;
     if (ContainsCaseInsensitive(sname, "idle")) {
-        // Selector { Sequence { HasTarget, SetSMParam("Attack", 1) }, Wait(0.5) }
+        // HasTarget のとき Attack パラメータを 1 にし、それ以外は Wait する Selector。
         const uint32_t root = pushNode(BTNodeType::Root, "Root");
         const uint32_t sel  = pushNode(BTNodeType::Selector, "Sel");
         const uint32_t seq  = pushNode(BTNodeType::Sequence, "TryAttack");
@@ -2197,7 +2167,7 @@ void PlayerEditorPanel::GenerateDefaultSubtreeForState(StateNode& state)
         setParam(setp, 1.0f, 0, "Attack", "");
         setParam(wait, 0.5f);
     } else if (ContainsCaseInsensitive(sname, "chase")) {
-        // Sequence { HasTarget, MoveToTarget(stopRange=1.5) }
+        // HasTarget のとき stopRange=1.5 まで MoveToTarget する Sequence。
         const uint32_t root = pushNode(BTNodeType::Root, "Root");
         const uint32_t seq  = pushNode(BTNodeType::Sequence, "Chase");
         const uint32_t has  = pushNode(BTNodeType::HasTarget, "HasTarget?");
@@ -2209,11 +2179,11 @@ void PlayerEditorPanel::GenerateDefaultSubtreeForState(StateNode& state)
     } else if (ContainsCaseInsensitive(sname, "attack") ||
                ContainsCaseInsensitive(sname, "damage") ||
                ContainsCaseInsensitive(sname, "dead")) {
-        // No BT - animation-only state.
+        // BT なし。アニメーションのみのステート。
         a.nodes.clear();
         a.rootId = 0;
     } else {
-        // Generic: just Wait(1.0).
+        // 汎用: Wait(1.0) だけ。
         const uint32_t root = pushNode(BTNodeType::Root, "Root");
         const uint32_t wait = pushNode(BTNodeType::Wait, "Wait");
         a.rootId = root;

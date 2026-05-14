@@ -1,7 +1,7 @@
 #define _COMPUTE_PARTICLE_DISABLE_CBSCENE_
 #include "compute_particle.hlsli"
 
-// Legacy counter offsets for shaders not yet migrated to SoA v3 layout
+// まだ SoA v3 レイアウトへ移行していないシェーダ用の旧 counter offset。
 static const uint EffectParticleCounterDeadCountOffset = 0;
 static const uint EffectParticleCounterActiveCountOffset = 4;
 static const uint EffectParticleCounterEmitCountOffset = 8;
@@ -25,35 +25,35 @@ cbuffer EffectParticleSimulationParams : register(b0)
     float4 gSizeSeed;
     float4 gSubUvParams;
     float4 gMotionParams;
-    float4 gRandomParams;      // x=speedRange, y=sizeRange, z=lifeRange, w=windStrength
-    float4 gWindDirection;     // xyz=direction, w=turbulence
-    // Phase 1C
+    float4 gRandomParams;      // x は speedRange、y は sizeRange、z は lifeRange、w は windStrength。
+    float4 gWindDirection;     // xyz は direction、w は turbulence。
+    // フェーズ 1C
     float4 gSizeCurveValues;   // s0,s1,s2,s3
     float4 gSizeCurveTimes;    // t0,t1,t2,t3
-    float4 gGradientColor0;    // RGBA at t=0
-    float4 gGradientColor1;    // RGBA at t=t1
-    float4 gGradientColor2;    // RGBA at t=t2
-    float4 gGradientColor3;    // RGBA at t=1
+    float4 gGradientColor0;    // t=0 の RGBA
+    float4 gGradientColor1;    // t=t1 の RGBA
+    float4 gGradientColor2;    // t=t2 の RGBA
+    float4 gGradientColor3;    // t=1 の RGBA
     float4 gGradientTimes;     // t0,t1,t2,t3
-    // Phase 2: Attractors
-    float4 gAttractor0;        // xyz=pos, w=strength
+    // フェーズ 2: Attractor
+    float4 gAttractor0;        // xyz は position、w は strength。
     float4 gAttractor1;
     float4 gAttractor2;
     float4 gAttractor3;
-    float4 gAttractorRadii;    // per-attractor radius
-    float4 gAttractorFalloff;  // 0=constant,1=linear,2=quadratic
-    // Phase 2: Collision
-    float4 gCollisionPlane;    // normal.xyz + d
-    float4 gCollisionSphere0;  // xyz=center, w=radius
+    float4 gAttractorRadii;    // attractor ごとの radius。
+    float4 gAttractorFalloff;  // 0 は constant、1 は linear、2 は quadratic。
+    // フェーズ 2: コリジョン
+    float4 gCollisionPlane;    // normal.xyz と d を保持する。
+    float4 gCollisionSphere0;  // xyz は center、w は radius。
     float4 gCollisionSphere1;
     float4 gCollisionSphere2;
     float4 gCollisionSphere3;
-    float4 gCollisionParams;   // x=restitution, y=friction, z=sphereCount, w=attractorCount
-    // Mesh particle params (used only when gMeshFlags.x != 0)
-    float4 gMeshInitialScale;        // xyz=scale, w=scaleRandomRange
-    float4 gMeshAngularAxisSpeed;    // xyz=angularAxis (normalized), w=angularSpeed rad/s
-    float4 gMeshAngularRandomOrient; // xyz=yaw/pitch/roll random range (rad), w=speed random range
-    float4 gMeshFlags;               // x=isMeshMode (0/1), yzw=reserved
+    float4 gCollisionParams;   // x は restitution、y は friction、z は sphereCount、w は attractorCount。
+    // メッシュパーティクル設定（gMeshFlags.x != 0 のときだけ使用）
+    float4 gMeshInitialScale;        // xyz は scale、w は scaleRandomRange。
+    float4 gMeshAngularAxisSpeed;    // xyz は正規化済み angularAxis、w は angularSpeed の rad/s。
+    float4 gMeshAngularRandomOrient; // xyz は yaw / pitch / roll の乱数範囲、w は speed の乱数範囲。
+    float4 gMeshFlags;               // x=isMeshMode。0 または 1。, yzw=reserved
 }
 
 Texture3D<float4> gCurlNoiseTexture : register(t1);
@@ -136,7 +136,7 @@ float ComputeBiasedAge(float normalizedAge, float bias)
     return saturate(pow(saturate(normalizedAge), max(bias, 0.05f)));
 }
 
-// Phase 1C: 4-key size curve evaluation
+// フェーズ 1C: 4 キーサイズカーブ評価
 float EvaluateSizeCurve(float normalizedAge)
 {
     float t = saturate(normalizedAge);
@@ -155,7 +155,7 @@ float EvaluateSizeCurve(float normalizedAge)
     return lerp(sv.z, sv.w, segT);
 }
 
-// Phase 1C: 4-key color gradient evaluation
+// フェーズ 1C: 4 キー色グラデーション評価
 float4 EvaluateColorGradient(float normalizedAge)
 {
     float t = saturate(normalizedAge);

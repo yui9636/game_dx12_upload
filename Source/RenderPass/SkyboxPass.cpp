@@ -1,3 +1,4 @@
+﻿// SkyboxPass のレンダーパス実装をまとめます。
 #include "SkyboxPass.h"
 #include "Graphics.h"
 #include "SkyBox.h"

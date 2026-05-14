@@ -1,4 +1,4 @@
-#include "EditorInputBridge.h"
+﻿#include "EditorInputBridge.h"
 #include "InputActionMapComponent.h"
 #include "InputUserComponent.h"
 #include "InputContextComponent.h"
@@ -11,7 +11,7 @@
 #include <cstring>
 
 void EditorInputBridge::Initialize(Registry& registry) {
-    // Editor User entity
+    // editor user 用 entity。
     m_editorUser = registry.CreateEntity();
     InputUserComponent user{};
     user.userId = 0;
@@ -30,7 +30,7 @@ void EditorInputBridge::Initialize(Registry& registry) {
     registry.AddComponent(m_editorUser, ResolvedInputStateComponent{});
     registry.AddComponent(m_editorUser, InputDebugStateComponent{});
 
-    // EditorGlobal context
+    // EditorGlobal 用 context。
     m_editorGlobalCtx = registry.CreateEntity();
     InputContextComponent globalCtx{};
     globalCtx.priority = InputContextPriority::EditorGlobal;
@@ -39,7 +39,7 @@ void EditorInputBridge::Initialize(Registry& registry) {
     globalCtx.pointerEnabled = true;
     registry.AddComponent(m_editorGlobalCtx, globalCtx);
 
-    // SceneView context
+    // SceneView 用 context。
     m_sceneViewCtx = registry.CreateEntity();
     InputContextComponent sceneCtx{};
     sceneCtx.priority = InputContextPriority::SceneView;
@@ -48,7 +48,7 @@ void EditorInputBridge::Initialize(Registry& registry) {
     sceneCtx.pointerEnabled = true;
     registry.AddComponent(m_sceneViewCtx, sceneCtx);
 
-    // TextInput context (starts disabled)
+    // text 用色。Input context (starts disabled)
     m_textInputCtx = registry.CreateEntity();
     InputContextComponent textCtx{};
     textCtx.priority = InputContextPriority::TextInput;
@@ -58,7 +58,7 @@ void EditorInputBridge::Initialize(Registry& registry) {
     registry.AddComponent(m_textInputCtx, textCtx);
 }
 
-void EditorInputBridge::Finalize(Registry& /*registry*/) {
+void EditorInputBridge::Finalize(Registry&) {
     m_editorUser = 0;
     m_editorGlobalCtx = 0;
     m_sceneViewCtx = 0;
@@ -90,7 +90,7 @@ void EditorInputBridge::UpdateTextInputState(bool wantTextInput, Registry& regis
 }
 
 void EditorInputBridge::OnPlayStarted(Registry& registry) {
-    // Disable SceneView gamepad input during play
+    // play 中は SceneView の gamepad 入力を無効化する。
     Signature sig = CreateSignature<InputContextComponent>();
     auto archetypes = registry.GetAllArchetypes();
     for (auto* arch : archetypes) {
@@ -107,7 +107,7 @@ void EditorInputBridge::OnPlayStarted(Registry& registry) {
 }
 
 void EditorInputBridge::OnPlayStopped(Registry& registry) {
-    // Re-enable SceneView
+    // SceneView 入力を再有効化する。
     Signature sig = CreateSignature<InputContextComponent>();
     auto archetypes = registry.GetAllArchetypes();
     for (auto* arch : archetypes) {

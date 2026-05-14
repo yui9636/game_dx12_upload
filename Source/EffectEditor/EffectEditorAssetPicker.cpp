@@ -1,8 +1,7 @@
-﻿// Asset picker logic for EffectEditorPanel — extracted from EffectEditorPanel.cpp
-// to keep the main panel focused on dock layout / orchestration.
-//
-// All entry points remain member functions of EffectEditorPanel; only their
-// definitions live here.
+﻿// EffectEditorPanel の asset picker 処理。EffectEditorPanel.cpp から分離している。
+// main panel を dock layout と orchestration に集中させるため。
+// entry point は EffectEditorPanel の member function のままで、
+// 定義だけをこのファイルへ置いている。
 
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"

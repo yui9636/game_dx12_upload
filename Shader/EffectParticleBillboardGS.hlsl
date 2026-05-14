@@ -1,8 +1,5 @@
-// ============================================================================
-// Billboard GS (SoA): Reads from g_AliveList -> Hot + Warm streams
-// Expands point to camera-facing quad with velocity stretch
-// ============================================================================
-
+// ビルボード GS（SoA）: g_AliveList から Hot / Warm stream を読む。
+// 点を、速度ストレッチ付きのカメラ正対クアッドへ展開する。
 #include "compute_particle.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -42,7 +39,7 @@ void main(point GS_IN gin[1], inout TriangleStream<PS_IN> output)
     uint vertexId = gin[0].vertex_id;
     uint slot = g_AliveList[vertexId];
 
-    // ── Read SoA streams ──
+    // SoA stream を読み込む。
     BillboardHot hot = g_BillboardHot[slot];
     BillboardWarm warm = g_BillboardWarm[slot];
 
@@ -56,12 +53,12 @@ void main(point GS_IN gin[1], inout TriangleStream<PS_IN> output)
     float4 color = UnpackRGBA8(warm.packedColor);
     float2 texUV = UnpackHalf2(warm.texcoordPacked);
 
-    // Billboard matrix (inverse view, kill translation)
+    // ビルボード行列（逆 view、平行移動は除去）
     float4x4 billboard_matrix = inverseviewProjection;
     billboard_matrix._41_42_43 = float3(0, 0, 0);
     billboard_matrix._44 = 1.0f;
 
-    // Velocity stretch
+    // 速度ストレッチ
     float additional_roll = 0.0f;
     if (enable_velocity_stretch != 0)
     {
@@ -76,15 +73,15 @@ void main(point GS_IN gin[1], inout TriangleStream<PS_IN> output)
         scale.y *= stretchFactor;
     }
 
-    // Transform
+    // 変換
     float4x4 scale_matrix = matrix_scaling(scale);
     float4x4 rotation_matrix = mul(billboard_matrix, matrix_rotation_z(spinAngle + additional_roll));
     float4x4 translation_matrix = matrix_translation(hot.position);
     float4x4 wvp = mul(mul(scale_matrix, rotation_matrix), mul(translation_matrix, viewProjection));
 
-    // Sub-UV rect
-    // texUV.xy = atlas origin, compute_particle uses texcoord.zw = frame size
-    // For now pass through (sub-UV rect handled in update)
+    // Sub-UV の矩形。
+    // texUV.xy は atlas 原点。compute_particle は texcoord.zw をフレームサイズとして使う。
+    // 現時点ではそのまま渡し、Sub-UV 矩形の処理は update 側で行う。
     float4 texcoord = float4(texUV.x, texUV.y, 1.0f, 1.0f);
 
     static const float4 vertex_positions[4] =

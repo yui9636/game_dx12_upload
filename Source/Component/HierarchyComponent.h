@@ -1,9 +1,9 @@
-#pragma once
+ï»¿#pragma once
 #include "Entity/Entity.h"
 
 /**
- * @brief E½eE½qE½ÖŒWE½iE½KE½wE½\E½E½E½jE½E½Ûï¿½E½E½E½E½RE½E½E½|E½[E½lE½E½E½g
- * E½AE½[E½LE½^E½CE½vECSE½E½E½E½E½ÉAstd::vectorE½E½gE½E½È‚ï¿½E½oE½E½E½E½E½E½E½E½E½NE½E½E½XE½gE½E½E½E½E½E½Ì—p
+ * @brief è¦ªå­é–¢ä¿‚ï¼ˆéšå±¤æ§‹é€ ï¼‰ã‚’ä¿æŒã™ã‚‹ã‚³ãƒ³ãƒãƒ¼ãƒãƒ³ãƒˆã€‚
+ * ã‚¢ãƒ¼ã‚­ã‚¿ã‚¤ãƒ— ECS ã§ vector ã‚’ä½¿ã‚ãšé«˜é€Ÿã«å‚ç…§ã™ã‚‹ãŸã‚ã®ãƒªãƒ³ã‚¯æƒ…å ±ã€‚
  */
 struct HierarchyComponent {
     bool isActive = true;

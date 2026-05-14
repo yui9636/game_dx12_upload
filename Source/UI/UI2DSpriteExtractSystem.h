@@ -1,3 +1,4 @@
+﻿// UI2DSpriteExtractSystem の UI 関連宣言をまとめます。
 #pragma once
 
 #include <utility>

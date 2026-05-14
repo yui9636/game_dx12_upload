@@ -1,3 +1,4 @@
+﻿// InputResolveSystem の入力処理実装をまとめます。
 #include "InputResolveSystem.h"
 
 #include "Archetype/Archetype.h"

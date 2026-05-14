@@ -1,7 +1,8 @@
-#include "PreviewState.h"
+﻿#include "PreviewState.h"
 #include "Animator/AnimatorService.h"
 #include "Registry/Registry.h"
 #include <cmath>
+// PreviewState::EnterPreview はこのモジュールの実行時処理を構成する補助処理を行う。
 
 void PreviewState::EnterPreview(EntityID entity)
 {

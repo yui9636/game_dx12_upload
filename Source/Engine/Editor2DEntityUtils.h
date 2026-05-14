@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +15,7 @@
 
 namespace Editor2D
 {
+// SyncRectTransformToTransform はこのモジュールの実行時処理を構成する補助処理を行う。
     inline void SyncRectTransformToTransform(const RectTransformComponent& rect, TransformComponent& transform)
     {
         using namespace DirectX;

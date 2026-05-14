@@ -1,4 +1,4 @@
-#include "TrailSystem.h"
+﻿#include "TrailSystem.h"
 #include "Component/TrailComponent.h"
 #include "Component/TransformComponent.h"
 #include "Component/ComponentSignature.h"
@@ -52,13 +52,13 @@ void TrailSystem::Update(Registry& registry, float deltaTime)
                 trail.points.push_back(pt);
             }
 
-            // Remove expired points
+            // 寿命切れの点を削除する。
             const float cutoff = trail.totalTime - trail.lifetime;
             while (!trail.points.empty() && trail.points.front().timeStamp < cutoff) {
                 trail.points.erase(trail.points.begin());
             }
 
-            // Cap max points
+            // 点数が上限を超えないように切り詰める。
             while (static_cast<int>(trail.points.size()) > trail.maxPoints) {
                 trail.points.erase(trail.points.begin());
             }

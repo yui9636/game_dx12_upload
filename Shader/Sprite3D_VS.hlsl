@@ -1,23 +1,23 @@
-// [Sprite3D_VS.hlsl]
+// main は Sprite3D の頂点をビュー射影空間へ変換する。
 #include "Sprite3D.hlsli"
 
 VS_OUT main(VS_IN vin)
 {
     VS_OUT vout;
 
-    // 1. ���W�ϊ�
-    // ���[�J�����W(���f��) -> ���[���h���W(���E)
-    // ���͂�float3�Ȃ̂ŁAw=1.0��t�����čs�񉉎Z���s���܂�
+    // 1. 座標変換
+    // ローカル座標(モデル) -> ワールド座標(世界)
+    // 入力はfloat3なので、w=1.0を付加して行列演算を行います
     float4 worldPos = mul(float4(vin.position, 1.0f), World);
     
-    // ���[���h -> �r���[(�J����)
+    // ワールド -> ビュー(カメラ)
     float4 viewPos = mul(worldPos, View);
     
-    // �r���[ -> �v���W�F�N�V����(���)
+    // ビュー -> プロジェクション(画面)
     vout.position = mul(viewPos, Projection);
 
-    // 2. �p�X�X���[
-    // �F��UV�͂��̂܂܃s�N�Z���V�F�[�_�[�֓n���܂�
+    // 2. パススルー
+    // 色とUVはそのままピクセルシェーダーへ渡します
     vout.color = vin.color;
     vout.texcoord = vin.texcoord;
 

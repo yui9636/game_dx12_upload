@@ -1,25 +1,25 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Archetype.h"
 #include "Component/ComponentSignature.h"
 #include <unordered_map>
 #include <memory>
 
-// Signature ‚ğ unordered_map ‚ÌƒL[‚Æ‚µ‚Äg‚¤‚½‚ß‚Ì hash ’è‹`B
-// component ‚Ì—L–³ƒrƒbƒg—ñ‚©‚çˆÀ’è‚µ‚½ hash ’l‚ğì‚éB
+// Signature ã‚’ unordered_map ã®ã‚­ãƒ¼ã¨ã—ã¦ä½¿ã†ãŸã‚ã® hash å®šç¾©ã€‚
+// component ã®æœ‰ç„¡ãƒ“ãƒƒãƒˆåˆ—ã‹ã‚‰å®‰å®šã—ãŸ hash å€¤ã‚’ä½œã‚‹ã€‚
 namespace std {
     template <>
     struct hash<Signature> {
         size_t operator()(const Signature& sig) const {
-            // ‰Šú seed ‚ğİ’è‚·‚éB
+            // åˆæœŸ seed ã‚’è¨­å®šã™ã‚‹ã€‚
             size_t seed = 1469598103934665603ull;
 
-            // ‘S component bit ‚ğŒ©‚Ä hash ‚ğ¬‚º‚éB
+            // å…¨ component bit ã‚’è¦‹ã¦ hash ã‚’æ··ãœã‚‹ã€‚
             for (size_t i = 0; i < MAX_COMPONENTS; ++i) {
-                // bit ‚ª—§‚Á‚Ä‚¢‚é‚©‚Ç‚¤‚©‚ÅˆÙ‚È‚é’è”‚ğg‚¤B
+                // bit ãŒç«‹ã£ã¦ã„ã‚‹ã‹ã©ã†ã‹ã§ç•°ãªã‚‹å®šæ•°ã‚’ä½¿ã†ã€‚
                 const size_t bitValue = sig[i] ? 0x9e3779b97f4a7c15ull : 0x4f1bbcdc6762c3d1ull;
 
-                // hash ‚ğXV‚·‚éB
+                // hash ã‚’æ›´æ–°ã™ã‚‹ã€‚
                 seed ^= bitValue + (seed << 6) + (seed >> 2);
             }
 
@@ -28,57 +28,57 @@ namespace std {
     };
 }
 
-// Archetype ŠÔ‚Ì‘JˆÚæ‚ğ•Û‚·‚é\‘¢‘ÌB
-// component ‚ğ’Ç‰Á‚µ‚½‚Ì‘JˆÚæ‚ÆAíœ‚µ‚½‚Ì‘JˆÚæ‚ğ•ª‚¯‚Ä‚ÂB
+// Archetype é–“ã®é·ç§»å…ˆã‚’ä¿æŒã™ã‚‹æ§‹é€ ä½“ã€‚
+// component ã‚’è¿½åŠ ã—ãŸæ™‚ã®é·ç§»å…ˆã¨ã€å‰Šé™¤ã—ãŸæ™‚ã®é·ç§»å…ˆã‚’åˆ†ã‘ã¦æŒã¤ã€‚
 struct ArchetypeEdges {
-    // w’è component ‚ğ’Ç‰Á‚µ‚½‚É‘JˆÚ‚·‚é archetypeB
+    // æŒ‡å®š component ã‚’è¿½åŠ ã—ãŸæ™‚ã«é·ç§»ã™ã‚‹ archetypeã€‚
     std::unordered_map<ComponentTypeID, Archetype*> addEdges;
 
-    // w’è component ‚ğíœ‚µ‚½‚É‘JˆÚ‚·‚é archetypeB
+    // æŒ‡å®š component ã‚’å‰Šé™¤ã—ãŸæ™‚ã«é·ç§»ã™ã‚‹ archetypeã€‚
     std::unordered_map<ComponentTypeID, Archetype*> removeEdges;
 };
 
-// Archetype ‚ğ signature ‚²‚Æ‚ÉŠÇ—‚µA
-// component ‚Ì’Ç‰ÁEíœ‚É‰‚¶‚½Ÿ archetype ‚Ö‚Ì‘JˆÚ‚ğƒLƒƒƒbƒVƒ…‚·‚éƒNƒ‰ƒXB
+// Archetype ã‚’ signature ã”ã¨ã«ç®¡ç†ã—ã€
+// component ã®è¿½åŠ ãƒ»å‰Šé™¤ã«å¿œã˜ãŸæ¬¡ archetype ã¸ã®é·ç§»ã‚’ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã™ã‚‹ã‚¯ãƒ©ã‚¹ã€‚
 class ArchetypeGraph {
 public:
-    // ƒfƒtƒHƒ‹ƒg\’zB
+    // ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆæ§‹ç¯‰ã€‚
     ArchetypeGraph() = default;
 
-    // “Á•Ê‚È‰ğ•úˆ—‚Í•s—v‚È‚Ì‚Å default destructor ‚ğg‚¤B
+    // ç‰¹åˆ¥ãªè§£æ”¾å‡¦ç†ã¯ä¸è¦ãªã®ã§ default destructor ã‚’ä½¿ã†ã€‚
     ~ArchetypeGraph() = default;
 
-    // component ‚ğ1‚Â‚à‚½‚È‚¢‹ó archetype ‚ğæ“¾‚·‚éB
+    // component ã‚’1ã¤ã‚‚æŒãŸãªã„ç©º archetype ã‚’å–å¾—ã™ã‚‹ã€‚
     Archetype* GetEmptyArchetype();
 
-    // Œ»İ‚Ì archetype ‚É component ‚ğ1‚Â’Ç‰Á‚µ‚½æ‚Ì archetype ‚ğæ“¾‚·‚éB
-    // ‚Ü‚¾‘¶İ‚µ‚È‚¯‚ê‚ÎV‚µ‚­ì¬‚·‚éB
+    // ç¾åœ¨ã® archetype ã« component ã‚’1ã¤è¿½åŠ ã—ãŸå…ˆã® archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+    // ã¾ã å­˜åœ¨ã—ãªã‘ã‚Œã°æ–°ã—ãä½œæˆã™ã‚‹ã€‚
     Archetype* GetOrCreateNextArchetype(Archetype* current, ComponentTypeID typeId, size_t elementSize,
         ComponentColumn::ConstructFn c, ComponentColumn::MoveConstructFn mc,
         ComponentColumn::MoveAssignFn ma, ComponentColumn::DestructFn d);
 
-    // Œ»İ‚Ì archetype ‚©‚ç component ‚ğ1‚Âíœ‚µ‚½æ‚Ì archetype ‚ğæ“¾‚·‚éB
-    // ‚Ü‚¾‘¶İ‚µ‚È‚¯‚ê‚ÎV‚µ‚­ì¬‚·‚éB
+    // ç¾åœ¨ã® archetype ã‹ã‚‰ component ã‚’1ã¤å‰Šé™¤ã—ãŸå…ˆã® archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+    // ã¾ã å­˜åœ¨ã—ãªã‘ã‚Œã°æ–°ã—ãä½œæˆã™ã‚‹ã€‚
     Archetype* GetOrCreatePreviousArchetype(Archetype* current, ComponentTypeID typeId);
 
-    // Œ»İ graph ‚ª•Û‚µ‚Ä‚¢‚é‘S archetype ‚ğ”z—ñ‚Å•Ô‚·B
+    // ç¾åœ¨ graph ãŒä¿æŒã—ã¦ã„ã‚‹å…¨ archetype ã‚’é…åˆ—ã§è¿”ã™ã€‚
     std::vector<Archetype*> GetAllArchetypes() const;
 
 private:
-    // w’è signature ‚É‘Î‰‚·‚é archetype ‚ğæ“¾‚·‚éB
-    // –³‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š signature ã«å¯¾å¿œã™ã‚‹ archetype ã‚’å–å¾—ã™ã‚‹ã€‚
+    // ç„¡ã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     Archetype* GetArchetype(const Signature& sig);
 
-    // w’è signature ‚Ì archetype ‚ğV‹Kì¬‚·‚éB
+    // æŒ‡å®š signature ã® archetype ã‚’æ–°è¦ä½œæˆã™ã‚‹ã€‚
     Archetype* CreateArchetype(const Signature& sig);
 
 private:
-    // signature ‚²‚Æ‚É archetype ‚ğŠ—L‚·‚éƒ}ƒbƒvB
+    // signature ã”ã¨ã« archetype ã‚’æ‰€æœ‰ã™ã‚‹ãƒãƒƒãƒ—ã€‚
     std::unordered_map<Signature, std::unique_ptr<Archetype>> m_archetypes;
 
-    // Še archetype ‚©‚ç‚Ì add / remove ‘JˆÚæƒLƒƒƒbƒVƒ…B
+    // å„ archetype ã‹ã‚‰ã® add / remove é·ç§»å…ˆã‚­ãƒ£ãƒƒã‚·ãƒ¥ã€‚
     std::unordered_map<Archetype*, ArchetypeEdges> m_edges;
 
-    // ‹ó signature ‚É‘Î‰‚·‚é archetypeB
+    // ç©º signature ã«å¯¾å¿œã™ã‚‹ archetypeã€‚
     Archetype* m_emptyArchetype = nullptr;
 };

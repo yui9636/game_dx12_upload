@@ -1,3 +1,4 @@
+﻿// HitboxTrackingSystem の Gameplay 関連実装をまとめます。
 #include "HitboxTrackingSystem.h"
 #include "HitboxTrackingComponent.h"
 #include "TimelineComponent.h"

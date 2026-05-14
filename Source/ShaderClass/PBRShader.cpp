@@ -1,4 +1,4 @@
-#include "PBRShader.h"
+﻿#include "PBRShader.h"
 
 #include "Graphics.h"
 #include "ShadowMap.h"
@@ -11,6 +11,7 @@
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
+// PBRShader::PBRShader は PBR 用 shader object を初期化する。
 
 PBRShader::PBRShader(IResourceFactory* factory)
 {

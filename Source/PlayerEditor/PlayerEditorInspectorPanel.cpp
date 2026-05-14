@@ -1,7 +1,5 @@
-﻿// ============================================================================
-// PlayerEditor — Properties / Animator / Input panels (right column).
-// Sibling of PlayerEditorPanel.cpp; split out for readability.
-// ============================================================================
+﻿// PlayerEditor 右列の Properties / Animator / Input パネルを描画する。
+// PlayerEditorPanel.cpp から分離し、パネル単位で読みやすくしている。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -203,9 +201,9 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
                     timelineRuntimeChanged = true;
                 }
             }
-            // Hit feedback (VFX/SE on a successful hit) is authored on the
-            // Body collider of the receiver, not on the attacker's hitbox.
-            // See PlayerEditorSkeletonPanel's persistent collider inspector.
+            // ヒット成功時の VFX / SE は攻撃側の hitbox ではなく、
+            // 受け手側の Body collider に設定する。
+            // 設定 UI は PlayerEditorSkeletonPanel の永続コライダー Inspector にある。
             break;
 
         case TimelineTrackType::VFX:

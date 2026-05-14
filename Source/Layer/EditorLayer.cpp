@@ -1,4 +1,4 @@
-#include "EditorLayerInternal.h"
+﻿#include "EditorLayerInternal.h"
 #include "EditorTheme.h"
 #include "Graphics.h"
 
@@ -357,7 +357,7 @@ void EditorLayer::RenderUI()
 
 void EditorLayer::RenderDetachedWindows()
 {
-    // Player Editor is now hosted inside the main editor as a workspace tab.
+    // Player Editor は main editor 内の workspace tab としてホストする。
 }
 
 void EditorLayer::SyncPlayerEditorPanelState()

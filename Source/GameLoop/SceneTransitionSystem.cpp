@@ -1,3 +1,4 @@
+﻿// SceneTransitionSystem の GameLoop 関連実装をまとめます。
 #include "SceneTransitionSystem.h"
 
 #include "Asset/PrefabSystem.h"

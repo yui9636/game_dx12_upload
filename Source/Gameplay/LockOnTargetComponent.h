@@ -1,8 +1,8 @@
-#pragma once
+﻿#pragma once
 #include "Entity/Entity.h"
 
-// Player-side lock-on state. LockOnSystem owns currentTarget;
-// the third-person camera reads it via CameraTPVControlComponent.target.
+// プレイヤー側ロックオン状態。currentTarget は LockOnSystem が所有する。
+// 三人称カメラは CameraTPVControlComponent.target 経由でこれを読む。
 struct LockOnTargetComponent {
     EntityID currentTarget = Entity::NULL_ID;
     float maxRange         = 25.0f;

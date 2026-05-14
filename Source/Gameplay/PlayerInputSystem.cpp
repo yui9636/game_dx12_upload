@@ -1,4 +1,4 @@
-#include "PlayerInputSystem.h"
+﻿#include "PlayerInputSystem.h"
 #include "PlayerTagComponent.h"
 #include "LocomotionStateComponent.h"
 #include "ActionStateComponent.h"
@@ -12,10 +12,10 @@
 
 namespace
 {
-    // Resolve by action name to be robust against InputActionMap reordering between
-    // PlayerEditor save / GameLayer scene load. Index-based lookup broke when prefab
-    // had legacy "LightAttack" before "Dodge", which silently shifted Dodge to a
-    // wrong slot and made Space appear unresponsive.
+    // PlayerEditor 保存と GameLayer シーン読み込みの間で InputActionMap の順序が変わっても壊れないよう、
+    // action 名で解決する。index ベースの lookup では、prefab に旧 "LightAttack" が
+    // "Dodge" より前に残っていた場合に Dodge が別 slot へずれ、
+    // Space が反応しないように見えていた。
     float ReadPressedTriggerByName(
         const ResolvedInputStateComponent& input,
         const InputActionMapComponent& map,
@@ -73,8 +73,8 @@ void PlayerInputSystem::Update(Registry& registry) {
 
             loco.moveInput = { input.axes[0], input.axes[1] };
 
-            // StateMachine owns action and dodge transitions. Input only writes one-frame triggers.
-            // Damaged trigger is written by HealthSystem; do not touch it here.
+            // action と dodge の遷移は StateMachine が持つ。Input は 1 フレーム trigger だけを書く。
+            // Damaged trigger は HealthSystem が書くので、ここでは触らない。
             params.SetParam("Attack", ReadPressedTriggerByName(input, map, "Attack"));
             params.SetParam("Dodge",  ReadPressedTriggerByName(input, map, "Dodge"));
         }

@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 #include <imgui.h>
 #include <vector>
 #include <map>
 #include <string>
 #include "IconsFontAwesome7.h" 
+// IconFontSize は Medium を中心に、実行時やエディターで共有する状態を保持する。
 
 enum class IconFontSize { Mini,Small, Medium, Large, Extra };
 enum class IconSemantic { Default, Success, Danger, Warning, Info };

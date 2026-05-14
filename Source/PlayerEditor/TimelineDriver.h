@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include "Entity/Entity.h"
+// TimelineDriver は m_currentTime/m_animIndex/m_loop/m_targetEntity を中心に、実行時やエディターで共有する状態を保持する。
 
 class TimelineDriver
 {

@@ -1,3 +1,4 @@
+﻿// UIElement の UI 関連実装をまとめます。
 #include "UIElement.h"
 
 using namespace DirectX;

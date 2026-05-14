@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <DirectXMath.h>
 #include "RenderContext/RenderQueue.h"
 #include "RenderContext/RenderContext.h"
@@ -6,9 +6,9 @@
 
 class Registry;
 
-// Bakes the scene into a cubemap centered at each ReflectionProbeComponent.
-// Works for both DX11 and DX12. The probe's resulting cubemap is stored in
-// ReflectionProbeComponent::cubemapTexture as an API-neutral ITexture.
+// 各 ReflectionProbeComponent の位置を中心に scene を cubemap へ焼き込む。
+// DX11 と DX12 の両方で動作し、焼き込んだ cubemap は
+// API 非依存の ITexture として ReflectionProbeComponent::cubemapTexture へ格納する。
 class ReflectionProbeBaker {
 public:
     ReflectionProbeBaker() = default;

@@ -1,4 +1,4 @@
-#include "EffectMaterial.h"
+﻿#include "EffectMaterial.h"
 #include "Graphics.h"
 #include "RenderContext/RenderContext.h"
 #include "GpuResourceUtils.h"
@@ -7,9 +7,6 @@
 
 using namespace DirectX;
 using namespace Microsoft::WRL;
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 EffectMaterial::EffectMaterial()
 {
     constants.baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -32,9 +29,6 @@ EffectMaterial::EffectMaterial()
 
     CreateConstantBuffer();
 }
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 void EffectMaterial::SetTexture(int slot, const std::string& path, ComPtr<ID3D11ShaderResourceView> texture)
 {
     if (slot >= 0 && slot < TEXTURE_SLOT_COUNT)
@@ -43,9 +37,6 @@ void EffectMaterial::SetTexture(int slot, const std::string& path, ComPtr<ID3D11
         texturePaths[slot] = path;
     }
 }
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 std::string EffectMaterial::GetTexturePath(int slot) const
 {
     if (slot >= 0 && slot < TEXTURE_SLOT_COUNT)
@@ -54,9 +45,6 @@ std::string EffectMaterial::GetTexturePath(int slot) const
     }
     return "";
 }
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 void EffectMaterial::CreateConstantBuffer()
 {
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) return;
@@ -72,9 +60,6 @@ void EffectMaterial::CreateConstantBuffer()
     HRESULT hr = device->CreateBuffer(&desc, nullptr, constantBuffer.GetAddressOf());
     assert(SUCCEEDED(hr));
 }
-
-// --------------------------------------------------------
-// --------------------------------------------------------
 void EffectMaterial::Apply(const RenderContext& rc)
 {
     ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
@@ -99,33 +84,13 @@ void EffectMaterial::Apply(const RenderContext& rc)
 
 
     auto renderState = Graphics::Instance().GetRenderState();
-
-
-    //ID3D11SamplerState* samplers[2] = {
-    //    renderState->GetSamplerState(SamplerState::LinearWrap),  // s0: LinearWrap
-    //    renderState->GetSamplerState(SamplerState::LinearClamp)  // s1: LinearClamp
     //};
-    //dc->PSSetSamplers(0, 2, samplers);
 
 
 
 
     ID3D11BlendState* bs = nullptr;
-
-    //switch (blendMode)
     //{
-    //case EffectBlendMode::Opaque:
-    //    bs = renderState->GetBlendState(BlendState::Opaque);
-    //    break;
-    //case EffectBlendMode::Alpha:
-    //    bs = renderState->GetBlendState(BlendState::Transparency);
-    //    break;
-    //case EffectBlendMode::Additive:
-    //    bs = renderState->GetBlendState(BlendState::Additive);
-    //    break;
-    //case EffectBlendMode::Subtractive:
-    //    bs = renderState->GetBlendState(BlendState::Subtraction);
-    //    break;
     //}
 
     const float blendFactor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };

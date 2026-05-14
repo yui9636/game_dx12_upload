@@ -1,4 +1,4 @@
-#include "CollisionSystem.h"
+ï»¿#include "CollisionSystem.h"
 
 #include "Collision/CollisionManager.h"
 #include "Component/HierarchyComponent.h"
@@ -14,8 +14,8 @@ using namespace DirectX;
 
 namespace
 {
-    // Še²ƒXƒP[ƒ‹’l‚ğ‰ğŒˆ‚·‚éB
-    // ’l‚ª‹É¬‚È‚ç fallback ‚ğg‚¢A‚»‚ê‚à‹É¬‚È‚ç 1.0f ‚ğ•Ô‚·B
+    // å„è»¸ã‚¹ã‚±ãƒ¼ãƒ«å€¤ã‚’è§£æ±ºã™ã‚‹ã€‚
+    // å€¤ãŒæ¥µå°ãªã‚‰ fallback ã‚’ä½¿ã„ã€ãã‚Œã‚‚æ¥µå°ãªã‚‰ 1.0f ã‚’è¿”ã™ã€‚
     float ResolveAxisScale(float value, float fallback)
     {
         const float absValue = std::fabs(value);
@@ -25,8 +25,8 @@ namespace
         return fallback > 0.0001f ? fallback : 1.0f;
     }
 
-    // Transform ‚Ì worldScale ‚©‚çAÅ‘å²ƒXƒP[ƒ‹‚ğæ“¾‚·‚éB
-    // Sphere ‚â Capsule ”¼Œa‚Ì•â³‚Ég‚¤B
+    // Transform ã® worldScale ã‹ã‚‰ã€æœ€å¤§è»¸ã‚¹ã‚±ãƒ¼ãƒ«ã‚’å–å¾—ã™ã‚‹ã€‚
+    // Sphere ã‚„ Capsule åŠå¾„ã®è£œæ­£ã«ä½¿ã†ã€‚
     float ResolveMaxWorldScale(const TransformComponent& transform)
     {
         float value = std::fabs(transform.worldScale.x);
@@ -41,15 +41,15 @@ namespace
             value = sz;
         }
 
-        // ‘S²‚Æ‚à‹É¬‚È‚ç 1.0f ‚ğ•Ô‚·B
+        // å…¨è»¸ã¨ã‚‚æ¥µå°ãªã‚‰ 1.0f ã‚’è¿”ã™ã€‚
         if (value <= 0.0001f) {
             value = 1.0f;
         }
         return value;
     }
 
-    // ƒRƒ‰ƒCƒ_[—v‘f‚Ì world À•W‚ğ‹‚ß‚éB
-    // nodeIndex ‚ª—LŒø‚È‚çƒ{[ƒ“/ƒm[ƒh’Ç]ˆÊ’u‚ğg‚¢A–³Œø‚È‚ç entity Šî€‚Ì local offset ‚ğg‚¤B
+    // ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼è¦ç´ ã® world åº§æ¨™ã‚’æ±‚ã‚ã‚‹ã€‚
+    // nodeIndex ãŒæœ‰åŠ¹ãªã‚‰ãƒœãƒ¼ãƒ³/ãƒãƒ¼ãƒ‰è¿½å¾“ä½ç½®ã‚’ä½¿ã„ã€ç„¡åŠ¹ãªã‚‰ entity åŸºæº–ã® local offset ã‚’ä½¿ã†ã€‚
     XMFLOAT3 ResolveColliderWorldPosition(
         Registry& registry,
         EntityID entity,
@@ -58,7 +58,7 @@ namespace
     {
         const XMMATRIX worldMatrix = XMLoadFloat4x4(&transform.worldMatrix);
 
-        // —v‘f‚Ì local offset ‚ğ XMFLOAT3 ‚É•ÏŠ·‚·‚éB
+        // è¦ç´ ã® local offset ã‚’ XMFLOAT3 ã«å¤‰æ›ã™ã‚‹ã€‚
         const XMFLOAT3 localOffset = {
             element.offsetLocal.x,
             element.offsetLocal.y,
@@ -67,12 +67,12 @@ namespace
 
         XMVECTOR worldPosition = XMVectorZero();
 
-        // ƒm[ƒhw’è‚ ‚è‚È‚çA‚»‚Ìƒm[ƒh‚ÌˆÊ’u‚ğg‚Á‚Ä world ‰»‚·‚éB
+        // ãƒãƒ¼ãƒ‰æŒ‡å®šã‚ã‚Šãªã‚‰ã€ãã®ãƒãƒ¼ãƒ‰ã®ä½ç½®ã‚’ä½¿ã£ã¦ world åŒ–ã™ã‚‹ã€‚
         if (element.nodeIndex >= 0) {
             MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
 
             if (mesh && mesh->model) {
-                // ƒ‚ƒfƒ‹‚Ìw’èƒm[ƒhã‚Å‚Ì local offset ‚ğæ“¾‚µAentity ‚Ì worldMatrix ‚Ö•ÏŠ·‚·‚éB
+                // ãƒ¢ãƒ‡ãƒ«ã®æŒ‡å®šãƒãƒ¼ãƒ‰ä¸Šã§ã® local offset ã‚’å–å¾—ã—ã€entity ã® worldMatrix ã¸å¤‰æ›ã™ã‚‹ã€‚
                 const XMFLOAT3 nodeLocalPosition =
                     NodeAttachmentUtils::GetWorldPositionNodeLocal(
                         mesh->model.get(),
@@ -82,12 +82,12 @@ namespace
                 worldPosition = XMVector3TransformCoord(XMLoadFloat3(&nodeLocalPosition), worldMatrix);
             }
             else {
-                // ƒ‚ƒfƒ‹‚ª–³‚¢ê‡‚Í’Êí‚Ì local offset ‚Æ‚µ‚Äˆµ‚¤B
+                // ãƒ¢ãƒ‡ãƒ«ãŒç„¡ã„å ´åˆã¯é€šå¸¸ã® local offset ã¨ã—ã¦æ‰±ã†ã€‚
                 worldPosition = XMVector3TransformCoord(XMLoadFloat3(&localOffset), worldMatrix);
             }
         }
         else {
-            // ƒm[ƒhw’è‚È‚µ‚È‚ç entity Šî€‚Ì local offset ‚ğ world ‰»‚·‚éB
+            // ãƒãƒ¼ãƒ‰æŒ‡å®šãªã—ãªã‚‰ entity åŸºæº–ã® local offset ã‚’ world åŒ–ã™ã‚‹ã€‚
             worldPosition = XMVector3TransformCoord(XMLoadFloat3(&localOffset), worldMatrix);
         }
 
@@ -96,23 +96,23 @@ namespace
         return result;
     }
 
-    // Sphere ƒRƒ‰ƒCƒ_[‚ğ CollisionManager ã‚ÅXV‚Ü‚½‚ÍÄ“o˜^‚·‚éB
+    // Sphere ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ CollisionManager ä¸Šã§æ›´æ–°ã¾ãŸã¯å†ç™»éŒ²ã™ã‚‹ã€‚
     void RefreshSphereCollider(
         CollisionManager& collisionManager,
         EntityID entity,
         ColliderComponent::Element& element,
         const SphereDesc& desc)
     {
-        // Šù‚É“o˜^Ï‚İ‚È‚çXV‚ğ‚İ‚éB
+        // æ—¢ã«ç™»éŒ²æ¸ˆã¿ãªã‚‰æ›´æ–°ã‚’è©¦ã¿ã‚‹ã€‚
         if (element.registeredId != 0) {
             if (!collisionManager.UpdateSphere(element.registeredId, desc)) {
-                // XV¸”s‚È‚çˆê“xíœ‚µ‚ÄÄ“o˜^‚Å‚«‚éó‘Ô‚Ö–ß‚·B
+                // æ›´æ–°å¤±æ•—ãªã‚‰ä¸€åº¦å‰Šé™¤ã—ã¦å†ç™»éŒ²ã§ãã‚‹çŠ¶æ…‹ã¸æˆ»ã™ã€‚
                 collisionManager.Remove(element.registeredId);
                 element.registeredId = 0;
             }
         }
 
-        // –¢“o˜^‚È‚çV‹K“o˜^‚·‚éB
+        // æœªç™»éŒ²ãªã‚‰æ–°è¦ç™»éŒ²ã™ã‚‹ã€‚
         if (element.registeredId == 0) {
             element.registeredId = collisionManager.AddSphere(
                 desc,
@@ -120,7 +120,7 @@ namespace
                 element.attribute);
         }
 
-        // “o˜^¬Œ÷Œã‚Í—LŒø‰»‚Æ userPtr Äİ’è‚ğs‚¤B
+        // ç™»éŒ²æˆåŠŸå¾Œã¯æœ‰åŠ¹åŒ–ã¨ userPtr å†è¨­å®šã‚’è¡Œã†ã€‚
         if (element.registeredId != 0) {
             collisionManager.SetEnabled(element.registeredId, true);
             collisionManager.SetUserPtr(
@@ -129,23 +129,23 @@ namespace
         }
     }
 
-    // Capsule ƒRƒ‰ƒCƒ_[‚ğ CollisionManager ã‚ÅXV‚Ü‚½‚ÍÄ“o˜^‚·‚éB
+    // Capsule ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ CollisionManager ä¸Šã§æ›´æ–°ã¾ãŸã¯å†ç™»éŒ²ã™ã‚‹ã€‚
     void RefreshCapsuleCollider(
         CollisionManager& collisionManager,
         EntityID entity,
         ColliderComponent::Element& element,
         const CapsuleDesc& desc)
     {
-        // Šù‚É“o˜^Ï‚İ‚È‚çXV‚ğ‚İ‚éB
+        // æ—¢ã«ç™»éŒ²æ¸ˆã¿ãªã‚‰æ›´æ–°ã‚’è©¦ã¿ã‚‹ã€‚
         if (element.registeredId != 0) {
             if (!collisionManager.UpdateCapsule(element.registeredId, desc)) {
-                // XV¸”s‚È‚çˆê“xíœ‚µ‚ÄÄ“o˜^‚Å‚«‚éó‘Ô‚Ö–ß‚·B
+                // æ›´æ–°å¤±æ•—ãªã‚‰ä¸€åº¦å‰Šé™¤ã—ã¦å†ç™»éŒ²ã§ãã‚‹çŠ¶æ…‹ã¸æˆ»ã™ã€‚
                 collisionManager.Remove(element.registeredId);
                 element.registeredId = 0;
             }
         }
 
-        // –¢“o˜^‚È‚çV‹K“o˜^‚·‚éB
+        // æœªç™»éŒ²ãªã‚‰æ–°è¦ç™»éŒ²ã™ã‚‹ã€‚
         if (element.registeredId == 0) {
             element.registeredId = collisionManager.AddCapsule(
                 desc,
@@ -153,7 +153,7 @@ namespace
                 element.attribute);
         }
 
-        // “o˜^¬Œ÷Œã‚Í—LŒø‰»‚Æ userPtr Äİ’è‚ğs‚¤B
+        // ç™»éŒ²æˆåŠŸå¾Œã¯æœ‰åŠ¹åŒ–ã¨ userPtr å†è¨­å®šã‚’è¡Œã†ã€‚
         if (element.registeredId != 0) {
             collisionManager.SetEnabled(element.registeredId, true);
             collisionManager.SetUserPtr(
@@ -162,23 +162,23 @@ namespace
         }
     }
 
-    // Box ƒRƒ‰ƒCƒ_[‚ğ CollisionManager ã‚ÅXV‚Ü‚½‚ÍÄ“o˜^‚·‚éB
+    // Box ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ CollisionManager ä¸Šã§æ›´æ–°ã¾ãŸã¯å†ç™»éŒ²ã™ã‚‹ã€‚
     void RefreshBoxCollider(
         CollisionManager& collisionManager,
         EntityID entity,
         ColliderComponent::Element& element,
         const BoxDesc& desc)
     {
-        // Šù‚É“o˜^Ï‚İ‚È‚çXV‚ğ‚İ‚éB
+        // æ—¢ã«ç™»éŒ²æ¸ˆã¿ãªã‚‰æ›´æ–°ã‚’è©¦ã¿ã‚‹ã€‚
         if (element.registeredId != 0) {
             if (!collisionManager.UpdateBox(element.registeredId, desc)) {
-                // XV¸”s‚È‚çˆê“xíœ‚µ‚ÄÄ“o˜^‚Å‚«‚éó‘Ô‚Ö–ß‚·B
+                // æ›´æ–°å¤±æ•—ãªã‚‰ä¸€åº¦å‰Šé™¤ã—ã¦å†ç™»éŒ²ã§ãã‚‹çŠ¶æ…‹ã¸æˆ»ã™ã€‚
                 collisionManager.Remove(element.registeredId);
                 element.registeredId = 0;
             }
         }
 
-        // –¢“o˜^‚È‚çV‹K“o˜^‚·‚éB
+        // æœªç™»éŒ²ãªã‚‰æ–°è¦ç™»éŒ²ã™ã‚‹ã€‚
         if (element.registeredId == 0) {
             element.registeredId = collisionManager.AddBox(
                 desc,
@@ -186,7 +186,7 @@ namespace
                 element.attribute);
         }
 
-        // “o˜^¬Œ÷Œã‚Í—LŒø‰»‚Æ userPtr Äİ’è‚ğs‚¤B
+        // ç™»éŒ²æˆåŠŸå¾Œã¯æœ‰åŠ¹åŒ–ã¨ userPtr å†è¨­å®šã‚’è¡Œã†ã€‚
         if (element.registeredId != 0) {
             collisionManager.SetEnabled(element.registeredId, true);
             collisionManager.SetUserPtr(
@@ -436,7 +436,7 @@ namespace
     }
 }
 
-// –ˆƒtƒŒ[ƒ€AColliderComponent ‚Ì“à—e‚ğ CollisionManager ‚Ö”½‰f‚·‚éB
+// æ¯ãƒ•ãƒ¬ãƒ¼ãƒ ã€ColliderComponent ã®å†…å®¹ã‚’ CollisionManager ã¸åæ˜ ã™ã‚‹ã€‚
 void CollisionSystem::Update(Registry& registry)
 {
     auto& collisionManager = CollisionManager::Instance();
@@ -444,10 +444,10 @@ void CollisionSystem::Update(Registry& registry)
     auto syncPersistentColliders = [&]() {
         Query<ColliderComponent, TransformComponent> query(registry);
         query.ForEachWithEntity([&](EntityID entity, ColliderComponent& collider, TransformComponent& transform) {
-            // entity ‘¤ƒRƒ‰ƒCƒ_[‘S‘Ì‚ª–³Œø‚È‚çA“o˜^Ï‚İƒRƒ‰ƒCƒ_[‚ğ–³Œø‰»‚·‚éB
+            // entity å´ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å…¨ä½“ãŒç„¡åŠ¹ãªã‚‰ã€ç™»éŒ²æ¸ˆã¿ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ç„¡åŠ¹åŒ–ã™ã‚‹ã€‚
             if (!collider.enabled) {
                 for (auto& element : collider.elements) {
-                    // runtime ê—p—v‘f‚Í‚±‚±‚Å‚ÍG‚ç‚È‚¢B
+                    // runtime å°‚ç”¨è¦ç´ ã¯ã“ã“ã§ã¯è§¦ã‚‰ãªã„ã€‚
                     if (element.runtimeTag != 0) {
                         continue;
                     }
@@ -459,19 +459,19 @@ void CollisionSystem::Update(Registry& registry)
                 return;
             }
 
-            // worldScale ‚©‚çŠeŒ`ó‚Ög‚¤ƒXƒP[ƒ‹’l‚ğ‰ğŒˆ‚·‚éB
+            // worldScale ã‹ã‚‰å„å½¢çŠ¶ã¸ä½¿ã†ã‚¹ã‚±ãƒ¼ãƒ«å€¤ã‚’è§£æ±ºã™ã‚‹ã€‚
             const float maxWorldScale = ResolveMaxWorldScale(transform);
             const float scaleX = ResolveAxisScale(transform.worldScale.x, maxWorldScale);
             const float scaleY = ResolveAxisScale(transform.worldScale.y, maxWorldScale);
             const float scaleZ = ResolveAxisScale(transform.worldScale.z, maxWorldScale);
 
             for (auto& element : collider.elements) {
-                // runtime ê—p—v‘f‚Í‚±‚±‚Å‚ÍŠÇ—‚µ‚È‚¢B
+                // runtime å°‚ç”¨è¦ç´ ã¯ã“ã“ã§ã¯ç®¡ç†ã—ãªã„ã€‚
                 if (element.runtimeTag != 0) {
                     continue;
                 }
 
-                // —v‘fŒÂ•Ê‚ª–³Œø‚È‚ç manager ‘¤‚à–³Œø‰»‚·‚éB
+                // è¦ç´ å€‹åˆ¥ãŒç„¡åŠ¹ãªã‚‰ manager å´ã‚‚ç„¡åŠ¹åŒ–ã™ã‚‹ã€‚
                 if (!element.enabled) {
                     if (element.registeredId != 0) {
                         collisionManager.SetEnabled(element.registeredId, false);
@@ -479,11 +479,11 @@ void CollisionSystem::Update(Registry& registry)
                     continue;
                 }
 
-                // Œ»İ‚Ì element ‚Ì world ˆÊ’u‚ğ‹‚ß‚éB
+                // ç¾åœ¨ã® element ã® world ä½ç½®ã‚’æ±‚ã‚ã‚‹ã€‚
                 const XMFLOAT3 worldPosition =
                     ResolveColliderWorldPosition(registry, entity, element, transform);
 
-                // Œ`ó‚²‚Æ‚É manager ‘¤‚ÖXV”½‰f‚·‚éB
+                // å½¢çŠ¶ã”ã¨ã« manager å´ã¸æ›´æ–°åæ˜ ã™ã‚‹ã€‚
                 switch (element.type) {
                 case ColliderShape::Sphere:
                     RefreshSphereCollider(
@@ -529,7 +529,7 @@ void CollisionSystem::Update(Registry& registry)
     }
 }
 
-// I—¹‚âƒV[ƒ“Ø‚è‘Ö‚¦‚ÉA“o˜^Ï‚İƒRƒ‰ƒCƒ_[‚ğ CollisionManager ‚©‚çŠO‚·B
+// çµ‚äº†æ™‚ã‚„ã‚·ãƒ¼ãƒ³åˆ‡ã‚Šæ›¿ãˆæ™‚ã«ã€ç™»éŒ²æ¸ˆã¿ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ã‚’ CollisionManager ã‹ã‚‰å¤–ã™ã€‚
 void CollisionSystem::Finalize(Registry& registry)
 {
     Query<ColliderComponent> query(registry);

@@ -1,4 +1,4 @@
-#include "CinematicSequenceSerializer.h"
+﻿#include "CinematicSequenceSerializer.h"
 
 #include "CinematicSequenceAsset.h"
 #include "JSONManager.h"
@@ -8,6 +8,7 @@
 
 namespace
 {
+// ToJson は内部データを保存用 JSON へ変換する。
     nlohmann::json ToJson(const CinematicScalarOverride& value)
     {
         return {

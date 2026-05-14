@@ -1,3 +1,4 @@
+﻿// ワールド座標へ追従する 3D 用 HP バー / 進捗バー要素。 の UI 関連実装をまとめます。
 #include "UIProgressBar3D.h"
 
 #include "RenderContext/RenderContext.h"

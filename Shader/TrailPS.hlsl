@@ -7,11 +7,11 @@ struct PS_IN
 
 float4 main(PS_IN pin) : SV_TARGET
 {
-    // Simple trail: vertex color with smooth alpha falloff
+    // シンプルな軌跡: 頂点色に滑らかな alpha 減衰を掛ける。
     float4 c = pin.color;
-    // Soft edge fade on V axis (0..1 across width)
+    // V 軸方向（幅 0..1）で縁を柔らかくフェードする。
     float edgeFade = 1.0f - abs(pin.texcoord.y * 2.0f - 1.0f);
-    edgeFade = edgeFade * edgeFade; // quadratic falloff
+    edgeFade = edgeFade * edgeFade; // 二次減衰
     c.a *= edgeFade;
     return c;
 }

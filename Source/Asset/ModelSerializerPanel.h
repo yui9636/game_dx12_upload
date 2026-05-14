@@ -1,43 +1,43 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Asset/ModelAssetSerializer.h"
 
 #include <filesystem>
 #include <string>
 
-// ƒ‚ƒfƒ‹‚ğ .cereal ‰»‚·‚é‚½‚ß‚Ìè“® serializer ƒpƒlƒ‹B
-// ƒ\[ƒXƒ‚ƒfƒ‹‚Ìw’èAo—Íæİ’èAÅ“K‰»İ’èAƒrƒ‹ƒhÀsAŒ‹‰Ê•\¦‚ğ’S“–‚·‚éB
+// ãƒ¢ãƒ‡ãƒ«ã‚’ .cereal åŒ–ã™ã‚‹ãŸã‚ã®æ‰‹å‹• serializer ãƒ‘ãƒãƒ«ã€‚
+// ã‚½ãƒ¼ã‚¹ãƒ¢ãƒ‡ãƒ«ã®æŒ‡å®šã€å‡ºåŠ›å…ˆè¨­å®šã€æœ€é©åŒ–è¨­å®šã€ãƒ“ãƒ«ãƒ‰å®Ÿè¡Œã€çµæœè¡¨ç¤ºã‚’æ‹…å½“ã™ã‚‹ã€‚
 class ModelSerializerPanel
 {
 public:
-    // ƒpƒlƒ‹‘S‘Ì‚ğ•`‰æ‚·‚éB
-    // p_open ‚ªw’è‚³‚ê‚Ä‚¢‚ê‚ÎƒEƒBƒ“ƒhƒEŠJ•Âó‘Ô‚ğó‚¯æ‚èA
-    // outFocused ‚ªw’è‚³‚ê‚Ä‚¢‚ê‚ÎƒtƒH[ƒJƒXó‘Ô‚ğ•Ô‚·B
+    // ãƒ‘ãƒãƒ«å…¨ä½“ã‚’æç”»ã™ã‚‹ã€‚
+    // p_open ãŒæŒ‡å®šã•ã‚Œã¦ã„ã‚Œã°ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦é–‹é–‰çŠ¶æ…‹ã‚’å—ã‘å–ã‚Šã€
+    // outFocused ãŒæŒ‡å®šã•ã‚Œã¦ã„ã‚Œã°ãƒ•ã‚©ãƒ¼ã‚«ã‚¹çŠ¶æ…‹ã‚’è¿”ã™ã€‚
     void Draw(bool* p_open = nullptr, bool* outFocused = nullptr);
 
 private:
-    // w’èƒpƒX‚ğ“ü—ÍŒ³ƒAƒZƒbƒg‚Æ‚µ‚Äó‚¯“ü‚ê‚éB
-    // ‘Î‰Šg’£q‚È‚ç source/output ‚ğXV‚µA”ñ‘Î‰‚È‚çŒ‹‰Ê—“‚ÖƒGƒ‰[‚ğo‚·B
+    // æŒ‡å®šãƒ‘ã‚¹ã‚’å…¥åŠ›å…ƒã‚¢ã‚»ãƒƒãƒˆã¨ã—ã¦å—ã‘å…¥ã‚Œã‚‹ã€‚
+    // å¯¾å¿œæ‹¡å¼µå­ãªã‚‰ source/output ã‚’æ›´æ–°ã—ã€éå¯¾å¿œãªã‚‰çµæœæ¬„ã¸ã‚¨ãƒ©ãƒ¼ã‚’å‡ºã™ã€‚
     bool AcceptSourceAsset(const std::filesystem::path& path);
 
-    // serializer ‚Ì“ü—ÍŒ³‚Æ‚µ‚Äó‚¯•t‚¯‚éŠg’£q‚©‚Ç‚¤‚©‚ğ”»’è‚·‚éB
+    // serializer ã®å…¥åŠ›å…ƒã¨ã—ã¦å—ã‘ä»˜ã‘ã‚‹æ‹¡å¼µå­ã‹ã©ã†ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
     static bool IsSupportedSourceAsset(const std::filesystem::path& path);
 
-    // “ü—ÍŒ³ƒ‚ƒfƒ‹ƒpƒX‚©‚çŠù’è‚Ìo—Í .cereal ƒpƒX‚ğì‚éB
+    // å…¥åŠ›å…ƒãƒ¢ãƒ‡ãƒ«ãƒ‘ã‚¹ã‹ã‚‰æ—¢å®šã®å‡ºåŠ› .cereal ãƒ‘ã‚¹ã‚’ä½œã‚‹ã€‚
     static std::filesystem::path BuildDefaultOutputPath(const std::filesystem::path& sourcePath);
 
-    // Œ»İ‘I‘ğ‚³‚ê‚Ä‚¢‚é“ü—ÍŒ³ƒ‚ƒfƒ‹ƒpƒXB
+    // ç¾åœ¨é¸æŠã•ã‚Œã¦ã„ã‚‹å…¥åŠ›å…ƒãƒ¢ãƒ‡ãƒ«ãƒ‘ã‚¹ã€‚
     std::filesystem::path m_sourcePath;
 
-    // o—Íæ .cereal ƒpƒX•¶š—ñB
+    // å‡ºåŠ›å…ˆ .cereal ãƒ‘ã‚¹æ–‡å­—åˆ—ã€‚
     std::string m_outputPath;
 
-    // serializer Às‚ÌÅ“K‰»E•ÏŠ·İ’èB
+    // serializer å®Ÿè¡Œæ™‚ã®æœ€é©åŒ–ãƒ»å¤‰æ›è¨­å®šã€‚
     ModelSerializerSettings m_settings;
 
-    // ‘O‰ñƒrƒ‹ƒhŒ‹‰ÊB
+    // å‰å›ãƒ“ãƒ«ãƒ‰çµæœã€‚
     ModelSerializerResult m_lastResult;
 
-    // ‘O‰ñŒ‹‰Ê‚ª—LŒø‚©‚Ç‚¤‚©B
+    // å‰å›çµæœãŒæœ‰åŠ¹ã‹ã©ã†ã‹ã€‚
     bool m_hasResult = false;
 };

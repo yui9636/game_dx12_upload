@@ -11,9 +11,9 @@ class IPipelineState;
 class ITexture;
 class ICommandList;
 
-// Phase B Route B: Ubershader for mesh effects.
-// Single PSO, runtime variant branching via gVariantFlags.
-// Owned by EffectMeshPass (not ModelRenderer) — draws are inline, not queued.
+// Phase B Route B の mesh effect 用 ubershader。
+// 単一 PSO で gVariantFlags により runtime 分岐する。
+// ModelRenderer ではなく EffectMeshPass が所有し、draw は queue せず inline で行う。
 class EffectMeshShader
 {
 public:
@@ -23,7 +23,7 @@ public:
     IPipelineState* GetPipelineState() const { return m_pso.get(); }
     IInputLayout*   GetInputLayout()   const { return m_inputLayout.get(); }
 
-    // Builds + uploads CbMeshEffect (b3) for the current packet.
+    // 現在の packet 用 CbMeshEffect(b3) を作成して upload する。
     struct CbMeshEffect
     {
         float              dissolveAmount;
@@ -55,7 +55,7 @@ public:
 
     void UploadConstants(ICommandList* cmd, const CbMeshEffect& cb) const;
 
-    // Binds the 6 variant textures to t0..t5. Pass nullptr for unused slots.
+    // 6 個の variant texture を t0..t5 へ bind する。未使用 slot は nullptr を渡す。
     void BindTextures(ICommandList* cmd,
         ITexture* base, ITexture* mask, ITexture* normal,
         ITexture* flow, ITexture* sub,  ITexture* emission) const;

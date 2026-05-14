@@ -1,8 +1,5 @@
 ﻿#include "Camera.h"
-
-// =========================================================
 // 注視点を指定してビュー行列と方向ベクトルを更新します。
-// =========================================================
 void Camera::SetLookAt(const DirectX::XMFLOAT3& eye, const DirectX::XMFLOAT3& focus, const DirectX::XMFLOAT3& up)
 {
 	// 入力された位置・注視点・上方向を SIMD 用のベクトルへ変換します。
@@ -38,10 +35,7 @@ void Camera::SetLookAt(const DirectX::XMFLOAT3& eye, const DirectX::XMFLOAT3& fo
 	this->eye = eye;
 	this->focus = focus;
 }
-
-// =========================================================
 // 透視投影のパラメータを保存し、射影行列を更新します。
-// =========================================================
 void Camera::SetPerspectiveFov(float fovY, float aspect, float nearZ, float farZ)
 {
 	// 後から参照できるように、射影パラメータをメンバへ保存します。

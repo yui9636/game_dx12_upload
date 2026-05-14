@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <DirectXMath.h>
+// ITexture はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class ITexture;
 class Model;

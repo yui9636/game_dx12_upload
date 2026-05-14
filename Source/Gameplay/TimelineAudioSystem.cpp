@@ -1,4 +1,4 @@
-#include "TimelineAudioSystem.h"
+﻿#include "TimelineAudioSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
 #include "Component/TransformComponent.h"
@@ -38,7 +38,7 @@ void TimelineAudioSystem::Update(Registry& registry) {
                         continue;
                     }
 
-                    // Play audio
+                    // 音声を再生する。
                     if (item.audio.is3D) {
                         item.audioHandle = editorPreview
                             ? audio.PlayEditorTransient3D(
@@ -72,11 +72,11 @@ void TimelineAudioSystem::Update(Registry& registry) {
                     }
                 }
                 else if (inside && item.audioActive && item.audioHandle != 0 && item.audio.is3D) {
-                    // Update 3D position
+                    // 3D 位置を更新する。
                     audio.SetVoicePosition(item.audioHandle, worldPos);
                 }
                 else if (!inside && item.audioActive) {
-                    // Stop audio
+                    // 音声を停止する。
                     if (item.audioHandle != 0) {
                         audio.StopVoice(item.audioHandle);
                     }

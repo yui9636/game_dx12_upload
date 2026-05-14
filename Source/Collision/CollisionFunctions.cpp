@@ -1,24 +1,21 @@
-#include "CollisionFunctions.h"
+ï»¿#include "CollisionFunctions.h"
 #include <cmath>
 #include <algorithm>
 
 namespace {
 
-    // 0.0f ` 1.0f ‚Ì”ÍˆÍ‚ÖŠÛ‚ß‚éB
+    // 0.0f ï½ 1.0f ã®ç¯„å›²ã¸ä¸¸ã‚ã‚‹ã€‚
     inline float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
-    // ”CˆÓ‚ÌÅ¬’l`Å‘å’l‚Ì”ÍˆÍ‚ÖŠÛ‚ß‚éB
+    // ä»»æ„ã®æœ€å°å€¤ï½æœ€å¤§å€¤ã®ç¯„å›²ã¸ä¸¸ã‚ã‚‹ã€‚
     inline float Clamp(float v, float min, float max) { return (v < min) ? min : (v > max ? max : v); }
 
-    // •‚“®¬”‚Ìƒ[ƒ”äŠr—p‚µ‚«‚¢’lB
+    // æµ®å‹•å°æ•°ã®ã‚¼ãƒ­æ¯”è¼ƒç”¨ã—ãã„å€¤ã€‚
     constexpr float EPSILON = 1e-6f;
 }
-
-// ---------------------------------------------------------
-// Sphere vs Sphere
-// ---------------------------------------------------------
-// 2‚Â‚Ì‹…“¯m‚Ì“–‚½‚è”»’è‚ğs‚¤B
-// d‚È‚Á‚Ä‚¢‚ê‚Î hitResult ‚É‰Ÿ‚µ–ß‚µŒ‹‰Ê‚à‘‚«‚ŞB
+// çƒåŒå£«ã®äº¤å·®åˆ¤å®šã€‚
+// 2ã¤ã®çƒåŒå£«ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+// é‡ãªã£ã¦ã„ã‚Œã° hitResult ã«æŠ¼ã—æˆ»ã—çµæœã‚‚æ›¸ãè¾¼ã‚€ã€‚
 bool CollisionFunctions::IntersectSphereVsSphere(
     const DirectX::XMFLOAT3& positionA, float radiusA,
     const DirectX::XMFLOAT3& positionB, float radiusB,
@@ -26,53 +23,50 @@ bool CollisionFunctions::IntersectSphereVsSphere(
 {
     using namespace DirectX;
 
-    // ”¼Œa‚ª•‰‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+    // åŠå¾„ãŒè² ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
     if (radiusA < 0.0f) radiusA = 0.0f;
     if (radiusB < 0.0f) radiusB = 0.0f;
 
-    // A ‚Æ B ‚Ì’†SÀ•W‚ğƒ[ƒh‚·‚éB
+    // A ã¨ B ã®ä¸­å¿ƒåº§æ¨™ã‚’ãƒ­ãƒ¼ãƒ‰ã™ã‚‹ã€‚
     XMVECTOR a = XMLoadFloat3(&positionA);
     XMVECTOR b = XMLoadFloat3(&positionB);
 
-    // A -> B ƒxƒNƒgƒ‹‚ğ‹‚ß‚éB
+    // A -> B ãƒ™ã‚¯ãƒˆãƒ«ã‚’æ±‚ã‚ã‚‹ã€‚
     XMVECTOR d = XMVectorSubtract(b, a);
 
-    // ’†SŠÔ‹——£‚Ì“ñæ‚ğ‹‚ß‚éB
+    // ä¸­å¿ƒé–“è·é›¢ã®äºŒä¹—ã‚’æ±‚ã‚ã‚‹ã€‚
     float dsq = XMVectorGetX(XMVector3Dot(d, d));
 
-    // “–‚½‚è”»’è‚Ég‚¤‡Œv”¼ŒaB
+    // å½“ãŸã‚Šåˆ¤å®šã«ä½¿ã†åˆè¨ˆåŠå¾„ã€‚
     float rr = radiusA + radiusB;
 
-    // ‹——£‚ª‡Œv”¼Œa‚æ‚è‘å‚«‚¯‚ê‚Î”ñÚGB
+    // è·é›¢ãŒåˆè¨ˆåŠå¾„ã‚ˆã‚Šå¤§ãã‘ã‚Œã°éæ¥è§¦ã€‚
     if (dsq > rr * rr) return false;
 
-    // À‹——£‚ğ‹‚ß‚éB
+    // å®Ÿè·é›¢ã‚’æ±‚ã‚ã‚‹ã€‚
     float dist = dsq > 0.0f ? std::sqrt(dsq) : 0.0f;
 
-    // ÚGˆÊ’u‚Í‚±‚±‚Å‚Í B ‚Ì’†S‚ğÌ—p‚µ‚Ä‚¢‚éB
+    // æ¥è§¦ä½ç½®ã¯ã“ã“ã§ã¯ B ã®ä¸­å¿ƒã‚’æ¡ç”¨ã—ã¦ã„ã‚‹ã€‚
     hitResult.hitPosition = { XMVectorGetX(b), XMVectorGetY(b), XMVectorGetZ(b) };
 
-    // ‚ß‚è‚İ[‚³‚ğ‹‚ß‚éB
+    // ã‚ã‚Šè¾¼ã¿æ·±ã•ã‚’æ±‚ã‚ã‚‹ã€‚
     hitResult.penetrationDepth = rr - dist;
 
-    // ‰Ÿ‚µ–ß‚µ•ûŒü‚ğì‚éB
-    // Š®‘Sˆê’v‚Íã•ûŒü‚ğ‰¼Ì—p‚·‚éB
+    // æŠ¼ã—æˆ»ã—æ–¹å‘ã‚’ä½œã‚‹ã€‚
+    // å®Œå…¨ä¸€è‡´æ™‚ã¯ä¸Šæ–¹å‘ã‚’ä»®æ¡ç”¨ã™ã‚‹ã€‚
     XMVECTOR n = (dist > 1e-6f) ? XMVectorScale(d, 1.0f / dist) : XMVectorSet(0, 1, 0, 0);
 
-    // ”¼•ª‚¸‚Â‰Ÿ‚µ–ß‚·—Ê‚ğì‚éB
+    // åŠåˆ†ãšã¤æŠ¼ã—æˆ»ã™é‡ã‚’ä½œã‚‹ã€‚
     XMVECTOR push = XMVectorScale(n, hitResult.penetrationDepth * 0.5f);
 
-    // A ‚Í‹t•ûŒü‚ÖAB ‚Í‡•ûŒü‚Ö‰Ÿ‚µ–ß‚·B
+    // A ã¯é€†æ–¹å‘ã¸ã€B ã¯é †æ–¹å‘ã¸æŠ¼ã—æˆ»ã™ã€‚
     XMStoreFloat3(&hitResult.selfOutPosition, XMVectorSubtract(a, push));
     XMStoreFloat3(&hitResult.otherOutPosition, XMVectorAdd(b, push));
     return true;
 }
-
-// ---------------------------------------------------------
-// Sphere vs Capsule
-// ---------------------------------------------------------
-// ‹…‚ÆƒJƒvƒZƒ‹‚Ì“–‚½‚è”»’è‚ğs‚¤B
-// ƒJƒvƒZƒ‹‚Í positionCapsule ‚ğ’ê–Ê’†SA‚‚³‚Í +Y •ûŒü‚ÖL‚Ñ‚é‘O’ñB
+// çƒã¨ã‚«ãƒ—ã‚»ãƒ«ã®äº¤å·®åˆ¤å®šã€‚
+// çƒã¨ã‚«ãƒ—ã‚»ãƒ«ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
+// ã‚«ãƒ—ã‚»ãƒ«ã¯ positionCapsule ã‚’åº•é¢ä¸­å¿ƒã€é«˜ã•ã¯ +Y æ–¹å‘ã¸ä¼¸ã³ã‚‹å‰æã€‚
 bool CollisionFunctions::IntersectSphereVsCapsule(
     const DirectX::XMFLOAT3& positionSphere, float radiusSphere,
     const DirectX::XMFLOAT3& positionCapsule, float radiusCapsule, float heightCapsule,
@@ -80,66 +74,63 @@ bool CollisionFunctions::IntersectSphereVsCapsule(
 {
     using namespace DirectX;
 
-    // ”¼Œa‚Æ‚‚³‚ª•‰‚É‚È‚ç‚È‚¢‚æ‚¤•â³‚·‚éB
+    // åŠå¾„ã¨é«˜ã•ãŒè² ã«ãªã‚‰ãªã„ã‚ˆã†è£œæ­£ã™ã‚‹ã€‚
     if (radiusSphere < 0.0f) radiusSphere = 0.0f;
     if (radiusCapsule < 0.0f) radiusCapsule = 0.0f;
     if (heightCapsule < 0.0f) heightCapsule = 0.0f;
 
-    // ƒJƒvƒZƒ‹²‚Ìn“_ A ‚ÆI“_ B ‚ğì‚éB
+    // ã‚«ãƒ—ã‚»ãƒ«è»¸ã®å§‹ç‚¹ A ã¨çµ‚ç‚¹ B ã‚’ä½œã‚‹ã€‚
     XMVECTOR A = XMLoadFloat3(&positionCapsule);
     XMVECTOR B = XMVectorAdd(A, XMVectorSet(0.0f, heightCapsule, 0.0f, 0.0f));
 
-    // ‹…’†S CB
+    // çƒä¸­å¿ƒ Cã€‚
     XMVECTOR C = XMLoadFloat3(&positionSphere);
 
-    // ƒJƒvƒZƒ‹²ƒxƒNƒgƒ‹B
+    // ã‚«ãƒ—ã‚»ãƒ«è»¸ãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR AB = XMVectorSubtract(B, A);
     float ab2 = XMVectorGetX(XMVector3Dot(AB, AB));
 
-    // ‹…’†S‚ğƒJƒvƒZƒ‹²‚ÖË‰e‚µ‚½ŒW” t ‚ğ‹‚ß‚éB
+    // çƒä¸­å¿ƒã‚’ã‚«ãƒ—ã‚»ãƒ«è»¸ã¸å°„å½±ã—ãŸä¿‚æ•° t ã‚’æ±‚ã‚ã‚‹ã€‚
     float t = 0.0f;
     if (ab2 > 0.0f) {
         t = XMVectorGetX(XMVector3Dot(XMVectorSubtract(C, A), AB)) / ab2;
         t = Clamp01(t);
     }
 
-    // ƒJƒvƒZƒ‹²ã‚ÌÅ‹ß–T“_ PB
+    // ã‚«ãƒ—ã‚»ãƒ«è»¸ä¸Šã®æœ€è¿‘å‚ç‚¹ Pã€‚
     XMVECTOR P = XMVectorAdd(A, XMVectorScale(AB, t));
 
-    // ƒJƒvƒZƒ‹Å‹ß–T“_ -> ‹…’†SƒxƒNƒgƒ‹B
+    // ã‚«ãƒ—ã‚»ãƒ«æœ€è¿‘å‚ç‚¹ -> çƒä¸­å¿ƒãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR D = XMVectorSubtract(C, P);
     float dsq = XMVectorGetX(XMVector3Dot(D, D));
 
-    // “–‚½‚è”»’è—p‚Ì‡Œv”¼ŒaB
+    // å½“ãŸã‚Šåˆ¤å®šç”¨ã®åˆè¨ˆåŠå¾„ã€‚
     float rr = radiusSphere + radiusCapsule;
     if (dsq > rr * rr) return false;
 
-    // À‹——£‚ğ‹‚ß‚éB
+    // å®Ÿè·é›¢ã‚’æ±‚ã‚ã‚‹ã€‚
     float dist = dsq > 0.0f ? std::sqrt(dsq) : 0.0f;
 
-    // ÚG“_‚ÍƒJƒvƒZƒ‹²ã‚ÌÅ‹ß–T“_‚Æ‚·‚éB
+    // æ¥è§¦ç‚¹ã¯ã‚«ãƒ—ã‚»ãƒ«è»¸ä¸Šã®æœ€è¿‘å‚ç‚¹ã¨ã™ã‚‹ã€‚
     hitResult.hitPosition = { XMVectorGetX(P), XMVectorGetY(P), XMVectorGetZ(P) };
 
-    // ‚ß‚è‚İ[‚³‚ğ‹‚ß‚éB
+    // ã‚ã‚Šè¾¼ã¿æ·±ã•ã‚’æ±‚ã‚ã‚‹ã€‚
     hitResult.penetrationDepth = rr - dist;
 
-    // ‰Ÿ‚µ–ß‚µ•ûŒü‚ğì‚éB
+    // æŠ¼ã—æˆ»ã—æ–¹å‘ã‚’ä½œã‚‹ã€‚
     XMVECTOR n = (dist > 1e-6f) ? XMVectorScale(D, 1.0f / dist) : XMVectorSet(0, 1, 0, 0);
 
-    // ”¼•ª‚¸‚Â‰Ÿ‚µ–ß‚·—ÊB
+    // åŠåˆ†ãšã¤æŠ¼ã—æˆ»ã™é‡ã€‚
     XMVECTOR push = XMVectorScale(n, hitResult.penetrationDepth * 0.5f);
 
-    // ‹…‚ÍŠO‘¤‚ÖAƒJƒvƒZƒ‹‚Í‹t•ûŒü‚Ö‰Ÿ‚·B
+    // çƒã¯å¤–å´ã¸ã€ã‚«ãƒ—ã‚»ãƒ«ã¯é€†æ–¹å‘ã¸æŠ¼ã™ã€‚
     XMStoreFloat3(&hitResult.selfOutPosition, XMVectorAdd(C, push));
     XMStoreFloat3(&hitResult.otherOutPosition, XMVectorSubtract(A, push));
 
     return true;
 }
-
-// ---------------------------------------------------------
-// Capsule vs Capsule
-// ---------------------------------------------------------
-// 2–{‚ÌƒJƒvƒZƒ‹²ü•ª‚ÌÅ‹ß–T“_‚ğ‹‚ßA‚»‚Ì‹——£‚Å“–‚½‚è”»’è‚·‚éB
+// ã‚«ãƒ—ã‚»ãƒ«åŒå£«ã®äº¤å·®åˆ¤å®šã€‚
+// 2æœ¬ã®ã‚«ãƒ—ã‚»ãƒ«è»¸ç·šåˆ†ã®æœ€è¿‘å‚ç‚¹ã‚’æ±‚ã‚ã€ãã®è·é›¢ã§å½“ãŸã‚Šåˆ¤å®šã™ã‚‹ã€‚
 bool CollisionFunctions::IntersectCapsuleVCapsule(
     const DirectX::XMFLOAT3& positionA, float radiusA, float heightA,
     const DirectX::XMFLOAT3& positionB, float radiusB, float heightB,
@@ -147,21 +138,21 @@ bool CollisionFunctions::IntersectCapsuleVCapsule(
 {
     using namespace DirectX;
 
-    // ”¼Œa‚Æ‚‚³‚ğ•‰’l‚©‚ç•ÛŒì‚·‚éB
+    // åŠå¾„ã¨é«˜ã•ã‚’è² å€¤ã‹ã‚‰ä¿è­·ã™ã‚‹ã€‚
     if (radiusA < 0.0f) radiusA = 0.0f;
     if (radiusB < 0.0f) radiusB = 0.0f;
     if (heightA < 0.0f) heightA = 0.0f;
     if (heightB < 0.0f) heightB = 0.0f;
 
-    // A ƒJƒvƒZƒ‹²‚Ìn“_EI“_B
+    // A ã‚«ãƒ—ã‚»ãƒ«è»¸ã®å§‹ç‚¹ãƒ»çµ‚ç‚¹ã€‚
     XMVECTOR A0 = XMLoadFloat3(&positionA);
     XMVECTOR A1 = XMVectorAdd(A0, XMVectorSet(0.0f, heightA, 0.0f, 0.0f));
 
-    // B ƒJƒvƒZƒ‹²‚Ìn“_EI“_B
+    // B ã‚«ãƒ—ã‚»ãƒ«è»¸ã®å§‹ç‚¹ãƒ»çµ‚ç‚¹ã€‚
     XMVECTOR B0 = XMLoadFloat3(&positionB);
     XMVECTOR B1 = XMVectorAdd(B0, XMVectorSet(0.0f, heightB, 0.0f, 0.0f));
 
-    // ü•ªÅ‹ß–TŒvZ—pƒxƒNƒgƒ‹B
+    // ç·šåˆ†æœ€è¿‘å‚è¨ˆç®—ç”¨ãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR u = XMVectorSubtract(A1, A0);
     XMVECTOR v = XMVectorSubtract(B1, B0);
     XMVECTOR w = XMVectorSubtract(A0, B0);
@@ -172,7 +163,7 @@ bool CollisionFunctions::IntersectCapsuleVCapsule(
     float d = XMVectorGetX(XMVector3Dot(u, w));
     float e = XMVectorGetX(XMVector3Dot(v, w));
 
-    // 2’¼ü‚ÌÅ‹ß–Tƒpƒ‰ƒ[ƒ^‚ğ‹‚ß‚éB
+    // 2ç›´ç·šã®æœ€è¿‘å‚ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ã‚’æ±‚ã‚ã‚‹ã€‚
     float denom = a * c - b * b;
     float s, t;
     if (denom != 0.0f) {
@@ -180,50 +171,47 @@ bool CollisionFunctions::IntersectCapsuleVCapsule(
         t = (a * e - b * d) / denom;
     }
     else {
-        // •½s‚É‹ß‚¢‚Í•Ğ•û‚ğ 0 ‚ÉŒÅ’è‚µ‚Ä‹ß—‚·‚éB
+        // å¹³è¡Œã«è¿‘ã„æ™‚ã¯ç‰‡æ–¹ã‚’ 0 ã«å›ºå®šã—ã¦è¿‘ä¼¼ã™ã‚‹ã€‚
         s = (a > 0.0f) ? (-d / a) : 0.0f;
         t = 0.0f;
     }
 
-    // ü•ª”ÍˆÍ‚ÖŠÛ‚ß‚éB
+    // ç·šåˆ†ç¯„å›²ã¸ä¸¸ã‚ã‚‹ã€‚
     if (s < 0.0f) s = 0.0f; else if (s > 1.0f) s = 1.0f;
     if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
 
-    // Šeü•ªã‚ÌÅ‹ß–T“_B
+    // å„ç·šåˆ†ä¸Šã®æœ€è¿‘å‚ç‚¹ã€‚
     XMVECTOR PA = XMVectorAdd(A0, XMVectorScale(u, s));
     XMVECTOR PB = XMVectorAdd(B0, XMVectorScale(v, t));
 
-    // B -> A ƒxƒNƒgƒ‹B
+    // B -> A ãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR dP = XMVectorSubtract(PA, PB);
     float dsq = XMVectorGetX(XMVector3Dot(dP, dP));
 
-    // ‡Œv”¼ŒaB
+    // åˆè¨ˆåŠå¾„ã€‚
     float rr = radiusA + radiusB;
     if (dsq > rr * rr) return false;
 
     float dist = dsq > 0.0f ? std::sqrt(dsq) : 0.0f;
 
-    // ÚGˆÊ’u‚Í B ‘¤Å‹ß–T“_‚ğÌ—pB
+    // æ¥è§¦ä½ç½®ã¯ B å´æœ€è¿‘å‚ç‚¹ã‚’æ¡ç”¨ã€‚
     hitResult.hitPosition = { XMVectorGetX(PB), XMVectorGetY(PB), XMVectorGetZ(PB) };
 
-    // ‚ß‚è‚İ[‚³B
+    // ã‚ã‚Šè¾¼ã¿æ·±ã•ã€‚
     hitResult.penetrationDepth = rr - dist;
 
-    // ‰Ÿ‚µ–ß‚µ•ûŒüB
+    // æŠ¼ã—æˆ»ã—æ–¹å‘ã€‚
     XMVECTOR n = (dist > 1e-6f) ? XMVectorScale(dP, 1.0f / dist) : XMVectorSet(0, 1, 0, 0);
     XMVECTOR push = XMVectorScale(n, hitResult.penetrationDepth * 0.5f);
 
-    // —¼Ò‚ğ”¼•ª‚¸‚Â‰Ÿ‚µ–ß‚·B
+    // ä¸¡è€…ã‚’åŠåˆ†ãšã¤æŠ¼ã—æˆ»ã™ã€‚
     XMStoreFloat3(&hitResult.selfOutPosition, XMVectorAdd(A0, push));
     XMStoreFloat3(&hitResult.otherOutPosition, XMVectorSubtract(B0, push));
 
     return true;
 }
-
-// ---------------------------------------------------------
-// Sphere vs Box
-// ---------------------------------------------------------
-// ‹…‚Æ AABB ‚Ì“–‚½‚è”»’è‚ğs‚¤B
+// çƒã¨ box ã®äº¤å·®åˆ¤å®šã€‚
+// çƒã¨ AABB ã®å½“ãŸã‚Šåˆ¤å®šã‚’è¡Œã†ã€‚
 bool CollisionFunctions::IntersectSphereVsBox(
     const DirectX::XMFLOAT3& sphereCenter, float sphereRadius,
     const DirectX::XMFLOAT3& boxCenter, const DirectX::XMFLOAT3& boxSize,
@@ -231,28 +219,28 @@ bool CollisionFunctions::IntersectSphereVsBox(
 {
     using namespace DirectX;
 
-    // Box ’†S‚Æ half size ‚ğì‚éB
+    // Box ä¸­å¿ƒã¨ half size ã‚’ä½œã‚‹ã€‚
     XMVECTOR bCenter = XMLoadFloat3(&boxCenter);
     XMVECTOR bHalf = XMLoadFloat3(&boxSize) * 0.5f;
     XMVECTOR bMin = bCenter - bHalf;
     XMVECTOR bMax = bCenter + bHalf;
 
-    // ‹…’†SB
+    // çƒä¸­å¿ƒã€‚
     XMVECTOR sCenter = XMLoadFloat3(&sphereCenter);
 
-    // ‹…’†S‚ğ AABB “à‚Ö clamp ‚µ‚½Å‹ß–T“_‚ğ‹‚ß‚éB
+    // çƒä¸­å¿ƒã‚’ AABB å†…ã¸ clamp ã—ãŸæœ€è¿‘å‚ç‚¹ã‚’æ±‚ã‚ã‚‹ã€‚
     XMVECTOR closestPoint = XMVectorMin(XMVectorMax(sCenter, bMin), bMax);
 
-    // Å‹ß–T“_‚©‚ç‹…’†S‚Ö‚ÌƒxƒNƒgƒ‹B
+    // æœ€è¿‘å‚ç‚¹ã‹ã‚‰çƒä¸­å¿ƒã¸ã®ãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR distVec = closestPoint - sCenter;
     float distSq = XMVectorGetX(XMVector3Dot(distVec, distVec));
 
-    // ”¼ŒaŠO‚È‚ç”ñÚGB
+    // åŠå¾„å¤–ãªã‚‰éæ¥è§¦ã€‚
     if (distSq > sphereRadius * sphereRadius) return false;
 
     float dist = std::sqrt(distSq);
 
-    // ÚG“_‚ÍÅ‹ß–T“_B
+    // æ¥è§¦ç‚¹ã¯æœ€è¿‘å‚ç‚¹ã€‚
     hitResult.hitPosition = { XMVectorGetX(closestPoint), XMVectorGetY(closestPoint), XMVectorGetZ(closestPoint) };
 
     XMVECTOR normal;
@@ -260,13 +248,13 @@ bool CollisionFunctions::IntersectSphereVsBox(
 
     if (dist > 1e-6f)
     {
-        // ŠO•”‚©‚çÚG‚µ‚½’ÊíƒP[ƒXB
+        // å¤–éƒ¨ã‹ã‚‰æ¥è§¦ã—ãŸé€šå¸¸ã‚±ãƒ¼ã‚¹ã€‚
         normal = distVec * (1.0f / dist);
         depth = sphereRadius - dist;
     }
     else
     {
-        // ‹…’†S‚ª” “à•”‚É‚ ‚éƒP[ƒXB
+        // çƒä¸­å¿ƒãŒç®±å†…éƒ¨ã«ã‚ã‚‹ã‚±ãƒ¼ã‚¹ã€‚
         normal = XMVectorSet(0, 1, 0, 0);
         depth = sphereRadius;
     }
@@ -274,17 +262,14 @@ bool CollisionFunctions::IntersectSphereVsBox(
     hitResult.penetrationDepth = depth;
     XMVECTOR push = normal * (depth * 0.5f);
 
-    // ‹…‚Í‹t•ûŒü‚ÖA” ‚Í‡•ûŒü‚Ö‰Ÿ‚µ–ß‚·B
+    // çƒã¯é€†æ–¹å‘ã¸ã€ç®±ã¯é †æ–¹å‘ã¸æŠ¼ã—æˆ»ã™ã€‚
     XMStoreFloat3(&hitResult.selfOutPosition, sCenter - push);
     XMStoreFloat3(&hitResult.otherOutPosition, bCenter + push);
 
     return true;
 }
-
-// ---------------------------------------------------------
-// Box vs Box
-// ---------------------------------------------------------
-// 2‚Â‚Ì AABB ‚Ìd‚È‚è‚ğ²‚²‚Æ‚É’²‚×AÅ¬‚ß‚è‚İ²‚Å‰Ÿ‚µ–ß‚·B
+// box åŒå£«ã®äº¤å·®åˆ¤å®šã€‚
+// 2ã¤ã® AABB ã®é‡ãªã‚Šã‚’è»¸ã”ã¨ã«èª¿ã¹ã€æœ€å°ã‚ã‚Šè¾¼ã¿è»¸ã§æŠ¼ã—æˆ»ã™ã€‚
 bool CollisionFunctions::IntersectBoxVsBox(
     const DirectX::XMFLOAT3& boxACenter, const DirectX::XMFLOAT3& boxASize,
     const DirectX::XMFLOAT3& boxBCenter, const DirectX::XMFLOAT3& boxBSize,
@@ -292,25 +277,25 @@ bool CollisionFunctions::IntersectBoxVsBox(
 {
     using namespace DirectX;
 
-    // Še²‚Ì’†S·B
+    // å„è»¸ã®ä¸­å¿ƒå·®ã€‚
     float dx = std::abs(boxACenter.x - boxBCenter.x);
     float dy = std::abs(boxACenter.y - boxBCenter.y);
     float dz = std::abs(boxACenter.z - boxBCenter.z);
 
-    // Še²‚Ì half size ‡ŒvB
+    // å„è»¸ã® half size åˆè¨ˆã€‚
     float sumHalfX = (boxASize.x + boxBSize.x) * 0.5f;
     float sumHalfY = (boxASize.y + boxBSize.y) * 0.5f;
     float sumHalfZ = (boxASize.z + boxBSize.z) * 0.5f;
 
-    // ‚Ç‚ê‚©1²‚Å‚à—£‚ê‚Ä‚¢‚ê‚Î”ñÚGB
+    // ã©ã‚Œã‹1è»¸ã§ã‚‚é›¢ã‚Œã¦ã„ã‚Œã°éæ¥è§¦ã€‚
     if (dx >= sumHalfX || dy >= sumHalfY || dz >= sumHalfZ) return false;
 
-    // Še²‚Ì‚ß‚è‚İ—ÊB
+    // å„è»¸ã®ã‚ã‚Šè¾¼ã¿é‡ã€‚
     float penX = sumHalfX - dx;
     float penY = sumHalfY - dy;
     float penZ = sumHalfZ - dz;
 
-    // Å¬‚ß‚è‚İ²‚ğ‘I‚ÔB
+    // æœ€å°ã‚ã‚Šè¾¼ã¿è»¸ã‚’é¸ã¶ã€‚
     float minPen = penX;
     int axis = 0; // 0:x, 1:y, 2:z
     if (penY < minPen) { minPen = penY; axis = 1; }
@@ -318,7 +303,7 @@ bool CollisionFunctions::IntersectBoxVsBox(
 
     hitResult.penetrationDepth = minPen;
 
-    // ‰Ÿ‚µ–ß‚µ–@ü‚ğÅ¬²‚É‰ˆ‚Á‚ÄŒˆ‚ß‚éB
+    // æŠ¼ã—æˆ»ã—æ³•ç·šã‚’æœ€å°è»¸ã«æ²¿ã£ã¦æ±ºã‚ã‚‹ã€‚
     XMVECTOR n = XMVectorZero();
     if (axis == 0) n = XMVectorSet(boxACenter.x > boxBCenter.x ? 1.0f : -1.0f, 0, 0, 0);
     else if (axis == 1) n = XMVectorSet(0, boxACenter.y > boxBCenter.y ? 1.0f : -1.0f, 0, 0);
@@ -328,22 +313,19 @@ bool CollisionFunctions::IntersectBoxVsBox(
     XMVECTOR posA = XMLoadFloat3(&boxACenter);
     XMVECTOR posB = XMLoadFloat3(&boxBCenter);
 
-    // ÚGˆÊ’u‚Í’†“_‚Å‹ß—‚·‚éB
+    // æ¥è§¦ä½ç½®ã¯ä¸­ç‚¹ã§è¿‘ä¼¼ã™ã‚‹ã€‚
     XMVECTOR contact = (posA + posB) * 0.5f;
     XMStoreFloat3(&hitResult.hitPosition, contact);
 
-    // ”¼•ª‚¸‚Â‰Ÿ‚µ–ß‚·B
+    // åŠåˆ†ãšã¤æŠ¼ã—æˆ»ã™ã€‚
     XMStoreFloat3(&hitResult.selfOutPosition, posA + push);
     XMStoreFloat3(&hitResult.otherOutPosition, posB - push);
 
     return true;
 }
-
-// ---------------------------------------------------------
-// Ray vs Sphere
-// ---------------------------------------------------------
-// ƒŒƒC‚Æ‹…‚ÌŒğ·”»’è‚ğs‚¤B
-// –½’†‚Í‹——£ t ‚Æ–@ü‚ğ•Ô‚·B
+// ray ã¨çƒã®äº¤å·®åˆ¤å®šã€‚
+// ãƒ¬ã‚¤ã¨çƒã®äº¤å·®åˆ¤å®šã‚’è¡Œã†ã€‚
+// å‘½ä¸­æ™‚ã¯è·é›¢ t ã¨æ³•ç·šã‚’è¿”ã™ã€‚
 bool CollisionFunctions::IntersectRayVsSphere(
     const Ray& ray,
     const DirectX::XMFLOAT3& sphereCenter,
@@ -353,44 +335,41 @@ bool CollisionFunctions::IntersectRayVsSphere(
 {
     using namespace DirectX;
 
-    // ƒŒƒCŒ´“_ OA•ûŒü DA‹…’†S CB
+    // ãƒ¬ã‚¤åŸç‚¹ Oã€æ–¹å‘ Dã€çƒä¸­å¿ƒ Cã€‚
     XMVECTOR O = XMLoadFloat3(&ray.origin);
     XMVECTOR D = XMLoadFloat3(&ray.direction);
     XMVECTOR C = XMLoadFloat3(&sphereCenter);
 
-    // ‹…’†S‚©‚çƒŒƒCŒ´“_‚Ö‚ÌƒxƒNƒgƒ‹B
+    // çƒä¸­å¿ƒã‹ã‚‰ãƒ¬ã‚¤åŸç‚¹ã¸ã®ãƒ™ã‚¯ãƒˆãƒ«ã€‚
     XMVECTOR M = O - C;
 
     float b = XMVectorGetX(XMVector3Dot(M, D));
     float c = XMVectorGetX(XMVector3Dot(M, M)) - (sphereRadius * sphereRadius);
 
-    // ƒŒƒCŒ´“_‚ª‹…ŠO‚©‚Âis•ûŒü‚ªŠOŒü‚«‚È‚çƒqƒbƒg‚µ‚È‚¢B
+    // ãƒ¬ã‚¤åŸç‚¹ãŒçƒå¤–ã‹ã¤é€²è¡Œæ–¹å‘ãŒå¤–å‘ããªã‚‰ãƒ’ãƒƒãƒˆã—ãªã„ã€‚
     if (c > 0.0f && b > 0.0f) return false;
 
-    // ”»•Ê®B
+    // åˆ¤åˆ¥å¼ã€‚
     float discr = b * b - c;
     if (discr < 0.0f) return false;
 
-    // Å‚à‹ß‚¢Œğ·‹——£B
+    // æœ€ã‚‚è¿‘ã„äº¤å·®è·é›¢ã€‚
     float t = -b - sqrtf(discr);
 
-    // ‹…“à•”‚©‚çn‚Ü‚é‚Í 0 ‚Æ‚·‚éB
+    // çƒå†…éƒ¨ã‹ã‚‰å§‹ã¾ã‚‹æ™‚ã¯ 0 ã¨ã™ã‚‹ã€‚
     if (t < 0.0f) t = 0.0f;
 
     outT = t;
 
-    // ƒqƒbƒgˆÊ’u‚©‚ç‹…’†S‚ÖŒü‚©‚¤–@ü‚ğì‚éB
+    // ãƒ’ãƒƒãƒˆä½ç½®ã‹ã‚‰çƒä¸­å¿ƒã¸å‘ã‹ã†æ³•ç·šã‚’ä½œã‚‹ã€‚
     XMVECTOR HitPoint = O + D * t;
     XMVECTOR Normal = XMVector3Normalize(HitPoint - C);
     XMStoreFloat3(&outNormal, Normal);
 
     return true;
 }
-
-// ---------------------------------------------------------
-// Ray vs Box
-// ---------------------------------------------------------
-// ƒŒƒC‚Æ AABB ‚ÌŒğ·”»’è‚ğƒXƒ‰ƒu–@‚Ås‚¤B
+// ray ã¨ box ã®äº¤å·®åˆ¤å®šã€‚
+// ãƒ¬ã‚¤ã¨ AABB ã®äº¤å·®åˆ¤å®šã‚’ã‚¹ãƒ©ãƒ–æ³•ã§è¡Œã†ã€‚
 bool CollisionFunctions::IntersectRayVsBox(
     const Ray& ray,
     const DirectX::XMFLOAT3& boxCenter,
@@ -400,18 +379,18 @@ bool CollisionFunctions::IntersectRayVsBox(
 {
     using namespace DirectX;
 
-    // AABB ‚Ì min / max ‚ğ‹‚ß‚éB
+    // AABB ã® min / max ã‚’æ±‚ã‚ã‚‹ã€‚
     XMVECTOR Center = XMLoadFloat3(&boxCenter);
     XMVECTOR Size = XMLoadFloat3(&boxSize);
     XMVECTOR HalfSize = Size * 0.5f;
     XMVECTOR Min = Center - HalfSize;
     XMVECTOR Max = Center + HalfSize;
 
-    // ƒŒƒCŒ´“_‚Æ•ûŒüB
+    // ãƒ¬ã‚¤åŸç‚¹ã¨æ–¹å‘ã€‚
     XMVECTOR O = XMLoadFloat3(&ray.origin);
     XMVECTOR D = XMLoadFloat3(&ray.direction);
 
-    // Še²ƒAƒNƒZƒX‚µ‚â‚·‚¢‚æ‚¤ˆê’U”z—ñ‚Ö—‚Æ‚·B
+    // å„è»¸ã‚¢ã‚¯ã‚»ã‚¹ã—ã‚„ã™ã„ã‚ˆã†ä¸€æ—¦é…åˆ—ã¸è½ã¨ã™ã€‚
     float o[3], d[3], min[3], max[3];
     XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(o), O);
     XMStoreFloat3(reinterpret_cast<XMFLOAT3*>(d), D);
@@ -421,12 +400,12 @@ bool CollisionFunctions::IntersectRayVsBox(
     float tMin = 0.0f;
     float tMax = FLT_MAX;
 
-    // ÅI“I‚Èƒqƒbƒg–Ê–@ü—pB
+    // æœ€çµ‚çš„ãªãƒ’ãƒƒãƒˆé¢æ³•ç·šç”¨ã€‚
     int axisSign[3] = { 0, 0, 0 };
 
     for (int i = 0; i < 3; ++i)
     {
-        // ‚Ù‚Ú•½s‚È‚çA‚»‚Ì²‚Å” ”ÍˆÍ“à‚É‹‚é‚©‚¾‚¯‚ğŒ©‚éB
+        // ã»ã¼å¹³è¡Œãªã‚‰ã€ãã®è»¸ã§ç®±ç¯„å›²å†…ã«å±…ã‚‹ã‹ã ã‘ã‚’è¦‹ã‚‹ã€‚
         if (fabsf(d[i]) < EPSILON)
         {
             if (o[i] < min[i] || o[i] > max[i]) return false;
@@ -437,10 +416,10 @@ bool CollisionFunctions::IntersectRayVsBox(
             float t1 = (min[i] - o[i]) * invD;
             float t2 = (max[i] - o[i]) * invD;
 
-            // ¬‚³‚¢•û‚ğ“üŒûA‘å‚«‚¢•û‚ğoŒû‚É‚»‚ë‚¦‚éB
+            // å°ã•ã„æ–¹ã‚’å…¥å£ã€å¤§ãã„æ–¹ã‚’å‡ºå£ã«ãã‚ãˆã‚‹ã€‚
             if (t1 > t2) std::swap(t1, t2);
 
-            // ˆê”Ô’x‚¢“üŒû‚ğXV‚µ‚½A‚»‚Ì–Ê–@ü‚ğ‹L˜^‚·‚éB
+            // ä¸€ç•ªé…ã„å…¥å£ã‚’æ›´æ–°ã—ãŸæ™‚ã€ãã®é¢æ³•ç·šã‚’è¨˜éŒ²ã™ã‚‹ã€‚
             if (t1 > tMin)
             {
                 tMin = t1;
@@ -449,10 +428,10 @@ bool CollisionFunctions::IntersectRayVsBox(
                 axisSign[2] = (i == 2) ? (invD < 0 ? 1 : -1) : 0;
             }
 
-            // ˆê”Ô‘‚¢oŒû‚ğXV‚·‚éB
+            // ä¸€ç•ªæ—©ã„å‡ºå£ã‚’æ›´æ–°ã™ã‚‹ã€‚
             if (t2 < tMax) tMax = t2;
 
-            // “üŒû‚ªoŒû‚ğ’´‚¦‚½‚çŒğ·‚µ‚È‚¢B
+            // å…¥å£ãŒå‡ºå£ã‚’è¶…ãˆãŸã‚‰äº¤å·®ã—ãªã„ã€‚
             if (tMin > tMax) return false;
         }
     }
@@ -461,12 +440,9 @@ bool CollisionFunctions::IntersectRayVsBox(
     outNormal = DirectX::XMFLOAT3((float)axisSign[0], (float)axisSign[1], (float)axisSign[2]);
     return true;
 }
-
-// ---------------------------------------------------------
-// Ray vs Capsule
-// ---------------------------------------------------------
-// ƒŒƒC‚ÆcŒü‚«ƒJƒvƒZƒ‹‚ÌŒğ·”»’è‚ğs‚¤B
-// ‰~’Œ•”•ª‚Æã‰º‚Ì”¼‹…‚ğ•ÊX‚É’²‚×AÅ‚à‹ß‚¢ƒqƒbƒg‚ğÌ—p‚·‚éB
+// ray ã¨ã‚«ãƒ—ã‚»ãƒ«ã®äº¤å·®åˆ¤å®šã€‚
+// ãƒ¬ã‚¤ã¨ç¸¦å‘ãã‚«ãƒ—ã‚»ãƒ«ã®äº¤å·®åˆ¤å®šã‚’è¡Œã†ã€‚
+// å††æŸ±éƒ¨åˆ†ã¨ä¸Šä¸‹ã®åŠçƒã‚’åˆ¥ã€…ã«èª¿ã¹ã€æœ€ã‚‚è¿‘ã„ãƒ’ãƒƒãƒˆã‚’æ¡ç”¨ã™ã‚‹ã€‚
 bool CollisionFunctions::IntersectRayVsCapsule(
     const Ray& ray,
     const DirectX::XMFLOAT3& capsuleBase,
@@ -477,27 +453,27 @@ bool CollisionFunctions::IntersectRayVsCapsule(
 {
     using namespace DirectX;
 
-    // ƒJƒvƒZƒ‹’ê–Ê’†S‚Æ²ã’[B
+    // ã‚«ãƒ—ã‚»ãƒ«åº•é¢ä¸­å¿ƒã¨è»¸ä¸Šç«¯ã€‚
     XMVECTOR Base = XMLoadFloat3(&capsuleBase);
     XMVECTOR Axis = XMVectorSet(0, 1, 0, 0);
     XMVECTOR Top = Base + Axis * height;
 
-    // ƒŒƒCŒ´“_‚Æ•ûŒüB
+    // ãƒ¬ã‚¤åŸç‚¹ã¨æ–¹å‘ã€‚
     XMVECTOR O = XMLoadFloat3(&ray.origin);
     XMVECTOR D = XMLoadFloat3(&ray.direction);
 
-    // Å‚à‹ß‚¢ƒqƒbƒgŒó•âB
+    // æœ€ã‚‚è¿‘ã„ãƒ’ãƒƒãƒˆå€™è£œã€‚
     float closestT = FLT_MAX;
     XMVECTOR closestNormal = XMVectorZero();
     bool hit = false;
 
-    // ‰~’Œ•”•ª”»’è—p‚ÉABase Šî€‚ÖˆÚ‚·B
+    // å††æŸ±éƒ¨åˆ†åˆ¤å®šç”¨ã«ã€Base åŸºæº–ã¸ç§»ã™ã€‚
     XMVECTOR RC = O - Base;
 
     float ox = XMVectorGetX(RC); float oz = XMVectorGetZ(RC);
     float dx = XMVectorGetX(D);  float dz = XMVectorGetZ(D);
 
-    // XZ •½–Êã‚Å–³ŒÀ‰~’Œ‚Æ‚ÌŒğ·‚ğ‰ğ‚­B
+    // XZ å¹³é¢ä¸Šã§ç„¡é™å††æŸ±ã¨ã®äº¤å·®ã‚’è§£ãã€‚
     float a = dx * dx + dz * dz;
     float b = 2.0f * (ox * dx + oz * dz);
     float c = (ox * ox + oz * oz) - radius * radius;
@@ -512,7 +488,7 @@ bool CollisionFunctions::IntersectRayVsCapsule(
 
             if (t1 > 0.0f)
             {
-                // ƒqƒbƒgˆÊ’u‚Ì y ‚ªƒJƒvƒZƒ‹‚Ì‚‚³”ÍˆÍ‚É“ü‚Á‚Ä‚¢‚é‚©Šm”F‚·‚éB
+                // ãƒ’ãƒƒãƒˆä½ç½®ã® y ãŒã‚«ãƒ—ã‚»ãƒ«ã®é«˜ã•ç¯„å›²ã«å…¥ã£ã¦ã„ã‚‹ã‹ç¢ºèªã™ã‚‹ã€‚
                 float y = XMVectorGetY(O) + XMVectorGetY(D) * t1;
                 float baseY = XMVectorGetY(Base);
 
@@ -523,7 +499,7 @@ bool CollisionFunctions::IntersectRayVsCapsule(
 
                     XMVECTOR HitP = O + D * t1;
 
-                    // ‰~’Œ²ã‚ÌÅ‹ß–T“_‚ğg‚Á‚Ä–@ü‚ğ‹‚ß‚éB
+                    // å††æŸ±è»¸ä¸Šã®æœ€è¿‘å‚ç‚¹ã‚’ä½¿ã£ã¦æ³•ç·šã‚’æ±‚ã‚ã‚‹ã€‚
                     XMVECTOR N = HitP - XMVectorSet(XMVectorGetX(HitP), y, XMVectorGetZ(HitP), 0);
                     XMVECTOR AxisPt = Base + Axis * (y - baseY);
                     closestNormal = XMVector3Normalize(HitP - AxisPt);
@@ -532,7 +508,7 @@ bool CollisionFunctions::IntersectRayVsCapsule(
         }
     }
 
-    // ‰º‘¤”¼‹…‚Æ‚ÌŒğ·”»’èB
+    // ä¸‹å´åŠçƒã¨ã®äº¤å·®åˆ¤å®šã€‚
     float tSphere;
     DirectX::XMFLOAT3 nSphere;
     if (IntersectRayVsSphere(ray, capsuleBase, radius, tSphere, nSphere))
@@ -545,7 +521,7 @@ bool CollisionFunctions::IntersectRayVsCapsule(
         }
     }
 
-    // ã‘¤”¼‹…‚Æ‚ÌŒğ·”»’èB
+    // ä¸Šå´åŠçƒã¨ã®äº¤å·®åˆ¤å®šã€‚
     DirectX::XMFLOAT3 topPos;
     XMStoreFloat3(&topPos, Top);
     if (IntersectRayVsSphere(ray, topPos, radius, tSphere, nSphere))
@@ -558,7 +534,7 @@ bool CollisionFunctions::IntersectRayVsCapsule(
         }
     }
 
-    // ‚Ç‚±‚©‚É“–‚½‚Á‚Ä‚¢‚ê‚ÎÅ‚à‹ß‚¢Œ‹‰Ê‚ğ•Ô‚·B
+    // ã©ã“ã‹ã«å½“ãŸã£ã¦ã„ã‚Œã°æœ€ã‚‚è¿‘ã„çµæœã‚’è¿”ã™ã€‚
     if (hit)
     {
         outT = closestT;

@@ -1,5 +1,6 @@
 #include "Phong.hlsli"
 #include"Skinning.hlsli"
+// main は Phong 描画で使う頂点変換またはライティング入力を処理する。
 
 VS_OUT main(
 float4 position:POSITION,

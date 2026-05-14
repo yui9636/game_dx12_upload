@@ -1,34 +1,34 @@
-#pragma once
+ï»¿#pragma once
 #include "Registry/Registry.h"
 #include <unordered_map>
 
-// Entity ‚ÌeqŠÖŒW‚Æ Transform ‚ÌŠK‘wXV‚ğ’S“–‚·‚éƒVƒXƒeƒ€B
-// e•ÏXAØ‚è—£‚µAdirty “`”dAworldMatrix ÄŒvZ‚ğs‚¤B
+// Entity ã®è¦ªå­é–¢ä¿‚ã¨ Transform ã®éšå±¤æ›´æ–°ã‚’æ‹…å½“ã™ã‚‹ã‚·ã‚¹ãƒ†ãƒ ã€‚
+// è¦ªå¤‰æ›´ã€åˆ‡ã‚Šé›¢ã—ã€dirty ä¼æ’­ã€worldMatrix å†è¨ˆç®—ã‚’è¡Œã†ã€‚
 class HierarchySystem {
 public:
-    // Hierarchy ‘S‘Ì‚ğXV‚·‚éB
-    // e‚ª dirty ‚Èq‚ğ dirty ‚É‚µA‚»‚ÌŒã dirty ‚È transform ‚Ì worldMatrix ‚ğÄŒvZ‚·‚éB
+    // Hierarchy å…¨ä½“ã‚’æ›´æ–°ã™ã‚‹ã€‚
+    // è¦ªãŒ dirty ãªå­ã‚’ dirty ã«ã—ã€ãã®å¾Œ dirty ãª transform ã® worldMatrix ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
     void Update(Registry& registry);
 
-    // entity ‚ğ newParent ‚Ìq‚É‚µ‚½‚Æ‚«AzŠÂQÆ‚ª”­¶‚·‚é‚©”»’è‚·‚éB
+    // entity ã‚’ newParent ã®å­ã«ã—ãŸã¨ãã€å¾ªç’°å‚ç…§ãŒç™ºç”Ÿã™ã‚‹ã‹åˆ¤å®šã™ã‚‹ã€‚
     static bool WouldCreateCycle(EntityID entity, EntityID newParent, Registry& registry);
 
-    // entity ‚Ìe‚ğ newParent ‚É•t‚¯‘Ö‚¦‚éB
-    // keepWorldTransform ‚ª true ‚Ìê‡‚ÍAŒ©‚½–Ú‚Ì world ˆÊ’u‚ğˆÛ‚·‚é‚æ‚¤ localTransform ‚ğÄŒvZ‚·‚éB
+    // entity ã®è¦ªã‚’ newParent ã«ä»˜ã‘æ›¿ãˆã‚‹ã€‚
+    // keepWorldTransform ãŒ true ã®å ´åˆã¯ã€è¦‹ãŸç›®ã® world ä½ç½®ã‚’ç¶­æŒã™ã‚‹ã‚ˆã† localTransform ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
     static void Reparent(EntityID entity, EntityID newParent, Registry& registry, bool keepWorldTransform = true);
 
-    // entity ‚ğŒ»İ‚ÌeqŠÖŒW‚©‚çØ‚è—£‚·B
+    // entity ã‚’ç¾åœ¨ã®è¦ªå­é–¢ä¿‚ã‹ã‚‰åˆ‡ã‚Šé›¢ã™ã€‚
     static void Detach(EntityID entity, Registry& registry);
 
-    // parent ‚Ìq‚Æ‚µ‚Ä child ‚ğÚ‘±‚·‚éB
-    // À‘Ì‚Í Reparent ‚Ìƒ‰ƒbƒp[B
+    // parent ã®å­ã¨ã—ã¦ child ã‚’æ¥ç¶šã™ã‚‹ã€‚
+    // å®Ÿä½“ã¯ Reparent ã®ãƒ©ãƒƒãƒ‘ãƒ¼ã€‚
     static void AttachChild(EntityID parent, EntityID child, Registry& registry, bool keepWorldTransform = true);
 
-    // entity ˆÈ‰º‚Ì subtree ‚ğÄ‹A“I‚É dirty ‚É‚·‚éB
+    // entity ä»¥ä¸‹ã® subtree ã‚’å†å¸°çš„ã« dirty ã«ã™ã‚‹ã€‚
     static void MarkDirtyRecursive(EntityID entity, Registry& registry);
 
 private:
-    // entity ‚Ì localTransform ‚©‚ç worldMatrix ‚ğÄŒvZ‚·‚éB
-    // •K—v‚È‚çe‚Ì worldMatrix ‚àæ‚ÉXV‚·‚éB
+    // entity ã® localTransform ã‹ã‚‰ worldMatrix ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
+    // å¿…è¦ãªã‚‰è¦ªã® worldMatrix ã‚‚å…ˆã«æ›´æ–°ã™ã‚‹ã€‚
     void ComputeWorldMatrix(EntityID entity, Registry& registry);
 };

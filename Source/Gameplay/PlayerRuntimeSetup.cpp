@@ -255,7 +255,7 @@ namespace
         return value;
     }
 
-    // Spec §12: per-slot attack animation lookup (Attack1〜3).
+    // 仕様 §12: slot ごとの攻撃アニメーション参照。Attack1〜3。
     int FindAttackAnimationBySlot(Registry& registry, EntityID entity, int slot)
     {
         const MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
@@ -280,8 +280,8 @@ namespace
         return -1;
     }
 
-    // Spec §11: Attack1〜3 nodes with comboStart / cancelStart / damage tuning.
-    // Spec §3.3: Idempotent — preserve user-edited fields when re-running.
+    // 仕様 §11: comboStart、cancelStart、damage tuning を持つ Attack1〜3 ノード。
+    // 仕様 §3.3: 再実行してもユーザー編集済み項目を保持する。
     void EnsureDefaultActionDatabase(Registry& registry, EntityID entity, ActionDatabaseComponent& database)
     {
         struct AttackTuning {
@@ -426,7 +426,7 @@ namespace PlayerRuntimeSetup
         LocomotionStateComponent* locomotion = EnsureComponent<LocomotionStateComponent>(registry, entity);
         if (locomotion) {
             EnsureLocomotionRuntimeTuning(*locomotion);
-            // Player input is camera-relative stick input.
+            // player input は camera 相対の stick 入力として扱う。
             locomotion->useCameraRelativeInput = true;
         }
         EnsureComponent<ActionStateComponent>(registry, entity);

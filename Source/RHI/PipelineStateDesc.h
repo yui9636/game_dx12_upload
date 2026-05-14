@@ -1,12 +1,10 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include "RHI/IShader.h"
 #include "RHI/IState.h"
 #include "RHI/ITexture.h"
 #include "RHI/ICommandList.h"
-
-// ==========================================
-// ==========================================
+// RHI 共通のパイプラインステート作成パラメータ。
 struct PipelineStateDesc {
     IShader* vertexShader = nullptr;
     IShader* pixelShader = nullptr;

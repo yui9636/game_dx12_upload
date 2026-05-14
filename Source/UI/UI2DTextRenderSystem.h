@@ -1,3 +1,4 @@
+﻿// UI2DTextRenderSystem の UI 関連宣言をまとめます。
 #pragma once
 
 #ifndef NOMINMAX

@@ -1,3 +1,4 @@
+﻿// UICombo の UI 関連宣言をまとめます。
 #pragma once
 #include "UIScreen.h"
 #include <memory>

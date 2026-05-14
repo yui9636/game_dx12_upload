@@ -48,11 +48,8 @@ void VolumetricFogPass::Setup(FrameGraphBuilder& builder, const RenderContext& r
         m_hVolumetricFogBlur = {};
         return;
     }
-
-    // =========================================================
-    // ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
-    // =========================================================
-    uint32_t renderW = rc.renderWidth;
+// ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
+uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
         float renderScale = Graphics::Instance().GetRenderScale();
@@ -94,17 +91,11 @@ void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueu
     rc.commandList->SetIndexBuffer(nullptr, IndexFormat::Uint32, 0);
 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-    // =========================================================
-    // ★ 修正：実際のテクスチャ解像度(428x241相当)をビューポートに使用する
-    // =========================================================
-    float halfWidth = (float)fogTex->GetWidth();
+// ★ 修正：実際のテクスチャ解像度(428x241相当)をビューポートに使用する
+float halfWidth = (float)fogTex->GetWidth();
     float halfHeight = (float)fogTex->GetHeight();
-
-    // ==========================================
-    // パス1: レイマーチング (生フォグ生成)
-    // ==========================================
-    rc.commandList->ClearColor(fogTex, clearColor);
+// パス1: レイマーチング (生フォグ生成)
+rc.commandList->ClearColor(fogTex, clearColor);
     rc.commandList->SetRenderTargets(1, &fogTex, nullptr);
 
     rc.mainRenderTarget = fogTex;
@@ -128,11 +119,8 @@ void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueu
         rc.commandList->PSSetTexture(0, gbuffer2);
     }
     rc.commandList->Draw(3, 0);
-
-    // ==========================================
-    // パス2: 空間ブラー (バンディングノイズ除去)
-    // ==========================================
-    rc.commandList->ClearColor(blurTex, clearColor);
+// パス2: 空間ブラー (バンディングノイズ除去)
+rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTargets(1, &blurTex, nullptr);
 
     rc.mainRenderTarget = blurTex;

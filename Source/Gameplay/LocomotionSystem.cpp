@@ -1,4 +1,4 @@
-#include "LocomotionSystem.h"
+﻿#include "LocomotionSystem.h"
 #include "LocomotionStateComponent.h"
 #include "ActionStateComponent.h"
 #include "Component/CameraComponent.h"
@@ -14,7 +14,7 @@
 
 static constexpr float kPi = 3.14159265f;
 
-// Wrap angle to [-PI, PI]
+// 角度を [-PI, PI] へ丸める。
 static float WrapAngle(float a) {
     while (a > kPi)  a -= 2.0f * kPi;
     while (a < -kPi) a += 2.0f * kPi;
@@ -84,8 +84,8 @@ void LocomotionSystem::Update(Registry& registry, float dt) {
 
             const float inputX = loco.moveInput.x;
             const float inputY = loco.moveInput.y;
-            // AI / scripted entities (useCameraRelativeInput == false) write moveInput
-            // already in world x/z. Player entities use camera-relative stick input.
+            // AI / scripted entity（useCameraRelativeInput == false）は moveInput を
+            // 既にワールド XZ 方向として書く。Player entity はカメラ相対スティック入力を使う。
             const float worldX = loco.useCameraRelativeInput
                 ? (cameraBasis.right.x * inputX + cameraBasis.forward.x * inputY)
                 : inputX;

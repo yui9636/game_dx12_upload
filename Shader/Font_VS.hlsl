@@ -9,15 +9,15 @@ VS_OUT main(
 {
 	VS_OUT vout;
 	
-	// šC³: Sprite3D_VS.hlsl ‚Æ‘S‚­“¯‚¶ŒvŽZŽè‡‚É‚·‚é
-    // 1. ƒ[ƒJƒ‹ -> ƒ[ƒ‹ƒh
-    // ¦“ü—Íposition‚Ífloat4‚Å‚·‚ªAw=1.0‚Æ‚µ‚Äˆµ‚¢‚Ü‚·
+	// â˜…ä¿®æ­£: Sprite3D_VS.hlsl ã¨å…¨ãåŒã˜è¨ˆç®—æ‰‹é †ã«ã™ã‚‹
+    // 1. ãƒ­ãƒ¼ã‚«ãƒ« -> ãƒ¯ãƒ¼ãƒ«ãƒ‰
+    // â€»å…¥åŠ›positionã¯float4ã§ã™ãŒã€w=1.0ã¨ã—ã¦æ‰±ã„ã¾ã™
     float4 worldPos = mul(position, World);
 
-    // 2. ƒ[ƒ‹ƒh -> ƒrƒ…[
+    // 2. ãƒ¯ãƒ¼ãƒ«ãƒ‰ -> ãƒ“ãƒ¥ãƒ¼
     float4 viewPos = mul(worldPos, View);
 
-    // 3. ƒrƒ…[ -> ƒvƒƒWƒFƒNƒVƒ‡ƒ“
+    // 3. ãƒ“ãƒ¥ãƒ¼ -> ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ã‚·ãƒ§ãƒ³
     vout.position = mul(viewPos, Projection);
 
     vout.color = color;

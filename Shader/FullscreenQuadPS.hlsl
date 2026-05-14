@@ -7,6 +7,7 @@
 #define LINEAR_BORDER_WHITE 4
 SamplerState samplerStates[5] : register(s0);
 Texture2D textureMap : register(t0);
+// main は全画面パスで使う頂点またはピクセル出力を生成する。
 
 float4 main(VS_OUT pin) : SV_TARGET
 {

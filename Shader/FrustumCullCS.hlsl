@@ -1,6 +1,6 @@
-// GPU Frustum Culling Compute Shader — 2D Dispatch
-// X axis: instance index within command
-// Y axis: command index (no linear search)
+// GPU フラスタムカリング用コンピュートシェーダ（2D Dispatch）
+// X 軸: command 内の instance index
+// Y 軸: command index（線形探索なし）
 
 cbuffer CullingParams : register(b0) {
     float4 frustumPlanes[6];
@@ -39,7 +39,7 @@ StructuredBuffer<CullCommandMeta> commands        : register(t1);
 RWStructuredBuffer<InstanceData>  outputInstances : register(u0);
 RWStructuredBuffer<DrawArgs>      drawArgsBuffer  : register(u1);
 
-// Transform local-space bounds to world space
+// ローカル空間 bounds をワールド空間へ変換する。
 void TransformBounds(
     float3 localCenter, float localRadius,
     float4x4 world,
@@ -53,7 +53,7 @@ void TransformBounds(
     worldRadius = localRadius * max(sx, max(sy, sz));
 }
 
-// Frustum sphere test
+// フラスタム球判定
 bool IsVisible(float3 worldCenter, float worldRadius)
 {
     for (int p = 0; p < 6; p++) {
@@ -77,7 +77,7 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID)
 
     uint inputIdx = cmd.firstInstance + localIdx;
 
-    // World-space bounds
+    // ワールド空間 bounds
     float4x4 world = inputInstances[inputIdx].worldMatrix;
     float3 localCenter = float3(cmd.boundsCenterX, cmd.boundsCenterY, cmd.boundsCenterZ);
     float3 worldCenter;
@@ -86,11 +86,11 @@ void CSMain(uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID)
 
     if (!IsVisible(worldCenter, worldRadius)) return;
 
-    // Visible: atomic increment instanceCount in DrawArgs
+    // 可視: DrawArgs の instanceCount を atomic increment する。
     uint outLocalIdx;
     InterlockedAdd(drawArgsBuffer[cmd.drawArgsIndex].instanceCount, 1, outLocalIdx);
 
-    // Write to output buffer
+    // 出力バッファへ書く。
     uint writePos = cmd.outputInstanceStart + outLocalIdx;
     outputInstances[writePos] = inputInstances[inputIdx];
 }

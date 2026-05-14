@@ -1,5 +1,5 @@
-﻿// Graph + NodeMode panels for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
-// All entry points remain member functions of EffectEditorPanel.
+﻿// EffectEditorPanel の Graph / NodeMode panel。EffectEditorPanel.cpp から分離している。
+// entry point はすべて EffectEditorPanel の member function のままにする。
 
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"

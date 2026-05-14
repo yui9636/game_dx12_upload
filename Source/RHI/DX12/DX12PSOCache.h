@@ -1,3 +1,4 @@
+﻿// DX12PSOCache の RHI 関連インターフェースまたは実装宣言をまとめます。
 #pragma once
 #include "DX12Device.h"
 #include "DX12RootSignature.h"

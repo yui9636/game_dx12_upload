@@ -1,4 +1,4 @@
-// AssetManager.h
+ï»¿// AssetManager ã¯ã‚¢ã‚»ãƒƒãƒˆã®ç™»éŒ²ã€æ¤œç´¢ã€èª­ã¿è¾¼ã¿æ¸ˆã¿å‚ç…§ã‚’ç®¡ç†ã™ã‚‹ã€‚
 
 #pragma once
 
@@ -10,12 +10,12 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
-#include "Icon/IconFontManager.h" // ƒAƒCƒRƒ“•¶š—ñ’è‹`‚È‚Ç‚Åg‚¤
+#include "Icon/IconFontManager.h" // ã‚¢ã‚¤ã‚³ãƒ³æ–‡å­—åˆ—å®šç¾©ãªã©ã§ä½¿ã†
 
 class ITexture;
 
-// ƒAƒZƒbƒg‚Ìí—Ş‚ğ•\‚·—ñ‹“B
-// Asset Browser ã‚Å‚Ì•\¦‚âƒAƒCƒRƒ“Ø‚è‘Ö‚¦‚Ég‚¤B
+// ã‚¢ã‚»ãƒƒãƒˆã®ç¨®é¡ã‚’è¡¨ã™åˆ—æŒ™ã€‚
+// Asset Browser ä¸Šã§ã®è¡¨ç¤ºã‚„ã‚¢ã‚¤ã‚³ãƒ³åˆ‡ã‚Šæ›¿ãˆã«ä½¿ã†ã€‚
 enum class AssetType {
     Folder,
     Model,
@@ -28,91 +28,91 @@ enum class AssetType {
     Unknown
 };
 
-// Asset Browser ‚É•\¦‚·‚é 1 Œ‚Ô‚ñ‚Ìî•ñ‚ğ‚Ü‚Æ‚ß‚½\‘¢‘ÌB
+// Asset Browser ã«è¡¨ç¤ºã™ã‚‹ 1 ä»¶ã¶ã‚“ã®æƒ…å ±ã‚’ã¾ã¨ã‚ãŸæ§‹é€ ä½“ã€‚
 struct AssetEntry {
 
-    // •\¦—p‚Ìƒtƒ@ƒCƒ‹–¼B
+    // è¡¨ç¤ºç”¨ã®ãƒ•ã‚¡ã‚¤ãƒ«åã€‚
     std::string fileName;
 
-    // ÀÛ‚Ìƒtƒ@ƒCƒ‹ƒpƒXB
+    // å®Ÿéš›ã®ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ã€‚
     std::filesystem::path path;
 
-    // ƒAƒZƒbƒg‚Ìí—ŞB
+    // ã‚¢ã‚»ãƒƒãƒˆã®ç¨®é¡ã€‚
     AssetType type;
 
-    // DX11 —p‚ÌƒTƒ€ƒlƒCƒ‹ SRVB
-    // Šù‘¶‚Ì ImGui •\¦‚È‚Ç‚Å’¼Úg‚¤‚½‚ß‚Ì‚à‚ÌB
+    // DX11 ç”¨ã®ã‚µãƒ ãƒã‚¤ãƒ« SRVã€‚
+    // æ—¢å­˜ã® ImGui è¡¨ç¤ºãªã©ã§ç›´æ¥ä½¿ã†ãŸã‚ã®ã‚‚ã®ã€‚
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> thumbnail;
 
-    // API ”ñˆË‘¶Šñ‚è‚ÌƒeƒNƒXƒ`ƒƒQÆB
-    // DX11 ˆÈŠO‚Ì•`‰æAPI‘Î‰‚âŠÇ—‚Ì‚½‚ß‚É‚ÂB
+    // API éä¾å­˜å¯„ã‚Šã®ãƒ†ã‚¯ã‚¹ãƒãƒ£å‚ç…§ã€‚
+    // DX11 ä»¥å¤–ã®æç”»APIå¯¾å¿œã‚„ç®¡ç†ã®ãŸã‚ã«æŒã¤ã€‚
     std::shared_ptr<ITexture> thumbnailTexture;
 
-    // •\¦‚·‚é FontAwesome ŒnƒAƒCƒRƒ“•¶š—ñB
+    // è¡¨ç¤ºã™ã‚‹ FontAwesome ç³»ã‚¢ã‚¤ã‚³ãƒ³æ–‡å­—åˆ—ã€‚
     const char* iconStr = nullptr;
 
-    // ƒAƒCƒRƒ“‚Ì•\¦FB
+    // ã‚¢ã‚¤ã‚³ãƒ³ã®è¡¨ç¤ºè‰²ã€‚
     ImVec4 iconColor = { 1, 1, 1, 1 };
 };
 
-// ƒAƒZƒbƒgƒuƒ‰ƒEƒU—p‚ÌƒAƒZƒbƒgŠÇ—ƒNƒ‰ƒXB
-// ƒfƒBƒŒƒNƒgƒŠ—ñ‹“Aí•Ê”»’èAƒTƒ€ƒlƒCƒ‹İ’èAƒtƒ@ƒCƒ‹ì¬EíœEˆÚ“®‚È‚Ç‚ğ’S“–‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆãƒ–ãƒ©ã‚¦ã‚¶ç”¨ã®ã‚¢ã‚»ãƒƒãƒˆç®¡ç†ã‚¯ãƒ©ã‚¹ã€‚
+// ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªåˆ—æŒ™ã€ç¨®åˆ¥åˆ¤å®šã€ã‚µãƒ ãƒã‚¤ãƒ«è¨­å®šã€ãƒ•ã‚¡ã‚¤ãƒ«ä½œæˆãƒ»å‰Šé™¤ãƒ»ç§»å‹•ãªã©ã‚’æ‹…å½“ã™ã‚‹ã€‚
 class AssetManager {
 public:
 
-    // singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+    // singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
     static AssetManager& Instance() { static AssetManager instance; return instance; }
 
-    // ƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ğİ’è‚µ‚Ä‰Šú‰»‚·‚éB
+    // ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’è¨­å®šã—ã¦åˆæœŸåŒ–ã™ã‚‹ã€‚
     void Initialize(const std::string& rootDirectory);
 
-    // w’èƒfƒBƒŒƒNƒgƒŠ“à‚ÌƒAƒZƒbƒgˆê——‚ğæ“¾‚·‚éB
+    // æŒ‡å®šãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªå†…ã®ã‚¢ã‚»ãƒƒãƒˆä¸€è¦§ã‚’å–å¾—ã™ã‚‹ã€‚
     std::vector<AssetEntry> GetAssetsInDirectory(const std::filesystem::path& directory);
 
-    // OS ‚ÌŠù’èƒAƒvƒŠ‚ÅƒAƒZƒbƒg‚ğŠJ‚­B
+    // OS ã®æ—¢å®šã‚¢ãƒ—ãƒªã§ã‚¢ã‚»ãƒƒãƒˆã‚’é–‹ãã€‚
     void OpenInExternalEditor(const std::filesystem::path& path);
 
-    // Œ»İ‚ÌƒAƒZƒbƒgƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ğ•Ô‚·B
+    // ç¾åœ¨ã®ã‚¢ã‚»ãƒƒãƒˆãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’è¿”ã™ã€‚
     const std::filesystem::path& GetRootDirectory() const { return m_rootDirectory; }
 
-    // ŠO•”ƒtƒ@ƒCƒ‹‚ğƒAƒZƒbƒgƒfƒBƒŒƒNƒgƒŠ‚Öæ‚è‚ŞB
+    // å¤–éƒ¨ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ã‚¢ã‚»ãƒƒãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã¸å–ã‚Šè¾¼ã‚€ã€‚
     void ImportExternalFile(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir);
 
-    // V‹KƒtƒHƒ‹ƒ_‚ğì¬‚·‚éB
+    // æ–°è¦ãƒ•ã‚©ãƒ«ãƒ€ã‚’ä½œæˆã™ã‚‹ã€‚
     void CreateNewFolder(const std::filesystem::path& parentDir);
 
-    // V‹K C++ ƒXƒNƒŠƒvƒg‚Ğ‚ÈŒ^‚ğì¬‚·‚éB
+    // æ–°è¦ C++ ã‚¹ã‚¯ãƒªãƒ—ãƒˆã²ãªå‹ã‚’ä½œæˆã™ã‚‹ã€‚
     void CreateNewScript(const std::filesystem::path& parentDir);
 
-    // V‹KƒVƒF[ƒ_‚Ğ‚ÈŒ^‚ğì¬‚·‚éB
+    // æ–°è¦ã‚·ã‚§ãƒ¼ãƒ€ã²ãªå‹ã‚’ä½œæˆã™ã‚‹ã€‚
     void CreateNewShader(const std::filesystem::path& parentDir);
 
-    // V‹Kƒ}ƒeƒŠƒAƒ‹‚Ğ‚ÈŒ^‚ğì¬‚·‚éB
+    // æ–°è¦ãƒãƒ†ãƒªã‚¢ãƒ«ã²ãªå‹ã‚’ä½œæˆã™ã‚‹ã€‚
     void CreateNewMaterial(const std::filesystem::path& parentDir);
 
-    // ƒAƒZƒbƒg–¼‚ğ•ÏX‚·‚éB
-    // ¬Œ÷‚Í trueA¸”s‚Í false ‚ğ•Ô‚·B
+    // ã‚¢ã‚»ãƒƒãƒˆåã‚’å¤‰æ›´ã™ã‚‹ã€‚
+    // æˆåŠŸæ™‚ã¯ trueã€å¤±æ•—æ™‚ã¯ false ã‚’è¿”ã™ã€‚
     bool RenameAsset(const std::filesystem::path& oldPath, const std::string& newName);
 
-    // ƒAƒZƒbƒg‚ğƒRƒs[‚·‚éB
-    // ¬Œ÷‚Í trueA¸”s‚Í false ‚ğ•Ô‚·B
+    // ã‚¢ã‚»ãƒƒãƒˆã‚’ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
+    // æˆåŠŸæ™‚ã¯ trueã€å¤±æ•—æ™‚ã¯ false ã‚’è¿”ã™ã€‚
     bool CopyAsset(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir);
 
-    // ƒAƒZƒbƒg‚ğˆÚ“®‚·‚éB
-    // ¬Œ÷‚Í trueA¸”s‚Í false ‚ğ•Ô‚·B
+    // ã‚¢ã‚»ãƒƒãƒˆã‚’ç§»å‹•ã™ã‚‹ã€‚
+    // æˆåŠŸæ™‚ã¯ trueã€å¤±æ•—æ™‚ã¯ false ã‚’è¿”ã™ã€‚
     bool MoveAsset(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir);
 
-    // ƒAƒZƒbƒg‚ğíœ‚·‚éB
+    // ã‚¢ã‚»ãƒƒãƒˆã‚’å‰Šé™¤ã™ã‚‹ã€‚
     void DeleteAsset(const std::filesystem::path& path);
 
 private:
 
-    // singleton —p‚È‚Ì‚ÅƒRƒ“ƒXƒgƒ‰ƒNƒ^‚Í privateB
+    // singleton ç”¨ãªã®ã§ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã¯ privateã€‚
     AssetManager() = default;
 
-    // ƒAƒZƒbƒg‚Ìƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠB
+    // ã‚¢ã‚»ãƒƒãƒˆã®ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã€‚
     std::filesystem::path m_rootDirectory;
 
-    // Šg’£q‚âí•Ê‚É‰‚¶‚Ä AssetEntry ‚ÌƒAƒCƒRƒ“EFEí—ŞEƒTƒ€ƒlƒCƒ‹‚ğİ’è‚·‚éB
+    // æ‹¡å¼µå­ã‚„ç¨®åˆ¥ã«å¿œã˜ã¦ AssetEntry ã®ã‚¢ã‚¤ã‚³ãƒ³ãƒ»è‰²ãƒ»ç¨®é¡ãƒ»ã‚µãƒ ãƒã‚¤ãƒ«ã‚’è¨­å®šã™ã‚‹ã€‚
     void AssignIconAndType(AssetEntry& entry);
 };

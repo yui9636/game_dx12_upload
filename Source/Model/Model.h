@@ -301,7 +301,7 @@ private:
 	// モデルデータをファイルから読み込みます。
 	void Deserialize(const char* filename);
 
-	// ModelResource????: ??????Rebuild???????SceneSync?????????MeshBufferSync???
+	// ModelResource 関連処理: Rebuild、SceneSync、MeshBufferSync を分けて扱う。
 	void RefreshMeshBindingData();
 	// 描画用 ModelResource を再構築します。
 	void RebuildModelResource();
@@ -361,11 +361,7 @@ public:
 
 	// 現在のノード姿勢配列を取得します。
 	void GetNodePoses(std::vector<NodePose>& nodePoses) const;
-
-// =========================================================
-// =========================================================
-
-	struct MeshData {
+struct MeshData {
 		std::vector<Vertex>* vertices;
 		std::vector<uint32_t>* indices;
 	};

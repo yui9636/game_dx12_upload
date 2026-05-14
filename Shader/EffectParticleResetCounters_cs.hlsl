@@ -1,14 +1,11 @@
-// ============================================================================
-// ResetCounters: Zero per-frame counters and page alive counts
-// Dispatch: (totalPages + 63) / 64
-// Uses shared simulation root signature. totalPages passed via gTiming.w.
-// ============================================================================
-
+// ResetCounters: フレームごとの counter と page alive count を 0 にする。
+// ディスパッチ: (totalPages + 63) / 64
+// 共有 simulation root signature を使う。totalPages は gTiming.w で渡す。
 #include "EffectParticleRuntimeCommon.hlsli"
 #include "EffectParticleSoA.hlsli"
 
-// Shared root sig: u0=Hot, u1=Warm, ...
-// We repurpose: u0=Counter, u1=PageAliveCount (only these two are needed)
+// 共有 root signature: u0=Hot, u1=Warm, ...
+// ここでは u0=Counter、u1=PageAliveCount として流用する（必要なのはこの 2 つだけ）。
 RWByteAddressBuffer g_CounterBuffer      : register(u0);
 RWStructuredBuffer<uint> g_PageAliveCount : register(u1);
 
@@ -17,7 +14,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID)
 {
     const uint totalPages = (uint)(gTiming.w + 0.5f);
 
-    // Thread 0: reset global counters
+    // スレッド 0: グローバル counter をリセットする。
     if (dtid.x == 0u)
     {
         g_CounterBuffer.Store(COUNTER_ALIVE_BILLBOARD, 0u);
@@ -28,7 +25,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID)
         g_CounterBuffer.Store(COUNTER_DROPPED_EMIT, 0u);
     }
 
-    // Zero per-page alive counts
+    // ページごとの alive count を 0 にする。
     if (dtid.x < totalPages)
     {
         g_PageAliveCount[dtid.x] = 0u;

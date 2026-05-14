@@ -1,3 +1,4 @@
+﻿// DX11Texture の RHI 関連インターフェースまたは実装宣言をまとめます。
 #pragma once
 #include "../ITexture.h"
 #include <d3d11.h>

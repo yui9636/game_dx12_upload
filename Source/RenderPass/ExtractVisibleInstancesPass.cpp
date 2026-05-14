@@ -1,3 +1,4 @@
+﻿// ExtractVisibleInstancesPass のレンダーパス実装をまとめます。
 #include "ExtractVisibleInstancesPass.h"
 #include "Model/ModelResource.h"
 #include "System/TaskSystem.h"

@@ -1,4 +1,4 @@
-// AssetManager.cpp
+ï»¿// AssetManager ã®å„æ“ä½œã¯ãƒ‘ã‚¹ã‚’ã‚­ãƒ¼ã«ã‚¢ã‚»ãƒƒãƒˆå‚ç…§ã‚’ç®¡ç†ã™ã‚‹ã€‚
 
 #include "AssetManager.h"
 
@@ -13,64 +13,64 @@
 #include "RHI/DX11/DX11Texture.h"
 #include "Console/Logger.h"
 
-// ƒAƒZƒbƒgŠÇ—‚ğ‰Šú‰»‚·‚éB
-// ƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ğ•Û‘¶‚µA‘¶İ‚µ‚È‚¯‚ê‚Îì¬‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆç®¡ç†ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
+// ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’ä¿å­˜ã—ã€å­˜åœ¨ã—ãªã‘ã‚Œã°ä½œæˆã™ã‚‹ã€‚
 void AssetManager::Initialize(const std::string& rootDirectory) {
 
-    // ƒAƒZƒbƒg‚Ìƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ğ•Û‘¶‚·‚éB
+    // ã‚¢ã‚»ãƒƒãƒˆã®ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’ä¿å­˜ã™ã‚‹ã€‚
     m_rootDirectory = rootDirectory;
 
-    // ƒ‹[ƒgƒfƒBƒŒƒNƒgƒŠ‚ª‘¶İ‚µ‚È‚¯‚ê‚Îì¬‚·‚éB
+    // ãƒ«ãƒ¼ãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªãŒå­˜åœ¨ã—ãªã‘ã‚Œã°ä½œæˆã™ã‚‹ã€‚
     if (!std::filesystem::exists(m_rootDirectory)) std::filesystem::create_directories(m_rootDirectory);
 
-    // eƒfƒBƒŒƒNƒgƒŠ‚ğæ“¾‚·‚éB
-    // Œ»ó‚Í–¢g—p‚¾‚ªA«—ˆ‚ÌŠg’£—p‚Éc‚µ‚Ä‚ ‚é‰Â”\«‚ª‚ ‚éB
+    // è¦ªãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’å–å¾—ã™ã‚‹ã€‚
+    // ç¾çŠ¶ã¯æœªä½¿ç”¨ã ãŒã€å°†æ¥ã®æ‹¡å¼µç”¨ã«æ®‹ã—ã¦ã‚ã‚‹å¯èƒ½æ€§ãŒã‚ã‚‹ã€‚
     std::filesystem::path parentDir = std::filesystem::path(m_rootDirectory).parent_path();
 }
 
-// w’èƒfƒBƒŒƒNƒgƒŠ“à‚ÌƒAƒZƒbƒgˆê——‚ğæ“¾‚·‚éB
-// ƒtƒHƒ‹ƒ_‚Íæ“ª‚ÉA‚»‚Ì‘¼‚Í–¼‘O‡‚É•À‚×‚éB
+// æŒ‡å®šãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªå†…ã®ã‚¢ã‚»ãƒƒãƒˆä¸€è¦§ã‚’å–å¾—ã™ã‚‹ã€‚
+// ãƒ•ã‚©ãƒ«ãƒ€ã¯å…ˆé ­ã«ã€ãã®ä»–ã¯åå‰é †ã«ä¸¦ã¹ã‚‹ã€‚
 std::vector<AssetEntry> AssetManager::GetAssetsInDirectory(const std::filesystem::path& directory) {
 
-    // –ß‚è’l—p‚Ì”z—ñB
+    // æˆ»ã‚Šå€¤ç”¨ã®é…åˆ—ã€‚
     std::vector<AssetEntry> entries;
 
-    // std::filesystem —p‚ÌƒGƒ‰[ƒR[ƒhB
+    // std::filesystem ç”¨ã®ã‚¨ãƒ©ãƒ¼ã‚³ãƒ¼ãƒ‰ã€‚
     std::error_code ec;
 
-    // ƒpƒX‚ª‘¶İ‚µ‚È‚¢A‚Ü‚½‚ÍƒfƒBƒŒƒNƒgƒŠ‚Å‚È‚¯‚ê‚Î‹ó”z—ñ‚ğ•Ô‚·B
+    // ãƒ‘ã‚¹ãŒå­˜åœ¨ã—ãªã„ã€ã¾ãŸã¯ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã§ãªã‘ã‚Œã°ç©ºé…åˆ—ã‚’è¿”ã™ã€‚
     if (!std::filesystem::exists(directory, ec) || !std::filesystem::is_directory(directory, ec)) return entries;
 
-    // ƒfƒBƒŒƒNƒgƒŠƒCƒeƒŒ[ƒ^‚ğì¬‚·‚éB
+    // ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚¤ãƒ†ãƒ¬ãƒ¼ã‚¿ã‚’ä½œæˆã™ã‚‹ã€‚
     auto it = std::filesystem::directory_iterator(directory, ec);
     if (ec) return entries;
 
-    // ƒfƒBƒŒƒNƒgƒŠ“à‚Ì‘SƒGƒ“ƒgƒŠ‚ğ‘–¸‚·‚éB
+    // ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªå†…ã®å…¨ã‚¨ãƒ³ãƒˆãƒªã‚’èµ°æŸ»ã™ã‚‹ã€‚
     for (; it != std::filesystem::directory_iterator(); it.increment(ec)) {
 
-        // ‘–¸’†‚ÉƒGƒ‰[‚ªo‚½‚çA‚»‚Ì—v‘f‚Í”ò‚Î‚µ‚Ä‘±s‚·‚éB
+        // èµ°æŸ»ä¸­ã«ã‚¨ãƒ©ãƒ¼ãŒå‡ºãŸã‚‰ã€ãã®è¦ç´ ã¯é£›ã°ã—ã¦ç¶šè¡Œã™ã‚‹ã€‚
         if (ec) {
             ec.clear();
             continue;
         }
 
-        // 1Œ•ª‚Ì AssetEntry ‚ğì¬‚·‚éB
+        // 1ä»¶åˆ†ã® AssetEntry ã‚’ä½œæˆã™ã‚‹ã€‚
         AssetEntry asset;
 
-        // ƒtƒ@ƒCƒ‹ƒpƒX‚ğ•Û‘¶‚·‚éB
+        // ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ã‚’ä¿å­˜ã™ã‚‹ã€‚
         asset.path = it->path();
 
-        // •\¦—pƒtƒ@ƒCƒ‹–¼‚ğ•Û‘¶‚·‚éB
+        // è¡¨ç¤ºç”¨ãƒ•ã‚¡ã‚¤ãƒ«åã‚’ä¿å­˜ã™ã‚‹ã€‚
         asset.fileName = it->path().filename().string();
 
-        // Šg’£q‚âí•Ê‚É‰‚¶‚Ä icon / type / thumbnail ‚ğİ’è‚·‚éB
+        // æ‹¡å¼µå­ã‚„ç¨®åˆ¥ã«å¿œã˜ã¦ icon / type / thumbnail ã‚’è¨­å®šã™ã‚‹ã€‚
         AssignIconAndType(asset);
 
-        // ˆê——‚Ö’Ç‰Á‚·‚éB
+        // ä¸€è¦§ã¸è¿½åŠ ã™ã‚‹ã€‚
         entries.push_back(asset);
     }
 
-    // ƒtƒHƒ‹ƒ_‚ğæ‚ÉA‚»‚ÌŒã‚Íƒtƒ@ƒCƒ‹–¼‚Åƒ\[ƒg‚·‚éB
+    // ãƒ•ã‚©ãƒ«ãƒ€ã‚’å…ˆã«ã€ãã®å¾Œã¯ãƒ•ã‚¡ã‚¤ãƒ«åã§ã‚½ãƒ¼ãƒˆã™ã‚‹ã€‚
     std::sort(entries.begin(), entries.end(), [](const AssetEntry& a, const AssetEntry& b) {
         if (a.type == AssetType::Folder && b.type != AssetType::Folder) return true;
         if (a.type != AssetType::Folder && b.type == AssetType::Folder) return false;
@@ -80,10 +80,10 @@ std::vector<AssetEntry> AssetManager::GetAssetsInDirectory(const std::filesystem
     return entries;
 }
 
-// Šg’£q‚âƒtƒ@ƒCƒ‹í•Ê‚É‰‚¶‚ÄAAssetEntry ‚Ìí•ÊEƒAƒCƒRƒ“EƒTƒ€ƒlƒCƒ‹‚ğİ’è‚·‚éB
+// æ‹¡å¼µå­ã‚„ãƒ•ã‚¡ã‚¤ãƒ«ç¨®åˆ¥ã«å¿œã˜ã¦ã€AssetEntry ã®ç¨®åˆ¥ãƒ»ã‚¢ã‚¤ã‚³ãƒ³ãƒ»ã‚µãƒ ãƒã‚¤ãƒ«ã‚’è¨­å®šã™ã‚‹ã€‚
 void AssetManager::AssignIconAndType(AssetEntry& entry) {
 
-    // ƒfƒBƒŒƒNƒgƒŠ‚È‚çƒtƒHƒ‹ƒ_ˆµ‚¢‚É‚·‚éB
+    // ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªãªã‚‰ãƒ•ã‚©ãƒ«ãƒ€æ‰±ã„ã«ã™ã‚‹ã€‚
     if (std::filesystem::is_directory(entry.path)) {
 
         entry.type = AssetType::Folder;
@@ -92,54 +92,54 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         return;
     }
 
-    // Šg’£q‚ğæ“¾‚µA¬•¶š‚Ö“ˆê‚·‚éB
+    // æ‹¡å¼µå­ã‚’å–å¾—ã—ã€å°æ–‡å­—ã¸çµ±ä¸€ã™ã‚‹ã€‚
     std::string ext = entry.path.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-    // ƒ‚ƒfƒ‹ƒtƒ@ƒCƒ‹ŒnB
+    // ãƒ¢ãƒ‡ãƒ«ãƒ•ã‚¡ã‚¤ãƒ«ç³»ã€‚
     if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf" || ext == ".cereal") {
 
         entry.type = AssetType::Model;
         entry.iconStr = ICON_FA_CUBE;
         entry.iconColor = ImVec4(0.4f, 0.8f, 0.9f, 1.0f);
 
-        // ƒ‚ƒfƒ‹‚ÌƒTƒ€ƒlƒCƒ‹¶¬‚ğ—v‹‚·‚éB
+        // ãƒ¢ãƒ‡ãƒ«ã®ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆã‚’è¦æ±‚ã™ã‚‹ã€‚
         ThumbnailGenerator::Instance().Request(entry.path.string());
 
-        // Šù‚É¶¬Ï‚İ‚È‚çæ“¾‚·‚éB
+        // æ—¢ã«ç”Ÿæˆæ¸ˆã¿ãªã‚‰å–å¾—ã™ã‚‹ã€‚
         entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
     }
 
-    // Prefab / ƒoƒCƒiƒŠ / JSON ŒnB
+    // Prefab / ãƒã‚¤ãƒŠãƒª / JSON ç³»ã€‚
     else if (ext == ".prefab" || ext == ".bin" || ext == ".json") {
 
         entry.type = AssetType::Prefab;
         entry.iconStr = ICON_FA_BOXES_STACKED;
         entry.iconColor = ImVec4(0.6f, 0.4f, 0.9f, 1.0f);
 
-        // Œ»ó‚Í prefab ê—pƒTƒ€ƒlƒCƒ‹–¢‘Î‰B
+        // ç¾çŠ¶ã¯ prefab å°‚ç”¨ã‚µãƒ ãƒã‚¤ãƒ«æœªå¯¾å¿œã€‚
         entry.thumbnail = nullptr;
     }
 
-    // ƒeƒNƒXƒ`ƒƒŒnB
+    // ãƒ†ã‚¯ã‚¹ãƒãƒ£ç³»ã€‚
     else if (ext == ".png" || ext == ".jpg" || ext == ".tga" || ext == ".dds" || ext == ".hdr") {
 
         entry.type = AssetType::Texture;
         entry.iconStr = ICON_FA_IMAGE;
         entry.iconColor = ImVec4(0.5f, 0.9f, 0.5f, 1.0f);
 
-        // ResourceManager ‚©‚çƒeƒNƒXƒ`ƒƒ‚ğæ“¾‚·‚éB
+        // ResourceManager ã‹ã‚‰ãƒ†ã‚¯ã‚¹ãƒãƒ£ã‚’å–å¾—ã™ã‚‹ã€‚
         auto tex = ResourceManager::Instance().GetTexture(entry.path.string());
         entry.thumbnailTexture = tex;
 
-        // DX11 ‚Ìê‡‚ÍƒlƒCƒeƒBƒu SRV ‚ğæ‚èo‚µ‚ÄƒTƒ€ƒlƒCƒ‹•`‰æ‚Ég‚¤B
+        // DX11 ã®å ´åˆã¯ãƒã‚¤ãƒ†ã‚£ãƒ– SRV ã‚’å–ã‚Šå‡ºã—ã¦ã‚µãƒ ãƒã‚¤ãƒ«æç”»ã«ä½¿ã†ã€‚
         if (Graphics::Instance().GetAPI() == GraphicsAPI::DX11 && tex) {
             auto* dx11Texture = dynamic_cast<DX11Texture*>(tex.get());
             entry.thumbnail = dx11Texture ? dx11Texture->GetNativeSRV() : nullptr;
         }
     }
 
-    // ƒtƒHƒ“ƒgŒnB
+    // ãƒ•ã‚©ãƒ³ãƒˆç³»ã€‚
     else if (ext == ".ttf" || ext == ".otf" || ext == ".fnt") {
 
         entry.type = AssetType::Font;
@@ -147,7 +147,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         entry.iconColor = ImVec4(0.95f, 0.85f, 0.45f, 1.0f);
     }
 
-    // ‰¹ºŒnB
+    // éŸ³å£°ç³»ã€‚
     else if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac") {
 
         entry.type = AssetType::Audio;
@@ -155,33 +155,33 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         entry.iconColor = ImVec4(0.45f, 0.85f, 1.0f, 1.0f);
     }
 
-    // ƒ}ƒeƒŠƒAƒ‹ŒnB
+    // ãƒãƒ†ãƒªã‚¢ãƒ«ç³»ã€‚
     else if (ext == ".mat") {
 
         entry.type = AssetType::Material;
         entry.iconStr = ICON_FA_PALETTE;
         entry.iconColor = ImVec4(1.0f, 0.5f, 0.8f, 1.0f);
 
-        // ƒ}ƒeƒŠƒAƒ‹ƒTƒ€ƒlƒCƒ‹¶¬‚ğ—v‹‚·‚éB
+        // ãƒãƒ†ãƒªã‚¢ãƒ«ã‚µãƒ ãƒã‚¤ãƒ«ç”Ÿæˆã‚’è¦æ±‚ã™ã‚‹ã€‚
         ThumbnailGenerator::Instance().RequestMaterial(entry.path.string());
 
-        // Šù‚É¶¬Ï‚İ‚È‚çæ“¾‚·‚éB
+        // æ—¢ã«ç”Ÿæˆæ¸ˆã¿ãªã‚‰å–å¾—ã™ã‚‹ã€‚
         entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
     }
 
-    // ƒR[ƒh / ƒVƒF[ƒ_ŒnB
+    // ã‚³ãƒ¼ãƒ‰ / ã‚·ã‚§ãƒ¼ãƒ€ç³»ã€‚
     else if (ext == ".cpp" || ext == ".h" || ext == ".hlsl" || ext == ".hlsli") {
 
         entry.type = AssetType::Script;
         entry.iconStr = ICON_FA_FILE_CODE;
 
-        // HLSL Œn‚¾‚¯­‚µF‚ğ•Ï‚¦‚éB
+        // HLSL ç³»ã ã‘å°‘ã—è‰²ã‚’å¤‰ãˆã‚‹ã€‚
         entry.iconColor = (ext == ".hlsl" || ext == ".hlsli")
             ? ImVec4(0.3f, 0.9f, 0.6f, 1.0f)
             : ImVec4(0.8f, 0.8f, 0.8f, 1.0f);
     }
 
-    // ‚»‚êˆÈŠO‚Í unknown ˆµ‚¢B
+    // ãã‚Œä»¥å¤–ã¯ unknown æ‰±ã„ã€‚
     else {
 
         entry.type = AssetType::Unknown;
@@ -190,67 +190,67 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
     }
 }
 
-// OS ‚ÌŠù’èƒAƒvƒŠ‚Åƒtƒ@ƒCƒ‹‚ğŠJ‚­B
+// OS ã®æ—¢å®šã‚¢ãƒ—ãƒªã§ãƒ•ã‚¡ã‚¤ãƒ«ã‚’é–‹ãã€‚
 void AssetManager::OpenInExternalEditor(const std::filesystem::path& path) {
 
     ShellExecuteA(NULL, "open", path.string().c_str(), NULL, NULL, SW_SHOWNORMAL);
 }
 
-// ŠO•”ƒtƒ@ƒCƒ‹‚ğƒAƒZƒbƒgƒfƒBƒŒƒNƒgƒŠ‚ÖƒRƒs[‚µ‚Äæ‚è‚ŞB
-// “¯–¼ƒtƒ@ƒCƒ‹‚ª‚ ‚éê‡‚Í˜A”Ô‚ğ•t‚¯‚Ä‰ñ”ğ‚·‚éB
+// å¤–éƒ¨ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ã‚¢ã‚»ãƒƒãƒˆãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã¸ã‚³ãƒ”ãƒ¼ã—ã¦å–ã‚Šè¾¼ã‚€ã€‚
+// åŒåãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚‹å ´åˆã¯é€£ç•ªã‚’ä»˜ã‘ã¦å›é¿ã™ã‚‹ã€‚
 void AssetManager::ImportExternalFile(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir) {
 
     std::error_code ec;
 
-    // ƒRƒs[æ‚Ì‰ŠúŒó•â‚ğì‚éB
+    // ã‚³ãƒ”ãƒ¼å…ˆã®åˆæœŸå€™è£œã‚’ä½œã‚‹ã€‚
     std::filesystem::path finalDest = destinationDir / sourcePath.filename();
 
-    // “¯–¼ƒtƒ@ƒCƒ‹‚ª‚ ‚éê‡‚Í "(1)" "(2)" ‚ğ•t‚¯‚Ä‰ñ”ğ‚·‚éB
+    // åŒåãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚‹å ´åˆã¯ "(1)" "(2)" ã‚’ä»˜ã‘ã¦å›é¿ã™ã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(finalDest, ec)) {
         std::string newName = sourcePath.stem().string() + "(" + std::to_string(count++) + ")" + sourcePath.extension().string();
         finalDest = destinationDir / newName;
     }
 
-    // ƒtƒ@ƒCƒ‹‚ğƒRƒs[‚·‚éB
+    // ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
     if (std::filesystem::copy_file(sourcePath, finalDest, std::filesystem::copy_options::none, ec)) {
-        // ¬Œ÷‚Ì’Ç‰Áˆ—‚ÍŒ»ó‚È‚µB
+        // æˆåŠŸæ™‚ã®è¿½åŠ å‡¦ç†ã¯ç¾çŠ¶ãªã—ã€‚
     }
 }
 
-// V‚µ‚¢ƒtƒHƒ‹ƒ_‚ğì¬‚·‚éB
-// Šù‚É‘¶İ‚·‚éê‡‚Í "NewFolder (1)" ‚Ì‚æ‚¤‚É˜A”Ô‚ğ•t‚¯‚éB
+// æ–°ã—ã„ãƒ•ã‚©ãƒ«ãƒ€ã‚’ä½œæˆã™ã‚‹ã€‚
+// æ—¢ã«å­˜åœ¨ã™ã‚‹å ´åˆã¯ "NewFolder (1)" ã®ã‚ˆã†ã«é€£ç•ªã‚’ä»˜ã‘ã‚‹ã€‚
 void AssetManager::CreateNewFolder(const std::filesystem::path& parentDir) {
 
     std::error_code ec;
 
-    // ‰ŠúƒtƒHƒ‹ƒ_–¼B
+    // åˆæœŸãƒ•ã‚©ãƒ«ãƒ€åã€‚
     std::filesystem::path newPath = parentDir / "NewFolder";
 
-    // d•¡‚Í˜A”Ô‚ğ•t‚¯‚éB
+    // é‡è¤‡æ™‚ã¯é€£ç•ªã‚’ä»˜ã‘ã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(newPath, ec)) {
         newPath = parentDir / ("NewFolder (" + std::to_string(count++) + ")");
     }
 
-    // ƒtƒHƒ‹ƒ_‚ğì¬‚·‚éB
+    // ãƒ•ã‚©ãƒ«ãƒ€ã‚’ä½œæˆã™ã‚‹ã€‚
     std::filesystem::create_directory(newPath, ec);
 }
 
-// V‚µ‚¢ C++ ƒXƒNƒŠƒvƒg‚Ğ‚ÈŒ^‚ğì¬‚·‚éB
-// .h ‚Æ .cpp ‚ğƒZƒbƒg‚Å¶¬‚·‚éB
+// æ–°ã—ã„ C++ ã‚¹ã‚¯ãƒªãƒ—ãƒˆã²ãªå‹ã‚’ä½œæˆã™ã‚‹ã€‚
+// .h ã¨ .cpp ã‚’ã‚»ãƒƒãƒˆã§ç”Ÿæˆã™ã‚‹ã€‚
 void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
 
     std::error_code ec;
 
-    // ƒx[ƒX–¼‚ğŒˆ‚ß‚éB
+    // ãƒ™ãƒ¼ã‚¹åã‚’æ±ºã‚ã‚‹ã€‚
     std::string baseName = "NewScript";
 
-    // .h ‚Æ .cpp ‚ÌƒpƒX‚ğì‚éB
+    // .h ã¨ .cpp ã®ãƒ‘ã‚¹ã‚’ä½œã‚‹ã€‚
     std::filesystem::path hPath = parentDir / (baseName + ".h");
     std::filesystem::path cppPath = parentDir / (baseName + ".cpp");
 
-    // Šù‚É‘¶İ‚·‚éê‡‚Í˜A”Ô•t‚«‚Ö•ÏX‚·‚éB
+    // æ—¢ã«å­˜åœ¨ã™ã‚‹å ´åˆã¯é€£ç•ªä»˜ãã¸å¤‰æ›´ã™ã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(hPath, ec) || std::filesystem::exists(cppPath, ec)) {
         baseName = "NewScript_" + std::to_string(count++);
@@ -258,7 +258,7 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
         cppPath = parentDir / (baseName + ".cpp");
     }
 
-    // ƒwƒbƒ_ƒtƒ@ƒCƒ‹‚ğ¶¬‚·‚éB
+    // ãƒ˜ãƒƒãƒ€ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç”Ÿæˆã™ã‚‹ã€‚
     std::ofstream ofsH(hPath);
     ofsH << "#pragma once\n\n"
         << "class " << baseName << " {\n"
@@ -267,51 +267,51 @@ void AssetManager::CreateNewScript(const std::filesystem::path& parentDir) {
         << "};\n";
     ofsH.close();
 
-    // CPP ƒtƒ@ƒCƒ‹‚ğ¶¬‚·‚éB
+    // CPP ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç”Ÿæˆã™ã‚‹ã€‚
     std::ofstream ofsCpp(cppPath);
     ofsCpp << "#include \"" << baseName << ".h\"\n\n"
         << "void " << baseName << "::Update(float dt) {\n"
-        << "      // À‘•‚ğ‚±‚±‚É’Ç‰Á‚·‚é\\n"
+        << "      // å®Ÿè£…ã‚’ã“ã“ã«è¿½åŠ ã™ã‚‹\\n"
         << "}\\n";
     ofsCpp.close();
 }
 
-// V‚µ‚¢ HLSL ƒVƒF[ƒ_‚Ğ‚ÈŒ^‚ğì¬‚·‚éB
+// æ–°ã—ã„ HLSL ã‚·ã‚§ãƒ¼ãƒ€ã²ãªå‹ã‚’ä½œæˆã™ã‚‹ã€‚
 void AssetManager::CreateNewShader(const std::filesystem::path& parentDir) {
 
     std::error_code ec;
 
-    // ‰Šúƒtƒ@ƒCƒ‹–¼B
+    // åˆæœŸãƒ•ã‚¡ã‚¤ãƒ«åã€‚
     std::filesystem::path newPath = parentDir / "NewShader.hlsl";
 
-    // d•¡‚Í˜A”Ô‚ğ•t‚¯‚éB
+    // é‡è¤‡æ™‚ã¯é€£ç•ªã‚’ä»˜ã‘ã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(newPath, ec)) {
         newPath = parentDir / ("NewShader (" + std::to_string(count++) + ").hlsl");
     }
 
-    // ‚²‚­ŠÈ’P‚È VS / PS ‚Ğ‚ÈŒ^‚ğ‘‚«o‚·B
+    // ã”ãç°¡å˜ãª VS / PS ã²ãªå‹ã‚’æ›¸ãå‡ºã™ã€‚
     std::ofstream ofs(newPath);
     ofs << "float4 VSMain(float4 pos : POSITION) : SV_POSITION {\n    return pos;\n}\n\nfloat4 PSMain() : SV_TARGET {\n    return float4(1, 1, 1, 1);\n}\n";
     ofs.close();
 }
 
-// V‚µ‚¢ƒ}ƒeƒŠƒAƒ‹ƒtƒ@ƒCƒ‹‚ğì¬‚·‚éB
-// JSON Œ`®‚ÌŠÈˆÕ‚Ğ‚ÈŒ^‚ğ‘‚«o‚·B
+// æ–°ã—ã„ãƒãƒ†ãƒªã‚¢ãƒ«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ä½œæˆã™ã‚‹ã€‚
+// JSON å½¢å¼ã®ç°¡æ˜“ã²ãªå‹ã‚’æ›¸ãå‡ºã™ã€‚
 void AssetManager::CreateNewMaterial(const std::filesystem::path& parentDir) {
 
     std::error_code ec;
 
-    // ‰Šúƒtƒ@ƒCƒ‹–¼B
+    // åˆæœŸãƒ•ã‚¡ã‚¤ãƒ«åã€‚
     std::filesystem::path newPath = parentDir / "NewMaterial.mat";
 
-    // d•¡‚Í˜A”Ô‚ğ•t‚¯‚éB
+    // é‡è¤‡æ™‚ã¯é€£ç•ªã‚’ä»˜ã‘ã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(newPath, ec)) {
         newPath = parentDir / ("NewMaterial (" + std::to_string(count++) + ").mat");
     }
 
-    // ‚Ğ‚ÈŒ^‚ğ‘‚«o‚·B
+    // ã²ãªå‹ã‚’æ›¸ãå‡ºã™ã€‚
     std::ofstream ofs(newPath);
     if (ofs.is_open()) {
         ofs << "{\n"
@@ -330,26 +330,26 @@ void AssetManager::CreateNewMaterial(const std::filesystem::path& parentDir) {
     }
 }
 
-// ƒAƒZƒbƒg–¼‚ğ•ÏX‚·‚éB
-// •ÏXæ‚ªŠù‚É‘¶İ‚·‚éê‡‚Í¸”s‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆåã‚’å¤‰æ›´ã™ã‚‹ã€‚
+// å¤‰æ›´å…ˆãŒæ—¢ã«å­˜åœ¨ã™ã‚‹å ´åˆã¯å¤±æ•—ã™ã‚‹ã€‚
 bool AssetManager::RenameAsset(const std::filesystem::path& oldPath, const std::string& newName) {
 
     std::error_code ec;
 
-    // “¯‚¶eƒfƒBƒŒƒNƒgƒŠ“à‚ÅV‚µ‚¢ƒpƒX‚ğì‚éB
+    // åŒã˜è¦ªãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªå†…ã§æ–°ã—ã„ãƒ‘ã‚¹ã‚’ä½œã‚‹ã€‚
     std::filesystem::path newPath = oldPath.parent_path() / newName;
 
-    // Šù‚É‘¶İ‚·‚é‚È‚ç¸”sB
+    // æ—¢ã«å­˜åœ¨ã™ã‚‹ãªã‚‰å¤±æ•—ã€‚
     if (std::filesystem::exists(newPath)) return false;
 
-    // ƒŠƒl[ƒ€‚·‚éB
+    // ãƒªãƒãƒ¼ãƒ ã™ã‚‹ã€‚
     std::filesystem::rename(oldPath, newPath, ec);
 
     return !ec;
 }
 
-// ƒAƒZƒbƒg‚ğíœ‚·‚éB
-// ƒtƒHƒ‹ƒ_‚Ìê‡‚Í’†g‚²‚Æíœ‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆã‚’å‰Šé™¤ã™ã‚‹ã€‚
+// ãƒ•ã‚©ãƒ«ãƒ€ã®å ´åˆã¯ä¸­èº«ã”ã¨å‰Šé™¤ã™ã‚‹ã€‚
 void AssetManager::DeleteAsset(const std::filesystem::path& path) {
 
     std::error_code ec;
@@ -357,43 +357,43 @@ void AssetManager::DeleteAsset(const std::filesystem::path& path) {
     std::filesystem::remove_all(path, ec);
 }
 
-// ƒAƒZƒbƒg‚ğ•ÊƒfƒBƒŒƒNƒgƒŠ‚ÖˆÚ“®‚·‚éB
-// “¯–¼ƒtƒ@ƒCƒ‹‚ª‚ ‚ê‚Î¸”s‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆã‚’åˆ¥ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã¸ç§»å‹•ã™ã‚‹ã€‚
+// åŒåãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚Œã°å¤±æ•—ã™ã‚‹ã€‚
 bool AssetManager::MoveAsset(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir) {
 
     std::error_code ec;
 
-    // ˆÚ“®æƒpƒX‚ğì‚éB
+    // ç§»å‹•å…ˆãƒ‘ã‚¹ã‚’ä½œã‚‹ã€‚
     std::filesystem::path finalDest = destinationDir / sourcePath.filename();
 
-    // “¯–¼ƒtƒ@ƒCƒ‹‚ª‚ ‚ê‚Î¸”s‚·‚éB
+    // åŒåãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚Œã°å¤±æ•—ã™ã‚‹ã€‚
     if (std::filesystem::exists(finalDest)) {
         return false;
     }
 
-    // ƒŠƒl[ƒ€‚É‚æ‚éˆÚ“®‚ğs‚¤B
+    // ãƒªãƒãƒ¼ãƒ ã«ã‚ˆã‚‹ç§»å‹•ã‚’è¡Œã†ã€‚
     std::filesystem::rename(sourcePath, finalDest, ec);
 
     return !ec;
 }
 
-// ƒAƒZƒbƒg‚ğ•ÊƒfƒBƒŒƒNƒgƒŠ‚ÖƒRƒs[‚·‚éB
-// “¯–¼‚ª‚ ‚éê‡‚Í " - Copy (n)" ‚ğ•t‚¯‚Ä‰ñ”ğ‚·‚éB
+// ã‚¢ã‚»ãƒƒãƒˆã‚’åˆ¥ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã¸ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
+// åŒåãŒã‚ã‚‹å ´åˆã¯ " - Copy (n)" ã‚’ä»˜ã‘ã¦å›é¿ã™ã‚‹ã€‚
 bool AssetManager::CopyAsset(const std::filesystem::path& sourcePath, const std::filesystem::path& destinationDir) {
 
     std::error_code ec;
 
-    // ƒRƒs[æ‚Ì‰ŠúŒó•â‚ğì‚éB
+    // ã‚³ãƒ”ãƒ¼å…ˆã®åˆæœŸå€™è£œã‚’ä½œã‚‹ã€‚
     std::filesystem::path finalDest = destinationDir / sourcePath.filename();
 
-    // “¯–¼‚ª‚ ‚éê‡‚Í˜A”Ô•t‚«ƒRƒs[–¼‚Ö•Ï‚¦‚éB
+    // åŒåãŒã‚ã‚‹å ´åˆã¯é€£ç•ªä»˜ãã‚³ãƒ”ãƒ¼åã¸å¤‰ãˆã‚‹ã€‚
     int count = 1;
     while (std::filesystem::exists(finalDest, ec)) {
         std::string newName = sourcePath.stem().string() + " - Copy (" + std::to_string(count++) + ")" + sourcePath.extension().string();
         finalDest = destinationDir / newName;
     }
 
-    // Ä‹AƒRƒs[‚ğs‚¤B
+    // å†å¸°ã‚³ãƒ”ãƒ¼ã‚’è¡Œã†ã€‚
     std::filesystem::copy(sourcePath, finalDest, std::filesystem::copy_options::recursive, ec);
 
     return !ec;

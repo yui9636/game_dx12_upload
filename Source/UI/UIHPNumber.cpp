@@ -1,3 +1,4 @@
+﻿// UIHPNumber の UI 関連実装をまとめます。
 #include "UIHPNumber.h"
 #include "Font/FontManager.h"
 #include "RHI/ICommandList.h"

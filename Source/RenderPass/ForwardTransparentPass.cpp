@@ -1,3 +1,4 @@
+﻿// ForwardTransparentPass のレンダーパス実装をまとめます。
 #include "ForwardTransparentPass.h"
 #include "Graphics.h"
 #include "Model/ModelRenderer.h"

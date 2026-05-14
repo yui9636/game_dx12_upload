@@ -1,4 +1,4 @@
-#include "EffectService.h"
+ï»¿#include "EffectService.h"
 
 #include <algorithm>
 
@@ -16,8 +16,8 @@ using namespace DirectX;
 
 namespace
 {
-    // Œ»İ‚Æ‘Ä¶ŠÔ‚©‚ç lifetime fade ’l‚ğŒvZ‚·‚éB
-    // ’â~’†‚È‚ç 0Aƒ‹[ƒv’†‚Ü‚½‚Í duration –³Œø‚È‚çí‚É 1 ‚ğ•Ô‚·B
+    // ç¾åœ¨æ™‚åˆ»ã¨ç·å†ç”Ÿæ™‚é–“ã‹ã‚‰ lifetime fade å€¤ã‚’è¨ˆç®—ã™ã‚‹ã€‚
+    // åœæ­¢ä¸­ãªã‚‰ 0ã€ãƒ«ãƒ¼ãƒ—ä¸­ã¾ãŸã¯ duration ç„¡åŠ¹ãªã‚‰å¸¸ã« 1 ã‚’è¿”ã™ã€‚
     float ComputeLifetimeFade(float currentTime, float duration, bool loop, bool isPlaying)
     {
         if (!isPlaying) {
@@ -32,8 +32,8 @@ namespace
         return 1.0f - normalized;
     }
 
-    // worldMatrix ‚ğ position / rotation / scale ‚Ö•ª‰ğ‚·‚éB
-    // •ª‰ğ‚É¸”s‚µ‚½ê‡‚Í false ‚ğ•Ô‚·B
+    // worldMatrix ã‚’ position / rotation / scale ã¸åˆ†è§£ã™ã‚‹ã€‚
+    // åˆ†è§£ã«å¤±æ•—ã—ãŸå ´åˆã¯ false ã‚’è¿”ã™ã€‚
     bool DecomposeWorldMatrix(const XMFLOAT4X4& worldMatrix,
         XMFLOAT3& outPosition,
         XMFLOAT4& outRotation,
@@ -56,38 +56,38 @@ namespace
     }
 }
 
-// singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+// singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
 EffectService& EffectService::Instance()
 {
     static EffectService instance;
     return instance;
 }
 
-// “à•” Registry ‚ªİ’èÏ‚İ‚È‚çA‚»‚Ì Registry ã‚Åƒ[ƒ‹ƒhƒGƒtƒFƒNƒg‚ğÄ¶‚·‚éB
+// å†…éƒ¨ Registry ãŒè¨­å®šæ¸ˆã¿ãªã‚‰ã€ãã® Registry ä¸Šã§ãƒ¯ãƒ¼ãƒ«ãƒ‰ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’å†ç”Ÿã™ã‚‹ã€‚
 EffectHandle EffectService::PlayWorld(const EffectPlayDesc& desc)
 {
     return m_registry ? PlayWorldInternal(*m_registry, desc) : EffectHandle{};
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚Åƒ[ƒ‹ƒhƒGƒtƒFƒNƒg‚ğÄ¶‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ãƒ¯ãƒ¼ãƒ«ãƒ‰ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’å†ç”Ÿã™ã‚‹ã€‚
 EffectHandle EffectService::PlayWorld(Registry& registry, const EffectPlayDesc& desc)
 {
     return PlayWorldInternal(registry, desc);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡A‚»‚Ì handle ‚ª¶‘¶‚µ‚Ä‚¢‚é‚©”»’è‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€ãã® handle ãŒç”Ÿå­˜ã—ã¦ã„ã‚‹ã‹åˆ¤å®šã™ã‚‹ã€‚
 bool EffectService::IsAlive(const EffectHandle& handle) const
 {
     return m_registry ? IsAlive(*m_registry, handle) : false;
 }
 
-// w’è Registry ã‚ÅA‚»‚Ì handle ‚ª—LŒø‚©‚Â entity ‚ª¶‘¶‚µ‚Ä‚¢‚é‚©”»’è‚·‚éB
+// æŒ‡å®š Registry ä¸Šã§ã€ãã® handle ãŒæœ‰åŠ¹ã‹ã¤ entity ãŒç”Ÿå­˜ã—ã¦ã„ã‚‹ã‹åˆ¤å®šã™ã‚‹ã€‚
 bool EffectService::IsAlive(Registry& registry, const EffectHandle& handle) const
 {
     return handle.IsValid() && registry.IsAlive(handle.entity);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡A‚»‚Ì effect ‚ğ’â~‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€ãã® effect ã‚’åœæ­¢ã™ã‚‹ã€‚
 void EffectService::Stop(const EffectHandle& handle, bool destroyEntity)
 {
     if (m_registry) {
@@ -95,13 +95,13 @@ void EffectService::Stop(const EffectHandle& handle, bool destroyEntity)
     }
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅA‚»‚Ì effect ‚ğ’â~‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€ãã® effect ã‚’åœæ­¢ã™ã‚‹ã€‚
 void EffectService::Stop(Registry& registry, const EffectHandle& handle, bool destroyEntity)
 {
     StopInternal(registry, handle, destroyEntity);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡A‚»‚Ì effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€ãã® effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹ã€‚
 void EffectService::Seek(const EffectHandle& handle, float time, float duration, bool loop)
 {
     if (m_registry) {
@@ -109,13 +109,13 @@ void EffectService::Seek(const EffectHandle& handle, float time, float duration,
     }
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅA‚»‚Ì effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€ãã® effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹ã€‚
 void EffectService::Seek(Registry& registry, const EffectHandle& handle, float time, float duration, bool loop)
 {
     SeekInternal(registry, handle, time, duration, loop);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡A‚»‚Ì effect ‚Ì transform ‚ğ’¼Úİ’è‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€ãã® effect ã® transform ã‚’ç›´æ¥è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetWorldTransform(const EffectHandle& handle,
     const XMFLOAT3& position,
     const XMFLOAT4& rotation,
@@ -126,7 +126,7 @@ void EffectService::SetWorldTransform(const EffectHandle& handle,
     }
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅA‚»‚Ì effect ‚Ì transform ‚ğ’¼Úİ’è‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€ãã® effect ã® transform ã‚’ç›´æ¥è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetWorldTransform(Registry& registry,
     const EffectHandle& handle,
     const XMFLOAT3& position,
@@ -136,7 +136,7 @@ void EffectService::SetWorldTransform(Registry& registry,
     SetWorldTransformInternal(registry, handle, position, rotation, scale);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡As—ñ‚©‚ç transform ‚ğ•ª‰ğ‚µ‚Ä effect ‚Éİ’è‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€è¡Œåˆ—ã‹ã‚‰ transform ã‚’åˆ†è§£ã—ã¦ effect ã«è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetWorldMatrix(const EffectHandle& handle, const XMFLOAT4X4& worldMatrix)
 {
     if (!m_registry) {
@@ -145,14 +145,14 @@ void EffectService::SetWorldMatrix(const EffectHandle& handle, const XMFLOAT4X4&
     SetWorldMatrix(*m_registry, handle, worldMatrix);
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅAs—ñ‚©‚ç transform ‚ğ•ª‰ğ‚µ‚Ä effect ‚Éİ’è‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€è¡Œåˆ—ã‹ã‚‰ transform ã‚’åˆ†è§£ã—ã¦ effect ã«è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetWorldMatrix(Registry& registry, const EffectHandle& handle, const XMFLOAT4X4& worldMatrix)
 {
     XMFLOAT3 position;
     XMFLOAT4 rotation;
     XMFLOAT3 scale;
 
-    // s—ñ•ª‰ğ‚É¸”s‚µ‚½‚ç‰½‚à‚µ‚È‚¢B
+    // è¡Œåˆ—åˆ†è§£ã«å¤±æ•—ã—ãŸã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (!DecomposeWorldMatrix(worldMatrix, position, rotation, scale)) {
         return;
     }
@@ -160,7 +160,7 @@ void EffectService::SetWorldMatrix(Registry& registry, const EffectHandle& handl
     SetWorldTransformInternal(registry, handle, position, rotation, scale);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡Afloat ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€float ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetScalar(const EffectHandle& handle, const std::string& parameterName, float value)
 {
     if (m_registry) {
@@ -168,13 +168,13 @@ void EffectService::SetScalar(const EffectHandle& handle, const std::string& par
     }
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅAfloat ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€float ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetScalar(Registry& registry, const EffectHandle& handle, const std::string& parameterName, float value)
 {
     SetScalarInternal(registry, handle, parameterName, value);
 }
 
-// “à•” Registry ‚ª‚ ‚éê‡Acolor ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+// å†…éƒ¨ Registry ãŒã‚ã‚‹å ´åˆã€color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetColor(const EffectHandle& handle, const std::string& parameterName, const XMFLOAT4& value)
 {
     if (m_registry) {
@@ -182,16 +182,16 @@ void EffectService::SetColor(const EffectHandle& handle, const std::string& para
     }
 }
 
-// –¾¦‚³‚ê‚½ Registry ã‚ÅAcolor ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+// æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ã€color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
 void EffectService::SetColor(Registry& registry, const EffectHandle& handle, const std::string& parameterName, const XMFLOAT4& value)
 {
     SetColorInternal(registry, handle, parameterName, value);
 }
 
-// ÀÛ‚É effect entity ‚ğV‹K¶¬‚µ‚ÄAÄ¶‚É•K—v‚È component ‚ğ•t—^‚·‚éB
+// å®Ÿéš›ã« effect entity ã‚’æ–°è¦ç”Ÿæˆã—ã¦ã€å†ç”Ÿã«å¿…è¦ãª component ã‚’ä»˜ä¸ã™ã‚‹ã€‚
 EffectHandle EffectService::PlayWorldInternal(Registry& registry, const EffectPlayDesc& desc)
 {
-    // ƒAƒZƒbƒgƒpƒX‚ª–³‚¯‚ê‚Î¶¬‚Å‚«‚È‚¢B
+    // ã‚¢ã‚»ãƒƒãƒˆãƒ‘ã‚¹ãŒç„¡ã‘ã‚Œã°ç”Ÿæˆã§ããªã„ã€‚
     if (desc.assetPath.empty()) {
         return {};
     }
@@ -199,10 +199,10 @@ EffectHandle EffectService::PlayWorldInternal(Registry& registry, const EffectPl
     EffectHandle handle;
     handle.entity = registry.CreateEntity();
 
-    // Å’áŒÀ•K—v‚ÈŠî–{ component ‚ğ•t—^‚·‚éB
+    // æœ€ä½é™å¿…è¦ãªåŸºæœ¬ component ã‚’ä»˜ä¸ã™ã‚‹ã€‚
     EnsureBaseComponents(registry, handle.entity, desc.debugName);
 
-    // ‰Šú transform ‚ğİ’è‚·‚éB
+    // åˆæœŸ transform ã‚’è¨­å®šã™ã‚‹ã€‚
     auto* transform = registry.GetComponent<TransformComponent>(handle.entity);
     if (transform) {
         transform->localPosition = desc.position;
@@ -211,14 +211,14 @@ EffectHandle EffectService::PlayWorldInternal(Registry& registry, const EffectPl
         transform->isDirty = true;
     }
 
-    // effect ƒAƒZƒbƒgQÆ component ‚ğì‚éB
+    // effect ã‚¢ã‚»ãƒƒãƒˆå‚ç…§ component ã‚’ä½œã‚‹ã€‚
     EffectAssetComponent assetComponent;
     assetComponent.assetPath = desc.assetPath;
     assetComponent.autoPlay = true;
     assetComponent.loop = desc.loop;
     assetComponent.useSelectedMeshFallback = true;
 
-    // Ä¶ó‘Ô component ‚ğ‰Šú‰»‚·‚éB
+    // å†ç”ŸçŠ¶æ…‹ component ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
     EffectPlaybackComponent playbackComponent;
     playbackComponent.seed = desc.seed;
     playbackComponent.loop = desc.loop;
@@ -226,12 +226,12 @@ EffectHandle EffectService::PlayWorldInternal(Registry& registry, const EffectPl
     playbackComponent.duration = 2.0f;
     playbackComponent.lifetimeFade = 1.0f;
 
-    // ŸƒtƒŒ[ƒ€ˆÈ~‚ÅÀÛ‚É spawn ‚³‚¹‚é—v‹ componentB
+    // æ¬¡ãƒ•ãƒ¬ãƒ¼ãƒ ä»¥é™ã§å®Ÿéš›ã« spawn ã•ã›ã‚‹è¦æ±‚ componentã€‚
     EffectSpawnRequestComponent requestComponent;
     requestComponent.pending = true;
     requestComponent.restartIfActive = true;
 
-    // ‚Ü‚Æ‚ß‚Ä component ‚ğ•t—^‚·‚éB
+    // ã¾ã¨ã‚ã¦ component ã‚’ä»˜ä¸ã™ã‚‹ã€‚
     registry.AddComponent(handle.entity, assetComponent);
     registry.AddComponent(handle.entity, playbackComponent);
     registry.AddComponent(handle.entity, requestComponent);
@@ -239,8 +239,8 @@ EffectHandle EffectService::PlayWorldInternal(Registry& registry, const EffectPl
     return handle;
 }
 
-// effect ‚ğ’â~‚·‚éB
-// runtime instance ‚ª‚ ‚ê‚Î”jŠü‚µA•K—v‚È‚ç entity ©‘Ì‚àíœ‚·‚éB
+// effect ã‚’åœæ­¢ã™ã‚‹ã€‚
+// runtime instance ãŒã‚ã‚Œã°ç ´æ£„ã—ã€å¿…è¦ãªã‚‰ entity è‡ªä½“ã‚‚å‰Šé™¤ã™ã‚‹ã€‚
 void EffectService::StopInternal(Registry& registry, const EffectHandle& handle, bool destroyEntity)
 {
     if (!IsAlive(registry, handle)) {
@@ -248,7 +248,7 @@ void EffectService::StopInternal(Registry& registry, const EffectHandle& handle,
     }
 
     if (auto* playback = registry.GetComponent<EffectPlaybackComponent>(handle.entity)) {
-        // runtime instance ‚ª‘–‚Á‚Ä‚¢‚ê‚Îæ‚É”jŠü‚·‚éB
+        // runtime instance ãŒèµ°ã£ã¦ã„ã‚Œã°å…ˆã«ç ´æ£„ã™ã‚‹ã€‚
         if (playback->runtimeInstanceId != 0) {
             EffectRuntimeRegistry::Instance().Destroy(playback->runtimeInstanceId);
             playback->runtimeInstanceId = 0;
@@ -259,14 +259,14 @@ void EffectService::StopInternal(Registry& registry, const EffectHandle& handle,
         playback->lifetimeFade = 0.0f;
     }
 
-    // destroy w’è‚È‚ç entity ©‘Ì‚ğÁ‚·B
+    // destroy æŒ‡å®šãªã‚‰ entity è‡ªä½“ã‚’æ¶ˆã™ã€‚
     if (destroyEntity) {
         registry.DestroyEntity(handle.entity);
     }
 }
 
-// effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚éB
-// •K—v‚È‚ç duration ‚â loop ‚àXV‚µAruntime instance ‘¤‚Ì time ‚à“¯Šú‚·‚éB
+// effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹ã€‚
+// å¿…è¦ãªã‚‰ duration ã‚„ loop ã‚‚æ›´æ–°ã—ã€runtime instance å´ã® time ã‚‚åŒæœŸã™ã‚‹ã€‚
 void EffectService::SeekInternal(Registry& registry, const EffectHandle& handle, float time, float duration, bool loop)
 {
     if (!IsAlive(registry, handle)) {
@@ -278,12 +278,12 @@ void EffectService::SeekInternal(Registry& registry, const EffectHandle& handle,
         return;
     }
 
-    // time ‚Í 0 –¢–‚É‚È‚ç‚È‚¢‚æ‚¤‚ÉŠÛ‚ß‚éB
+    // time ã¯ 0 æœªæº€ã«ãªã‚‰ãªã„ã‚ˆã†ã«ä¸¸ã‚ã‚‹ã€‚
     const float clampedTime = time < 0.0f ? 0.0f : time;
 
     playback->currentTime = clampedTime;
 
-    // –¾¦w’è‚³‚ê‚½ duration ‚ª³‚È‚çXV‚·‚éB
+    // æ˜ç¤ºæŒ‡å®šã•ã‚ŒãŸ duration ãŒæ­£ãªã‚‰æ›´æ–°ã™ã‚‹ã€‚
     if (duration > 0.0f) {
         playback->duration = duration;
     }
@@ -292,15 +292,15 @@ void EffectService::SeekInternal(Registry& registry, const EffectHandle& handle,
     playback->isPlaying = true;
     playback->stopRequested = false;
 
-    // V‚µ‚¢Ä¶ˆÊ’u‚É‰‚¶‚Ä lifetime fade ‚ğÄŒvZ‚·‚éB
+    // æ–°ã—ã„å†ç”Ÿä½ç½®ã«å¿œã˜ã¦ lifetime fade ã‚’å†è¨ˆç®—ã™ã‚‹ã€‚
     playback->lifetimeFade = ComputeLifetimeFade(playback->currentTime, playback->duration, playback->loop, playback->isPlaying);
 
-    // SpawnRequest ‚ª‚ ‚é‚È‚çŠJnˆÊ’u‚à“¯Šú‚·‚éB
+    // SpawnRequest ãŒã‚ã‚‹ãªã‚‰é–‹å§‹ä½ç½®ã‚‚åŒæœŸã™ã‚‹ã€‚
     if (auto* request = registry.GetComponent<EffectSpawnRequestComponent>(handle.entity)) {
         request->startTime = clampedTime;
     }
 
-    // Šù‚É runtime instance ‚ª‚ ‚é‚È‚çA‚»‚Ì time ‚à“¯Šú‚·‚éB
+    // æ—¢ã« runtime instance ãŒã‚ã‚‹ãªã‚‰ã€ãã® time ã‚‚åŒæœŸã™ã‚‹ã€‚
     if (playback->runtimeInstanceId != 0) {
         if (auto* runtime = EffectRuntimeRegistry::Instance().GetRuntimeInstance(playback->runtimeInstanceId)) {
             runtime->time = playback->currentTime;
@@ -308,7 +308,7 @@ void EffectService::SeekInternal(Registry& registry, const EffectHandle& handle,
     }
 }
 
-// effect entity ‚Ì TransformComponent ‚ğ’¼ÚXV‚·‚éB
+// effect entity ã® TransformComponent ã‚’ç›´æ¥æ›´æ–°ã™ã‚‹ã€‚
 void EffectService::SetWorldTransformInternal(Registry& registry,
     const EffectHandle& handle,
     const XMFLOAT3& position,
@@ -330,8 +330,8 @@ void EffectService::SetWorldTransformInternal(Registry& registry,
     transform->isDirty = true;
 }
 
-// float ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
-// Override component ‚ª–³‚¯‚ê‚Î‚»‚Ìê‚Å’Ç‰Á‚·‚éB
+// float å€¤ã€‚ ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
+// Override component ãŒç„¡ã‘ã‚Œã°ãã®å ´ã§è¿½åŠ ã™ã‚‹ã€‚
 void EffectService::SetScalarInternal(Registry& registry, const EffectHandle& handle, const std::string& parameterName, float value)
 {
     if (!IsAlive(registry, handle) || parameterName.empty()) {
@@ -340,7 +340,7 @@ void EffectService::SetScalarInternal(Registry& registry, const EffectHandle& ha
 
     auto* overrideComponent = registry.GetComponent<EffectParameterOverrideComponent>(handle.entity);
 
-    // –³‚¯‚ê‚Î’Ç‰Á‚·‚éB
+    // ç„¡ã‘ã‚Œã°è¿½åŠ ã™ã‚‹ã€‚
     if (!overrideComponent) {
         registry.AddComponent(handle.entity, EffectParameterOverrideComponent{});
         overrideComponent = registry.GetComponent<EffectParameterOverrideComponent>(handle.entity);
@@ -355,8 +355,8 @@ void EffectService::SetScalarInternal(Registry& registry, const EffectHandle& ha
     overrideComponent->scalarValue = value;
 }
 
-// color ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
-// Override component ‚ª–³‚¯‚ê‚Î‚»‚Ìê‚Å’Ç‰Á‚·‚éB
+// color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
+// Override component ãŒç„¡ã‘ã‚Œã°ãã®å ´ã§è¿½åŠ ã™ã‚‹ã€‚
 void EffectService::SetColorInternal(Registry& registry, const EffectHandle& handle, const std::string& parameterName, const XMFLOAT4& value)
 {
     if (!IsAlive(registry, handle) || parameterName.empty()) {
@@ -365,7 +365,7 @@ void EffectService::SetColorInternal(Registry& registry, const EffectHandle& han
 
     auto* overrideComponent = registry.GetComponent<EffectParameterOverrideComponent>(handle.entity);
 
-    // –³‚¯‚ê‚Î’Ç‰Á‚·‚éB
+    // ç„¡ã‘ã‚Œã°è¿½åŠ ã™ã‚‹ã€‚
     if (!overrideComponent) {
         registry.AddComponent(handle.entity, EffectParameterOverrideComponent{});
         overrideComponent = registry.GetComponent<EffectParameterOverrideComponent>(handle.entity);
@@ -380,7 +380,7 @@ void EffectService::SetColorInternal(Registry& registry, const EffectHandle& han
     overrideComponent->colorValue = value;
 }
 
-// effect runtime entity ‚ÉÅ’áŒÀ•K—v‚ÈŠî–{ component ‚ğ•t—^‚·‚éB
+// effect runtime entity ã«æœ€ä½é™å¿…è¦ãªåŸºæœ¬ component ã‚’ä»˜ä¸ã™ã‚‹ã€‚
 void EffectService::EnsureBaseComponents(Registry& registry, EntityID entity, const char* debugName) const
 {
     registry.AddComponent(entity, NameComponent{ debugName ? debugName : "Effect Runtime" });

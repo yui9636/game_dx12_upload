@@ -1,3 +1,4 @@
+﻿// InputBindingProfileAsset の入力処理実装をまとめます。
 #include "InputBindingProfileAsset.h"
 #include "Console/Logger.h"
 #include <nlohmann/json.hpp>

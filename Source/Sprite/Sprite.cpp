@@ -1,9 +1,10 @@
-#include "Sprite.h"
+﻿#include "Sprite.h"
 
 #include "RHI/ITexture.h"
 #include "System/ResourceManager.h"
 
 Sprite::Sprite() = default;
+// Sprite::Sprite はこのモジュールの実行時処理を構成する補助処理を行う。
 
 Sprite::Sprite(const std::string& texturePath)
 {

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -8,41 +8,41 @@
 
 #include "GameLoopAsset.h"
 
-// Runtime state for the GameLoop. Persistent across scene loads.
-// Owned by EngineKernel (NOT by any Registry).
+// GameLoop の実行時状態。シーン読み込みをまたいで保持する。
+// EngineKernel が所有する（Registry では所有しない）。
 struct GameLoopRuntime
 {
-    // Current node id in the graph.
+    // グラフ内の現在ノード ID。
     uint32_t currentNodeId  = 0;
 
-    // Previous node id (kept for debug/effects).
+    // 直前ノード ID（デバッグ / 演出用に保持）。
     uint32_t previousNodeId = 0;
 
-    // Pending next node id (consumed by SceneTransitionSystem).
+    // 遷移待ちの次ノード ID（SceneTransitionSystem が消費）。
     uint32_t pendingNodeId  = 0;
 
     std::string currentScenePath;
     std::string pendingScenePath;
 
-    // True while a transition is requested (set by GameLoopSystem,
-    // cleared by SceneTransitionSystem).
+    // 遷移要求中なら true（GameLoopSystem が設定し、
+    // SceneTransitionSystem がクリアする）。
     bool sceneTransitionRequested = false;
 
-    // True while a synchronous load is in progress.
-    // Phase 1 keeps this short-lived; placeholder for future async loads.
+    // 同期ロード中なら true。
+    // Phase 1 では短時間だけ使う。将来の非同期ロード用の置き場。
     bool waitingSceneLoad = false;
 
-    // Force a reload even if pendingScenePath == currentScenePath.
+    // pendingScenePath == currentScenePath でも強制リロードする。
     bool forceReload = false;
 
-    // Time (seconds) since the current node started. Used by TimerElapsed.
+    // 現在ノード開始からの時間（秒）。TimerElapsed で使う。
     float nodeTimer = 0.0f;
 
-    // ActorMovedDistance: position of the observed actor when the node started.
+    // ActorMovedDistance: ノード開始時点の監視対象 actor 位置。
     DirectX::XMFLOAT3 observedActorStartPosition{ 0.0f, 0.0f, 0.0f };
     bool              observedActorPositionInitialized = false;
 
-    // RuntimeFlag / CustomEvent flag table.
+    // RuntimeFlag / CustomEvent のフラグテーブル。
     std::unordered_map<std::string, bool> flags;
 
     std::vector<QueuedGameFlowAction> pendingActions;
@@ -53,9 +53,9 @@ struct GameLoopRuntime
     bool loadingOverlayVisible = false;
     std::string loadingMessage;
 
-    // True while GameLoop is running (Play in progress).
+    // GameLoop 実行中（Play 中）なら true。
     bool isActive = false;
 
-    // Reset to the post-Stop initial state.
+    // Stop 後の初期状態へ戻す。
     void Reset();
 };

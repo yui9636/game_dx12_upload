@@ -1,4 +1,4 @@
-#include "PostEffect.h"
+﻿#include "PostEffect.h"
 
 #include "FrameBuffer.h"
 #include "Graphics.h"
@@ -143,7 +143,7 @@ PipelineStateDesc MakeFullscreenPsoDesc(IShader* vs, IShader* ps, TextureFormat 
     return desc;
 }
 
-} // namespace
+} // namespace 終端。
 
 PostEffect::PostEffect(IResourceFactory* factory, GraphicsAPI api, void* nativeDevice)
     : m_factory(factory)

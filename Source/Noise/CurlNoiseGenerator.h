@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <d3d11.h>
 #include <wrl.h>
 #include <vector>
 #include <string>
+// CurlNoiseGenerator は Config/width/height/depth を中心に、実行時やエディターで共有する状態を保持する。
 
 class CurlNoiseGenerator
 {

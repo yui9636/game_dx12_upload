@@ -1,4 +1,4 @@
-#include "EffectGraphSerializer.h"
+ï»¿#include "EffectGraphSerializer.h"
 
 #include <filesystem>
 #include <fstream>
@@ -6,7 +6,7 @@
 
 namespace
 {
-    // EffectGraphPin ‚ğ json ‚Ö•ÏŠ·‚·‚éB
+    // EffectGraphPin ã‚’ json ã¸å¤‰æ›ã™ã‚‹ã€‚
     nlohmann::json ToJson(const EffectGraphPin& pin)
     {
         return {
@@ -18,7 +18,7 @@ namespace
         };
     }
 
-    // json ‚©‚ç EffectGraphPin ‚ğ•œŒ³‚·‚éB
+    // json ã‹ã‚‰ EffectGraphPin ã‚’å¾©å…ƒã™ã‚‹ã€‚
     EffectGraphPin PinFromJson(const nlohmann::json& json)
     {
         EffectGraphPin pin;
@@ -30,7 +30,7 @@ namespace
         return pin;
     }
 
-    // EffectGraphNode ‚ğ json ‚Ö•ÏŠ·‚·‚éB
+    // EffectGraphNode ã‚’ json ã¸å¤‰æ›ã™ã‚‹ã€‚
     nlohmann::json ToJson(const EffectGraphNode& node)
     {
         return {
@@ -61,7 +61,7 @@ namespace
         };
     }
 
-    // json ‚©‚ç EffectGraphNode ‚ğ•œŒ³‚·‚éB
+    // json ã‹ã‚‰ EffectGraphNode ã‚’å¾©å…ƒã™ã‚‹ã€‚
     EffectGraphNode NodeFromJson(const nlohmann::json& json)
     {
         EffectGraphNode node;
@@ -92,7 +92,7 @@ namespace
         return node;
     }
 
-    // EffectGraphLink ‚ğ json ‚Ö•ÏŠ·‚·‚éB
+    // EffectGraphLink ã‚’ json ã¸å¤‰æ›ã™ã‚‹ã€‚
     nlohmann::json ToJson(const EffectGraphLink& link)
     {
         return {
@@ -102,7 +102,7 @@ namespace
         };
     }
 
-    // json ‚©‚ç EffectGraphLink ‚ğ•œŒ³‚·‚éB
+    // json ã‹ã‚‰ EffectGraphLink ã‚’å¾©å…ƒã™ã‚‹ã€‚
     EffectGraphLink LinkFromJson(const nlohmann::json& json)
     {
         EffectGraphLink link;
@@ -112,7 +112,7 @@ namespace
         return link;
     }
 
-    // EffectExposedParameter ‚ğ json ‚Ö•ÏŠ·‚·‚éB
+    // EffectExposedParameter ã‚’ json ã¸å¤‰æ›ã™ã‚‹ã€‚
     nlohmann::json ToJson(const EffectExposedParameter& parameter)
     {
         return {
@@ -122,7 +122,7 @@ namespace
         };
     }
 
-    // json ‚©‚ç EffectExposedParameter ‚ğ•œŒ³‚·‚éB
+    // json ã‹ã‚‰ EffectExposedParameter ã‚’å¾©å…ƒã™ã‚‹ã€‚
     EffectExposedParameter ParameterFromJson(const nlohmann::json& json)
     {
         EffectExposedParameter parameter;
@@ -133,17 +133,17 @@ namespace
     }
 }
 
-// EffectGraphAsset ‚ğ JSON ƒtƒ@ƒCƒ‹‚Æ‚µ‚Ä•Û‘¶‚·‚éB
+// EffectGraphAsset ã‚’ JSON ãƒ•ã‚¡ã‚¤ãƒ«ã¨ã—ã¦ä¿å­˜ã™ã‚‹ã€‚
 bool EffectGraphSerializer::Save(const std::string& path, const EffectGraphAsset& asset)
 {
     std::filesystem::path filePath(path);
 
-    // eƒfƒBƒŒƒNƒgƒŠ‚ª‚ ‚é‚È‚ç–‘O‚Éì¬‚·‚éB
+    // è¦ªãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªãŒã‚ã‚‹ãªã‚‰äº‹å‰ã«ä½œæˆã™ã‚‹ã€‚
     if (filePath.has_parent_path()) {
         std::filesystem::create_directories(filePath.parent_path());
     }
 
-    // ƒ‹[ƒg JSON ‚ğ‘g‚İ—§‚Ä‚éB
+    // ãƒ«ãƒ¼ãƒˆ JSON ã‚’çµ„ã¿ç«‹ã¦ã‚‹ã€‚
     nlohmann::json root;
     root["schemaVersion"] = asset.schemaVersion;
     root["graphId"] = asset.graphId;
@@ -152,7 +152,7 @@ bool EffectGraphSerializer::Save(const std::string& path, const EffectGraphAsset
     root["nextPinId"] = asset.nextPinId;
     root["nextLinkId"] = asset.nextLinkId;
 
-    // ƒvƒŒƒrƒ…[Šù’è’l‚ğ•Û‘¶‚·‚éB
+    // ãƒ—ãƒ¬ãƒ“ãƒ¥ãƒ¼æ—¢å®šå€¤ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["previewDefaults"] = {
         {"duration", asset.previewDefaults.duration},
         {"seed", asset.previewDefaults.seed},
@@ -160,45 +160,45 @@ bool EffectGraphSerializer::Save(const std::string& path, const EffectGraphAsset
         {"previewMaterialPath", asset.previewDefaults.previewMaterialPath}
     };
 
-    // QÆƒAƒZƒbƒgˆê——‚ğ•Û‘¶‚·‚éB
+    // å‚ç…§ã‚¢ã‚»ãƒƒãƒˆä¸€è¦§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["referencedAssets"] = asset.referencedAssets;
 
-    // ƒm[ƒhˆê——‚ğ•Û‘¶‚·‚éB
+    // ãƒãƒ¼ãƒ‰ä¸€è¦§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["nodes"] = nlohmann::json::array();
     for (const auto& node : asset.nodes) {
         root["nodes"].push_back(ToJson(node));
     }
 
-    // ƒsƒ“ˆê——‚ğ•Û‘¶‚·‚éB
+    // ãƒ”ãƒ³ä¸€è¦§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["pins"] = nlohmann::json::array();
     for (const auto& pin : asset.pins) {
         root["pins"].push_back(ToJson(pin));
     }
 
-    // ƒŠƒ“ƒNˆê——‚ğ•Û‘¶‚·‚éB
+    // ãƒªãƒ³ã‚¯ä¸€è¦§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["links"] = nlohmann::json::array();
     for (const auto& link : asset.links) {
         root["links"].push_back(ToJson(link));
     }
 
-    // ŒöŠJƒpƒ‰ƒ[ƒ^ˆê——‚ğ•Û‘¶‚·‚éB
+    // å…¬é–‹ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ä¸€è¦§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     root["exposedParameters"] = nlohmann::json::array();
     for (const auto& parameter : asset.exposedParameters) {
         root["exposedParameters"].push_back(ToJson(parameter));
     }
 
-    // ƒtƒ@ƒCƒ‹‚ğ‘‚«‚İƒ‚[ƒh‚ÅŠJ‚­B
+    // ãƒ•ã‚¡ã‚¤ãƒ«ã‚’æ›¸ãè¾¼ã¿ãƒ¢ãƒ¼ãƒ‰ã§é–‹ãã€‚
     std::ofstream output(path, std::ios::binary);
     if (!output.is_open()) {
         return false;
     }
 
-    // ®Œ`•t‚« JSON ‚Æ‚µ‚Ä•Û‘¶‚·‚éB
+    // æ•´å½¢ä»˜ã JSON ã¨ã—ã¦ä¿å­˜ã™ã‚‹ã€‚
     output << root.dump(2);
     return true;
 }
 
-// JSON ƒtƒ@ƒCƒ‹‚©‚ç EffectGraphAsset ‚ğ“Ç‚İ‚ŞB
+// JSON ãƒ•ã‚¡ã‚¤ãƒ«ã‹ã‚‰ EffectGraphAsset ã‚’èª­ã¿è¾¼ã‚€ã€‚
 bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outAsset)
 {
     std::ifstream input(path, std::ios::binary);
@@ -214,7 +214,7 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
         return false;
     }
 
-    // “Ç‚İ‚İ‘O‚É‰Šú‰»‚·‚éB
+    // èª­ã¿è¾¼ã¿å‰ã«åˆæœŸåŒ–ã™ã‚‹ã€‚
     outAsset = {};
     outAsset.schemaVersion = root.value("schemaVersion", 1u);
     outAsset.graphId = root.value("graphId", "effect_graph");
@@ -223,7 +223,7 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
     outAsset.nextPinId = root.value("nextPinId", 1u);
     outAsset.nextLinkId = root.value("nextLinkId", 1u);
 
-    // ƒvƒŒƒrƒ…[Šù’è’l‚ğ“Ç‚İ‚ŞB
+    // ãƒ—ãƒ¬ãƒ“ãƒ¥ãƒ¼æ—¢å®šå€¤ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("previewDefaults")) {
         const auto& preview = root["previewDefaults"];
         outAsset.previewDefaults.duration = preview.value("duration", 2.0f);
@@ -232,33 +232,33 @@ bool EffectGraphSerializer::Load(const std::string& path, EffectGraphAsset& outA
         outAsset.previewDefaults.previewMaterialPath = preview.value("previewMaterialPath", "");
     }
 
-    // QÆƒAƒZƒbƒgˆê——‚ğ“Ç‚İ‚ŞB
+    // å‚ç…§ã‚¢ã‚»ãƒƒãƒˆä¸€è¦§ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("referencedAssets") && root["referencedAssets"].is_array()) {
         outAsset.referencedAssets = root["referencedAssets"].get<std::vector<std::string>>();
     }
 
-    // ƒm[ƒhˆê——‚ğ“Ç‚İ‚ŞB
+    // ãƒãƒ¼ãƒ‰ä¸€è¦§ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("nodes") && root["nodes"].is_array()) {
         for (const auto& nodeJson : root["nodes"]) {
             outAsset.nodes.push_back(NodeFromJson(nodeJson));
         }
     }
 
-    // ƒsƒ“ˆê——‚ğ“Ç‚İ‚ŞB
+    // ãƒ”ãƒ³ä¸€è¦§ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("pins") && root["pins"].is_array()) {
         for (const auto& pinJson : root["pins"]) {
             outAsset.pins.push_back(PinFromJson(pinJson));
         }
     }
 
-    // ƒŠƒ“ƒNˆê——‚ğ“Ç‚İ‚ŞB
+    // ãƒªãƒ³ã‚¯ä¸€è¦§ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("links") && root["links"].is_array()) {
         for (const auto& linkJson : root["links"]) {
             outAsset.links.push_back(LinkFromJson(linkJson));
         }
     }
 
-    // ŒöŠJƒpƒ‰ƒ[ƒ^ˆê——‚ğ“Ç‚İ‚ŞB
+    // å…¬é–‹ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ä¸€è¦§ã‚’èª­ã¿è¾¼ã‚€ã€‚
     if (root.contains("exposedParameters") && root["exposedParameters"].is_array()) {
         for (const auto& parameterJson : root["exposedParameters"]) {
             outAsset.exposedParameters.push_back(ParameterFromJson(parameterJson));

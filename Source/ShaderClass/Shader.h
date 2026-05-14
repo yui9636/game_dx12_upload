@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include"RenderContext/RenderContext.h"
 #include "Model/ModelResource.h"
 
+// Shader は mesh 描画で使う Begin / Update / End の共通 interface を定義する。
 class Shader
 {
 public:
@@ -10,8 +11,6 @@ public:
 	virtual ~Shader() {};
 
 	virtual void Begin(const RenderContext& rc) = 0;
-
-	//virtual void Draw(const RenderContext& rc, const ModelResource* modelResource) = 0;
 
 	virtual void Update(const RenderContext& rc, const ModelResource::MeshResource& mesh) = 0;
 

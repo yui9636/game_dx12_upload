@@ -1,10 +1,8 @@
-//=============================================================================
-// HologramVS.hlsl
-//=============================================================================
+// main ã¯ãƒ›ãƒ­ã‚°ãƒ©ãƒ æç”»ç”¨ã«é ‚ç‚¹ã‚’å¤‰æ›ã™ã‚‹ã€‚
 #include "Hologram.hlsl"
-#include "Skinning.hlsli" // Šù‘¶‚ÌƒXƒLƒjƒ“ƒOŠÖ”‚ğ—˜—p
+#include "Skinning.hlsli" // æ—¢å­˜ã®ã‚¹ã‚­ãƒ‹ãƒ³ã‚°é–¢æ•°ã‚’åˆ©ç”¨
 
-// ŠÈˆÕ—”¶¬ (ƒOƒŠƒbƒ`—p)
+// ç°¡æ˜“ä¹±æ•°ç”Ÿæˆ (ã‚°ãƒªãƒƒãƒç”¨)
 float hash(float2 p)
 {
     return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
@@ -21,19 +19,19 @@ VS_OUT main(
 {
     VS_OUT vout;
 
-    // 1. ƒXƒLƒjƒ“ƒO“K—p (Œ»İ‚Ìƒ|[ƒY‚É•ÏŒ`)
-    // SkinningPosition / SkinningVector ‚Í Skinning.hlsli “à‚ÌŠÖ”
+    // 1. ã‚¹ã‚­ãƒ‹ãƒ³ã‚°é©ç”¨ (ç¾åœ¨ã®ãƒãƒ¼ã‚ºã«å¤‰å½¢)
+    // SkinningPosition / SkinningVector ã¯ Skinning.hlsli å†…ã®é–¢æ•°
     float4 skinnedPos = SkinningPosition(position, boneWeights, boneIndices);
     float3 skinnedNormal = SkinningVector(normal, boneWeights, boneIndices);
 
-    // 2. ƒOƒŠƒbƒ`ƒmƒCƒY (’¸“_ƒVƒF[ƒ_[‚ÅŒ`ó‚ğ—‚·)
-    // ‹­“x‚ª 0 ‚æ‚è‘å‚«‚¢‚¾‚¯ŒvZ
+    // 2. ã‚°ãƒªãƒƒãƒãƒã‚¤ã‚º (é ‚ç‚¹ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã§å½¢çŠ¶ã‚’ä¹±ã™)
+    // å¼·åº¦ãŒ 0 ã‚ˆã‚Šå¤§ãã„æ™‚ã ã‘è¨ˆç®—
     if (glitchIntensity > 0.001)
     {
-        // ŠÔ‚Æ‚‚³(Y)‚ğí‚É‚µ‚Äƒ‰ƒ“ƒ_ƒ€’l‚ğ¶¬
+        // æ™‚é–“ã¨é«˜ã•(Y)ã‚’ç¨®ã«ã—ã¦ãƒ©ãƒ³ãƒ€ãƒ å€¤ã‚’ç”Ÿæˆ
         float noise = hash(float2(time * 20.0, skinnedPos.y));
         
-        // è‡’l‚ğ’´‚¦‚½•”•ª‚¾‚¯‰¡‚É”ò‚Î‚· (ƒuƒƒbƒNƒmƒCƒY•—)
+        // é–¾å€¤ã‚’è¶…ãˆãŸéƒ¨åˆ†ã ã‘æ¨ªã«é£›ã°ã™ (ãƒ–ãƒ­ãƒƒã‚¯ãƒã‚¤ã‚ºé¢¨)
         if (noise > 0.96)
         {
             float shift = (noise - 0.5) * glitchIntensity * 2.0;
@@ -42,9 +40,9 @@ VS_OUT main(
         }
     }
 
-    // 3. À•W•ÏŠ·
-    vout.position = mul(skinnedPos, viewProjection); // ƒNƒŠƒbƒvÀ•W‚Ö
-    vout.worldPos = skinnedPos.xyz; // ƒ[ƒ‹ƒhÀ•W‚ÍƒsƒNƒZƒ‹ƒVƒF[ƒ_[‚Ö
+    // 3. åº§æ¨™å¤‰æ›
+    vout.position = mul(skinnedPos, viewProjection); // ã‚¯ãƒªãƒƒãƒ—åº§æ¨™ã¸
+    vout.worldPos = skinnedPos.xyz; // ãƒ¯ãƒ¼ãƒ«ãƒ‰åº§æ¨™ã¯ãƒ”ã‚¯ã‚»ãƒ«ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã¸
     vout.normal = normalize(skinnedNormal);
     vout.texcoord = texcoord;
 

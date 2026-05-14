@@ -1,5 +1,6 @@
-#include "TimelineDriver.h"
+﻿#include "TimelineDriver.h"
 #include "Animator/AnimatorService.h"
+// TimelineDriver::SetTime はこのモジュールの実行時処理を構成する補助処理を行う。
 
 void TimelineDriver::SetTime(float t)
 {

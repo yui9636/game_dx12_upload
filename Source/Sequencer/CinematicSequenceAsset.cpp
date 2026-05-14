@@ -1,7 +1,8 @@
-#include "CinematicSequenceAsset.h"
+﻿#include "CinematicSequenceAsset.h"
 
 namespace
 {
+// DefaultTrackColor はこのモジュールの実行時処理を構成する補助処理を行う。
     static uint32_t DefaultTrackColor(CinematicTrackType type)
     {
         switch (type) {

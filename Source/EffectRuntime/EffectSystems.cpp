@@ -332,8 +332,8 @@ void EffectAttachmentSystem::Update(Registry& registry, float dt)
                     NodeAttachmentSpace::NodeLocal);
             }
 
-            // Velocity sample for VFX modulation. Spec: skip first frame to avoid
-            // huge initial spike when prevWorldPos == {0,0,0}.
+            // VFX modulation 用の velocity sample。初回 frame は
+            // prevWorldPos == {0,0,0} による大きな初期 spike を避けるため skip する。
             const DirectX::XMFLOAT3 worldPos = {
                 desiredWorld._41, desiredWorld._42, desiredWorld._43
             };
@@ -536,11 +536,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
             // lifetime fade を alpha へ掛ける。
             DirectX::XMFLOAT4 tint = effectiveMesh.tint;
             tint.w *= playback.lifetimeFade;
-
-            // -------------------------------------------------
-            // Mesh effect 抽出
-            // -------------------------------------------------
-            if (effectiveMesh.enabled) {
+// Mesh effect 抽出
+if (effectiveMesh.enabled) {
                 std::shared_ptr<ModelResource> modelResource;
 
                 // まず effect 専用 meshAssetPath から model を取得する。
@@ -642,11 +639,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     queue.effectMeshPackets.push_back(std::move(packet));
                 }
             }
-
-            // -------------------------------------------------
-            // Particle effect 抽出
-            // -------------------------------------------------
-            if (effectiveParticle.enabled) {
+// Particle effect 抽出
+if (effectiveParticle.enabled) {
                 std::shared_ptr<ModelResource> particleModelResource;
 
                 // Mesh draw mode の場合のみ mesh model が必要。
@@ -763,8 +757,8 @@ void EffectExtractSystem::Extract(Registry& registry, RenderContext& rc, RenderQ
                     packet.texture = ResourceManager::Instance().GetTexture(effectiveParticle.texturePath);
                 }
 
-                // CharacterTrailEffects: velocity-driven additive modulation.
-                // EffectAttachmentSystem populates worldSpeed; here we fold it into the packet.
+                // CharacterTrailEffects は velocity 駆動の加算 modulation を行う。
+                // EffectAttachmentSystem が worldSpeed を書き、ここで packet へ反映する。
                 if (auto* attachment = registry.GetComponent<EffectAttachmentComponent>(archetype->GetEntities()[row])) {
                     if (attachment->velocityModulateEnabled) {
                         const float ref = (attachment->velocitySpeedRef > 0.001f) ? attachment->velocitySpeedRef : 0.001f;

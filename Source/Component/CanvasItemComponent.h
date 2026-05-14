@@ -1,3 +1,4 @@
+﻿// CanvasItemComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 
 struct CanvasItemComponent

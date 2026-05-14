@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 #include <memory>
@@ -22,10 +22,7 @@ private:
     std::unique_ptr<IShader> m_ps;
 
     std::unique_ptr<IPipelineState> m_pso;
-
-    // ====================================================
-    // ====================================================
-    ResourceHandle m_hGBuffer1; // Normal
-    ResourceHandle m_hGBuffer2; // WorldPos
+    ResourceHandle m_hGBuffer1; // 法線。
+    ResourceHandle m_hGBuffer2; // WorldPos 用。
     ResourceHandle m_hGTAO;
 };

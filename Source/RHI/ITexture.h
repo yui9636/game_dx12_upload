@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 
+// RHI 共通で扱うテクスチャフォーマット。
 enum class TextureFormat {
     Unknown,
     RGBA8_UNORM,
@@ -17,6 +18,7 @@ enum class TextureFormat {
 };
 
 
+// コマンドリストが追跡するテクスチャの現在状態。
 enum class ResourceState {
     Common,
     RenderTarget,
@@ -30,6 +32,7 @@ enum class ResourceState {
 };
 
 
+// テクスチャ作成時に許可するバインド用途。
 enum class TextureBindFlags : uint32_t {
     None = 0,
     ShaderResource = 1 << 0,
@@ -43,9 +46,7 @@ inline TextureBindFlags operator|(TextureBindFlags a, TextureBindFlags b) {
 inline bool operator&(TextureBindFlags a, TextureBindFlags b) {
     return (static_cast<uint32_t>(a) & static_cast<uint32_t>(b)) != 0;
 }
-
-// =========================================================
-// =========================================================
+// API 差を隠してテクスチャ寸法、形式、リソース状態を参照する。
 class ITexture {
 public:
     virtual ~ITexture() = default;

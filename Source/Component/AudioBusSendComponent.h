@@ -1,3 +1,4 @@
+﻿// AudioBusSendComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 
 #include "Component/AudioEmitterComponent.h"

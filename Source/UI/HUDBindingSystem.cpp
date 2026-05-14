@@ -1,3 +1,4 @@
+﻿// HUDBindingSystem の UI 関連実装をまとめます。
 #include "HUDBindingSystem.h"
 
 #include "Component/TransformComponent.h"

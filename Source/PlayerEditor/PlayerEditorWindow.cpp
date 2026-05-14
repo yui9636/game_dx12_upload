@@ -1,4 +1,4 @@
-#include "PlayerEditorWindow.h"
+﻿#include "PlayerEditorWindow.h"
 
 #include <algorithm>
 #include <Windows.h>
@@ -19,6 +19,7 @@ namespace {
     constexpr float kDetachedEditorFontSize = 18.0f;
     constexpr uint32_t kSecondaryImGuiFontSlot = 1;
     constexpr wchar_t kPlayerEditorWindowClassName[] = L"MyEnginePlayerEditorWindow";
+// SetupDetachedEditorFonts はこのモジュールの実行時処理を構成する補助処理を行う。
 
     void SetupDetachedEditorFonts(ImGuiIO& io)
     {

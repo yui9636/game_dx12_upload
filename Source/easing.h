@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 #include <cmath>
 
 #ifndef PI
 #define PI 3.1415926545f
 #endif
+// Clamp はこのモジュールの実行時処理を構成する補助処理を行う。
 
 template<class T>
 constexpr const T& Clamp(const T& value,

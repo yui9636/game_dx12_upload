@@ -1,3 +1,4 @@
+﻿// Camera2DComponent は 2D カメラ用の ECS 状態を保持する。
 #pragma once
 
 #include <cstdint>

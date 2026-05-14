@@ -140,11 +140,11 @@ struct EffectMeshPacket {
     uint64_t sortKey = 0;
     float lifetimeFade = 1.0f;
 
-    // Phase A: Mesh Variant System
+    // Phase A は Mesh Variant System。
     EffectMeshVariantParams meshVariantParams;
-    // Base (albedo) texture authored on the MeshRenderer node. When non-null
-    // EffectMeshPass binds this to slot 0 instead of the FBX material's own
-    // albedoMap, so templates can override the source model's texture.
+    // MeshRenderer ノードで指定された base/albedo テクスチャ。非 null の場合、
+    // EffectMeshPass は FBX material 側の albedoMap ではなくこれを slot 0 へバインドする。
+    // テンプレートから元モデルのテクスチャを差し替えられるようにする。
     std::shared_ptr<ITexture> baseTexture;
     std::shared_ptr<ITexture> maskTexture;
     std::shared_ptr<ITexture> normalMapTexture;
@@ -200,23 +200,23 @@ struct EffectParticlePacket {
     float windStrength = 0.0f;
     DirectX::XMFLOAT3 windDirection = { 1.0f, 0.0f, 0.0f };
     float windTurbulence = 0.0f;
-    // Phase 1C: Size curve
+    // Phase 1C: サイズカーブ。
     DirectX::XMFLOAT4 sizeCurveValues = { 0.18f, 0.18f, 0.04f, 0.04f };
     DirectX::XMFLOAT4 sizeCurveTimes  = { 0.0f,  0.33f, 0.66f, 1.0f };
     uint32_t sizeCurveKeyCount = 2;
-    // Phase 1C: Color gradient
+    // Phase 1C: カラーグラデーション。
     DirectX::XMFLOAT4 gradientColor0 = { 1.0f, 1.0f, 1.0f, 1.0f };
     DirectX::XMFLOAT4 gradientColor1 = { 1.0f, 1.0f, 1.0f, 1.0f };
     DirectX::XMFLOAT4 gradientColor2 = { 1.0f, 1.0f, 1.0f, 0.0f };
     DirectX::XMFLOAT4 gradientColor3 = { 1.0f, 1.0f, 1.0f, 0.0f };
     DirectX::XMFLOAT2 gradientMidTimes = { 0.33f, 0.66f };
     uint32_t gradientKeyCount = 2;
-    // Phase 2: Attractor/Repeller
+    // Phase 2 は Attractor / Repeller。
     DirectX::XMFLOAT4 attractors[4] = {};
     DirectX::XMFLOAT4 attractorRadii = { 5.0f, 5.0f, 5.0f, 5.0f };
     DirectX::XMFLOAT4 attractorFalloff = { 1.0f, 1.0f, 1.0f, 1.0f };
     uint32_t attractorCount = 0;
-    // Phase 2: GPU Collision
+    // Phase 2 は GPU Collision。
     bool collisionEnabled = false;
     DirectX::XMFLOAT4 collisionPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 collisionSpheres[4] = {};

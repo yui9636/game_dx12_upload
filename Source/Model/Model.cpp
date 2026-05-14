@@ -368,7 +368,7 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 	IResourceFactory* factory = Graphics::Instance().GetResourceFactory();
 
-	ID3D11Device* device = Graphics::Instance().GetDevice(); // DX12 ?? nullptr
+	ID3D11Device* device = Graphics::Instance().GetDevice(); // DX12 では nullptr
 
 	std::filesystem::path sourceFilepath(filename);
 
@@ -401,7 +401,7 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 
 		importer.LoadAnimations(animations, nodes);
 
-		// Manual serializer build now owns .cereal output.
+		// 手動シリアライザ側が .cereal 出力を担当する。
 	}
 	else if (!loadedFromCache)
 	{
@@ -425,128 +425,6 @@ Model::Model(const char* filename, float scaling, bool sourceOnly)
 		}
 
 	}
-
-	//for (Material& material : materials)
-
-	//{
-
-	//	if (material.diffuseTextureFileName.empty())
-
-	//	{
-
-	//		HRESULT hr = GpuResourceUtils::CreateDummyTexture(device, 0xFFFFFFFF,
-
-	//										material.diffuseMap.GetAddressOf());
-
-	//		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-
-	//	}
-
-	//	else
-
-	//	{
-
-	//	std::filesystem::path diffuseTexturePath(dirpath / material.diffuseTextureFileName);
-
-	//	HRESULT hr = GpuResourceUtils::LoadTexture(device, diffuseTexturePath.string().c_str(),
-
-	//												material.diffuseMap.GetAddressOf());
-
-	//		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-
-	//	}
-
-	//	if (material.normalTextureFileName.empty())
-
-	//	{
-
-	//		HRESULT hr = GpuResourceUtils::CreateDummyTexture(device, 0xFFFF7F7F,
-
-	//			material.normalMap.GetAddressOf());
-
-	//		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-
-	//	}
-
-	//	else
-
-	//	{
-
-	//		std::filesystem::path texturePath(dirpath / material.normalTextureFileName);
-
-	//		HRESULT hr = GpuResourceUtils::LoadTexture(device, texturePath.string().c_str(),
-
-	//			material.normalMap.GetAddressOf());
-
-	//		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-
-	//	}
-
-	//}
-
-//	for (Material& m : materials)
-
-//	{
-
-//		if (m.albedoTextureFileName.empty())
-
-//
-
-//		auto SafeLoad = [&](const std::string& file,
-
-//			Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& srv,
-
-//			uint32_t dummyRGBA = 0xFFFFFFFF)
-
-//			{
-
-//				std::filesystem::path pLocal(file);
-
-//				std::filesystem::path pModel = dirpath / pLocal;
-
-//				std::filesystem::path use;
-
-//
-
-//				if (!file.empty() && std::filesystem::exists(pLocal))      use = pLocal;
-
-//				else if (!file.empty() && std::filesystem::exists(pModel)) use = pModel;
-
-//
-
-//				HRESULT hr;
-
-//				if (!use.empty())
-
-//				{
-
-//					hr = GpuResourceUtils::LoadTexture(device, use.string().c_str(), srv.GetAddressOf());
-
-//				}
-
-//				else
-
-//				{
-
-//					hr = GpuResourceUtils::CreateDummyTexture(device, dummyRGBA, srv.GetAddressOf());
-
-//#ifdef _DEBUG
-
-//					OutputDebugStringA(("? Missing tex, dummy used: " + pModel.string() + "\n").c_str());
-
-//#endif
-
-//				}
-
-//				_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-
-//			};
-
-//
-
-//		SafeLoad(m.albedoTextureFileName, m.albedoMap);
-
-//	}
 
 	for (Material& material : materials)
 
@@ -1447,7 +1325,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 
 	const NodeAnim& nodeAnim = animation.nodeAnims.at(nodeIndex);
 
-	// position
+	// position key を処理する。
 	if (!nodeAnim.positionKeyframes.empty()) {
 		const auto& kfs = nodeAnim.positionKeyframes;
 		if (kfs.size() == 1 || time <= kfs.front().seconds) {
@@ -1474,7 +1352,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 		}
 	}
 
-	// rotation
+	// rotation key を処理する。
 	if (!nodeAnim.rotationKeyframes.empty()) {
 		const auto& kfs = nodeAnim.rotationKeyframes;
 		if (kfs.size() == 1 || time <= kfs.front().seconds) {
@@ -1507,7 +1385,7 @@ void Model::ComputeAnimation(int animationIndex, int nodeIndex, float time, Node
 		}
 	}
 
-	// scale
+	// scale key を処理する。
 	if (!nodeAnim.scaleKeyframes.empty()) {
 		const auto& kfs = nodeAnim.scaleKeyframes;
 		if (kfs.size() == 1 || time <= kfs.front().seconds) {
@@ -1644,7 +1522,7 @@ int Model::GetSubsetCount() const
 
 }
 
-// Model.cpp
+// Model の読み込みと animation key 変換を実装する。
 
 Model::MeshData Model::GetMeshData(int subsetIndex)
 

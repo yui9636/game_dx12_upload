@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
 #include <cstdint>
@@ -80,10 +80,10 @@ struct EffectMeshVariantParams
     uint32_t shaderFlags = MeshFlag_Texture | MeshFlag_AlphaFade;
     EffectMeshEffectConstants constants;
 
-    // Base (albedo) texture authored on the MeshRenderer node (AssetPickerKind::Texture).
-    // When non-empty this overrides the FBX material's albedoMap for slot 0 in
-    // EffectMeshPass, so effect templates can specify their own base texture
-    // (e.g. Aura01_T.png) without editing the source model material.
+    // MeshRenderer ノードで指定された base/albedo テクスチャ。AssetPickerKind::Texture で選ぶ。
+    // 空でなければ EffectMeshPass の slot 0 で FBX material の albedoMap を上書きする。
+    // effect template が独自の base texture を指定できるようにする。
+    // 元モデル material を編集せず、Aura01_T.png などを差し替えられる。
     std::string baseTexturePath;
     std::string maskTexturePath;
     std::string normalMapPath;

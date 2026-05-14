@@ -1,3 +1,4 @@
+﻿// EffectSpawnRequestComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 
 struct EffectSpawnRequestComponent

@@ -1,4 +1,4 @@
-#include "GBufferPBRShader.h"
+﻿#include "GBufferPBRShader.h"
 
 #include "Graphics.h"
 #include "Console/Logger.h"
@@ -177,8 +177,8 @@ void GBufferPBRShader::Update(const RenderContext& rc, const ModelResource::Mesh
         resolveTexture(m_materialOverride ? m_materialOverride->metallicRoughnessTexturePath : std::string(), mesh.material.roughnessMap)
     };
 
-    // Use the standard frame-heap PSSetTextures path for all APIs.
-    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
+    // 全 API で標準の frame-heap PSSetTextures 経路を使う。
+    // SetDescriptorHeaps の多用で root descriptor table が無効化される問題を避ける。
     rc.commandList->PSSetTextures(0, _countof(srvs), srvs);
 }
 

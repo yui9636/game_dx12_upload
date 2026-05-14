@@ -1,12 +1,12 @@
-#pragma once
+﻿#pragma once
 #include "UIElement.h"
 #include <DirectXMath.h>
 
-// Base for HUD elements anchored to a world-space position. Derived
-// classes do their own drawing (text via FontManager, sprites via
-// SpriteRenderer) after WorldToScreen projects the position. The base
-// itself no longer carries a Sprite3D; that legacy DX11 path has been
-// removed (HUD_HPBar_Spec_2026-05-05 v3 section 3.7).
+// ワールド座標へ固定される HUD 要素の基底クラス。派生クラスは
+// WorldToScreen で投影した後、テキストは FontManager、スプライトは
+// SpriteRenderer を使って各自で描画する。基底クラス自体は
+// Sprite3D を持たず、古い DX11 経路は
+// HUD_HPBar_Spec_2026-05-05 v3 の 3.7 節に合わせて削除済み。
 class UIWorld : public UIElement
 {
 public:

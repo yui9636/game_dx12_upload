@@ -1,3 +1,4 @@
+﻿// ShadowPass のレンダーパス実装をまとめます。
 #include "ShadowPass.h"
 #include "Graphics.h"
 #include "ShadowMap.h"

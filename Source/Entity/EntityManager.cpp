@@ -1,64 +1,64 @@
-#include "EntityManager.h"
+ï»¿#include "EntityManager.h"
 
-// V‚µ‚¢ Entity ‚ğ¶¬‚·‚éB
-// free list ‚É‹ó‚« index ‚ª‚ ‚ê‚ÎÄ—˜—p‚µA–³‚¯‚ê‚ÎV‹K index ‚ğ”­s‚·‚éB
+// æ–°ã—ã„ Entity ã‚’ç”Ÿæˆã™ã‚‹ã€‚
+// free list ã«ç©ºã index ãŒã‚ã‚Œã°å†åˆ©ç”¨ã—ã€ç„¡ã‘ã‚Œã°æ–°è¦ index ã‚’ç™ºè¡Œã™ã‚‹ã€‚
 EntityID EntityManager::CreateEntity() {
     uint32_t index;
     uint32_t generation;
 
-    // g‚¢‰ñ‚¹‚é index ‚ª–³‚¯‚ê‚Î––”ö‚ÉV‹K’Ç‰Á‚·‚éB
+    // ä½¿ã„å›ã›ã‚‹ index ãŒç„¡ã‘ã‚Œã°æœ«å°¾ã«æ–°è¦è¿½åŠ ã™ã‚‹ã€‚
     if (m_freeIndices.empty()) {
         index = static_cast<uint32_t>(m_generations.size());
         generation = 0;
         m_generations.push_back(generation);
     }
     else {
-        // ”jŠüÏ‚İ entity ‚Ì index ‚ğÄ—˜—p‚·‚éB
+        // ç ´æ£„æ¸ˆã¿ entity ã® index ã‚’å†åˆ©ç”¨ã™ã‚‹ã€‚
         index = m_freeIndices.back();
         m_freeIndices.pop_back();
         generation = m_generations[index];
     }
 
-    // ¶‘¶ entity ”‚ğ‘‚â‚µ‚Ä EntityID ‚ğ•Ô‚·B
+    // ç”Ÿå­˜ entity æ•°ã‚’å¢—ã‚„ã—ã¦ EntityID ã‚’è¿”ã™ã€‚
     m_activeCount++;
     return Entity::Create(index, generation);
 }
 
-// Entity ‚ğ”jŠü‚·‚éB
-// generation ‚ğ 1 ‘‚â‚µ‚ÄŒÃ‚¢ handle ‚ğ–³Œø‰»‚µAindex ‚ğ free list ‚Ö–ß‚·B
+// Entity ã‚’ç ´æ£„ã™ã‚‹ã€‚
+// generation ã‚’ 1 å¢—ã‚„ã—ã¦å¤ã„ handle ã‚’ç„¡åŠ¹åŒ–ã—ã€index ã‚’ free list ã¸æˆ»ã™ã€‚
 void EntityManager::DestroyEntity(EntityID entity) {
     const uint32_t index = Entity::GetIndex(entity);
 
-    // ”ÍˆÍŠOA‚Ü‚½‚ÍŠù‚É€‚ñ‚Å‚¢‚é entity ‚È‚ç‰½‚à‚µ‚È‚¢B
+    // ç¯„å›²å¤–ã€ã¾ãŸã¯æ—¢ã«æ­»ã‚“ã§ã„ã‚‹ entity ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
     if (index >= m_generations.size() || !IsAlive(entity)) {
         return;
     }
 
-    // generation ‚ği‚ß‚ÄAŒÃ‚¢ EntityID ‚ğ–³Œø‰»‚·‚éB
+    // generation ã‚’é€²ã‚ã¦ã€å¤ã„ EntityID ã‚’ç„¡åŠ¹åŒ–ã™ã‚‹ã€‚
     m_generations[index]++;
 
-    // index ‚ğÄ—˜—p‰Â”\ƒŠƒXƒg‚Ö–ß‚·B
+    // index ã‚’å†åˆ©ç”¨å¯èƒ½ãƒªã‚¹ãƒˆã¸æˆ»ã™ã€‚
     m_freeIndices.push_back(index);
 
-    // ¶‘¶ entity ”‚ğŒ¸‚ç‚·B
+    // ç”Ÿå­˜ entity æ•°ã‚’æ¸›ã‚‰ã™ã€‚
     m_activeCount--;
 }
 
-// w’è EntityID ‚ªŒ»İ‚à—LŒø‚©‚ğ”»’è‚·‚éB
-// index ‚ª—LŒø”ÍˆÍ“à‚ÅAgeneration ‚ªˆê’v‚µ‚Ä‚¢‚ê‚Î¶‘¶’†‚Æ‚İ‚È‚·B
+// æŒ‡å®š EntityID ãŒç¾åœ¨ã‚‚æœ‰åŠ¹ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
+// index ãŒæœ‰åŠ¹ç¯„å›²å†…ã§ã€generation ãŒä¸€è‡´ã—ã¦ã„ã‚Œã°ç”Ÿå­˜ä¸­ã¨ã¿ãªã™ã€‚
 bool EntityManager::IsAlive(EntityID entity) const {
     const uint32_t index = Entity::GetIndex(entity);
 
-    // index ‚ª”ÍˆÍŠO‚È‚ç–³ŒøB
+    // index ãŒç¯„å›²å¤–ãªã‚‰ç„¡åŠ¹ã€‚
     if (index >= m_generations.size()) {
         return false;
     }
 
-    // generation ˆê’v‚Å¶‘¶”»’è‚·‚éB
+    // generation ä¸€è‡´ã§ç”Ÿå­˜åˆ¤å®šã™ã‚‹ã€‚
     return m_generations[index] == Entity::GetGeneration(entity);
 }
 
-// Œ»İ¶‘¶‚µ‚Ä‚¢‚é entity ”‚ğ•Ô‚·B
+// ç¾åœ¨ç”Ÿå­˜ã—ã¦ã„ã‚‹ entity æ•°ã‚’è¿”ã™ã€‚
 size_t EntityManager::GetActiveCount() const {
     return m_activeCount;
 }

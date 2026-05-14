@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿// DX11Buffer の RHI 関連インターフェースまたは実装宣言をまとめます。
+#pragma once
 
 #include "../IBuffer.h"
 #include <d3d11.h>

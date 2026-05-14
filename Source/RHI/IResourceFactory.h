@@ -13,10 +13,7 @@ class IPipelineState;
 enum class ShaderType;
 enum class BufferType;
 struct PipelineStateDesc;
-
-// ====================================================
 // InputLayout 記述子 (API非依存)
-// ====================================================
 constexpr uint32_t kAppendAlignedElement = 0xFFFFFFFF;
 
 struct InputLayoutElement {
@@ -33,10 +30,7 @@ struct InputLayoutDesc {
     const InputLayoutElement* elements;
     uint32_t count;
 };
-
-// ====================================================
 // RHI リソース生成ファクトリー (インターフェース)
-// ====================================================
 class IResourceFactory {
 public:
     virtual ~IResourceFactory() = default;

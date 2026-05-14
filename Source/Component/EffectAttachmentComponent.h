@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <DirectXMath.h>
@@ -12,18 +12,18 @@ struct EffectAttachmentComponent
     DirectX::XMFLOAT3 offsetRotDeg = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 offsetScale = { 1.0f, 1.0f, 1.0f };
 
-    // ---- Velocity Modulation (CharacterTrailEffects_Spec_2026-04-25) ----
-    // Drives spawnRate / size / alpha based on the parent socket's world velocity.
-    // Additive form: packet.spawnRate += velocitySpawnRateAdd * modulator,
-    // so a base of 0 still allows velocity-driven emission (Afterimage).
+    // CharacterTrailEffects 仕様に基づく速度連動 modulation。
+    // 親 socket の world velocity に応じて spawnRate、size、alpha を変化させる。
+    // 加算形式で packet.spawnRate に velocitySpawnRateAdd * modulator を足す。
+    // base が 0 でも速度駆動の afterimage 発生を可能にする。
     bool   velocityModulateEnabled = false;
-    float  velocitySpeedRef        = 5.8f;   // engine unit/sec; align with LocomotionStateComponent::runMaxSpeed.
-    float  velocitySpawnRateAdd    = 0.0f;   // +N spawn/sec at |v| == ref
-    float  velocityWidthAdd        = 0.0f;   // +Δstart size at |v| == ref
-    float  velocityAlphaAdd        = 0.0f;   // +Δalpha [0..1] at |v| == ref
-    float  velocityModulatorMax    = 3.0f;   // clamp on |v|/ref to suppress teleport/init spikes.
+    float  velocitySpeedRef        = 5.8f;   // engine unit/sec。LocomotionStateComponent::runMaxSpeed と合わせる。
+    float  velocitySpawnRateAdd    = 0.0f;   // |v| が基準速度のときに秒間 +N spawn する。
+    float  velocityWidthAdd        = 0.0f;   // |v| が基準速度のときに開始サイズへ Δ を足す。
+    float  velocityAlphaAdd        = 0.0f;   // |v| が基準速度のときに alpha へ [0..1] の Δ を足す。
+    float  velocityModulatorMax    = 3.0f;   // teleport や初期化直後の spike を抑えるため |v|/ref を clamp する。
 
-    // Runtime cache (written by EffectAttachmentSystem).
+    // EffectAttachmentSystem が書き込む実行時 cache。
     bool              velocityInitialized = false;
     DirectX::XMFLOAT3 prevWorldPos        = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 worldVelocity       = { 0.0f, 0.0f, 0.0f };

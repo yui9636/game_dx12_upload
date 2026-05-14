@@ -1,7 +1,8 @@
-#include "UIManager.h"
+﻿#include "UIManager.h"
 #include "RenderContext/RenderContext.h"
 #include "RHI/ICommandList.h"
 
+// 指定 UI 要素を管理リストから取り除く。
 void UIManager::RemoveElement(std::shared_ptr<UIElement> element)
 {
     auto it = std::remove(elements.begin(), elements.end(), element);
@@ -17,6 +18,7 @@ void UIManager::Clear()
     elements.clear();
 }
 
+// 登録済み UI 要素をすべて更新する。
 void UIManager::Update(float dt)
 {
     for (auto& e : elements)
@@ -25,19 +27,14 @@ void UIManager::Update(float dt)
     }
 }
 
+// アクティブな UI 要素だけを現在の RenderContext で描画する。
 void UIManager::Render(const RenderContext& rc)
 {
     if (elements.empty()) return;
 
     const RenderState* rs = rc.renderState;
 
-    // --------------------------------------------------------
-    // --------------------------------------------------------
-
     float blendFactor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    //dc->OMSetBlendState(rs->GetBlendState(BlendState::Transparency), blendFactor, 0xFFFFFFFF);
-    //dc->OMSetDepthStencilState(rs->GetDepthStencilState(DepthState::NoTestNoWrite), 0);
-    //dc->RSSetState(rs->GetRasterizerState(RasterizerState::SolidCullNone));
 
    
 

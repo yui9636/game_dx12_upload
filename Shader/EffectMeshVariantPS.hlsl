@@ -1,8 +1,5 @@
 #include "compute_particle.hlsli"
-
-// ----------------------------------------------------------------
 // テクスチャスロット (t2〜t8 は既存 t0/t1 の後ろに配置)
-// ----------------------------------------------------------------
 Texture2D gBaseTexture  : register(t2);   // ベース / メイン
 Texture2D gMaskTexture  : register(t3);   // マスク / Dissolveノイズ
 Texture2D gNormalMap    : register(t4);   // 法線マップ
@@ -10,10 +7,7 @@ Texture2D gFlowMap      : register(t5);   // フローマップ
 Texture2D gSubTexture   : register(t6);   // サブテクスチャ
 Texture2D gEmissionTex  : register(t7);   // エミッションマップ
 SamplerState gSampler   : register(s1);
-
-// ----------------------------------------------------------------
 // エフェクト定数 (b3 — b0=CbScene, b2=RenderConstants を避ける)
-// ----------------------------------------------------------------
 cbuffer CbMeshEffect : register(b3)
 {
     float  gDissolveAmount;     // 0..1
@@ -42,8 +36,6 @@ cbuffer CbMeshEffect : register(b3)
     float  gEffectTime;         // EffectSystems から注入
     float2 _pad3;
 };
-
-// ----------------------------------------------------------------
 struct PS_IN
 {
     float4 position     : SV_POSITION;
@@ -53,42 +45,38 @@ struct PS_IN
     float3 worldTangent : TEXCOORD2;
     float3 worldPos     : TEXCOORD3;
 };
-
-// ----------------------------------------------------------------
 float4 main(PS_IN pin) : SV_TARGET0
 {
     float2 uv = pin.texcoord;
 
-    // --- UV Scroll ---
+    // UV スクロール処理。
 #ifdef USE_SCROLL
     uv += gScrollSpeed * gEffectTime;
 #endif
 
-    // --- Flow Map ---
+    // Flow Map による UV 変形。
 #ifdef USE_FLOW_MAP
     float2 flow = gFlowMap.Sample(gSampler, uv).rg * 2.0f - 1.0f;
     uv += flow * gFlowStrength * gEffectTime;
 #endif
-
-    // --- Distort (サブテクスチャUV歪み) ---
+Distort (サブテクスチャUV歪み) ---
 #ifdef USE_DISTORT
     float2 distort = gSubTexture.Sample(gSampler, uv + gEffectTime * 0.05f).rg * 2.0f - 1.0f;
     uv += distort * gDistortStrength;
 #endif
 
-    // --- Base Color ---
+    // ベースカラーの合成。
     float4 color = pin.color;
 #ifdef USE_TEXTURE
     color *= gBaseTexture.Sample(gSampler, uv);
 #endif
-
-    // --- Sub Texture (乗算合成) ---
+Sub Texture (乗算合成) ---
 #ifdef USE_SUB_TEXTURE
     float4 subCol = gSubTexture.Sample(gSampler, uv);
     color.rgb = lerp(color.rgb, color.rgb * subCol.rgb, subCol.a);
 #endif
 
-    // --- Normal Map & Lighting ---
+    // normal map とライト計算。
 #ifdef USE_NORMAL_MAP
     float3 N = normalize(pin.worldNormal);
     float3 T = normalize(pin.worldTangent);
@@ -107,7 +95,7 @@ float4 main(PS_IN pin) : SV_TARGET0
     color.rgb *= diffuse;
 #endif
 
-    // --- Fresnel ---
+    // Fresnel 効果の加算。
 #ifdef USE_FRESNEL
     float3 viewDir = normalize(cameraPosition.xyz - pin.worldPos);
     float3 Nf = normalize(pin.worldNormal);
@@ -116,26 +104,26 @@ float4 main(PS_IN pin) : SV_TARGET0
     color.a   = saturate(color.a + gFresnelColor.a * fresnel);
 #endif
 
-    // --- Rim Light ---
+    // リムライトの加算。
 #ifdef USE_RIM_LIGHT
     float3 viewDirR = normalize(cameraPosition.xyz - pin.worldPos);
     float rim = pow(1.0f - saturate(dot(normalize(pin.worldNormal), viewDirR)), gRimPower);
     color.rgb += gRimColor.rgb * rim * gRimColor.a;
 #endif
 
-    // --- Gradient Map ---
+    // Gradient Map による色変換。
 #ifdef USE_GRADIENT_MAP
     float lum = dot(color.rgb, float3(0.299f, 0.587f, 0.114f));
     color.rgb = gFlowMap.Sample(gSampler, float2(lum, 0.5f)).rgb; // gFlowMap をグラデマップ兼用
 #endif
 
-    // --- Mask ---
+    // マスクによる表示制御。
 #ifdef USE_MASK
     float mask = gMaskTexture.Sample(gSampler, uv).r;
     color.a *= mask;
 #endif
 
-    // --- Dissolve ---
+    // Dissolve による消滅表現。
 #ifdef USE_DISSOLVE
     float noise = gMaskTexture.Sample(gSampler, uv).r;
     float hardEdge = step(gDissolveAmount, noise);
@@ -147,7 +135,7 @@ float4 main(PS_IN pin) : SV_TARGET0
     color.a *= hardEdge;
 #endif
 
-    // --- Chromatic Aberration ---
+    // 色収差の適用。
 #ifdef USE_CHROMATIC_ABERRATION
     float2 offset = float2(0.005f, 0.0f) * gDistortStrength;
     float rr = gBaseTexture.Sample(gSampler, uv + offset).r;
@@ -156,18 +144,18 @@ float4 main(PS_IN pin) : SV_TARGET0
     color.b = lerp(color.b, bb, 0.6f);
 #endif
 
-    // --- Emission ---
+    // emission 成分の加算。
 #ifdef USE_EMISSION
     float4 emCol = gEmissionTex.Sample(gSampler, uv);
     color.rgb += emCol.rgb * gEmissionColor.rgb * gEmissionIntensity;
 #endif
 
-    // --- Flipbook ---
+    // flipbook アニメーションの参照。
 #ifdef USE_FLIPBOOK
     // subUV はビルボードと同様にパーティクルから渡す想定 (将来拡張)
 #endif
 
-    // --- Toon ---
+    // toon 表現への量子化。
 #ifdef USE_TOON
     float3 Nt = normalize(pin.worldNormal);
     float3 Lt = normalize(-lightDirection.xyz);
@@ -176,13 +164,12 @@ float4 main(PS_IN pin) : SV_TARGET0
     color.rgb *= toonVal;
 #endif
 
-    // --- Side Fade ---
+    // 側面角度によるフェード。
 #ifdef USE_SIDE_FADE
     float sf = 1.0f - abs(pin.texcoord.x * 2.0f - 1.0f);
     color.a *= sf * sf;
 #endif
-
-    // --- Alpha Fade (ライフタイム) ---
+Alpha Fade (ライフタイム) ---
 #ifdef USE_ALPHA_FADE
     color.a *= gAlphaFade;
 #endif

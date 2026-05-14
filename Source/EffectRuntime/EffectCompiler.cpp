@@ -249,18 +249,12 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
         }
 
         addCompiledNode(*node);
-
-        // -------------------------------------------------
-        // Lifetime ノード
-        // -------------------------------------------------
-        if (node->type == EffectGraphNodeType::Lifetime) {
+// Lifetime ノード
+if (node->type == EffectGraphNodeType::Lifetime) {
             compiled->duration = node->scalar > 0.0f ? node->scalar : asset.previewDefaults.duration;
         }
-
-        // -------------------------------------------------
-        // MeshRenderer ノード
-        // -------------------------------------------------
-        else if (node->type == EffectGraphNodeType::MeshRenderer) {
+// MeshRenderer ノード
+else if (node->type == EffectGraphNodeType::MeshRenderer) {
             compiled->meshRenderer.enabled = true;
 
             // MeshRenderer ノードの stringValue は Texture パスとして authoring される。
@@ -275,23 +269,23 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             {
                 auto& vp = compiled->meshRenderer.variantParams;
 
-                // B1: shader flags
+                // B1 には shader flags を格納する。
                 vp.shaderFlags = static_cast<uint32_t>(node->intValue2);
 
                 // Base texture は stringValue。
                 vp.baseTexturePath = node->stringValue;
 
-                // vectorValue2: {dissolveAmount, dissolveEdge, fresnelPower, flowStrength}
+                // vectorValue2 は dissolveAmount、dissolveEdge、fresnelPower、flowStrength を保持する。
                 vp.constants.dissolveAmount = node->vectorValue2.x;
                 vp.constants.dissolveEdge = node->vectorValue2.y > 0.0f ? node->vectorValue2.y : 0.05f;
                 vp.constants.fresnelPower = node->vectorValue2.z > 0.0f ? node->vectorValue2.z : 3.0f;
                 vp.constants.flowStrength = node->vectorValue2.w;
 
-                // vectorValue3: {flowSpeed.x, flowSpeed.y, scrollSpeed.x, scrollSpeed.y}
+                // vectorValue3 は flowSpeed と scrollSpeed を保持する。
                 vp.constants.flowSpeed = { node->vectorValue3.x, node->vectorValue3.y };
                 vp.constants.scrollSpeed = { node->vectorValue3.z, node->vectorValue3.w };
 
-                // vectorValue4: {rimPower, emissionIntensity, distortStrength, alphaFade}
+                // vectorValue4 は rimPower、emissionIntensity、distortStrength、alphaFade を保持する。
                 vp.constants.rimPower = node->vectorValue4.x > 0.0f ? node->vectorValue4.x : 2.0f;
                 vp.constants.emissionIntensity = node->vectorValue4.y;
                 vp.constants.distortStrength = node->vectorValue4.z;
@@ -330,11 +324,8 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
                 hasColorInputForMesh = true;
             }
         }
-
-        // -------------------------------------------------
-        // ParticleEmitter ノード
-        // -------------------------------------------------
-        else if (node->type == EffectGraphNodeType::ParticleEmitter) {
+// ParticleEmitter ノード
+else if (node->type == EffectGraphNodeType::ParticleEmitter) {
             compiled->particleRenderer.enabled = true;
 
             compiled->particleRenderer.spawnRate = node->scalar > 0.0f ? node->scalar : 32.0f;
@@ -413,11 +404,8 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
                     "Particle emitter max particles is lower than the recommended capacity for its spawn/lifetime settings.");
             }
         }
-
-        // -------------------------------------------------
-        // SpriteRenderer ノード
-        // -------------------------------------------------
-        else if (node->type == EffectGraphNodeType::SpriteRenderer) {
+// SpriteRenderer ノード
+else if (node->type == EffectGraphNodeType::SpriteRenderer) {
             compiled->particleRenderer.enabled = true;
 
             const float alphaScale = node->vectorValue2.z > 0.0f ? node->vectorValue2.z : 1.0f;
@@ -491,7 +479,7 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             compiled->particleRenderer.tint.w *= alphaScale;
             compiled->particleRenderer.tintEnd.w *= alphaScale;
 
-            // Phase 1C: Size curve 4キー対応
+            // Phase 1C: サイズカーブ。 4キー対応
             {
                 const int sizeKeys = static_cast<int>(node->vectorValue6.w);
                 if (sizeKeys >= 3 && sizeKeys <= 4) {
@@ -519,9 +507,9 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
             // MeshParticle Phase 2: Mesh draw mode の場合、SpriteRenderer ノードの mesh 用
             //   汎用スロットから descriptor を組み立てる。
             //     stringValue2  : meshAssetPath (空なら previewDefaults にフォールバック)
-            //     vectorValue5  : meshInitialScale.xyz + meshScaleRandom.w
-            //     vectorValue6  : meshAngularAxis.xyz + meshAngularSpeed.w
-            //     vectorValue7  : meshAngularOrientRandom.xyz + meshAngularSpeedRandom.w
+            //     vectorValue5 は meshInitialScale.xyz と meshScaleRandom.w を保持する。
+            //     vectorValue6 は meshAngularAxis.xyz と meshAngularSpeed.w を保持する。
+            //     vectorValue7 は meshAngularOrientRandom.xyz と meshAngularSpeedRandom.w を保持する。
             if (compiled->particleRenderer.drawMode == EffectParticleDrawMode::Mesh) {
                 compiled->particleRenderer.meshAssetPath = !node->stringValue2.empty()
                     ? node->stringValue2
@@ -539,7 +527,7 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
                 if (axisLen2 > 1e-6f) {
                     compiled->particleRenderer.meshAngularAxis = { axisV.x, axisV.y, axisV.z };
                 }
-                // else keep default (0, 1, 0)
+                // それ以外では既定値 (0, 1, 0) を維持する。
                 compiled->particleRenderer.meshAngularSpeed = axisV.w;
 
                 const DirectX::XMFLOAT4 randV = node->vectorValue7;

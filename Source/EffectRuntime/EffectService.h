@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <cstdint>
 #include <string>
@@ -8,142 +8,142 @@
 
 class Registry;
 
-// Ä¶’†ƒGƒtƒFƒNƒg‚ğw‚·Œy—Êƒnƒ“ƒhƒ‹B
-// À‘Ì‚Í effect runtime entity ‚Ì EntityID ‚ğ•Û‚·‚éB
+// å†ç”Ÿä¸­ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’æŒ‡ã™è»½é‡ãƒãƒ³ãƒ‰ãƒ«ã€‚
+// å®Ÿä½“ã¯ effect runtime entity ã® EntityID ã‚’ä¿æŒã™ã‚‹ã€‚
 struct EffectHandle
 {
-    // effect runtime entityB
+    // effect runtime entity ã‚’å‚ç…§ã™ã‚‹ã€‚
     EntityID entity = Entity::NULL_ID;
 
-    // —LŒø‚È handle ‚©‚Ç‚¤‚©‚ğ•Ô‚·B
+    // æœ‰åŠ¹ãª handle ã‹ã©ã†ã‹ã‚’è¿”ã™ã€‚
     bool IsValid() const { return !Entity::IsNull(entity); }
 
-    // handle ‚ğ–³Œøó‘Ô‚Ö–ß‚·B
+    // handle ã‚’ç„¡åŠ¹çŠ¶æ…‹ã¸æˆ»ã™ã€‚
     void Reset() { entity = Entity::NULL_ID; }
 };
 
-// ƒGƒtƒFƒNƒgÄ¶—v‹‚É“n‚·‹LqqB
-// ƒ[ƒ‹ƒhÀ•WA‰ñ“]AƒXƒP[ƒ‹AseedAloop ‚È‚Ç‚ğ‚Ü‚Æ‚ß‚éB
+// ã‚¨ãƒ•ã‚§ã‚¯ãƒˆå†ç”Ÿè¦æ±‚æ™‚ã«æ¸¡ã™è¨˜è¿°å­ã€‚
+// ãƒ¯ãƒ¼ãƒ«ãƒ‰åº§æ¨™ã€å›è»¢ã€ã‚¹ã‚±ãƒ¼ãƒ«ã€seedã€loop ãªã©ã‚’ã¾ã¨ã‚ã‚‹ã€‚
 struct EffectPlayDesc
 {
-    // Ä¶‚·‚é effect asset ƒpƒXB
+    // å†ç”Ÿã™ã‚‹ effect asset ãƒ‘ã‚¹ã€‚
     std::string assetPath;
 
-    // ‰ŠúˆÊ’uB
+    // åˆæœŸä½ç½®ã€‚
     DirectX::XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
 
-    // ‰Šú‰ñ“]B
+    // åˆæœŸå›è»¢ã€‚
     DirectX::XMFLOAT4 rotation = { 0.0f, 0.0f, 0.0f, 1.0f };
 
-    // ‰ŠúƒXƒP[ƒ‹B
+    // åˆæœŸã‚¹ã‚±ãƒ¼ãƒ«ã€‚
     DirectX::XMFLOAT3 scale = { 1.0f, 1.0f, 1.0f };
 
-    // —” seedB
+    // ä¹±æ•° seedã€‚
     uint32_t seed = 1;
 
-    // ƒ‹[ƒvÄ¶‚·‚é‚©‚Ç‚¤‚©B
+    // ãƒ«ãƒ¼ãƒ—å†ç”Ÿã™ã‚‹ã‹ã©ã†ã‹ã€‚
     bool loop = false;
 
-    // ƒfƒoƒbƒO•\¦—p‚Ì entity –¼B
+    // ãƒ‡ãƒãƒƒã‚°è¡¨ç¤ºç”¨ã® entity åã€‚
     const char* debugName = "Effect Runtime";
 };
 
-// effect runtime entity ‚Ì¶¬E’â~EÄ¶ˆÊ’u•ÏXEƒpƒ‰ƒ[ƒ^ override ‚È‚Ç‚ğs‚¤ƒT[ƒrƒXB
-// “à•” Registry ‚ğg‚¤Œ`‚ÆA–¾¦ Registry ‚ğ“n‚·Œ`‚Ì—¼•û‚ğ’ñ‹Ÿ‚·‚éB
+// effect runtime entity ã®ç”Ÿæˆãƒ»åœæ­¢ãƒ»å†ç”Ÿä½ç½®å¤‰æ›´ãƒ»ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ãªã©ã‚’è¡Œã†ã‚µãƒ¼ãƒ“ã‚¹ã€‚
+// å†…éƒ¨ Registry ã‚’ä½¿ã†å½¢ã¨ã€æ˜ç¤º Registry ã‚’æ¸¡ã™å½¢ã®ä¸¡æ–¹ã‚’æä¾›ã™ã‚‹ã€‚
 class EffectService
 {
 public:
-    // singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+    // singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
     static EffectService& Instance();
 
-    // “à•”‚Åg‚¤ Registry ‚ğİ’è‚·‚éB
+    // å†…éƒ¨ã§ä½¿ã† Registry ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetRegistry(Registry* registry) { m_registry = registry; }
 
-    // Œ»İİ’è‚³‚ê‚Ä‚¢‚é Registry ‚ğ•Ô‚·B
+    // ç¾åœ¨è¨­å®šã•ã‚Œã¦ã„ã‚‹ Registry ã‚’è¿”ã™ã€‚
     Registry* GetRegistry() const { return m_registry; }
 
-    // “à•” Registry ã‚Åƒ[ƒ‹ƒhƒGƒtƒFƒNƒg‚ğÄ¶‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ãƒ¯ãƒ¼ãƒ«ãƒ‰ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’å†ç”Ÿã™ã‚‹ã€‚
     EffectHandle PlayWorld(const EffectPlayDesc& desc);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Åƒ[ƒ‹ƒhƒGƒtƒFƒNƒg‚ğÄ¶‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ãƒ¯ãƒ¼ãƒ«ãƒ‰ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’å†ç”Ÿã™ã‚‹ã€‚
     EffectHandle PlayWorld(Registry& registry, const EffectPlayDesc& desc);
 
-    // “à•” Registry ã‚Å handle ‚Ì¶‘¶‚ğ”»’è‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ handle ã®ç”Ÿå­˜ã‚’åˆ¤å®šã™ã‚‹ã€‚
     bool IsAlive(const EffectHandle& handle) const;
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å handle ‚Ì¶‘¶‚ğ”»’è‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ handle ã®ç”Ÿå­˜ã‚’åˆ¤å®šã™ã‚‹ã€‚
     bool IsAlive(Registry& registry, const EffectHandle& handle) const;
 
-    // “à•” Registry ã‚Å effect ‚ğ’â~‚·‚éB
-    // destroyEntity ‚ª true ‚È‚ç entity ©‘Ì‚àíœ‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ effect ã‚’åœæ­¢ã™ã‚‹ã€‚
+    // destroyEntity ãŒ true ãªã‚‰ entity è‡ªä½“ã‚‚å‰Šé™¤ã™ã‚‹ã€‚
     void Stop(const EffectHandle& handle, bool destroyEntity = true);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å effect ‚ğ’â~‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ effect ã‚’åœæ­¢ã™ã‚‹ã€‚
     void Stop(Registry& registry, const EffectHandle& handle, bool destroyEntity = true);
 
-    // “à•” Registry ã‚Å effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹ã€‚
     void Seek(const EffectHandle& handle, float time, float duration, bool loop);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹ã€‚
     void Seek(Registry& registry, const EffectHandle& handle, float time, float duration, bool loop);
 
-    // “à•” Registry ã‚Å effect ‚Ì transform ‚ğ’¼Úİ’è‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ effect ã® transform ã‚’ç›´æ¥è¨­å®šã™ã‚‹ã€‚
     void SetWorldTransform(const EffectHandle& handle,
         const DirectX::XMFLOAT3& position,
         const DirectX::XMFLOAT4& rotation,
         const DirectX::XMFLOAT3& scale);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å effect ‚Ì transform ‚ğ’¼Úİ’è‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ effect ã® transform ã‚’ç›´æ¥è¨­å®šã™ã‚‹ã€‚
     void SetWorldTransform(Registry& registry,
         const EffectHandle& handle,
         const DirectX::XMFLOAT3& position,
         const DirectX::XMFLOAT4& rotation,
         const DirectX::XMFLOAT3& scale);
 
-    // “à•” Registry ã‚Å worldMatrix ‚ğ•ª‰ğ‚µ‚Ä transform ‚ğİ’è‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ worldMatrix ã‚’åˆ†è§£ã—ã¦ transform ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetWorldMatrix(const EffectHandle& handle, const DirectX::XMFLOAT4X4& worldMatrix);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å worldMatrix ‚ğ•ª‰ğ‚µ‚Ä transform ‚ğİ’è‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ worldMatrix ã‚’åˆ†è§£ã—ã¦ transform ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetWorldMatrix(Registry& registry, const EffectHandle& handle, const DirectX::XMFLOAT4X4& worldMatrix);
 
-    // “à•” Registry ã‚Å float ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ float ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetScalar(const EffectHandle& handle, const std::string& parameterName, float value);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å float ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ float ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetScalar(Registry& registry, const EffectHandle& handle, const std::string& parameterName, float value);
 
-    // “à•” Registry ã‚Å color ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+    // å†…éƒ¨ Registry ä¸Šã§ color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetColor(const EffectHandle& handle, const std::string& parameterName, const DirectX::XMFLOAT4& value);
 
-    // –¾¦‚³‚ê‚½ Registry ã‚Å color ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚éB
+    // æ˜ç¤ºã•ã‚ŒãŸ Registry ä¸Šã§ color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetColor(Registry& registry, const EffectHandle& handle, const std::string& parameterName, const DirectX::XMFLOAT4& value);
 
 private:
-    // ÀÛ‚É effect runtime entity ‚ğ¶¬‚·‚é“à•”ˆ—B
+    // å®Ÿéš›ã« effect runtime entity ã‚’ç”Ÿæˆã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     EffectHandle PlayWorldInternal(Registry& registry, const EffectPlayDesc& desc);
 
-    // effect ‚ğ’â~‚·‚é“à•”ˆ—B
+    // effect ã‚’åœæ­¢ã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     void StopInternal(Registry& registry, const EffectHandle& handle, bool destroyEntity);
 
-    // effect ‚ÌÄ¶ˆÊ’u‚ğ•ÏX‚·‚é“à•”ˆ—B
+    // effect ã®å†ç”Ÿä½ç½®ã‚’å¤‰æ›´ã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     void SeekInternal(Registry& registry, const EffectHandle& handle, float time, float duration, bool loop);
 
-    // effect ‚Ì transform ‚ğXV‚·‚é“à•”ˆ—B
+    // effect ã® transform ã‚’æ›´æ–°ã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     void SetWorldTransformInternal(Registry& registry,
         const EffectHandle& handle,
         const DirectX::XMFLOAT3& position,
         const DirectX::XMFLOAT4& rotation,
         const DirectX::XMFLOAT3& scale);
 
-    // float ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚é“à•”ˆ—B
+    // float å€¤ã€‚ ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     void SetScalarInternal(Registry& registry, const EffectHandle& handle, const std::string& parameterName, float value);
 
-    // color ƒpƒ‰ƒ[ƒ^ override ‚ğİ’è‚·‚é“à•”ˆ—B
+    // color ãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ override ã‚’è¨­å®šã™ã‚‹å†…éƒ¨å‡¦ç†ã€‚
     void SetColorInternal(Registry& registry, const EffectHandle& handle, const std::string& parameterName, const DirectX::XMFLOAT4& value);
 
-    // effect runtime entity ‚ÉÅ’áŒÀ•K—v‚È component ‚ğ•t—^‚·‚éB
+    // effect runtime entity ã«æœ€ä½é™å¿…è¦ãª component ã‚’ä»˜ä¸ã™ã‚‹ã€‚
     void EnsureBaseComponents(Registry& registry, EntityID entity, const char* debugName) const;
 
-    // “à•”•Û‚µ‚Ä‚¢‚é RegistryB
+    // å†…éƒ¨ä¿æŒã—ã¦ã„ã‚‹ Registryã€‚
     Registry* m_registry = nullptr;
 };

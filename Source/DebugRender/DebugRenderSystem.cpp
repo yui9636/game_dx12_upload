@@ -1,4 +1,4 @@
-#include "DebugRenderSystem.h"
+ï»¿#include "DebugRenderSystem.h"
 #include "Graphics.h"
 #include "Gizmos.h"
 #include "Collision/CollisionManager.h"
@@ -13,8 +13,8 @@ using namespace DirectX;
 
 namespace
 {
-    // Transform ‚Ì worldScale ‚©‚çÅ‘å²ƒXƒP[ƒ‹‚ğ‹‚ß‚éB
-    // Sphere ‚â Capsule ”¼Œa‚Ì•`‰æ•â³‚Ég‚¤B
+    // Transform ã® worldScale ã‹ã‚‰æœ€å¤§è»¸ã‚¹ã‚±ãƒ¼ãƒ«ã‚’æ±‚ã‚ã‚‹ã€‚
+    // Sphere ã‚„ Capsule åŠå¾„ã®æç”»è£œæ­£ã«ä½¿ã†ã€‚
     float ResolveMaxWorldScale(const TransformComponent& trans)
     {
         float sx = std::fabs(trans.worldScale.x);
@@ -25,21 +25,21 @@ namespace
         if (sy > value) value = sy;
         if (sz > value) value = sz;
 
-        // ‘S²‚Æ‚à‹É¬‚È‚ç 1.0f ‚ğ•Ô‚·B
+        // å…¨è»¸ã¨ã‚‚æ¥µå°ãªã‚‰ 1.0f ã‚’è¿”ã™ã€‚
         if (value <= 0.0001f) value = 1.0f;
         return value;
     }
 
-    // SimpleMath::Vector4 ‚ğ XMFLOAT4 ‚Ö•ÏŠ·‚·‚éB
+    // SimpleMath::Vector4 ã‚’ XMFLOAT4 ã¸å¤‰æ›ã™ã‚‹ã€‚
     XMFLOAT4 ToFloat4(const DirectX::SimpleMath::Vector4& value)
     {
         return { value.x, value.y, value.z, value.w };
     }
 }
 
-// ƒRƒ‰ƒCƒ_[ Gizmo ‚ğ•`‰æ‚·‚éB
-// ‚Ü‚¸ CollisionManager ‚É“o˜^Ï‚İ‚Ì runtime collider ‚ğ—Dæ‚µA
-// –³‚¯‚ê‚Î authoring î•ñ‚©‚ç’¼Ú world À•W‚ğŒvZ‚µ‚Ä•`‰æ‚·‚éB
+// ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼ Gizmo ã‚’æç”»ã™ã‚‹ã€‚
+// ã¾ãš CollisionManager ã«ç™»éŒ²æ¸ˆã¿ã® runtime collider ã‚’å„ªå…ˆã—ã€
+// ç„¡ã‘ã‚Œã° authoring æƒ…å ±ã‹ã‚‰ç›´æ¥ world åº§æ¨™ã‚’è¨ˆç®—ã—ã¦æç”»ã™ã‚‹ã€‚
 void DebugRenderSystem::Render(Registry& registry)
 {
     auto gizmo = Graphics::Instance().GetGizmos();
@@ -49,17 +49,17 @@ void DebugRenderSystem::Render(Registry& registry)
 
     Query<ColliderComponent, TransformComponent> colQuery(registry);
     colQuery.ForEachWithEntity([&](EntityID entity, ColliderComponent& col, const TransformComponent& trans) {
-        // Gizmo •`‰æ‚ª–³ŒøA‚Ü‚½‚ÍƒRƒ‰ƒCƒ_[‘S‘Ì‚ª–³Œø‚È‚ç‰½‚à‚µ‚È‚¢B
+        // Gizmo æç”»ãŒç„¡åŠ¹ã€ã¾ãŸã¯ã‚³ãƒ©ã‚¤ãƒ€ãƒ¼å…¨ä½“ãŒç„¡åŠ¹ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
         if (!col.drawGizmo || !col.enabled) return;
 
         for (auto& e : col.elements) {
-            // —v‘fŒÂ•Ê‚ª–³Œø‚È‚ç•`‰æ‚µ‚È‚¢B
+            // è¦ç´ å€‹åˆ¥ãŒç„¡åŠ¹ãªã‚‰æç”»ã—ãªã„ã€‚
             if (!e.enabled) continue;
 
             const XMFLOAT4 color = ToFloat4(e.color);
 
-            // Šù‚É CollisionManager ‚É“o˜^‚³‚ê‚Ä‚¢‚é runtime collider ‚ª‚ ‚ê‚ÎA
-            // ‚»‚¿‚ç‚Ì’l‚ğg‚Á‚Ä•`‰æ‚·‚éB
+            // æ—¢ã« CollisionManager ã«ç™»éŒ²ã•ã‚Œã¦ã„ã‚‹ runtime collider ãŒã‚ã‚Œã°ã€
+            // ãã¡ã‚‰ã®å€¤ã‚’ä½¿ã£ã¦æç”»ã™ã‚‹ã€‚
             if (e.registeredId != 0) {
                 const Collider* runtimeCollider = collisionManager.Get(e.registeredId);
                 if (runtimeCollider && runtimeCollider->enabled) {
@@ -92,11 +92,11 @@ void DebugRenderSystem::Render(Registry& registry)
                 }
             }
 
-            // runtime collider ‚ª–³‚¢ê‡‚ÍAauthoring î•ñ‚©‚ç world À•W‚ğŒvZ‚µ‚Ä•`‰æ‚·‚éB
+            // runtime collider ãŒç„¡ã„å ´åˆã¯ã€authoring æƒ…å ±ã‹ã‚‰ world åº§æ¨™ã‚’è¨ˆç®—ã—ã¦æç”»ã™ã‚‹ã€‚
             XMVECTOR vWorldPos;
             XMMATRIX matWorld = XMLoadFloat4x4(&trans.worldMatrix);
 
-            // nodeIndex ‚ª—LŒø‚È‚çƒ{[ƒ“/ƒm[ƒh’Ç]ˆÊ’u‚ğg‚¤B
+            // nodeIndex ãŒæœ‰åŠ¹ãªã‚‰ãƒœãƒ¼ãƒ³/ãƒãƒ¼ãƒ‰è¿½å¾“ä½ç½®ã‚’ä½¿ã†ã€‚
             if (e.nodeIndex >= 0) {
                 MeshComponent* mesh = registry.GetComponent<MeshComponent>(entity);
                 if (mesh && mesh->model) {
@@ -106,20 +106,20 @@ void DebugRenderSystem::Render(Registry& registry)
                         (float)e.offsetLocal.z
                     };
 
-                    // ƒ‚ƒfƒ‹ƒ[ƒJƒ‹‹óŠÔ‚Åƒm[ƒh’Ç]ˆÊ’u‚ğæ“¾‚µA
-                    // entity ‚Ì worldMatrix ‚Å world ‚Ö•ÏŠ·‚·‚éB
+                    // ãƒ¢ãƒ‡ãƒ«ãƒ­ãƒ¼ã‚«ãƒ«ç©ºé–“ã§ãƒãƒ¼ãƒ‰è¿½å¾“ä½ç½®ã‚’å–å¾—ã—ã€
+                    // entity ã® worldMatrix ã§ world ã¸å¤‰æ›ã™ã‚‹ã€‚
                     XMFLOAT3 posModelSpace = NodeAttachmentUtils::GetWorldPositionNodeLocal(
                         mesh->model.get(), e.nodeIndex, offset);
 
                     vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&posModelSpace), matWorld);
                 }
                 else {
-                    // ƒ‚ƒfƒ‹‚ª–³‚¯‚ê‚Î’Êí‚Ì local offset ‚Æ‚µ‚Äˆµ‚¤B
+                    // ãƒ¢ãƒ‡ãƒ«ãŒç„¡ã‘ã‚Œã°é€šå¸¸ã® local offset ã¨ã—ã¦æ‰±ã†ã€‚
                     vWorldPos = XMVector3TransformCoord(XMLoadFloat3((XMFLOAT3*)&e.offsetLocal), matWorld);
                 }
             }
             else {
-                // nodeIndex –³‚µ‚È‚ç entity Šî€‚Ì local offset ‚ğ‚»‚Ì‚Ü‚Üg‚¤B
+                // nodeIndex ç„¡ã—ãªã‚‰ entity åŸºæº–ã® local offset ã‚’ãã®ã¾ã¾ä½¿ã†ã€‚
                 vWorldPos = XMVector3TransformCoord(XMLoadFloat3((XMFLOAT3*)&e.offsetLocal), matWorld);
             }
 
@@ -128,7 +128,7 @@ void DebugRenderSystem::Render(Registry& registry)
 
             const float maxWorldScale = ResolveMaxWorldScale(trans);
 
-            // Œ`ó‚²‚Æ‚É“KØ‚È Gizmo ‚ğ•`‚­B
+            // å½¢çŠ¶ã”ã¨ã«é©åˆ‡ãª Gizmo ã‚’æãã€‚
             if (e.type == ColliderShape::Sphere) {
                 gizmo->DrawSphere(worldPos, e.radius * maxWorldScale, color);
                 continue;

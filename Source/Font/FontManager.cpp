@@ -80,7 +80,7 @@ void FontManager::Clear()
 }
 
 // DX11互換呼び出し用。実際の読み込みはRHIファクトリ版へ委譲する。
-void FontManager::Load(ID3D11Device* /*device*/, const std::string& key, const char* filename)
+void FontManager::Load(ID3D11Device*, const std::string& key, const char* filename)
 {
     Load(Graphics::Instance().GetResourceFactory(), key, filename);
 }

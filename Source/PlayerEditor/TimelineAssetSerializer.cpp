@@ -1,4 +1,4 @@
-#include "TimelineAssetSerializer.h"
+﻿#include "TimelineAssetSerializer.h"
 #include "TimelineAsset.h"
 #include "JSONManager.h"
 #include <algorithm>
@@ -29,10 +29,7 @@ static GEAudioPayload MakePortableAudioPayload(const GEAudioPayload& payload)
     return portable;
 }
 
-// ============================================================================
-// JSON helpers for TimelineAsset types
-// ============================================================================
-
+// TimelineAsset の各要素を JSON に落とすための小さな変換関数群。
 static nlohmann::json ItemToJson(const TimelineItem& item, TimelineTrackType trackType)
 {
     nlohmann::json j;
@@ -112,10 +109,7 @@ static TimelineKeyframe KeyframeFromJson(const nlohmann::json& j)
     return kf;
 }
 
-// ============================================================================
-// Save / Load
-// ============================================================================
-
+// TimelineAsset 全体を保存形式の JSON オブジェクトへ変換する。
 nlohmann::json TimelineAssetSerializer::ToJson(const TimelineAsset& asset)
 {
     nlohmann::json root;

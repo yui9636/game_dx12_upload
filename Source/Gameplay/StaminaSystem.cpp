@@ -1,3 +1,4 @@
+﻿// StaminaSystem の Gameplay 関連実装をまとめます。
 #include "StaminaSystem.h"
 #include "StaminaComponent.h"
 #include "Registry/Registry.h"

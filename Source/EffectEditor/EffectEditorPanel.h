@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <string>
@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 #include "Entity/Entity.h"
 #include "EffectRuntime/EffectGraphAsset.h"
+// ImVec2 はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 struct ImVec2;
 class Registry;

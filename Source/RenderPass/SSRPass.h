@@ -24,13 +24,10 @@ private:
 
     std::unique_ptr<IPipelineState> m_psoRaymarch;
     std::unique_ptr<IPipelineState> m_psoBlur;
-
-    // ====================================================
-    // ★ グラフで管理するハンドル達
-    // ====================================================
-    ResourceHandle m_hGBuffer0;    // Albedo
-    ResourceHandle m_hGBuffer1;    // Normal
-    ResourceHandle m_hGBuffer2;    // WorldPos
+// ★ グラフで管理するハンドル達
+ResourceHandle m_hGBuffer0;    // Albedo 用。
+    ResourceHandle m_hGBuffer1;    // 法線。
+    ResourceHandle m_hGBuffer2;    // WorldPos 用。
     ResourceHandle m_hPrevScene;   // 反射元の色
 
     ResourceHandle m_hSSR;         // パス1の出力（生SSR）

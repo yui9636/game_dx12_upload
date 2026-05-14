@@ -1,3 +1,4 @@
+﻿// UIDamagePopup の UI 関連実装をまとめます。
 #include "UIDamagePopup.h"
 #include "Font/FontManager.h"
 #include <cmath>

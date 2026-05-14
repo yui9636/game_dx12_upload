@@ -1,69 +1,66 @@
-// ============================================================================
-// SoA Particle Layout for DX12 Compute Particle Overhaul v3
-// Billboard: Hot(32B) + Warm(16B) + Cold(32B) + Header(8B) = 88B/particle
-// ============================================================================
-
+// DX12 コンピュートパーティクル刷新 v3 用の SoA パーティクルレイアウト
+// ビルボード: Hot(32B) + Warm(16B) + Cold(32B) + Header(8B) = 88B/particle
 #ifndef EFFECT_PARTICLE_SOA_HLSLI
 #define EFFECT_PARTICLE_SOA_HLSLI
 
-// ── Billboard Hot Stream (32 bytes, updated every frame) ──
-// position.xyz + half-packed age/remainLife + velocity.xyz + half-packed size/spin
+// BillboardHot は毎フレーム更新する 32B の stream。
+// position、半精度 pack の age/remainLife、velocity、半精度 pack の size/spin を保持する。
 struct BillboardHot
 {
     float3 position;        // 12B
-    uint   ageLifePacked;   //  4B  age(f16) | remainLife(f16)
+    uint   ageLifePacked;   //  4B  age(f16) と remainLife(f16)。
     float3 velocity;        // 12B
-    uint   sizeSpin;        //  4B  currentSize(f16) | spinAngle(f16)
+    uint   sizeSpin;        //  4B  currentSize(f16) と spinAngle(f16)。
 };
 
-// ── Billboard Warm Stream (16 bytes, read at render) ──
+// BillboardWarm は描画時に読む 16B の stream。
 struct BillboardWarm
 {
-    uint   packedColor;     //  4B  RGBA8_UNORM
-    uint   packedEndColor;  //  4B  RGBA8_UNORM (lerp target)
-    uint   texcoordPacked;  //  4B  u(f16) | v(f16) (atlas rect)
-    uint   flags;           //  4B  blendMode(2), sortMode(2), material(8), subUvFrame(8), soft(1), ...
+    uint   packedColor;     //  4B の RGBA8_UNORM 色。
+    uint   packedEndColor;  //  4B  RGBA8_UNORM の補間先。
+    uint   texcoordPacked;  //  4B  u(f16) と v(f16) の atlas rect。
+    uint   flags;           //  4B  blendMode、sortMode、material、subUvFrame、soft などの bit field。
 };
 
-// ── Billboard Cold Stream (32 bytes, written once at emit) ──
+// BillboardCold は emit 時に一度だけ書く 32B の stream。
 struct BillboardCold
 {
     float3 acceleration;    // 12B
-    uint   dragSpinPacked;  //  4B  drag(f16) | spinRate(f16)
-    uint   sizeRange;       //  4B  startSize(f16) | endSize(f16)
-    uint   lifeBias;        //  4B  totalLife(f16) | alphaBias(f16)
-    uint   sizeFadeBias;    //  4B  sizeBias(f16) | fadeBias(f16)
+    uint   dragSpinPacked;  //  4B  drag(f16) と spinRate(f16)。
+    uint   sizeRange;       //  4B  startSize(f16) と endSize(f16)。
+    uint   lifeBias;        //  4B  totalLife(f16) と alphaBias(f16)。
+    uint   sizeFadeBias;    //  4B  sizeBias(f16) と fadeBias(f16)。
     uint   emitterSeed;     //  4B
 };
 
-// ── Billboard Header (8 bytes) ──
+// BillboardHeader は生存状態や bin 情報を持つ 8B の header。
 struct BillboardHeader
 {
     uint   slotIndex;       //  4B
-    uint   packed;          //  4B  alive(1) | depthBin(5) | pageHandle(16) | rendererBin(10)
+    uint   packed;          //  4B  alive、depthBin、pageHandle、rendererBin を bit pack する。
 };
 
-// ── Mesh Attribute Hot Stream (64 bytes, used only by Mesh renderer bin) ──
-// quaternion orientation + per-axis scale + fixed-axis angular velocity
-// Reserved fields leave room for skinning handle / variant index / material flags.
+// MeshAttribHot は Mesh renderer bin のときだけ使う 64B の stream。
+// クォータニオン姿勢 + 軸ごとのスケール + 固定軸角速度
+// 予約フィールドは skinning handle / variant index / material flags 用の余地として残す。
 struct MeshAttribHot
 {
-    float4 rotation;        // 16B  current orientation (updated each frame)
-    float3 scale;           // 12B  per-axis scale (set at emit)
-    float  angularSpeed;    //  4B  rad/sec around angularAxis (0 = no spin)
-    float3 angularAxis;     // 12B  normalized rotation axis (set at emit)
-    float  rotReserved;     //  4B  reserved (future: rotation damping)
-    uint4  reserved;        // 16B  reserved (future: skinning / variant / material flags)
+    float4 rotation;        // 16B  毎フレーム更新する現在姿勢。
+    float3 scale;           // 12B  emit 時に設定する軸別 scale。
+    float  angularSpeed;    //  4B  angularAxis 周りの rad/sec。0 なら spin なし。
+    float3 angularAxis;     // 12B  emit 時に設定する正規化済み回転軸。
+    float  rotReserved;     //  4B  将来の rotation damping 用予約領域。
+    uint4  reserved;        // 16B  将来の skinning、variant、material flags 用予約領域。
 };
 static const uint MESH_ATTRIB_STRIDE = 64;
 
-// ── Header bit packing helpers ──
+// Header の bit pack / unpack 補助関数。
 static const uint HEADER_ALIVE_BIT       = 0x80000000u;
 static const uint HEADER_DEPTHBIN_SHIFT  = 25u;
-static const uint HEADER_DEPTHBIN_MASK   = 0x3E000000u; // 5 bits
+static const uint HEADER_DEPTHBIN_MASK   = 0x3E000000u; // 5 bit 幅。
 static const uint HEADER_PAGE_SHIFT      = 10u;
-static const uint HEADER_PAGE_MASK       = 0x03FFFC00u; // 16 bits
-static const uint HEADER_BIN_MASK        = 0x000003FFu; // 10 bits
+static const uint HEADER_PAGE_MASK       = 0x03FFFC00u; // 16 bit 幅。
+static const uint HEADER_BIN_MASK        = 0x000003FFu; // 10 bit 幅。
 
 bool HeaderIsAlive(uint packed) { return (packed & HEADER_ALIVE_BIT) != 0; }
 
@@ -83,7 +80,7 @@ uint HeaderPack(bool alive, uint depthBin, uint pageHandle, uint bin)
     return p;
 }
 
-// ── half-float pack/unpack ──
+// half-float の pack / unpack 補助関数。
 uint PackHalf2(float a, float b)
 {
     return f32tof16(a) | (f32tof16(b) << 16u);
@@ -94,7 +91,7 @@ float2 UnpackHalf2(uint packed)
     return float2(f16tof32(packed), f16tof32(packed >> 16u));
 }
 
-// ── RGBA8 pack/unpack ──
+// RGBA8 の pack / unpack 補助関数。
 uint PackRGBA8(float4 c)
 {
     uint r = (uint)(saturate(c.x) * 255.0f + 0.5f);
@@ -113,7 +110,7 @@ float4 UnpackRGBA8(uint packed)
         (float)((packed >> 24u) & 0xFFu) / 255.0f);
 }
 
-// ── Counter buffer layout (v3) ──
+// v3 counter buffer のレイアウト。
 static const uint COUNTER_ALIVE_BILLBOARD   = 0;
 static const uint COUNTER_ALIVE_MESH        = 4;
 static const uint COUNTER_ALIVE_RIBBON      = 8;
@@ -125,15 +122,15 @@ static const uint COUNTER_DROPPED_EMIT      = 28;
 static const uint COUNTER_DEAD_STACK_TOP    = 32;
 
 
-// ── Page metadata (GPU-side) ──
+// GPU 側で使う page metadata。
 struct GpuPageMeta
 {
     uint pageHandle;
-    uint state;          // 0=Free, 1=Reserved, 2=Active, 3=Sparse, 4=ReclaimPending
+    uint state;          // 0 は Free、1 は Reserved、2 は Active、3 は Sparse、4 は ReclaimPending。
     uint ownerEmitter;
-    uint rendererClass;  // 0=Billboard, 1=Mesh, 2=Ribbon
+    uint rendererClass;  // 0 は Billboard、1 は Mesh、2 は Ribbon。
     uint liveCount;
-    uint baseSlot;       // arena offset = handle * PAGE_SIZE
+    uint baseSlot;       // arena offset は handle * PAGE_SIZE。
     uint nextPage;
     uint flags;
 };
@@ -146,7 +143,7 @@ static const uint PAGE_STATE_ACTIVE          = 2;
 static const uint PAGE_STATE_SPARSE          = 3;
 static const uint PAGE_STATE_RECLAIM_PENDING = 4;
 
-// ── Quaternion helpers (used by Mesh particle path) ──
+// Mesh particle 経路で使う quaternion 補助関数。
 float4 QuatFromAxisAngle(float3 axis, float angle)
 {
     float h = angle * 0.5f;
@@ -181,7 +178,7 @@ float3 QuatRotate(float3 v, float4 q)
     return v + q.w * t + cross(q.xyz, t);
 }
 
-// ── CoarseDepthBin ──
+// 粗い depth bin の計算。
 static const uint DEPTH_BIN_COUNT = 32u;
 
 uint ComputeDepthBin(float viewZ, float nearClip, float farClip)
@@ -193,4 +190,4 @@ uint ComputeDepthBin(float viewZ, float nearClip, float farClip)
     return clamp((uint)(depthNorm * (float)DEPTH_BIN_COUNT), 0u, DEPTH_BIN_COUNT - 1u);
 }
 
-#endif // EFFECT_PARTICLE_SOA_HLSLI
+#endif // EFFECT_PARTICLE_SOA_HLSLI の include guard 終端。

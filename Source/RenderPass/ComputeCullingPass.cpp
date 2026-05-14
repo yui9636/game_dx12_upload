@@ -1,4 +1,5 @@
-﻿#include "ComputeCullingPass.h"
+﻿// ComputeCullingPass のレンダーパス実装をまとめます。
+#include "ComputeCullingPass.h"
 #include "Graphics.h"
 #include "RHI/IBuffer.h"
 #include "RHI/IResourceFactory.h"

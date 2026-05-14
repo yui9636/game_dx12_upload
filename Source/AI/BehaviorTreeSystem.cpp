@@ -291,7 +291,7 @@ namespace
     }
 
     // スタミナ条件を評価するための将来拡張用ノード。
-    BTStatus TickStaminaAbove(const BTNode& /*node*/, BTContext& /*ctx*/)
+    BTStatus TickStaminaAbove(const BTNode&, BTContext&)
     {
         return BTStatus::Failure;
     }

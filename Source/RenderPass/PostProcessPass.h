@@ -1,3 +1,4 @@
+﻿// PostProcessPass のレンダーパス宣言をまとめます。
 #pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"

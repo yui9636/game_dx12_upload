@@ -1,3 +1,4 @@
+﻿// GameLoopEditorPanelPicker の GameLoop 関連実装をまとめます。
 #include "GameLoopEditorPanelInternal.h"
 
 void GameLoopEditorPanelInternal::DrawScenePickerPopup()

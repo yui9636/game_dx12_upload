@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Entity/Entity.h"
 #include "Model/Model.h"
@@ -7,21 +7,21 @@
 #include <vector>
 #include <string>
 
-// 1‘Ì‚Ì entity ‚É‘Î‰‚·‚é Animator runtime —p‚Ìˆêƒf[ƒ^‚ğ•Û‚·‚é\‘¢‘ÌB
-// ƒ‚ƒfƒ‹QÆAå—vƒ{[ƒ“ indexAŠeí pose ƒoƒbƒtƒ@A•âŠÔ—pó‘Ô‚È‚Ç‚ğ‚Ü‚Æ‚ß‚Ä‚ÂB
+// 1ä½“ã® entity ã«å¯¾å¿œã™ã‚‹ Animator runtime ç”¨ã®ä¸€æ™‚ãƒ‡ãƒ¼ã‚¿ã‚’ä¿æŒã™ã‚‹æ§‹é€ ä½“ã€‚
+// ãƒ¢ãƒ‡ãƒ«å‚ç…§ã€ä¸»è¦ãƒœãƒ¼ãƒ³ indexã€å„ç¨® pose ãƒãƒƒãƒ•ã‚¡ã€è£œé–“ç”¨çŠ¶æ…‹ãªã©ã‚’ã¾ã¨ã‚ã¦æŒã¤ã€‚
 struct AnimatorRuntimeEntry
 {
-    // ‚±‚Ì runtime entry ‚ªQÆ‚·‚éƒ‚ƒfƒ‹–{‘ÌB
-    // entity ‚É‘Î‰‚·‚é•`‰æƒ‚ƒfƒ‹‚âƒ{[ƒ“ŠK‘w‚ğQÆ‚·‚éB
+    // ã“ã® runtime entry ãŒå‚ç…§ã™ã‚‹ãƒ¢ãƒ‡ãƒ«æœ¬ä½“ã€‚
+    // entity ã«å¯¾å¿œã™ã‚‹æç”»ãƒ¢ãƒ‡ãƒ«ã‚„ãƒœãƒ¼ãƒ³éšå±¤ã‚’å‚ç…§ã™ã‚‹ã€‚
     Model* modelRef = nullptr;
 
-    // ƒ‹[ƒgƒm[ƒh indexB
-    // ƒ‚ƒfƒ‹‘S‘Ì‚ÌŠî€ƒm[ƒh‚Æ‚µ‚Äg‚¤B
+    // ãƒ«ãƒ¼ãƒˆãƒãƒ¼ãƒ‰ indexã€‚
+    // ãƒ¢ãƒ‡ãƒ«å…¨ä½“ã®åŸºæº–ãƒãƒ¼ãƒ‰ã¨ã—ã¦ä½¿ã†ã€‚
     int rootNodeIndex = -1;
     DirectX::XMFLOAT3 rootNodeBindPosition = { 0.0f, 0.0f, 0.0f };
 
-    // pelvis ƒ{[ƒ“‚Ì indexB
-    // ƒ‹[ƒgƒ‚[ƒVƒ‡ƒ“‚â‰º”¼gŠî€‚Ìˆ—‚Åg‚¤‘z’èB
+    // pelvis ãƒœãƒ¼ãƒ³ã® indexã€‚
+    // ãƒ«ãƒ¼ãƒˆãƒ¢ãƒ¼ã‚·ãƒ§ãƒ³ã‚„ä¸‹åŠèº«åŸºæº–ã®å‡¦ç†ã§ä½¿ã†æƒ³å®šã€‚
     int pelvisNodeIndex = -1;
 
     int rootMotionNodeIndex = -1;
@@ -29,50 +29,50 @@ struct AnimatorRuntimeEntry
 
     std::vector<Model::NodePose> bindPoses;
 
-    // spine ƒ{[ƒ“‚Ì indexB
-    // ã”¼gƒ}ƒXƒN‚Ì‹N“_‚Æ‚µ‚Äg‚¤B
+    // spine ãƒœãƒ¼ãƒ³ã® indexã€‚
+    // ä¸ŠåŠèº«ãƒã‚¹ã‚¯ã®èµ·ç‚¹ã¨ã—ã¦ä½¿ã†ã€‚
     int spineNodeIndex = -1;
 
-    // Šeƒm[ƒh‚ªuã”¼g‚ÉŠÜ‚Ü‚ê‚é‚©‚Ç‚¤‚©v‚ğ•\‚·ƒ}ƒXƒNB
-    // spine ‚©‚ç‰º‚É‚Ô‚ç‰º‚ª‚éƒm[ƒh‚ğ true ‚É‚·‚éB
+    // å„ãƒãƒ¼ãƒ‰ãŒã€Œä¸ŠåŠèº«ã«å«ã¾ã‚Œã‚‹ã‹ã©ã†ã‹ã€ã‚’è¡¨ã™ãƒã‚¹ã‚¯ã€‚
+    // spine ã‹ã‚‰ä¸‹ã«ã¶ã‚‰ä¸‹ãŒã‚‹ãƒãƒ¼ãƒ‰ã‚’ true ã«ã™ã‚‹ã€‚
     std::vector<bool> isUpperBody;
 
-    // base layer —p‚Ì pose ”z—ñB
-    // locomotion ‚â’ÊíˆÚ“®ƒAƒjƒ[ƒVƒ‡ƒ“‚È‚ÇA‰º’n‚Æ‚È‚ép¨‚ğ“ü‚ê‚éB
+    // base layer ç”¨ã® pose é…åˆ—ã€‚
+    // locomotion ã‚„é€šå¸¸ç§»å‹•ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ãªã©ã€ä¸‹åœ°ã¨ãªã‚‹å§¿å‹¢ã‚’å…¥ã‚Œã‚‹ã€‚
     std::vector<Model::NodePose> basePoses;
 
-    // action layer —p‚Ì pose ”z—ñB
-    // UŒ‚‚âã”¼gƒAƒNƒVƒ‡ƒ“‚È‚ÇA’Ç‰Á‚Åd‚Ë‚½‚¢p¨‚ğ“ü‚ê‚éB
+    // action layer ç”¨ã® pose é…åˆ—ã€‚
+    // æ”»æ’ƒã‚„ä¸ŠåŠèº«ã‚¢ã‚¯ã‚·ãƒ§ãƒ³ãªã©ã€è¿½åŠ ã§é‡ã­ãŸã„å§¿å‹¢ã‚’å…¥ã‚Œã‚‹ã€‚
     std::vector<Model::NodePose> actionPoses;
 
     std::vector<Model::NodePose> baseBlendFromPoses;
     std::vector<Model::NodePose> actionBlendFromPoses;
 
-    // ˆêŒvZ—p‚Ì pose ”z—ñB
-    // ƒuƒŒƒ“ƒh“r’†‚â’†ŠÔŒ‹‰Ê‚Ì‘Ş”ğ‚Ég‚¤B
+    // ä¸€æ™‚è¨ˆç®—ç”¨ã® pose é…åˆ—ã€‚
+    // ãƒ–ãƒ¬ãƒ³ãƒ‰é€”ä¸­ã‚„ä¸­é–“çµæœã®é€€é¿ã«ä½¿ã†ã€‚
     std::vector<Model::NodePose> tempPoses;
 
-    // ÅIo—Í—p‚Ì pose ”z—ñB
-    // ÀÛ‚Éƒ‚ƒfƒ‹‚Ö”½‰f‚·‚éÅIp¨‚ğ‚±‚±‚Éì‚éB
+    // æœ€çµ‚å‡ºåŠ›ç”¨ã® pose é…åˆ—ã€‚
+    // å®Ÿéš›ã«ãƒ¢ãƒ‡ãƒ«ã¸åæ˜ ã™ã‚‹æœ€çµ‚å§¿å‹¢ã‚’ã“ã“ã«ä½œã‚‹ã€‚
     std::vector<Model::NodePose> finalPoses;
 
     bool hasValidFinalPose = false;
 
-    // ƒuƒŒƒ“ƒh•âŠÔ—p‚Ì pose ƒIƒtƒZƒbƒg”z—ñB
-    // action ‘JˆÚ‚Ì‚È‚ß‚ç‚©‚È•âŠÔ‚È‚Ç‚Ég‚¤B
+    // ãƒ–ãƒ¬ãƒ³ãƒ‰è£œé–“ç”¨ã® pose ã‚ªãƒ•ã‚»ãƒƒãƒˆé…åˆ—ã€‚
+    // action é·ç§»æ™‚ã®ãªã‚ã‚‰ã‹ãªè£œé–“ãªã©ã«ä½¿ã†ã€‚
     std::vector<Model::NodePose> blendOffsets;
 
-    // ƒIƒtƒZƒbƒgƒuƒŒƒ“ƒh‘S‘Ì‚ÌŒp‘±ŠÔB
+    // ã‚ªãƒ•ã‚»ãƒƒãƒˆãƒ–ãƒ¬ãƒ³ãƒ‰å…¨ä½“ã®ç¶™ç¶šæ™‚é–“ã€‚
     float offsetBlendDuration = 0.0f;
 
-    // ƒIƒtƒZƒbƒgƒuƒŒƒ“ƒh‚ÌŒo‰ßŠÔB
+    // ã‚ªãƒ•ã‚»ãƒƒãƒˆãƒ–ãƒ¬ãƒ³ãƒ‰ã®çµŒéæ™‚é–“ã€‚
     float offsetBlendTimer = 0.0f;
 
-    // ƒIƒtƒZƒbƒgƒuƒŒƒ“ƒh‚ğg‚¤‚©‚Ç‚¤‚©B
+    // ã‚ªãƒ•ã‚»ãƒƒãƒˆãƒ–ãƒ¬ãƒ³ãƒ‰ã‚’ä½¿ã†ã‹ã©ã†ã‹ã€‚
     bool useOffsetBlending = false;
 
-    // ‘O‰ñ action Ä¶B
-    // action Ä¶‚ÌŒp‘±EØ‚è‘Ö‚¦”»’è‚Åg‚¤‘z’èB
+    // å‰å› action å†ç”Ÿæ™‚åˆ»ã€‚
+    // action å†ç”Ÿã®ç¶™ç¶šãƒ»åˆ‡ã‚Šæ›¿ãˆåˆ¤å®šã§ä½¿ã†æƒ³å®šã€‚
     float prevActionTime = 0.0f;
 
     int prevBaseRootMotionAnimIndex = -1;
@@ -80,36 +80,36 @@ struct AnimatorRuntimeEntry
     int prevActionRootMotionAnimIndex = -1;
     float prevActionRootMotionTime = 0.0f;
 
-    // ƒAƒjƒ[ƒVƒ‡ƒ“–¼‚©‚ç index ‚ğˆø‚­‚½‚ß‚ÌƒLƒƒƒbƒVƒ…B
-    // –ˆ‰ñ•¶š—ñŒŸõ‚µ‚È‚¢‚æ‚¤‚É‚·‚éB
+    // ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³åã‹ã‚‰ index ã‚’å¼•ããŸã‚ã®ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã€‚
+    // æ¯å›æ–‡å­—åˆ—æ¤œç´¢ã—ãªã„ã‚ˆã†ã«ã™ã‚‹ã€‚
     std::unordered_map<std::string, int> animNameCache;
 };
 
-// entity ‚²‚Æ‚Ì AnimatorRuntimeEntry ‚ğŠÇ—‚·‚éƒŒƒWƒXƒgƒŠB
-// AnimatorSystem ‚È‚Ç‚©‚ç entity ‚ğƒL[‚É runtime ó‘Ô‚ÖƒAƒNƒZƒX‚·‚éB
+// entity ã”ã¨ã® AnimatorRuntimeEntry ã‚’ç®¡ç†ã™ã‚‹ãƒ¬ã‚¸ã‚¹ãƒˆãƒªã€‚
+// AnimatorSystem ãªã©ã‹ã‚‰ entity ã‚’ã‚­ãƒ¼ã« runtime çŠ¶æ…‹ã¸ã‚¢ã‚¯ã‚»ã‚¹ã™ã‚‹ã€‚
 class AnimatorRuntimeRegistry
 {
 public:
-    // w’è entity ‚Ì runtime entry ‚ğŒŸõ‚·‚éB
-    // Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š entity ã® runtime entry ã‚’æ¤œç´¢ã™ã‚‹ã€‚
+    // è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     AnimatorRuntimeEntry* Find(EntityID entity);
 
-    // w’è entity ‚Ì runtime entry ‚ğ•K‚¸æ“¾‚·‚éB
-    // –³‚¯‚ê‚ÎV‹K¶¬‚µAmodel ‚ª•Ï‚í‚Á‚Ä‚¢‚ê‚Î Rebind ‚·‚éB
+    // æŒ‡å®š entity ã® runtime entry ã‚’å¿…ãšå–å¾—ã™ã‚‹ã€‚
+    // ç„¡ã‘ã‚Œã°æ–°è¦ç”Ÿæˆã—ã€model ãŒå¤‰ã‚ã£ã¦ã„ã‚Œã° Rebind ã™ã‚‹ã€‚
     AnimatorRuntimeEntry& Ensure(EntityID entity, Model* model);
 
-    // w’è entity ‚Ì runtime entry ‚ğíœ‚·‚éB
+    // æŒ‡å®š entity ã® runtime entry ã‚’å‰Šé™¤ã™ã‚‹ã€‚
     void Remove(EntityID entity);
 
-    // ‚·‚×‚Ä‚Ì runtime entry ‚ğíœ‚·‚éB
+    // ã™ã¹ã¦ã® runtime entry ã‚’å‰Šé™¤ã™ã‚‹ã€‚
     void Clear();
 
 private:
-    // 1‚Â‚Ì runtime entry ‚ğV‚µ‚¢ model ‚ÉŒ‹‚Ñ’¼‚µA
-    // pose ƒoƒbƒtƒ@‚âƒ{[ƒ“ index ‚È‚Ç‚ğ‰Šú‰»‚·‚éB
+    // 1ã¤ã® runtime entry ã‚’æ–°ã—ã„ model ã«çµã³ç›´ã—ã€
+    // pose ãƒãƒƒãƒ•ã‚¡ã‚„ãƒœãƒ¼ãƒ³ index ãªã©ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
     void Rebind(AnimatorRuntimeEntry& entry, Model* model);
 
 private:
-    // entity ‚ğƒL[‚ÉA‚»‚Ì entity ê—p‚Ì animator runtime ó‘Ô‚ğ•Û‚·‚éB
+    // entity ã‚’ã‚­ãƒ¼ã«ã€ãã® entity å°‚ç”¨ã® animator runtime çŠ¶æ…‹ã‚’ä¿æŒã™ã‚‹ã€‚
     std::unordered_map<EntityID, AnimatorRuntimeEntry> m_entries;
 };

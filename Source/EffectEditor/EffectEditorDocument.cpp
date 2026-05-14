@@ -1,5 +1,5 @@
-// Document persistence + runtime preview lifecycle for EffectEditorPanel.
-// Extracted from EffectEditorPanel.cpp; method bodies stay on the panel class.
+﻿// EffectEditorPanel の document 保存と runtime preview lifecycle を扱う。
+// EffectEditorPanel.cpp から分離しているが、メソッド本体は panel class に属する。
 
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"
@@ -69,10 +69,10 @@ std::string EffectEditorPanel::BuildTransientAssetKey() const
 
 std::string EffectEditorPanel::GetActiveAssetKey() const
 {
-    // Always use the transient key: CompileDocument() registers the freshly
-    // compiled asset only under the transient key. Returning the document
-    // path here would cause the registry's disk-backed cache to be used,
-    // which ignores live template/graph edits.
+    // 常に transient key を使う。CompileDocument() はコンパイル直後の asset を
+    // transient key だけで登録する。ここで document path を返すと、
+    // registry の disk-backed cache が使われてしまい、
+    // live な template / graph 編集が反映されない。
     return BuildTransientAssetKey();
 }
 
@@ -150,9 +150,9 @@ void EffectEditorPanel::StopPreview()
         m_previewEntity = Entity::NULL_ID;
         return;
     }
-    // Destroy the runtime instance BEFORE destroying the entity, otherwise the
-    // runtime is leaked in EffectRuntimeRegistry::m_instances. GPU allocation
-    // sticks around for up to 240 frames regardless, but CPU state is dropped.
+    // entity を破棄する前に runtime instance を破棄する。そうしないと
+    // EffectRuntimeRegistry::m_instances に runtime が漏れる。GPU allocation は
+    // 最大 240 frame 残るが、CPU state はここで落とす。
     if (auto* playback = m_registry->GetComponent<EffectPlaybackComponent>(m_previewEntity)) {
         if (playback->runtimeInstanceId != 0) {
             EffectRuntimeRegistry::Instance().Destroy(playback->runtimeInstanceId);

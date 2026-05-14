@@ -1,4 +1,4 @@
-#include "DX12CommandList.h"
+ï»¿#include "DX12CommandList.h"
 #include "DX12Texture.h"
 #include "DX12Buffer.h"
 #include "DX12Shader.h"
@@ -31,10 +31,10 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
         IID_PPV_ARGS(&m_commandList));
     assert(SUCCEEDED(hr));
 
-    // ¶¬’¼Œã‚Í recording ó‘Ô‚È‚Ì‚ÅAˆê“x Close ‚µ‚Ä Begin() ‚Å“ˆê“I‚É Reset ‚·‚éB
+    // ç”Ÿæˆç›´å¾Œã¯ recording çŠ¶æ…‹ãªã®ã§ã€ä¸€åº¦ Close ã—ã¦ Begin() ã§çµ±ä¸€çš„ã« Reset ã™ã‚‹ã€‚
     m_commandList->Close();
 
-    // ƒtƒŒ[ƒ€’†‚¾‚¯g‚¤ SRV ƒe[ƒuƒ‹‚Íê—p allocator ‚Åg‚¢Ì‚Ä‚éB
+    // ãƒ•ãƒ¬ãƒ¼ãƒ ä¸­ã ã‘ä½¿ã† SRV ãƒ†ãƒ¼ãƒ–ãƒ«ã¯å°‚ç”¨ allocator ã§ä½¿ã„æ¨ã¦ã‚‹ã€‚
     m_frameSrvAllocator = std::make_unique<DX12DescriptorAllocator>(
         device->GetDevice(),
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
@@ -115,27 +115,27 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
     nullCubeDesc.TextureCube.MipLevels = 1;
     device->GetDevice()->CreateShaderResourceView(nullptr, &nullCubeDesc, m_nullSrvCube);
 
-    // ƒRƒ}ƒ“ƒhƒŠƒXƒg’PˆÊ‚Å PSO ƒLƒƒƒbƒVƒ…‚ğ‚¿AÄ\’z‚ğŒ¸‚ç‚·B
+    // ã‚³ãƒãƒ³ãƒ‰ãƒªã‚¹ãƒˆå˜ä½ã§ PSO ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’æŒã¡ã€å†æ§‹ç¯‰ã‚’æ¸›ã‚‰ã™ã€‚
     m_psoCache = std::make_unique<DX12PSOCache>(device, rootSig);
 }
 
 DX12CommandList::~DX12CommandList() = default;
 
 void DX12CommandList::Begin() {
-    // ƒtƒŒ[ƒ€ŠJn‚É allocatorAdescriptor heapAdynamic CB ring ‚ğ‰Šúó‘Ô‚Ö–ß‚·B
+    // ãƒ•ãƒ¬ãƒ¼ãƒ é–‹å§‹æ™‚ã« allocatorã€descriptor heapã€dynamic CB ring ã‚’åˆæœŸçŠ¶æ…‹ã¸æˆ»ã™ã€‚
     auto* allocator = m_useDeviceFrameAllocator ? m_device->GetCurrentAllocator() : m_ownedAllocator.Get();
     allocator->Reset();
     m_commandList->Reset(allocator, nullptr);
     m_pendingBarriers.clear();
 
-    // Reset frame allocator
+    // frame allocator ã‚’ reset ã™ã‚‹ã€‚
     m_frameSrvAllocator->Reset();
 
-    // Set descriptor heaps
+    // descriptor heap ã‚’è¨­å®šã™ã‚‹ã€‚
     ID3D12DescriptorHeap* heaps[] = { m_frameSrvAllocator->GetHeap() };
     m_commandList->SetDescriptorHeaps(1, heaps);
 
-    // Set root signature
+    // root signature ã‚’è¨­å®šã™ã‚‹ã€‚
     m_commandList->SetGraphicsRootSignature(m_rootSignature->Get());
 
     m_psoDirty = true;
@@ -163,26 +163,26 @@ void DX12CommandList::DiscardResourceBarriers() {
 }
 
 void DX12CommandList::RestoreFrameDescriptorHeap() {
-    // ŠO•” heap ‚ğg‚Á‚½Œã‚ÉA’Êí•`‰æ—p‚ÌƒtƒŒ[ƒ€ heap ‚Ö–ß‚·B
+    // å¤–éƒ¨ heap ã‚’ä½¿ã£ãŸå¾Œã«ã€é€šå¸¸æç”»ç”¨ã®ãƒ•ãƒ¬ãƒ¼ãƒ  heap ã¸æˆ»ã™ã€‚
     ID3D12DescriptorHeap* heaps[] = { m_frameSrvAllocator->GetHeap() };
     m_commandList->SetDescriptorHeaps(1, heaps);
 }
 
 void DX12CommandList::RestoreDescriptorHeap() {
-    // ImGui •`‰æŒã‚Í’Êí•`‰æ—p‚Ì heap ‚Æ root signature ‚Ö–ß‚·B
-    // root signature ‚ğ’£‚è’¼‚·‚ÆŠù‘¶‚Ì root parameter ‚ª–³Œø‚É‚È‚é‚½‚ßA
-    // ƒtƒŒ[ƒ€“r’†‚Ì•œ‹A‚É‚Íg‚í‚¸AImGui Œã‚ÌÅI•œ‹A‚¾‚¯‚ÉŒÀ’è‚·‚éB
+    // ImGui æç”»å¾Œã¯é€šå¸¸æç”»ç”¨ã® heap ã¨ root signature ã¸æˆ»ã™ã€‚
+    // root signature ã‚’å¼µã‚Šç›´ã™ã¨æ—¢å­˜ã® root parameter ãŒç„¡åŠ¹ã«ãªã‚‹ãŸã‚ã€
+    // ãƒ•ãƒ¬ãƒ¼ãƒ é€”ä¸­ã®å¾©å¸°ã«ã¯ä½¿ã‚ãšã€ImGui å¾Œã®æœ€çµ‚å¾©å¸°ã ã‘ã«é™å®šã™ã‚‹ã€‚
     RestoreFrameDescriptorHeap();
     m_commandList->SetGraphicsRootSignature(m_rootSignature->Get());
 }
 
 DX12CommandList::DynamicAllocation DX12CommandList::AllocateDynamicConstantBuffer(const void* data, uint32_t size) {
-    // DX12 ‚Å‚Í draw ‚²‚Æ‚É•Ê GPU VA ‚ğŠ„‚è“–‚ÄA’è”ƒoƒbƒtƒ@‚Ìã‘‚«”j’]‚ğ–h‚®B
+    // DX12 ã§ã¯ draw ã”ã¨ã«åˆ¥ GPU VA ã‚’å‰²ã‚Šå½“ã¦ã€å®šæ•°ãƒãƒƒãƒ•ã‚¡ã®ä¸Šæ›¸ãç ´ç¶»ã‚’é˜²ãã€‚
     DynamicAllocation allocation{};
     if (!data || size == 0) return allocation;
 
     const uint32_t alignedSize = (size + 255u) & ~255u;
-    // ’Êí‚Í frame-local ring ‚©‚çŠm•Û‚µA‘«‚è‚È‚¢‚Æ‚«‚¾‚¯ spill upload ‚ğg‚¤B
+    // é€šå¸¸ã¯ frame-local ring ã‹ã‚‰ç¢ºä¿ã—ã€è¶³ã‚Šãªã„ã¨ãã ã‘ spill upload ã‚’ä½¿ã†ã€‚
     if (m_dynamicCbRing && (m_dynamicCbRingOffset + alignedSize) <= m_dynamicCbRingSize) {
         allocation.cpuPtr = m_dynamicCbRingCpuBase + m_dynamicCbRingOffset;
         allocation.gpuVA = m_dynamicCbRing->GetGPUVirtualAddress() + m_dynamicCbRingOffset;
@@ -253,7 +253,7 @@ void DX12CommandList::PSSetDynamicConstantBuffer(uint32_t slot, const void* data
     }
 }
 
-// „Ÿ„Ÿ Draw „Ÿ„Ÿ
+// Draw ç³»å‡¦ç†ã€‚
 
 void DX12CommandList::FlushPSO() {
     if (!m_psoDirty) return;
@@ -378,7 +378,7 @@ void DX12CommandList::CopyBufferRegion(ID3D12Resource* dst, uint64_t dstOffset, 
     m_commandList->CopyBufferRegion(dst, dstOffset, src, srcOffset, numBytes);
 }
 
-// „Ÿ„Ÿ Shader „Ÿ„Ÿ
+// shader bind å‡¦ç†ã€‚
 
 void DX12CommandList::VSSetShader(IShader* shader) {
     m_pendingDesc.vertexShader = shader;
@@ -397,16 +397,16 @@ void DX12CommandList::GSSetShader(IShader* shader) {
 
 void DX12CommandList::CSSetShader(IShader* shader) {
     m_pendingDesc.computeShader = shader;
-    // Compute uses a separate pipeline; mark dirty
+    // compute ã¯åˆ¥ pipeline ã‚’ä½¿ã†ãŸã‚ dirty ã¨ã—ã¦æ‰±ã†ã€‚
     m_psoDirty = true;
 }
 
-// „Ÿ„Ÿ Constant buffers „Ÿ„Ÿ
+// constant buffer ã® bind å‡¦ç†ã€‚
 
 void DX12CommandList::VSSetConstantBuffer(uint32_t slot, IBuffer* buffer) {
     if (!buffer) return;
     auto* dx12Buf = static_cast<DX12Buffer*>(buffer);
-    // Map slot to root parameter
+    // slot ã‚’ root parameter ã¸å¯¾å¿œä»˜ã‘ã‚‹ã€‚
     if (slot < 8) {
         m_commandList->SetGraphicsRootConstantBufferView(slot, dx12Buf->GetGPUVirtualAddress());
     }
@@ -428,15 +428,15 @@ void DX12CommandList::CSSetConstantBuffer(uint32_t slot, IBuffer* buffer) {
     }
 }
 
-// „Ÿ„Ÿ Textures (SRV) „Ÿ„Ÿ
+// texture SRV ã® bind å‡¦ç†ã€‚
 
 void DX12CommandList::EnsureSrvBlock() {
-    // ƒq[ƒv‚Í Begin() ‚Åİ’èÏ‚İBSkybox “™‚ÅØ‚è‘Ö‚¦‚½ê‡‚Í RestoreDescriptorHeap() ‚Å•œŒ³B
-    // ‚±‚±‚Å‚Í SetDescriptorHeaps / SetGraphicsRootSignature ‚ğŒÄ‚Î‚È‚¢B
-    // SetGraphicsRootSignature ‚ğÄŒÄo‚µ‚·‚é‚Æ‘Sƒ‹[ƒgƒpƒ‰ƒ[ƒ^iCBV“™j‚ª–³Œø‰»‚³‚ê‚éB
+    // ãƒ’ãƒ¼ãƒ—ã¯ Begin() ã§è¨­å®šæ¸ˆã¿ã€‚Skybox ç­‰ã§åˆ‡ã‚Šæ›¿ãˆãŸå ´åˆã¯ RestoreDescriptorHeap() ã§å¾©å…ƒã€‚
+    // ã“ã“ã§ã¯ SetDescriptorHeaps / SetGraphicsRootSignature ã‚’å‘¼ã°ãªã„ã€‚
+    // SetGraphicsRootSignature ã‚’å†å‘¼å‡ºã—ã™ã‚‹ã¨å…¨ãƒ«ãƒ¼ãƒˆãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ï¼ˆCBVç­‰ï¼‰ãŒç„¡åŠ¹åŒ–ã•ã‚Œã‚‹ã€‚
 
     if (!m_srvBlockAllocated) {
-        // 64ƒXƒƒbƒg•ª‚Ì˜A‘±ƒfƒBƒXƒNƒŠƒvƒ^ƒuƒƒbƒN‚ğŠm•Û
+        // 64ã‚¹ãƒ­ãƒƒãƒˆåˆ†ã®é€£ç¶šãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿ãƒ–ãƒ­ãƒƒã‚¯ã‚’ç¢ºä¿
         m_srvBlockCpuBase = m_frameSrvAllocator->AllocateBlock(kSrvSlotCount);
         m_srvBlockGpuBase = m_frameSrvAllocator->GetGPUHandle(m_srvBlockCpuBase);
         m_srvBlockAllocated = true;
@@ -473,7 +473,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12CommandList::GetNullSrvHandle(NullSrvKind kind) 
 
 void DX12CommandList::BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count) {
     if (!bindings || count == 0) return;
-    // DrawŒã‚ÌÅ‰‚ÌƒeƒNƒXƒ`ƒƒƒoƒCƒ“ƒh‚ÅVƒuƒƒbƒNŠm•Û
+    // Drawå¾Œã®æœ€åˆã®ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒã‚¤ãƒ³ãƒ‰ã§æ–°ãƒ–ãƒ­ãƒƒã‚¯ç¢ºä¿
     if (m_srvDirtyAfterDraw) {
         m_srvBlockAllocated = false;
         m_srvDirtyAfterDraw = false;
@@ -507,7 +507,7 @@ void DX12CommandList::PSSetTexture(uint32_t slot, ITexture* texture) {
 
 void DX12CommandList::PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) {
     if (numTextures == 0 || !ppTextures) return;
-    // DrawŒã‚ÌÅ‰‚ÌƒeƒNƒXƒ`ƒƒƒoƒCƒ“ƒh‚ÅVƒuƒƒbƒNŠm•Û
+    // Drawå¾Œã®æœ€åˆã®ãƒ†ã‚¯ã‚¹ãƒãƒ£ãƒã‚¤ãƒ³ãƒ‰ã§æ–°ãƒ–ãƒ­ãƒƒã‚¯ç¢ºä¿
     if (m_srvDirtyAfterDraw) {
         m_srvBlockAllocated = false;
         m_srvDirtyAfterDraw = false;
@@ -531,23 +531,23 @@ void DX12CommandList::PSSetTextures(uint32_t startSlot, uint32_t numTextures, IT
             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
 
-    // ƒfƒBƒXƒNƒŠƒvƒ^‚Ì‘‚«‚İŠ®—¹Œã‚É SRV ƒe[ƒuƒ‹‚ğÄƒoƒCƒ“ƒh‚·‚éB
-    // ‚±‚ê‚æ‚è‘O‚ÉƒoƒCƒ“ƒh‚·‚é‚ÆAˆê•”ƒhƒ‰ƒCƒo‚ÅŒÃ‚¢/null ‹Lqq‚ğQÆ‚µ‘±‚¯‚é‚±‚Æ‚ª‚ ‚éB
+    // ãƒ‡ã‚£ã‚¹ã‚¯ãƒªãƒ—ã‚¿ã®æ›¸ãè¾¼ã¿å®Œäº†å¾Œã« SRV ãƒ†ãƒ¼ãƒ–ãƒ«ã‚’å†ãƒã‚¤ãƒ³ãƒ‰ã™ã‚‹ã€‚
+    // ã“ã‚Œã‚ˆã‚Šå‰ã«ãƒã‚¤ãƒ³ãƒ‰ã™ã‚‹ã¨ã€ä¸€éƒ¨ãƒ‰ãƒ©ã‚¤ãƒã§å¤ã„/null è¨˜è¿°å­ã‚’å‚ç…§ã—ç¶šã‘ã‚‹ã“ã¨ãŒã‚ã‚‹ã€‚
     m_commandList->SetGraphicsRootDescriptorTable(DX12RootSignature::SRVTable, m_srvBlockGpuBase);
 }
 
-// „Ÿ„Ÿ Samplers „Ÿ„Ÿ
+// sampler ã® bind å‡¦ç†ã€‚
 
 void DX12CommandList::PSSetSampler(uint32_t slot, ISampler* sampler) {
-    // DX12: samplers are baked into root signature or separate heap
-    // For now, no-op (static samplers would handle this in a more complete implementation)
+    // DX12 ã§ã¯ sampler ã¯ root signature ã¾ãŸã¯åˆ¥ heap ã«ç„¼ãè¾¼ã‚€ã€‚
+    // ç¾çŠ¶ã¯ no-opã€‚å®Œå…¨å®Ÿè£…ã§ã¯ static sampler ãŒæ‹…å½“ã™ã‚‹ã€‚
 }
 
 void DX12CommandList::PSSetSamplers(uint32_t startSlot, uint32_t numSamplers, ISampler* const* ppSamplers) {
-    // No-op for now (see above)
+    // ç¾çŠ¶ã¯ä¸Šè¨˜ç†ç”±ã«ã‚ˆã‚Š no-opã€‚
 }
 
-// „Ÿ„Ÿ Viewport „Ÿ„Ÿ
+// viewport è¨­å®šã€‚
 
 void DX12CommandList::SetViewport(const RhiViewport& viewport) {
     D3D12_VIEWPORT vp;
@@ -567,10 +567,10 @@ void DX12CommandList::SetViewport(const RhiViewport& viewport) {
     m_commandList->RSSetScissorRects(1, &scissor);
 }
 
-// „Ÿ„Ÿ Input Assembler „Ÿ„Ÿ
+// input assembler è¨­å®šã€‚
 
 void DX12CommandList::SetInputLayout(IInputLayout* layout) {
-    // In DX12, input layout is part of PSO; store for PSO compilation
+    // DX12 ã§ã¯ input layout ãŒ PSO ã®ä¸€éƒ¨ãªã®ã§ã€PSO compile ç”¨ã«ä¿æŒã™ã‚‹ã€‚
     m_pendingDesc.inputLayout = layout;
     m_psoDirty = true;
 }
@@ -611,7 +611,7 @@ void DX12CommandList::SetIndexBuffer(IBuffer* buffer, IndexFormat format, uint32
     m_commandList->IASetIndexBuffer(&ibView);
 }
 
-// „Ÿ„Ÿ States (deferred into PSO) „Ÿ„Ÿ
+// PSO ã¸é…å»¶åæ˜ ã™ã‚‹ state è¨­å®šã€‚
 
 void DX12CommandList::SetDepthStencilState(IDepthStencilState* state, uint32_t stencilRef) {
     m_pendingDesc.depthStencilState = state;
@@ -633,7 +633,7 @@ void DX12CommandList::SetBlendState(IBlendState* state, const float blendFactor[
     }
 }
 
-// „Ÿ„Ÿ Render targets „Ÿ„Ÿ
+// render target è¨­å®šã€‚
 
 void DX12CommandList::SetRenderTarget(ITexture* rt, ITexture* depthStencil) {
     if (rt == nullptr) {
@@ -667,7 +667,7 @@ void DX12CommandList::SetRenderTargets(uint32_t numRTs, ITexture* const* rts, IT
 
     m_commandList->OMSetRenderTargets(rtvCount, rtvCount > 0 ? rtvHandles : nullptr, FALSE, pDSV);
 
-    // Track RT/DSV formats for PSO compilation
+    // PSO compile ç”¨ã« RT / DSV format ã‚’è¿½è·¡ã™ã‚‹ã€‚
     m_pendingDesc.numRenderTargets = rtvCount;
     for (uint32_t i = 0; i < 8; ++i) m_pendingDesc.rtvFormats[i] = TextureFormat::Unknown;
     for (uint32_t i = 0; i < rtvCount; ++i) {
@@ -698,7 +698,7 @@ void DX12CommandList::ClearDepthStencil(ITexture* depthStencil, float depth, uin
     }
 }
 
-// „Ÿ„Ÿ Barriers „Ÿ„Ÿ
+// resource barrier å‡¦ç†ã€‚
 
 void DX12CommandList::TransitionBarrier(ITexture* texture, ResourceState newState) {
     if (!texture) return;
@@ -783,10 +783,10 @@ D3D12_RESOURCE_STATES DX12CommandList::ToD3D12State(ResourceState state) {
     }
 }
 
-// „Ÿ„Ÿ Misc „Ÿ„Ÿ
+// ãã®ä»–ã®è£œåŠ©å‡¦ç†ã€‚
 
 void DX12CommandList::SetBindGroup(ShaderStage stage, uint32_t index, IBind* bind) {
-    // Not used in current architecture
+    // ç¾åœ¨ã®æ§‹æˆã§ã¯ä½¿ç”¨ã—ãªã„ã€‚
 }
 
 void DX12CommandList::SetPipelineState(IPipelineState* pso) {
@@ -798,8 +798,8 @@ void DX12CommandList::SetPipelineState(IPipelineState* pso) {
         m_commandList->SetPipelineState(dx12PSO->GetNativePSO());
         m_psoDirty = false;
     } else {
-        // Factory » PSO ‚ÍƒlƒCƒeƒBƒu PSO ‚ğ‚½‚È‚¢‚½‚ßA
-        // Ÿ‚Ì Draw ‚Å PSOCache ‚©‚ç³‚µ‚¢ PSO ‚ğƒRƒ“ƒpƒCƒ‹‚³‚¹‚éB
+        // Factory è£½ PSO ã¯ãƒã‚¤ãƒ†ã‚£ãƒ– PSO ã‚’æŒãŸãªã„ãŸã‚ã€
+        // æ¬¡ã® Draw ã§ PSOCache ã‹ã‚‰æ­£ã—ã„ PSO ã‚’ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã•ã›ã‚‹ã€‚
         m_psoDirty = true;
     }
 }
@@ -815,6 +815,6 @@ void DX12CommandList::UpdateBuffer(IBuffer* buffer, const void* data, uint32_t s
 }
 
 ID3D11DeviceContext* DX12CommandList::GetNativeContext() {
-    // DX12 has no equivalent to ID3D11DeviceContext
+    // DX12 ã«ã¯ ID3D11DeviceContext ç›¸å½“ã® object ãŒãªã„ã€‚
     return nullptr;
 }

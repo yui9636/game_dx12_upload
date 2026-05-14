@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
@@ -11,11 +11,9 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
-    // ====================================================
-    // ====================================================
-    ResourceHandle m_hGBuffer0; // Albedo + Metallic
-    ResourceHandle m_hGBuffer1; // Normal + Roughness
-    ResourceHandle m_hGBuffer2; // WorldPos + Depth(A)
-    ResourceHandle m_hGBuffer3; // Velocity (RG)
-    ResourceHandle m_hDepth;    // DepthStencil
+    ResourceHandle m_hGBuffer0; // Albedo と Metallic。
+    ResourceHandle m_hGBuffer1; // 法線と Roughness。
+    ResourceHandle m_hGBuffer2; // WorldPos 用。 + Depth(A)
+    ResourceHandle m_hGBuffer3; // Velocity を RG へ格納する。
+    ResourceHandle m_hDepth;    // DepthStencil 用。
 };

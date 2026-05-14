@@ -1,4 +1,4 @@
-#include "SpriteRenderer.h"
+﻿#include "SpriteRenderer.h"
 
 #include "Sprite.h"
 #include "Graphics.h"
@@ -16,8 +16,8 @@
 
 namespace
 {
-    // Vertex layout matches Shader/SpriteVS.hlsl:
-    //   POSITION (float3), COLOR (float4), TEXCOORD (float2)
+    // 頂点レイアウトは Shader/SpriteVS.hlsl と一致させる。
+    //   POSITION は float3、COLOR は float4、TEXCOORD は float2。
     struct SpriteVertex
     {
         DirectX::XMFLOAT3 position;
@@ -25,7 +25,7 @@ namespace
         DirectX::XMFLOAT2 texcoord;
     };
 
-    // Mirrors the layout in Shader/Sprite.hlsli register(b0).
+    // Shader/Sprite.hlsli の register(b0) と同じメモリ配置にする。
     struct UIConstants
     {
         DirectX::XMFLOAT4 color;
@@ -49,19 +49,19 @@ void SpriteRenderer::Initialize(IResourceFactory* factory)
         return;
     }
 
-    // Step (a) of spec 3.5: load existing pre-compiled .cso. They were
-    // already produced by the FxCompile entries in Game.vcxproj at SM5.0.
+    // 仕様 3.5 の Step (a): 既存の事前コンパイル済み .cso を読み込む。
+    // これらは Game.vcxproj の FxCompile 設定で SM5.0 として生成済み。
     auto vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/SpriteVS.cso");
     auto ps = factory->CreateShader(ShaderType::Pixel,  "Data/Shader/SpriteUI_PS.cso");
     if (!vs || !ps) {
-        // Shaders missing on disk. Stay uninitialized so HUDPass / UIElement
-        // can detect the situation and skip drawing instead of crashing.
+        // シェーダーファイルが見つからない場合は未初期化のままにし、
+        // HUDPass / UIElement が描画をスキップしてクラッシュを避けられるようにする。
         return;
     }
     m_vs.reset(vs.release());
     m_ps.reset(ps.release());
 
-    // Input layout (POSITION / COLOR / TEXCOORD) for SpriteVertex.
+    // SpriteVertex 用の入力レイアウトは POSITION / COLOR / TEXCOORD。
     InputLayoutElement elements[3];
     elements[0] = { "POSITION", 0, TextureFormat::R32G32B32_FLOAT,    0, 0,                                false, 0 };
     elements[1] = { "COLOR",    0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement,            false, 0 };
@@ -72,9 +72,9 @@ void SpriteRenderer::Initialize(IResourceFactory* factory)
         m_inputLayout.reset(il.release());
     }
 
-    // Build the PSO. Alpha-blended, no depth, triangle strip (4 verts per
-    // sprite). RTV format follows the Display framebuffer because the
-    // HUDPass writes to DisplayColor.
+    // PSO を作成する。アルファブレンド、有効な深度なし、triangle strip で
+    // スプライト 1 枚を 4 頂点で描く。RTV 形式は Display framebuffer に合わせる。
+    // HUDPass が DisplayColor へ書き込むため。
     auto* rs = Graphics::Instance().GetRenderState();
     PipelineStateDesc desc{};
     desc.vertexShader      = m_vs.get();
@@ -97,9 +97,9 @@ void SpriteRenderer::Initialize(IResourceFactory* factory)
         m_pso.reset(pso.release());
     }
 
-    // Per-draw mutable resources. The vertex buffer holds exactly 4
-    // vertices (one quad). Begin / End brackets a single frame so we
-    // can rewrite the same buffer for every Draw call.
+    // 描画ごとに書き換えるリソース。頂点バッファは 4 頂点だけを保持し、
+    // 1 枚の矩形を表す。Begin / End で 1 フレームを区切るため、
+    // 各 Draw 呼び出しで同じバッファを再利用して書き換えられる。
     auto vb = factory->CreateBuffer(
         sizeof(SpriteVertex) * kVertexCountPerSprite,
         BufferType::Vertex,
@@ -208,9 +208,9 @@ void SpriteRenderer::DrawInternal(const Sprite& sprite,
     m_currentCommandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
     m_currentCommandList->SetInputLayout(m_inputLayout.get());
 
-    // Build the four corners in screen pixel space, then convert to NDC.
-    // dx,dy is the pivot-corrected top-left of the quad. Callers handle the
-    // pivot themselves to keep the shader-side math trivial.
+    // 4 隅を画面ピクセル座標で作り、その後 NDC へ変換する。
+    // dx,dy は pivot 補正後の矩形左上。呼び出し側が pivot を処理し、
+    // シェーダー側の計算を単純に保つ。
     const float cx = dx + dw * 0.5f;
     const float cy = dy + dh * 0.5f;
     const float c = std::cos(angleRad);
@@ -242,7 +242,7 @@ void SpriteRenderer::DrawInternal(const Sprite& sprite,
     const float u1 = (sx + sw) / texW;
     const float v1 = (sy + sh) / texH;
 
-    // TriangleStrip order: TL, TR, BL, BR
+    // TriangleStrip の頂点順は左上、右上、左下、右下。
     SpriteVertex vertices[kVertexCountPerSprite];
     vertices[0].position = pixelToNdc(cornersPx[0]);
     vertices[1].position = pixelToNdc(cornersPx[1]);

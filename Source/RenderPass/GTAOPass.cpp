@@ -1,4 +1,4 @@
-#include "GTAOPass.h"
+﻿#include "GTAOPass.h"
 #include "Graphics.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
@@ -11,6 +11,7 @@
 
 GTAOPass::~GTAOPass() = default;
 
+// GTAO 用のフルスクリーン描画 PSO を構築する。
 GTAOPass::GTAOPass(IResourceFactory* factory)
 {
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/DeferredLightingVS.cso");
@@ -34,6 +35,7 @@ GTAOPass::GTAOPass(IResourceFactory* factory)
     m_pso = factory->CreatePipelineState(desc);
 }
 
+// GBuffer を入力として読み、AO 出力用の R8 テクスチャを FrameGraph に登録する。
 void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
@@ -46,9 +48,6 @@ void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
         m_hGTAO = {};
         return;
     }
-
-    // =========================================================
-    // =========================================================
     uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
@@ -69,6 +68,7 @@ void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     builder.RegisterHandle("GTAO", m_hGTAO);
 }
 
+// GBuffer から GTAO を描画し、DX11/DX12 ごとのテクスチャ束縛へ分岐する。
 void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc)
 {
     if (!rc.enableGTAO) {
@@ -87,9 +87,6 @@ void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     float clearColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
     rc.commandList->ClearColor(gtaoTex, clearColor);
     rc.commandList->SetRenderTarget(gtaoTex, nullptr);
-
-    // =========================================================
-    // =========================================================
     rc.mainRenderTarget = gtaoTex;
     rc.mainDepthStencil = nullptr;
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)gtaoTex->GetWidth(), (float)gtaoTex->GetHeight());

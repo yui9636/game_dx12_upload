@@ -1,4 +1,4 @@
-#include "ResourceManager.h"
+﻿#include "ResourceManager.h"
 #include "Model/Model.h"
 #include "Graphics.h"
 #include "GpuResourceUtils.h"
@@ -482,7 +482,7 @@ std::shared_ptr<MaterialAsset> ResourceManager::GetDefaultMaterial() {
         m_defaultMaterial->baseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
         m_defaultMaterial->metallic = 1.0f;
         m_defaultMaterial->roughness = 1.0f;
-        m_defaultMaterial->shaderId = 1; // PBR
+        m_defaultMaterial->shaderId = 1; // PBR shader を使う。
     }
     return m_defaultMaterial;
 }

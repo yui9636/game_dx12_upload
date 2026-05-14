@@ -1,4 +1,5 @@
-﻿#include "BuildIndirectCommandPass.h"
+﻿// BuildIndirectCommandPass のレンダーパス実装をまとめます。
+#include "BuildIndirectCommandPass.h"
 #include "Graphics.h"
 #include "Model/ModelResource.h"
 #include "RHI/IBuffer.h"

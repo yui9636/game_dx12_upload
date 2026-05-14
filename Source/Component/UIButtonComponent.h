@@ -1,15 +1,15 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 
-// Marks an entity as a 2D UI button.
-// Combine with CanvasItemComponent + RectTransformComponent + SpriteComponent
-// in a Hierarchy. Click detection is done by UIButtonClickSystem.
+// entity を 2D UI button として扱うための印。
+// CanvasItemComponent、RectTransformComponent、SpriteComponent と組み合わせる。
+// Hierarchy 内で使い、クリック検出は UIButtonClickSystem が行う。
 struct UIButtonComponent
 {
-    // Event-style id emitted when the button completes a click.
+    // click 完了時に発行する event-style id。
     std::string buttonId;
 
-    // While false, no click event is emitted for this button.
+    // false の間はこの button から click event を発行しない。
     bool enabled = true;
 };

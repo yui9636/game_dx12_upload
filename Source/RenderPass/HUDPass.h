@@ -1,17 +1,16 @@
-#pragma once
+﻿#pragma once
 
 #include "IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
 class IResourceFactory;
 
-// Game HUD pass. Runs after FinalBlitPass so we draw on the LDR
-// DisplayColor (post tone-mapping). The pass owns no PSO of its own;
-// it sets up the render target and viewport, then forwards drawing to
-// SpriteRenderer + UIManager + DamageTextManager.
-//
-// See HUD_HPBar_Spec_2026-05-05 v3 section 3.4 for the rationale on
-// targeting DisplayColor instead of HDR SceneColor.
+// Game HUD pass は FinalBlitPass の後に実行し、LDR の
+// DisplayColor へ描画する。pass 自身は PSO を持たず、
+// render target と viewport を設定してから描画を
+// SpriteRenderer、UIManager、DamageTextManager へ委譲する。
+// DisplayColor を対象にする理由は HUD_HPBar_Spec_2026-05-05 v3 の 3.4 節にある。
+// HDR SceneColor ではなく tone mapping 後の DisplayColor を使う。
 class HUDPass : public IRenderPass
 {
 public:

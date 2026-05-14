@@ -1,4 +1,5 @@
 #include "ShadingFunctions.hlsli"
+// SkyBox はこの描画経路で共有する入力構造や定数を定義する。
 
 cbuffer CbScene : register(b0)
 {

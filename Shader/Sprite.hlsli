@@ -1,4 +1,4 @@
-// 頂点シェーダー出力データ
+// 鬆らせ繧ｷ繧ｧ繝ｼ繝繝ｼ蜃ｺ蜉帙ョ繝ｼ繧ｿ
 struct VS_OUT
 {
 	float4 position : SV_POSITION;
@@ -8,7 +8,7 @@ struct VS_OUT
 
 cbuffer UIConstants : register(b0)
 {
-    float4 color; // 通常の乗算カラー (RGBA)
-    float4 glowColor; // 発光色 (RGB)
-    float glowIntensity; // 発光強度 (0.0 ~ )
+    float4 color; // 騾壼ｸｸ縺ｮ荵礼ｮ励き繝ｩ繝ｼ (RGBA)
+    float4 glowColor; // 逋ｺ蜈芽牡 (RGB)
+    float glowIntensity; // 逋ｺ蜈牙ｼｷ蠎ｦ (0.0 ~ )
 };

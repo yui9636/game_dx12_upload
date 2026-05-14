@@ -1,3 +1,4 @@
+﻿// PhysicsComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 #include "Jolt/jolt.h"
 #include <Jolt/Physics/Body/BodyID.h>

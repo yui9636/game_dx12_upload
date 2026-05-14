@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <DirectXMath.h>
@@ -11,40 +11,39 @@ class IResourceFactory;
 class IShader;
 class Sprite;
 
-// Engine-owned 2D sprite render base. Holds the PSO / shaders / dynamic
-// vertex buffer / per-draw constant buffer. Drawing always goes through
-// Begin -> Draw* -> End during the HUDPass execution.
-//
-// Coordinate convention (per HUD_HPBar_Spec_2026-05-05 v3 section 3.3):
-//   dx, dy : screen pixel, top-left origin
-//   dw, dh : screen pixel size
-//   sx, sy, sw, sh : texture pixel coordinates
-//   angleRad : radians, rotates around the quad centre
+// エンジン側で所有する 2D スプライト描画基盤。PSO、シェーダー、動的
+// 頂点バッファ、描画ごとの定数バッファを保持する。描画は常に
+// HUDPass 実行中の Begin -> Draw* -> End を通る。
+// 座標規約は HUD_HPBar_Spec_2026-05-05 v3 の 3.3 節に合わせる。
+//   dx, dy : 画面ピクセル座標、左上原点。
+//   dw, dh : 画面ピクセル単位のサイズ。
+//   sx, sy, sw, sh : テクスチャ内のピクセル座標。
+//   angleRad : ラジアン単位で、矩形中央を軸に回転する。
 class SpriteRenderer
 {
 public:
     static SpriteRenderer& Instance();
 
-    // Build PSO / shaders / buffers. Called once at engine bring-up after
-    // the resource factory is available (DX12 only; the DX11 path is a
-    // no-op for HUD purposes per spec section 3.7).
+    // PSO、シェーダー、バッファを構築する。ResourceFactory が使える
+    // エンジン起動後に一度だけ呼ぶ。DX12 専用で、DX11 経路は
+    // 仕様 3.7 節に従い HUD では no-op とする。
     void Initialize(IResourceFactory* factory);
     void Finalize();
 
-    // Begin / End frame the SpriteRenderer's command list scope. The
-    // command list and viewport pixel size are captured here so Draw()
-    // can compute NDC without re-querying every call.
+    // Begin / End は SpriteRenderer のコマンドリスト範囲を区切る。
+    // ここでコマンドリストと viewport ピクセルサイズを保持し、
+    // Draw() が毎回問い合わせずに NDC を計算できるようにする。
     void Begin(ICommandList* commandList, const DirectX::XMFLOAT2& viewportPx);
     void End();
 
-    // Full-rect texture variant.
+    // テクスチャ全体を描画するバリアント。
     void Draw(const Sprite& sprite,
               float dx, float dy,
               float dw, float dh,
               float angleRad,
               const DirectX::XMFLOAT4& tintColor);
 
-    // Source sub-rect variant (for filled bars / atlas glyphs).
+    // バーの塗り幅や atlas glyph 用に、テクスチャの一部だけを描画するバリアント。
     void Draw(const Sprite& sprite,
               float dx, float dy,
               float dw, float dh,
@@ -98,8 +97,8 @@ private:
     std::shared_ptr<IShader>        m_ps;
     std::shared_ptr<IInputLayout>   m_inputLayout;
     std::shared_ptr<IPipelineState> m_pso;
-    std::shared_ptr<IBuffer>        m_vertexBuffer;     // 4 vertices, dynamic
-    std::shared_ptr<IBuffer>        m_constantBuffer;   // UIConstants, aligned to 256
+    std::shared_ptr<IBuffer>        m_vertexBuffer;     // 4 頂点分の動的バッファ。
+    std::shared_ptr<IBuffer>        m_constantBuffer;   // 256 バイト境界にそろえた UIConstants。
 
     ICommandList* m_currentCommandList = nullptr;
     DirectX::XMFLOAT2 m_currentViewport{ 0.0f, 0.0f };

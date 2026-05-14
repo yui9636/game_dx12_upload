@@ -1,8 +1,6 @@
-﻿// ============================================================================
-// PlayerEditor — Timeline panel (track headers, grid, playback toolbar) and
-// timeline-related queries (frame limit, animation duration, selector).
-// Sibling of PlayerEditorPanel.cpp; split out for readability.
-// ============================================================================
+﻿// PlayerEditor のタイムラインパネル（トラックヘッダ、グリッド、再生ツールバー）と
+// タイムライン関連の問い合わせ（フレーム上限、アニメーション長、セレクタ）。
+// PlayerEditorPanel.cpp の兄弟ファイルとして、可読性のため分離している。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -37,14 +35,14 @@ void PlayerEditorPanel::DrawTimelinePanel()
     float availH = ImGui::GetContentRegionAvail().y;
     float availW = ImGui::GetContentRegionAvail().x;
 
-    // Left: Track Headers
+    // 左: トラックヘッダ
     ImGui::BeginChild("TLHeaders", ImVec2(kTrackHeaderWidth, availH), ImGuiChildFlags_Borders);
     DrawTimelineTrackHeaders(availH);
     ImGui::EndChild();
 
     ImGui::SameLine();
 
-    // Right: Grid
+    // 右: グリッド
     ImGui::BeginChild("TLGrid", ImVec2(availW - kTrackHeaderWidth - 8, availH),
         ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
     DrawTimelineGrid(availH);
@@ -216,14 +214,14 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
 
     ImGui::Separator();
 
-    // Track list
+    // トラック一覧
     for (int ti = 0; ti < (int)m_timelineAsset.tracks.size(); ++ti) {
         auto& track = m_timelineAsset.tracks[ti];
         ImGui::PushID(track.id);
 
         bool selected = (m_selectedTrackId == (int)track.id);
 
-        // Mute toggle icon
+        // ミュート切り替えアイコン
         if (track.muted)
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
 
@@ -236,7 +234,7 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
         if (track.muted)
             ImGui::PopStyleColor();
 
-        // Context menu
+        // コンテキストメニュー
         if (ImGui::BeginPopupContextItem()) {
             if (ImGui::Checkbox("Muted", &track.muted)) m_timelineDirty = true;
             if (ImGui::Checkbox("Locked", &track.locked)) m_timelineDirty = true;
@@ -276,11 +274,11 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
     float totalWidth = totalFrames * ppf;
     float drawWidth = (std::max)(canvasSize.x, totalWidth);
 
-    // Background
+    // 背景
     dl->AddRectFilled(canvasPos, ImVec2(canvasPos.x + drawWidth, canvasPos.y + canvasSize.y),
         IM_COL32(28, 28, 28, 255));
 
-    // Ruler
+    // ルーラー
     float rulerH = 22.0f;
     int frameStep = (std::max)(1, (int)(40.0f / ppf));
     for (int f = 0; f <= totalFrames; f += frameStep) {
@@ -294,7 +292,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         }
     }
 
-    // Track rows & items
+    // トラック行と項目
     float yOff = rulerH;
     for (int ti = 0; ti < (int)m_timelineAsset.tracks.size(); ++ti) {
         auto& track = m_timelineAsset.tracks[ti];
@@ -321,13 +319,13 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             bool rightResizeHovered = false;
             bool resizingItem = false;
 
-            // Item body with rounded corners
+            // 角丸の項目本体
             dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x1, y1), itemCol, 4.0f);
             if (isSelItem) {
                 dl->AddRect(ImVec2(x0, y0), ImVec2(x1, y1), IM_COL32(255, 255, 255, 255), 4.0f, 0, 2.0f);
             }
 
-            // Frame range label inside item
+            // 項目内のフレーム範囲ラベル
             if ((x1 - x0) > 40) {
                 char lbl[32]; snprintf(lbl, sizeof(lbl), "%d-%d", item.startFrame, item.endFrame);
                 dl->AddText(ImVec2(x0 + 3, y0 + 1), IM_COL32(255, 255, 255, 180), lbl);
@@ -370,7 +368,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 }
             }
 
-            // Click / drag body after resize handles so the edges win.
+            // リサイズハンドル後に本体クリック/ドラッグを処理し、端の操作を優先する。
             ImGui::SetCursorScreenPos(ImVec2(x0, y0));
             ImGui::InvisibleButton(("item_" + std::to_string(track.id) + "_" + std::to_string(ii)).c_str(),
                 ImVec2((std::max)(x1 - x0, 4.0f), y1 - y0));
@@ -381,7 +379,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 m_selectionCtx = SelectionContext::TimelineItem;
             }
 
-            // Drag to move only when not resizing.
+            // リサイズ中でないときだけドラッグ移動する。
             if (!resizingItem && ImGui::IsItemActive() && ImGui::IsMouseDragging(0) && !track.locked) {
                 float dx = ImGui::GetMouseDragDelta(0).x;
                 int frameDelta = (int)(dx / ppf);
@@ -400,7 +398,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
                 }
             }
 
-            // Right-click: delete item
+            // 右クリック: 項目削除
             if (ImGui::IsItemClicked(1)) {
                 m_selectedTrackId = track.id;
                 m_selectedItemIdx = ii;
@@ -409,7 +407,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
             }
         }
 
-          // Right-click on empty track area is intentionally disabled.
+          // 空トラック領域の右クリックは意図的に無効化している。
           ImGui::SetCursorScreenPos(ImVec2(canvasPos.x, trackY));
           ImGui::InvisibleButton(("trow_" + std::to_string(track.id)).c_str(),
               ImVec2(drawWidth, kTrackHeight));
@@ -417,7 +415,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         yOff += kTrackHeight;
     }
 
-      // Item context menu
+      // 項目コンテキストメニュー
       if (ImGui::BeginPopup("ItemCtx")) {
           if (ImGui::MenuItem(ICON_FA_TRASH " Delete")) {
               for (auto& track : m_timelineAsset.tracks) {
@@ -437,7 +435,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         ImGui::EndPopup();
     }
 
-    // Playhead
+    // 再生ヘッド
     float phX = std::floor(canvasPos.x + m_playheadFrame * ppf) + 0.5f;
     dl->AddLine(ImVec2(phX, canvasPos.y), ImVec2(phX, canvasPos.y + canvasSize.y),
         IM_COL32(255, 70, 70, 255), 2.0f);
@@ -447,7 +445,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         ImVec2(phX, canvasPos.y + kPlayheadTriSize * 1.5f),
         IM_COL32(255, 70, 70, 255));
 
-    // Click ruler to scrub
+    // ルーラークリックでスクラブ
     ImGui::SetCursorScreenPos(canvasPos);
     ImGui::InvisibleButton("ruler_click", ImVec2(drawWidth, rulerH));
     if (ImGui::IsItemActive()) {
@@ -460,7 +458,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         SyncPreviewTimelinePlayback();
     }
 
-    // Zoom with scroll wheel
+    // ホイールでズーム
     if (ImGui::IsWindowHovered()) {
         float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f) {
@@ -469,7 +467,7 @@ void PlayerEditorPanel::DrawTimelineGrid(float height)
         }
     }
 
-    // Dummy for scrollbar
+    // スクロールバー用ダミー
     ImGui::SetCursorScreenPos(ImVec2(canvasPos.x + totalWidth, canvasPos.y + yOff + rulerH));
     ImGui::Dummy(ImVec2(0, 0));
 }

@@ -1,3 +1,4 @@
+﻿// EffectParticlePass のレンダーパス宣言をまとめます。
 #pragma once
 
 #include "IRenderPass.h"

@@ -1,3 +1,4 @@
+﻿// ResolvedInputStateComponent の入力処理関連宣言をまとめます。
 #pragma once
 #include <cstdint>
 #include "InputEvent.h"

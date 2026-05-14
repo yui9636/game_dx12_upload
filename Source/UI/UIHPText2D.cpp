@@ -1,3 +1,4 @@
+﻿// UIHPText2D の UI 関連実装をまとめます。
 #include "UIHPText2D.h"
 
 #include "Graphics.h"

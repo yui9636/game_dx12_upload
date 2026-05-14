@@ -4,6 +4,7 @@ cbuffer CbScene : register(b0)
 {
     row_major float4x4 lightViewProjection;
 }
+// main は影マップ生成用に頂点をライト空間へ変換する。
 
 float4 main(float4 position : POSITION,
 	        float4 boneWeights : BONE_WEIGHTS,

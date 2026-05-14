@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
 
@@ -6,8 +6,8 @@ class Registry;
 class UIButtonClickEventQueue;
 class InputEventQueue;
 
-// Detect 2D UI Button clicks and push them into the event queue.
-// view/projection are passed in (built from the main camera by EngineKernel).
+// 2D UI Button のクリックを検出し、event queue へ積む。
+// view / projection は EngineKernel が main camera から作成して渡す。
 class UIButtonClickSystem
 {
 public:

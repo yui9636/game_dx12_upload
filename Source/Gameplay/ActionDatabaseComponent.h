@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
+// ActionNode は animIndex/nextLight/nextHeavy/nextDodge を保持し、関連システムが実行時状態として参照する。
 
 struct ActionNode {
     int animIndex = 0;

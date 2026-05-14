@@ -1,4 +1,4 @@
-#include "GizmoOverlay.h"
+﻿#include "GizmoOverlay.h"
 #include "TimelineAsset.h"
 #include "Gizmos.h"
 #include <DirectXMath.h>
@@ -19,7 +19,7 @@ void GizmoOverlay::DrawActiveHitboxes(Gizmos* gizmo, const TimelineAsset& asset,
             auto& hb = item.hitbox;
             if (hb.nodeIndex < 0 || hb.nodeIndex >= nodeCount) continue;
 
-            // Get node world transform (4x4 matrix stored row-major, 16 floats per node)
+            // ノードのワールド行列を取得する。4x4 行列はノードごとに 16 float の row-major で格納される。
             const float* m = nodeWorldTransforms + hb.nodeIndex * 16;
             XMFLOAT4X4 nodeMat;
             memcpy(&nodeMat, m, sizeof(XMFLOAT4X4));
@@ -31,7 +31,7 @@ void GizmoOverlay::DrawActiveHitboxes(Gizmos* gizmo, const TimelineAsset& asset,
             XMFLOAT3 center;
             XMStoreFloat3(&center, worldPos);
 
-            // Decode RGBA color
+            // RGBA 色を描画用の成分へ展開する。
             float r = ((hb.rgba >> 24) & 0xFF) / 255.0f;
             float g = ((hb.rgba >> 16) & 0xFF) / 255.0f;
             float b = ((hb.rgba >> 8) & 0xFF) / 255.0f;

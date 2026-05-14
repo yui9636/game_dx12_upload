@@ -38,9 +38,9 @@ namespace {
                 XMStoreFloat4x4(&cb.prevBoneTransforms[i], offset * modelS * prevW);
             }
         } else {
-            // Effect entities have no MeshComponent, so ModelUpdateSystem never ran and
-            // mesh.nodeWorldTransform stayed zeroed. Fall back to identity * W — effect
-            // meshes render at the actor's world transform directly.
+            // Effect entity は MeshComponent を持たないため ModelUpdateSystem が走らず、
+            // mesh.nodeWorldTransform が 0 のままになる。identity * W へ fallback し、
+            // effect mesh を actor の world transform で直接描画する。
             XMStoreFloat4x4(&cb.boneTransforms[0],     W);
             XMStoreFloat4x4(&cb.prevBoneTransforms[0], prevW);
         }
@@ -71,7 +71,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
     }
 
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
-        return;  // Phase B is DX12-only
+        return;  // Phase B は DX12 専用。
     }
 
     ITexture* rtScene = resources.GetTexture(m_hSceneColor);
@@ -142,7 +142,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
             lastRaster = packet.rasterizerState;
         }
 
-        // Build and upload per-packet CbMeshEffect (b3)
+        // packet ごとの CbMeshEffect(b3) を作成して upload する。
         const auto& params = packet.meshVariantParams;
         const auto& K = params.constants;
         EffectMeshShader::CbMeshEffect cb{};
@@ -167,12 +167,12 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
         cb.cameraPosition    = camPos4;
         m_shader->UploadConstants(cmd, cb);
 
-        // Slot 0 (base albedo): prefer the template-authored baseTexture on the
-        // packet (set from MeshRenderer.stringValue / variantParams.baseTexturePath).
-        // Fall back to the FBX material's own albedoMap only when the template
-        // hasn't supplied one — this is what lets e.g. the Sword Slash Glow
-        // template overlay Aura01_T.png onto a model whose source material has
-        // no albedo texture (otherwise the shader saw only the tint color).
+        // Slot 0 の base albedo は、template が指定した baseTexture を優先する。
+        // packet には MeshRenderer.stringValue / variantParams.baseTexturePath から設定される。
+        // template が指定していない場合だけ FBX material 自身の albedoMap へ fallback する。
+        // これにより Sword Slash Glow などの template が
+        // source material に albedo texture がない model へ Aura01_T.png を overlay できる。
+        // そうしないと shader には tint color しか渡らない。
         ITexture* baseTex = packet.baseTexture.get();
         if (!baseTex && packet.modelResource->GetMeshCount() > 0) {
             baseTex = packet.modelResource->GetMeshResource(0)->material.albedoMap.get();

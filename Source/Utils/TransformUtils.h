@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
+// TransformUtils は複数の処理から使う変換・補助関数をまとめて提供する。
 
 class TransformUtils
 {

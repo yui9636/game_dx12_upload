@@ -1,4 +1,4 @@
-#include <fstream>
+Ôªø#include <fstream>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 #include "System/Misc.h"
@@ -24,10 +24,9 @@ AssimpImporter::AssimpImporter(const char* filename)
 		| aiProcess_CalcTangentSpace;
 
 	aScene = aImporter.ReadFile(filename, aFlags);
-	//_ASSERT_EXPR_A(aScene, "3D Model File not found");
 	if (!aScene) {
 		LOG_WARN("[Assimp] import failed: %s", filename ? filename : "(null)");
-		// Ç±Ç±Ç≈ë¶assertÇµÇ»Ç¢
+		// „Åì„Åì„ÅßÂç≥assert„Åó„Å™„ÅÑ
 		return;
 	}
 

@@ -1,22 +1,22 @@
-#include "AnimatorRuntime.h"
+ï»¿#include "AnimatorRuntime.h"
 #include <stack>
 
 namespace
 {
-    // ƒ‚ƒfƒ‹‚Ìƒm[ƒhî•ñ‚©‚çAbind pose ‘Š“–‚Ì‰Šúp¨‚ğ poses ‚É‘‚«‚ŞB
-    // ‚±‚±‚Å‚ÍŠeƒm[ƒh‚Ì position / rotation / scale ‚ğ‚»‚Ì‚Ü‚ÜƒRƒs[‚·‚éB
+    // ãƒ¢ãƒ‡ãƒ«ã®ãƒãƒ¼ãƒ‰æƒ…å ±ã‹ã‚‰ã€bind pose ç›¸å½“ã®åˆæœŸå§¿å‹¢ã‚’ poses ã«æ›¸ãè¾¼ã‚€ã€‚
+    // ã“ã“ã§ã¯å„ãƒãƒ¼ãƒ‰ã® position / rotation / scale ã‚’ãã®ã¾ã¾ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
     static void FillBindPose(std::vector<Model::NodePose>& poses, const Model* model)
     {
-        // ƒ‚ƒfƒ‹‚ª–³‚¢‚È‚ç‰½‚à‚Å‚«‚È‚¢‚Ì‚ÅI—¹‚·‚éB
+        // ãƒ¢ãƒ‡ãƒ«ãŒç„¡ã„ãªã‚‰ä½•ã‚‚ã§ããªã„ã®ã§çµ‚äº†ã™ã‚‹ã€‚
         if (!model) return;
 
-        // ƒ‚ƒfƒ‹‚ª‚Â‘Sƒm[ƒhî•ñ‚ğæ“¾‚·‚éB
+        // ãƒ¢ãƒ‡ãƒ«ãŒæŒã¤å…¨ãƒãƒ¼ãƒ‰æƒ…å ±ã‚’å–å¾—ã™ã‚‹ã€‚
         const auto& nodes = model->GetNodes();
 
-        // ƒm[ƒh”‚É‡‚í‚¹‚Ä pose ”z—ñ‚ğŠm•Û‚·‚éB
+        // ãƒãƒ¼ãƒ‰æ•°ã«åˆã‚ã›ã¦ pose é…åˆ—ã‚’ç¢ºä¿ã™ã‚‹ã€‚
         poses.resize(nodes.size());
 
-        // Šeƒm[ƒh‚Ì‰Šú transform ‚ğ pose ”z—ñ‚ÖƒRƒs[‚·‚éB
+        // å„ãƒãƒ¼ãƒ‰ã®åˆæœŸ transform ã‚’ pose é…åˆ—ã¸ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
         for (size_t i = 0; i < nodes.size(); ++i) {
             poses[i].position = nodes[i].position;
             poses[i].rotation = nodes[i].rotation;
@@ -24,53 +24,53 @@ namespace
         }
     }
 
-    // spine ‚©‚ç‰º‚É‚Ô‚ç‰º‚ª‚éƒm[ƒh‚ğuã”¼gƒ{[ƒ“v‚Æ‚µ‚Äƒ}ƒXƒN‰»‚·‚éB
-    // upper body —pƒAƒNƒVƒ‡ƒ“Ä¶‚ÉA‚Ç‚Ìƒ{[ƒ“‚Ö“K—p‚·‚é‚©‚ğ”»’è‚·‚é‚½‚ß‚Ég‚¤B
+    // spine ã‹ã‚‰ä¸‹ã«ã¶ã‚‰ä¸‹ãŒã‚‹ãƒãƒ¼ãƒ‰ã‚’ã€Œä¸ŠåŠèº«ãƒœãƒ¼ãƒ³ã€ã¨ã—ã¦ãƒã‚¹ã‚¯åŒ–ã™ã‚‹ã€‚
+    // upper body ç”¨ã‚¢ã‚¯ã‚·ãƒ§ãƒ³å†ç”Ÿæ™‚ã«ã€ã©ã®ãƒœãƒ¼ãƒ³ã¸é©ç”¨ã™ã‚‹ã‹ã‚’åˆ¤å®šã™ã‚‹ãŸã‚ã«ä½¿ã†ã€‚
     static void BuildBoneMask(AnimatorRuntimeEntry& entry)
     {
-        // ˆÈ‘O‚Ìƒ}ƒXƒNî•ñ‚ğˆê’U”jŠü‚·‚éB
+        // ä»¥å‰ã®ãƒã‚¹ã‚¯æƒ…å ±ã‚’ä¸€æ—¦ç ´æ£„ã™ã‚‹ã€‚
         entry.isUpperBody.clear();
 
-        // ƒ‚ƒfƒ‹QÆ‚ª–³‚¢‚È‚ç\’z•s”\‚È‚Ì‚ÅI—¹‚·‚éB
+        // ãƒ¢ãƒ‡ãƒ«å‚ç…§ãŒç„¡ã„ãªã‚‰æ§‹ç¯‰ä¸èƒ½ãªã®ã§çµ‚äº†ã™ã‚‹ã€‚
         if (!entry.modelRef) return;
 
-        // ƒ‚ƒfƒ‹‚Ì‘Sƒm[ƒh‚ğæ“¾‚·‚éB
+        // ãƒ¢ãƒ‡ãƒ«ã®å…¨ãƒãƒ¼ãƒ‰ã‚’å–å¾—ã™ã‚‹ã€‚
         const auto& nodes = entry.modelRef->GetNodes();
 
-        // ‚·‚×‚Ä false ‚Å‰Šú‰»‚·‚éB
+        // ã™ã¹ã¦ false ã§åˆæœŸåŒ–ã™ã‚‹ã€‚
         entry.isUpperBody.assign(nodes.size(), false);
 
-        // spine ƒm[ƒh‚ªŒ©‚Â‚©‚Á‚Ä‚¢‚È‚¢A‚Ü‚½‚Í”ÍˆÍŠO‚È‚çI—¹‚·‚éB
+        // spine ãƒãƒ¼ãƒ‰ãŒè¦‹ã¤ã‹ã£ã¦ã„ãªã„ã€ã¾ãŸã¯ç¯„å›²å¤–ãªã‚‰çµ‚äº†ã™ã‚‹ã€‚
         if (entry.spineNodeIndex < 0 || entry.spineNodeIndex >= static_cast<int>(nodes.size())) {
             return;
         }
 
-        // [‚³—Dæ‚Å’H‚é‚½‚ß‚ÌƒXƒ^ƒbƒN‚ğ—pˆÓ‚·‚éB
+        // æ·±ã•å„ªå…ˆã§è¾¿ã‚‹ãŸã‚ã®ã‚¹ã‚¿ãƒƒã‚¯ã‚’ç”¨æ„ã™ã‚‹ã€‚
         std::stack<int> pending;
 
-        // ‹N“_‚Æ‚È‚é spine ƒm[ƒh‚ğÏ‚ŞB
+        // èµ·ç‚¹ã¨ãªã‚‹ spine ãƒãƒ¼ãƒ‰ã‚’ç©ã‚€ã€‚
         pending.push(entry.spineNodeIndex);
 
-        // spine ˆÈ‰º‚Ìqƒm[ƒh‚ğ‚·‚×‚Ä’H‚Á‚Ä upper body ˆµ‚¢‚É‚·‚éB
+        // spine ä»¥ä¸‹ã®å­ãƒãƒ¼ãƒ‰ã‚’ã™ã¹ã¦è¾¿ã£ã¦ upper body æ‰±ã„ã«ã™ã‚‹ã€‚
         while (!pending.empty()) {
-            // ƒXƒ^ƒbƒNæ“ª‚Ìƒm[ƒh index ‚ğæ‚èo‚·B
+            // ã‚¹ã‚¿ãƒƒã‚¯å…ˆé ­ã®ãƒãƒ¼ãƒ‰ index ã‚’å–ã‚Šå‡ºã™ã€‚
             const int idx = pending.top();
             pending.pop();
 
-            // –œ‚ªˆê”ÍˆÍŠO‚È‚ç–³‹‚·‚éB
+            // ä¸‡ãŒä¸€ç¯„å›²å¤–ãªã‚‰ç„¡è¦–ã™ã‚‹ã€‚
             if (idx < 0 || idx >= static_cast<int>(nodes.size())) {
                 continue;
             }
 
-            // ‚±‚Ìƒm[ƒh‚Íã”¼gƒ{[ƒ“‚Æ‚µ‚Äƒ}[ƒN‚·‚éB
+            // ã“ã®ãƒãƒ¼ãƒ‰ã¯ä¸ŠåŠèº«ãƒœãƒ¼ãƒ³ã¨ã—ã¦ãƒãƒ¼ã‚¯ã™ã‚‹ã€‚
             entry.isUpperBody[idx] = true;
 
-            // qƒm[ƒh‚ğ‚·‚×‚ÄƒXƒ^ƒbƒN‚ÖÏ‚ŞB
+            // å­ãƒãƒ¼ãƒ‰ã‚’ã™ã¹ã¦ã‚¹ã‚¿ãƒƒã‚¯ã¸ç©ã‚€ã€‚
             for (auto* child : nodes[idx].children) {
-                // child ƒ|ƒCƒ“ƒ^‚©‚ç”z—ñ“à index ‚ğZo‚·‚éB
+                // child ãƒã‚¤ãƒ³ã‚¿ã‹ã‚‰é…åˆ—å†… index ã‚’ç®—å‡ºã™ã‚‹ã€‚
                 const int childIdx = static_cast<int>(child - &nodes[0]);
 
-                // —LŒø‚È index ‚Ì‚İ’Ç‰Á‚·‚éB
+                // æœ‰åŠ¹ãª index ã®ã¿è¿½åŠ ã™ã‚‹ã€‚
                 if (childIdx >= 0 && childIdx < static_cast<int>(nodes.size())) {
                     pending.push(childIdx);
                 }
@@ -108,68 +108,68 @@ namespace
     }
 }
 
-// w’è entity ‚Ì runtime entry ‚ğŒŸõ‚µ‚Ä•Ô‚·B
-// –³‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š entity ã® runtime entry ã‚’æ¤œç´¢ã—ã¦è¿”ã™ã€‚
+// ç„¡ã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 AnimatorRuntimeEntry* AnimatorRuntimeRegistry::Find(EntityID entity)
 {
-    // entity ‚ğƒL[‚É map ‚ğŒŸõ‚·‚éB
+    // entity ã‚’ã‚­ãƒ¼ã« map ã‚’æ¤œç´¢ã™ã‚‹ã€‚
     const auto it = m_entries.find(entity);
 
-    // Œ©‚Â‚©‚ê‚Î‚»‚Ì entry ‚ÌƒAƒhƒŒƒXA–³‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+    // è¦‹ã¤ã‹ã‚Œã°ãã® entry ã®ã‚¢ãƒ‰ãƒ¬ã‚¹ã€ç„¡ã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
     return (it != m_entries.end()) ? &it->second : nullptr;
 }
 
-// w’è entity ‚Ì runtime entry ‚ğ•K‚¸æ“¾‚·‚éB
-// ‚Ü‚¾–³‚¯‚ê‚ÎV‹Kì¬‚µAmodel ‚ª•Ï‚í‚Á‚Ä‚¢‚½‚ç Rebind ‚·‚éB
+// æŒ‡å®š entity ã® runtime entry ã‚’å¿…ãšå–å¾—ã™ã‚‹ã€‚
+// ã¾ã ç„¡ã‘ã‚Œã°æ–°è¦ä½œæˆã—ã€model ãŒå¤‰ã‚ã£ã¦ã„ãŸã‚‰ Rebind ã™ã‚‹ã€‚
 AnimatorRuntimeEntry& AnimatorRuntimeRegistry::Ensure(EntityID entity, Model* model)
 {
-    // entity ‚É‘Î‰‚·‚é entry ‚ğæ“¾‚·‚éB–³‚¯‚ê‚Î©“®¶¬‚³‚ê‚éB
+    // entity ã«å¯¾å¿œã™ã‚‹ entry ã‚’å–å¾—ã™ã‚‹ã€‚ç„¡ã‘ã‚Œã°è‡ªå‹•ç”Ÿæˆã•ã‚Œã‚‹ã€‚
     AnimatorRuntimeEntry& entry = m_entries[entity];
 
-    // QÆƒ‚ƒfƒ‹‚ª•Ï‚í‚Á‚Ä‚¢‚½‚ç runtime î•ñ‚ğì‚è’¼‚·B
+    // å‚ç…§ãƒ¢ãƒ‡ãƒ«ãŒå¤‰ã‚ã£ã¦ã„ãŸã‚‰ runtime æƒ…å ±ã‚’ä½œã‚Šç›´ã™ã€‚
     if (entry.modelRef != model) {
         Rebind(entry, model);
     }
 
-    // —LŒø‚È entry ‚ğ•Ô‚·B
+    // æœ‰åŠ¹ãª entry ã‚’è¿”ã™ã€‚
     return entry;
 }
 
-// w’è entity ‚Ì runtime entry ‚ğíœ‚·‚éB
+// æŒ‡å®š entity ã® runtime entry ã‚’å‰Šé™¤ã™ã‚‹ã€‚
 void AnimatorRuntimeRegistry::Remove(EntityID entity)
 {
     m_entries.erase(entity);
 }
 
-// ‚·‚×‚Ä‚Ì runtime entry ‚ğíœ‚·‚éB
+// ã™ã¹ã¦ã® runtime entry ã‚’å‰Šé™¤ã™ã‚‹ã€‚
 void AnimatorRuntimeRegistry::Clear()
 {
     m_entries.clear();
 }
 
-// entry ‚ğV‚µ‚¢ model ‚ÉŒ‹‚Ñ’¼‚µAruntime —pƒoƒbƒtƒ@‚âŠeí index ‚ğ‰Šú‰»‚·‚éB
+// entry ã‚’æ–°ã—ã„ model ã«çµã³ç›´ã—ã€runtime ç”¨ãƒãƒƒãƒ•ã‚¡ã‚„å„ç¨® index ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
 void AnimatorRuntimeRegistry::Rebind(AnimatorRuntimeEntry& entry, Model* model)
 {
-    // ‚¢‚Á‚½‚ñ‘Só‘Ô‚ğ‰Šú‰»‚·‚éB
+    // ã„ã£ãŸã‚“å…¨çŠ¶æ…‹ã‚’åˆæœŸåŒ–ã™ã‚‹ã€‚
     entry = {};
 
-    // V‚µ‚¢ƒ‚ƒfƒ‹QÆ‚ğ•Û‘¶‚·‚éB
+    // æ–°ã—ã„ãƒ¢ãƒ‡ãƒ«å‚ç…§ã‚’ä¿å­˜ã™ã‚‹ã€‚
     entry.modelRef = model;
 
-    // ƒ‚ƒfƒ‹‚ª–³‚¢‚È‚ç‚±‚±‚ÅI—¹‚·‚éB
+    // ãƒ¢ãƒ‡ãƒ«ãŒç„¡ã„ãªã‚‰ã“ã“ã§çµ‚äº†ã™ã‚‹ã€‚
     if (!model) {
         return;
     }
 
     FillBindPose(entry.bindPoses, model);
 
-    // ƒ‚ƒfƒ‹ÅãˆÊƒm[ƒhBA5 ‚Ì dodge ‚Ì‚æ‚¤‚ÉAroot ‚Ìe‚ÖˆÚ“®ƒL[‚ª“ü‚é asset ‚ª‚ ‚éB
+    // ãƒ¢ãƒ‡ãƒ«æœ€ä¸Šä½ãƒãƒ¼ãƒ‰ã€‚A5 ã® dodge ã®ã‚ˆã†ã«ã€root ã®è¦ªã¸ç§»å‹•ã‚­ãƒ¼ãŒå…¥ã‚‹ asset ãŒã‚ã‚‹ã€‚
     entry.rootNodeIndex = model->GetNodes().empty() ? -1 : 0;
     if (entry.rootNodeIndex >= 0 && entry.rootNodeIndex < static_cast<int>(model->GetNodes().size())) {
         entry.rootNodeBindPosition = entry.bindPoses[entry.rootNodeIndex].position;
     }
 
-    // ‚æ‚­g‚¤å—vƒ{[ƒ“‚Ì index ‚ğ–¼‘OŒŸõ‚Åæ“¾‚·‚éB
+    // ã‚ˆãä½¿ã†ä¸»è¦ãƒœãƒ¼ãƒ³ã® index ã‚’åå‰æ¤œç´¢ã§å–å¾—ã™ã‚‹ã€‚
     entry.pelvisNodeIndex = model->GetNodeIndex("pelvis");
     entry.spineNodeIndex = model->GetNodeIndex("spine_01");
     entry.rootMotionNodeIndex = ResolveRootMotionNodeIndex(model);
@@ -180,28 +180,28 @@ void AnimatorRuntimeRegistry::Rebind(AnimatorRuntimeEntry& entry, Model* model)
         entry.rootMotionBindPosition = entry.bindPoses[entry.rootMotionNodeIndex].position;
     }
 
-    // ƒm[ƒh”‚ğæ“¾‚·‚éB
+    // ãƒãƒ¼ãƒ‰æ•°ã‚’å–å¾—ã™ã‚‹ã€‚
     const size_t poseCount = model->GetNodes().size();
 
-    // base layer —p pose ƒoƒbƒtƒ@‚ğŠm•Û‚·‚éB
+    // base layer ç”¨ pose ãƒãƒƒãƒ•ã‚¡ã‚’ç¢ºä¿ã™ã‚‹ã€‚
     entry.basePoses.resize(poseCount);
 
-    // action layer —p pose ƒoƒbƒtƒ@‚ğŠm•Û‚·‚éB
+    // action layer ç”¨ pose ãƒãƒƒãƒ•ã‚¡ã‚’ç¢ºä¿ã™ã‚‹ã€‚
     entry.actionPoses.resize(poseCount);
 
 
-    // ˆêŒvZ—p pose ƒoƒbƒtƒ@‚ğŠm•Û‚·‚éB
+    // ä¸€æ™‚è¨ˆç®—ç”¨ pose ãƒãƒƒãƒ•ã‚¡ã‚’ç¢ºä¿ã™ã‚‹ã€‚
     entry.tempPoses.resize(poseCount);
 
-    // ÅIo—Í pose ƒoƒbƒtƒ@‚ğŠm•Û‚·‚éB
+    // æœ€çµ‚å‡ºåŠ› pose ãƒãƒƒãƒ•ã‚¡ã‚’ç¢ºä¿ã™ã‚‹ã€‚
     entry.finalPoses.resize(poseCount);
 
-    // ƒuƒŒƒ“ƒh•âŠÔ—p‚ÌƒIƒtƒZƒbƒg”z—ñ‚ğŠm•Û‚·‚éB
+    // ãƒ–ãƒ¬ãƒ³ãƒ‰è£œé–“ç”¨ã®ã‚ªãƒ•ã‚»ãƒƒãƒˆé…åˆ—ã‚’ç¢ºä¿ã™ã‚‹ã€‚
     entry.blendOffsets.resize(poseCount);
 
-    // finalPoses ‚ğ bind pose ‘Š“–‚Ì‰Šúp¨‚Å–„‚ß‚éB
+    // finalPoses ã‚’ bind pose ç›¸å½“ã®åˆæœŸå§¿å‹¢ã§åŸ‹ã‚ã‚‹ã€‚
     FillBindPose(entry.finalPoses, model);
 
-    // spine ˆÈ‰º‚ğ upper body ‚Æ‚µ‚Äˆµ‚¤ƒ}ƒXƒN‚ğ\’z‚·‚éB
+    // spine ä»¥ä¸‹ã‚’ upper body ã¨ã—ã¦æ‰±ã†ãƒã‚¹ã‚¯ã‚’æ§‹ç¯‰ã™ã‚‹ã€‚
     BuildBoneMask(entry);
 }

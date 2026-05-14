@@ -1,4 +1,5 @@
-#pragma once
+﻿#pragma once
+// HealthComponent は health/maxHealth/invincibleTimer/isInvincible を保持し、関連システムが実行時状態として参照する。
 
 struct HealthComponent {
     int health = 100;

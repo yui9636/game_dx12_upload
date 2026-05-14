@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <atomic>
@@ -12,6 +12,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+// TaskSystem は対象コンポーネントを走査し、対応する実行時更新を担当する。
 
 class TaskSystem
 {

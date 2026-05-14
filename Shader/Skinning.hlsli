@@ -1,3 +1,4 @@
+// Skinning はこの描画経路で共有する入力構造や定数を定義する。
 cbuffer CbSkeleton : register(b6)
 {
 	row_major float4x4	boneTransforms[256];

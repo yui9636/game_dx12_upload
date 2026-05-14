@@ -1,3 +1,4 @@
+﻿// GameLoopSystem のシステム宣言をまとめます。
 #pragma once
 
 class FlowEventQueue;

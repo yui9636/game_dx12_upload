@@ -80,8 +80,8 @@ void EditorLayer::DrawRecoveryPopup()
 
 void EditorLayer::ProcessDeferredEditorActions()
 {
-    // Mode dialog confirmed last frame: now we are between frames, so it is
-    // safe to tear down the registry and rebuild it.
+    // mode dialog は前 frame で確定済み。現在は frame 間なので、
+    // registry を破棄して再構築しても安全。
     if (m_pendingNewSceneRequest) {
         m_pendingNewSceneRequest = false;
         NewScene(m_pendingNewSceneMode);
@@ -203,7 +203,7 @@ bool EditorLayer::ExecutePendingSceneAction()
 
     switch (action) {
     case PendingSceneAction::NewScene:
-        // Open mode selection first; Create performs NewScene(mode).
+        // 先に mode selection を開き、Create は NewScene(mode) を実行する。
         m_newSceneSelectedMode = m_sceneViewMode;
         m_openNewSceneModePopup = true;
         return true;
@@ -291,7 +291,7 @@ void EditorLayer::DrawNewSceneModePopup()
         ImGui::SameLine();
         ImGui::TextDisabled("Camera 2D, orthographic view. For titles and UI screens.");
 
-        // Arrow keys toggle the scene mode.
+        // arrow key で scene mode を切り替える。
         if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
             m_newSceneSelectedMode = (m_newSceneSelectedMode == SceneViewMode::Mode2D)
                 ? SceneViewMode::Mode3D
@@ -309,9 +309,9 @@ void EditorLayer::DrawNewSceneModePopup()
             ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
 
         if (createPressed) {
-            // Defer the actual NewScene to the next Update tick. Running it
-            // here (mid RenderUI) would destroy entities whose GPU resources
-            // are already referenced by this frame's recorded command list.
+            // 実際の NewScene は次の Update tick へ遅延する。ここで実行すると、
+            // RenderUI 中に GPU resource を持つ entity を破棄してしまい、
+            // この frame で記録済みの command list から参照されてしまう。
             m_pendingNewSceneRequest = true;
             m_pendingNewSceneMode = m_newSceneSelectedMode;
             ImGui::CloseCurrentPopup();

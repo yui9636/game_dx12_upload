@@ -1,8 +1,9 @@
-#include "PreviewTexturePool.h"
+﻿#include "PreviewTexturePool.h"
 
 #include <cstring>
 
 #include "RHI/IResourceFactory.h"
+// PreviewTexturePool::Initialize は依存オブジェクトと初期値を受け取り、後続処理に必要な内部状態を整える。
 
 void PreviewTexturePool::Initialize(IResourceFactory* factory,
                                     uint32_t w, uint32_t h,

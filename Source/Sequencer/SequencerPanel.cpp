@@ -1,4 +1,4 @@
-#include "SequencerPanel.h"
+﻿#include "SequencerPanel.h"
 
 #include "CinematicSequenceSerializer.h"
 #include "CinematicService.h"
@@ -47,6 +47,7 @@ namespace
     constexpr float kHeaderHeight = 28.0f;
     constexpr float kTimelineTopPadding = 4.0f;
     constexpr const char* kSequencerCameraModelPath = "Data/Model/Camera/Camera.cereal";
+// ABGRToImU32 はこのモジュールの実行時処理を構成する補助処理を行う。
 
     static ImU32 ABGRToImU32(uint32_t rgba)
     {

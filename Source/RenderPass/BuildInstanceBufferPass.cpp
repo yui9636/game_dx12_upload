@@ -23,7 +23,7 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     rc.preparedInstanceData.clear();
     rc.preparedOpaqueInstanceBatches.clear();
     rc.preparedVisibleInstanceCount = 0;
-    rc.useGpuCulling = false; // Reset; ComputeCullingPass will set if active
+    rc.useGpuCulling = false; // 一度 reset し、有効な場合は ComputeCullingPass が設定する。
 
     // BuildIndirectCommandPass が埋める active フィールドを先に初期化する
     rc.activeInstanceBuffer = nullptr;

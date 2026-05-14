@@ -1,12 +1,8 @@
-#pragma once
+﻿#pragma once
 #include "Input/InputActionMapAsset.h"
 
 class Registry;
-
-// ============================================================================
-// Input Mapping Editor Tab - draws inside PlayerEditorPanel
-// ============================================================================
-
+// PlayerEditorPanel 内に描画される Input Mapping タブ。
 class InputMappingTab
 {
 public:
@@ -29,7 +25,7 @@ private:
     InputActionMapAsset m_editingMap;
     bool m_dirty = false;
 
-    // Key bind capture state
+    // キー割り当て待ちの入力状態。
     bool m_capturingKey = false;
     int  m_captureTargetAction = -1;
     enum class CaptureField { Keyboard, Mouse, Gamepad };

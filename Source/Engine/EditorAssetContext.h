@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "Asset/AssetManager.h"
+// EditorAssetContext は instance/instance/type/AssetType を中心に、実行時やエディターで共有する状態を保持する。
 
 class EditorAssetContext
 {

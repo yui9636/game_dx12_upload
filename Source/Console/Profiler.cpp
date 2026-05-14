@@ -1,8 +1,5 @@
 ﻿#include "Profiler.h"
-
-// ---------------------------------------------------------
 // Profiler の唯一のインスタンスを返します。
-// ---------------------------------------------------------
 Profiler& Profiler::Instance() {
     static Profiler instance;
     return instance;
@@ -19,11 +16,7 @@ void Profiler::Clear() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_results.clear();
 }
-
-// ---------------------------------------------------------
-// ScopedTimer
-// ---------------------------------------------------------
-
+// ScopedTimer はスコープ終了時に経過時間を profiler へ記録する。
 // 計測名を保存し、現在時刻を開始時刻として記録します。
 ScopedTimer::ScopedTimer(const std::string& name) : m_name(name) {
     m_start = std::chrono::high_resolution_clock::now();

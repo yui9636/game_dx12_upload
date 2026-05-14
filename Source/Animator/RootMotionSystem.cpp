@@ -1,4 +1,4 @@
-#include "RootMotionSystem.h"
+﻿#include "RootMotionSystem.h"
 
 #include "AnimatorComponent.h"
 #include "AnimatorRuntime.h"
@@ -21,6 +21,7 @@ using namespace DirectX;
 
 namespace
 {
+// AddUniqueNodeIndex は入力内容を検証し、対象コレクションへ新しい要素として追加する。
     static void AddUniqueNodeIndex(std::vector<int>& indices, int nodeIndex)
     {
         if (nodeIndex < 0) {

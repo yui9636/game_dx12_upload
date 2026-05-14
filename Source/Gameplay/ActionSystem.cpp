@@ -1,4 +1,4 @@
-#include "ActionSystem.h"
+﻿#include "ActionSystem.h"
 #include "ActionStateComponent.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
@@ -16,7 +16,7 @@ void ActionSystem::Update(Registry& registry, float dt) {
         for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
             auto& action = *static_cast<ActionStateComponent*>(actionCol->Get(i));
 
-            // StateMachine owns action entry/exit. This system only keeps legacy combo timers sane.
+            // アクションの開始と終了は StateMachine が管理する。このシステムは旧コンボタイマーの整合だけ保つ。
             if (action.state == CharacterState::Locomotion && action.comboCount > 0) {
                 action.comboTimer += dt;
                 if (action.comboTimer >= action.comboTimeout) {

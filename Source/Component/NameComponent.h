@@ -1,3 +1,4 @@
+﻿// 入力名。Component の ECS コンポーネント定義をまとめます。
 #pragma once
 #include <string>
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 
 
@@ -7,6 +7,7 @@
 #include <memory>
 
 #include <DirectXMath.h>
+// IResourceFactory はテンプレートや設定値から編集用・実行用のデータを生成する。
 
 
 

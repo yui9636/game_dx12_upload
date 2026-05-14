@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <memory>
 #include <string>
@@ -6,10 +6,10 @@
 
 class ITexture;
 
-// Data-only sprite. Holds the texture reference and per-sprite tint /
-// glow parameters. The actual GPU draw is issued by SpriteRenderer (see
-// HUD_HPBar_Spec_2026-05-05 v3 section 3.2). Sprite no longer owns any
-// pipeline state, vertex buffer, or D3D11 / D3D12 native resources.
+// データ専用の Sprite。テクスチャ参照と Sprite ごとの色味、
+// glow パラメータだけを持つ。実際の GPU 描画は SpriteRenderer が発行する。
+// HUD_HPBar_Spec_2026-05-05 v3 の 3.2 節に従い、Sprite は
+// pipeline state、頂点バッファ、D3D11 / D3D12 ネイティブリソースを持たない。
 class Sprite
 {
 public:

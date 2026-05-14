@@ -1,3 +1,4 @@
+﻿// UIButtonClickEventQueue の GameLoop 関連実装をまとめます。
 #include "UIButtonClickEventQueue.h"
 
 #include <algorithm>

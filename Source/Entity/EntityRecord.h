@@ -1,14 +1,14 @@
-#pragma once
+ï»¿#pragma once
 #include <cstddef>
 
 class Archetype;
 
-// Entity ‚ªŒ»İ‚Ç‚Ì Archetype ‚Ì‰½s–Ú‚É‹‚é‚©‚ğ•\‚·ŠÇ—î•ñB
-// Registry ‘¤‚Å EntityID ‚©‚çÀƒf[ƒ^ˆÊ’u‚ğˆø‚­‚½‚ß‚Ég‚¤B
+// Entity ãŒç¾åœ¨ã©ã® Archetype ã®ä½•è¡Œç›®ã«å±…ã‚‹ã‹ã‚’è¡¨ã™ç®¡ç†æƒ…å ±ã€‚
+// Registry å´ã§ EntityID ã‹ã‚‰å®Ÿãƒ‡ãƒ¼ã‚¿ä½ç½®ã‚’å¼•ããŸã‚ã«ä½¿ã†ã€‚
 struct EntityRecord {
-    // ‚±‚Ì Entity ‚ªŠ‘®‚µ‚Ä‚¢‚é ArchetypeB
+    // ã“ã® Entity ãŒæ‰€å±ã—ã¦ã„ã‚‹ Archetypeã€‚
     Archetype* archetype = nullptr;
 
-    // Archetype “à‚Ìs”Ô†B
+    // Archetype å†…ã®è¡Œç•ªå·ã€‚
     size_t row = 0;
 };

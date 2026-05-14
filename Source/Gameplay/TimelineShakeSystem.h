@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <DirectXMath.h>
 
 class Registry;
@@ -7,7 +7,7 @@ class TimelineShakeSystem {
 public:
     static void Update(Registry& registry, float dt);
 
-    // Accumulated shake offset this frame (read by camera)
+    // このフレームで蓄積した揺れ offset（カメラが読む）
     static DirectX::XMFLOAT3 GetShakeOffset();
     static void ResetShakeOffset();
 

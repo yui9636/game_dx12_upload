@@ -1,6 +1,4 @@
-#pragma once
-
-//#include "Camera/Camera.h"
+﻿#pragma once
 #include "RenderState.h"
 #include "RenderQueue.h"
 #include "Light/Light.h"
@@ -218,8 +216,6 @@ struct RenderContext
     {
         return !activeDrawCommands.empty() || !activeSkinnedCommands.empty();
     }
-
-    //ID3D11DeviceContext* deviceContext;
     ICommandList* commandList;
     const RenderState* renderState;
     DX12RootSignature* dx12RootSignature = nullptr;
@@ -288,14 +284,14 @@ struct RenderContext
     std::vector<PreparedIndirectCommand> preparedSkinnedCommands;
     std::vector<GpuDrivenDispatchGroup> gpuDrivenDispatchGroups;
 
-    // Active draw state (set by BuildIndirectCommandPass, overridden by ComputeCullingPass)
-    IBuffer*  activeInstanceBuffer   = nullptr;   // VB slot1
+    // 現在有効な描画状態。BuildIndirectCommandPass が設定し、ComputeCullingPass が上書きする。
+    IBuffer*  activeInstanceBuffer   = nullptr;   // 頂点バッファ slot 1。
     uint32_t  activeInstanceStride   = INSTANCE_DATA_STRIDE;
-    IBuffer*  activeDrawArgsBuffer   = nullptr;   // ExecuteIndirect args
+    IBuffer*  activeDrawArgsBuffer   = nullptr;   // ExecuteIndirect 用 args。
     std::vector<IndirectDrawCommand> activeDrawCommands;
     std::vector<IndirectDrawCommand> activeSkinnedCommands;
 
-    // GPU culling state (set by ComputeCullingPass)
+    // ComputeCullingPass が設定する GPU culling 用状態。
     bool useGpuCulling = false;
     bool allowGpuDrivenCompute = true;
     bool allowAsyncCompute = true;
@@ -310,19 +306,16 @@ struct RenderContext
     bool clearSceneColor = true;
     bool cameraPixelSnap = false;
     DirectX::XMFLOAT4 clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
-    IBuffer* activeCountBuffer = nullptr;      // count buffer for multi-draw
+    IBuffer* activeCountBuffer = nullptr;      // multi-draw 用の count buffer。
     uint32_t activeCountBufferOffset = 0;
-    uint32_t activeMaxDrawCount = 0;           // max commands for multi-draw
+    uint32_t activeMaxDrawCount = 0;           // multi-draw で扱う command 数の上限。
     uint64_t pendingAsyncComputeFenceValue = 0;
 
     BloomData       bloomData;
     ColorFilterData colorFilterData;
     DepthOfFieldData dofData;       //
     MotionBlurData  motionBlurData;
-
-    // ----------------------------------------------------
-
-    float time = 0.0f;
+float time = 0.0f;
 
     UVScrollData uvScrollData;
     MaskData maskData;

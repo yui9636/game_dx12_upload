@@ -1,4 +1,4 @@
-#include "TransformSystem.h"
+﻿#include "TransformSystem.h"
 #include <System\Query.h>
 #include <unordered_set>
 
@@ -6,6 +6,7 @@ using namespace DirectX;
 
 namespace
 {
+// GetParentEntity は現在の状態から処理対象となる値や参照先を決定する。
     EntityID GetParentEntity(Registry& registry, EntityID entity, const TransformComponent& transform)
     {
         if (HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {

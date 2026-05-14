@@ -1,6 +1,4 @@
-// ==========================================
-// GTAOPS.hlsl
-// ==========================================
+// main は GTAO の遮蔽量を計算する。
 #include "PBR.hlsli"
 
 Texture2D NormalMap : register(t0);

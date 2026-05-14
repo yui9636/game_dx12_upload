@@ -1,3 +1,4 @@
+﻿// FinalBlitPass のレンダーパス宣言をまとめます。
 #pragma once
 #include "IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"

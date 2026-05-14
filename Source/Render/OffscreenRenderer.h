@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <cstdint>
 #include <DirectXMath.h>
@@ -22,7 +22,7 @@ public:
         float clearR = 0.f, float clearG = 0.f, float clearB = 0.f, float clearA = 0.f);
 
     void Begin();
-    void BeginJob();  // Clean state init for shared usage
+    void BeginJob();  // 共有利用前に描画状態を初期化する。
     void Clear(FrameBuffer* fb, float r, float g, float b, float a);
     void SetRenderTarget(FrameBuffer* fb);
     void SetViewport(float w, float h);
@@ -40,7 +40,7 @@ public:
 
     void Submit(FrameBuffer* fb);
 
-    // Direct rendering to external textures (no FrameBuffer wrapper needed)
+    // FrameBuffer ラッパーを使わず、外部テクスチャへ直接描画する。
     void ClearExternalRT(ITexture* color, ITexture* depth,
                          float r, float g, float b, float a);
     void SetExternalRenderTarget(ITexture* color, ITexture* depth);
@@ -57,7 +57,7 @@ private:
     std::unique_ptr<IBuffer>           m_localSceneBuffer;
     bool m_available = false;
 
-    // DX12 fence (async GPU completion)
+    // 非同期 GPU 完了を追跡する DX12 fence。
     void*    m_fencePtr = nullptr;
     void*    m_fenceEvent = nullptr;
     uint64_t m_fenceValue = 0;

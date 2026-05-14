@@ -173,7 +173,7 @@ namespace {
 
 std::unique_ptr<ITexture> DX12ResourceFactory::CreateTexture(const std::string& name, const TextureDesc& desc) {
     if (!m_device) return nullptr;
-    // TextureDesc の clearColor を DX12 optimizedClearValue として渡す
+    // text 用色。ureDesc の clearColor を DX12 optimizedClearValue として渡す
     const float* clearColor = (desc.bindFlags & TextureBindFlags::RenderTarget) ? desc.clearColor : nullptr;
     return std::make_unique<DX12Texture>(
         m_device,
@@ -230,10 +230,7 @@ std::unique_ptr<IInputLayout> DX12ResourceFactory::CreateInputLayout(const Input
 std::unique_ptr<IPipelineState> DX12ResourceFactory::CreatePipelineState(const PipelineStateDesc& desc) {
     return std::make_unique<DX12PipelineState>(desc);
 }
-
-// ========================================================
 // DX12 テクスチャファイル読み込み（アップロードヒープ経由）
-// ========================================================
 std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     const DirectX::ScratchImage& image,
     const DirectX::TexMetadata& metadata)

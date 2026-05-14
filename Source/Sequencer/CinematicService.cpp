@@ -1,4 +1,4 @@
-#include "CinematicService.h"
+﻿#include "CinematicService.h"
 
 #include "Animator/AnimatorService.h"
 #include "Archetype/Archetype.h"
@@ -339,6 +339,7 @@ void CinematicService::ApplyEntry(RuntimeEntry& entry, float previousFrameRaw, i
     const int currentFrame = static_cast<int>(entry.currentFrame + 0.5f);
     const int previousFrame = static_cast<int>(previousFrameRaw + 0.5f);
     const bool isSeek = std::fabs(entry.currentFrame - previousFrameRaw) > 0.001f && (!entry.playing || entry.paused);
+// EvalSegment は start/end/span/valid を中心に、実行時やエディターで共有する状態を保持する。
 
     struct EvalSegment
     {

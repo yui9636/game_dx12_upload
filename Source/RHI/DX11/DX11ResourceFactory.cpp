@@ -1,4 +1,5 @@
-﻿#include "DX11ResourceFactory.h"
+﻿// DX11ResourceFactory の RHI バックエンド実装をまとめます。
+#include "DX11ResourceFactory.h"
 #include "DX11Texture.h"
 #include "DX11Shader.h"
 #include "DX11Buffer.h"

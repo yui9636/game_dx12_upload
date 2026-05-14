@@ -1,4 +1,5 @@
-#pragma once
+﻿#pragma once
+// PlaybackComponent は currentSeconds/clipLength/playSpeed/playing を保持し、関連システムが実行時状態として参照する。
 
 struct PlaybackComponent {
     float currentSeconds = 0.0f;

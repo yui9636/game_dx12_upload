@@ -1,3 +1,4 @@
+﻿// DamageTextManager の UI 関連実装をまとめます。
 #include "DamageTextManager.h"
 
 using namespace DirectX;

@@ -1,6 +1,4 @@
-// ==========================================
-// VolumetricFogBlurPS.hlsl
-// ==========================================
+// main はボリュメトリックフォグのぼかし結果を計算する。
 #include "FullScreenQuad.hlsli"
 
 Texture2D FogMap : register(t0);

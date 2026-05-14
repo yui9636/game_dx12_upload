@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <filesystem>
 #include <string>
@@ -8,6 +8,7 @@
 
 #include "Component/RectTransformComponent.h"
 #include "Entity/Entity.h"
+// UIEditorTemplateKind はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 enum class UIEditorTemplateKind
 {

@@ -1,11 +1,8 @@
-// ============================================================================
-// UpdateAlive: Read Hot + Cold, write Hot, side-write g_PageAliveCount
-// Dispatch: (activeCount + 63) / 64
-// Only processes alive particles (from alive list of previous frame)
-// Register layout: t0=AliveListPrev, u0=Hot, u1=Warm, u2=Cold, u3=Header,
-//   u4=DeadStack, u5=Counter, u6=RibbonHistory, u7=PageAliveCount
-// ============================================================================
-
+// UpdateAlive: Hot + Cold を読み、Hot を書き、g_PageAliveCount も横で更新する。
+// ディスパッチ: (activeCount + 63) / 64
+// 前フレームの alive list にある生存パーティクルだけを処理する。
+// レジスタ配置: t0=AliveListPrev, u0=Hot, u1=Warm, u2=Cold, u3=Header,
+//   u4=DeadStack、u5=Counter、u6=RibbonHistory、u7=PageAliveCount を使う。
 #include "EffectParticleRuntimeCommon.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -30,16 +27,16 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     const uint slot = g_AliveListPrev[aliveIndex];
 
-    // ── Read Hot ──
+    // Hot stream を読み込む。
     BillboardHot hot = g_BillboardHot[slot];
     float2 ageLife = UnpackHalf2(hot.ageLifePacked);
     float age = ageLife.x;
     float remainLife = ageLife.y;
 
-    // Already dead check
+    // 既に死んでいるか確認
     if (remainLife <= 0.0f) return;
 
-    // ── Read Cold (immutable) ──
+    // 不変の Cold stream を読み込む。
     BillboardCold cold = g_BillboardCold[slot];
     float2 dragSpin = UnpackHalf2(cold.dragSpinPacked);
     float2 sizeRange = UnpackHalf2(cold.sizeRange);
@@ -56,35 +53,35 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     const float dt = max(gTiming.x, 0.0f);
 
-    // ── Age update ──
+    // 経過時間と残り寿命を更新する。
     age += dt;
     remainLife -= dt;
 
     if (remainLife <= 0.0f)
     {
-        // Kill particle
-        BillboardHeader hdr = {slot, 0u}; // alive=false
+        // パーティクルを殺す
+        BillboardHeader hdr = {slot, 0u}; // alive は false。
         g_BillboardHeader[slot] = hdr;
 
-        // Push to dead stack
+        // dead stack へ積む
         uint deadIdx = 0u;
         g_CounterBuffer.InterlockedAdd(COUNTER_DEAD_STACK_TOP, 1u, deadIdx);
         g_DeadStack[deadIdx] = slot;
 
-        // Zero out hot for clean render
+        // 描画を汚さないよう Hot を 0 にする
         hot.ageLifePacked = PackHalf2(0.0f, 0.0f);
         hot.sizeSpin = PackHalf2(0.0f, 0.0f);
         g_BillboardHot[slot] = hot;
         return;
     }
 
-    // ── Physics ──
+    // 物理量を積分する。
     const float normalizedAge = saturate(age / totalLife);
     const float dragFactor = saturate(1.0f - drag * dt);
 
     hot.velocity += cold.acceleration * dt;
 
-    // Curl noise
+    // カールノイズ
     const float curlNoiseStrength = max(gMotionParams.x, 0.0f);
     if (curlNoiseStrength > 0.001f)
     {
@@ -92,7 +89,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         hot.velocity += noiseForce * curlNoiseStrength * dt;
     }
 
-    // Wind
+    // 風
     const float windStrength = gRandomParams.w;
     if (windStrength > 0.001f)
     {
@@ -107,7 +104,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         hot.velocity += windDir * windStrength * dt;
     }
 
-    // Vortex
+    // 渦
     const float vortexStrength = gMotionParams.w;
     if (abs(vortexStrength) > 0.001f)
     {
@@ -117,7 +114,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         hot.velocity += tangent * (vortexStrength / sqrt(distSq)) * dt;
     }
 
-    // Phase 2: Attractor/Repeller
+    // フェーズ 2: Attractor / Repeller
     const uint attractorCount = (uint)(gCollisionParams.w + 0.5f);
     if (attractorCount > 0u)
     {
@@ -150,7 +147,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     hot.velocity *= dragFactor;
     hot.position += hot.velocity * dt;
 
-    // Phase 2: GPU Collision
+    // フェーズ 2: GPU コリジョン
     const bool collisionEnabled = (gCollisionParams.z > 0.0f || dot(gCollisionPlane.xyz, gCollisionPlane.xyz) > 0.5f);
     if (collisionEnabled)
     {
@@ -158,7 +155,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         const float friction = gCollisionParams.y;
         const uint sphereCount = (uint)(gCollisionParams.z + 0.5f);
 
-        // Plane collision
+        // 平面コリジョン
         float3 planeN = normalize(gCollisionPlane.xyz);
         float planeD = gCollisionPlane.w;
         float planeDist = dot(hot.position, planeN) + planeD;
@@ -174,7 +171,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
             }
         }
 
-        // Sphere collision
+        // 球コリジョン
         float4 spheres[4] = { gCollisionSphere0, gCollisionSphere1, gCollisionSphere2, gCollisionSphere3 };
         [unroll]
         for (uint si = 0; si < 4; ++si)
@@ -201,10 +198,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         }
     }
 
-    // ── Size + spin ──
+    // サイズと spin を更新する。
     float2 curSizeSpin = UnpackHalf2(hot.sizeSpin);
     const float sizeAge = ComputeBiasedAge(normalizedAge, sizeBias);
-    // Phase 1C: Use 4-key size curve if available, else legacy lerp
+    // フェーズ 1C: 4 キーのサイズカーブがあれば使い、なければ旧 lerp を使う。
     float currentSize;
     if (gSizeCurveTimes.y > 0.001f || gSizeCurveTimes.z < 0.999f) {
         currentSize = EvaluateSizeCurve(sizeAge);
@@ -217,12 +214,12 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     hot.sizeSpin = PackHalf2(currentSize, currentSpin);
     g_BillboardHot[slot] = hot;
 
-    // ── Update Warm: color + sub-UV ──
+    // Warm stream の色と sub-UV を更新する。
     const float alphaAge = ComputeBiasedAge(normalizedAge, alphaBias);
     const float fade = saturate(1.0f - alphaAge);
 
     BillboardWarm warm = g_BillboardWarm[slot];
-    // Phase 1C: Use 4-key color gradient if available, else legacy 2-key lerp
+    // フェーズ 1C: 4 キーの色グラデーションがあれば使い、なければ旧 2 キー lerp を使う。
     float4 lifeTint;
     if (gGradientTimes.y > 0.001f || gGradientTimes.z < 0.999f) {
         lifeTint = EvaluateColorGradient(alphaAge);
@@ -238,7 +235,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     warm.texcoordPacked = PackHalf2(subUv.x, subUv.y);
     g_BillboardWarm[slot] = warm;
 
-    // ── Update Header depth bin ──
+    // Header の depth bin を更新する。
     BillboardHeader hdr;
     hdr.slotIndex = slot;
     const float3 camToP = hot.position - gCameraPositionSortSign.xyz;
@@ -247,7 +244,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     hdr.packed = HeaderPack(true, depthBin, slot / PAGE_SIZE, 0u);
     g_BillboardHeader[slot] = hdr;
 
-    // ── Ribbon history ──
+    // ribbon 履歴を初期化する。
     const uint historyBase = slot * EffectParticleRibbonHistoryLength;
     [unroll]
     for (uint h = EffectParticleRibbonHistoryLength - 1u; h > 0u; --h)
@@ -256,11 +253,11 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     g_RibbonHistory[historyBase] = float4(hot.position, 1.0f);
 
-    // ── Side-write: per-page alive count (for PrefixSum) ──
+    // PrefixSum 用に page ごとの alive count を横書きする。
     uint pageIdx = slot / PAGE_SIZE;
     InterlockedAdd(g_PageAliveCount[pageIdx], 1u);
 
-    // ── Mesh attribute integration (rotate current quaternion by angular velocity) ──
+    // 角速度で現在の quaternion を回し、mesh attribute を積分する。
     if (gMeshFlags.x > 0.5f)
     {
         MeshAttribHot mattr = g_MeshAttribHot[slot];

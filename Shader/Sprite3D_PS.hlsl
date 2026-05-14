@@ -1,53 +1,41 @@
-// [SpriteUI_PS.hlsl]
+// main は Sprite3D / SpriteUI のピクセル色を出力する。
 #include "Sprite3D.hlsli"
 
-// �e�N�X�`�����\�[�X
+// テクスチャリソース
 Texture2D g_Texture : register(t0);
 SamplerState g_Sampler : register(s0);
 
 float4 main(VS_OUT pin) : SV_TARGET
 {
     float2 uv = pin.texcoord;
-
-    // -----------------------------------------------------------
-    // 1. HP�v���O���X�̃J�b�g����
-    // -----------------------------------------------------------
-    // UV�̉���(x)�� Progress �𒴂��Ă�����`���j��(discard)���܂��B
-    // ���̂�3D��Ԃŉ�]���Ă��邽�߁A���̐����J�b�g������
-    // ���o�I�ɂ́u�p�[�X�̌������΂߂̒f�ʁv�Ƃ��Đ����������܂��B
+// 1. HPプログレスのカット処理
+// UVの横軸(x)が Progress を超えていたら描画を破棄(discard)します。
+    // 板自体が3D空間で回転しているため、この垂直カットだけで
+    // 視覚的には「パースの効いた斜めの断面」として正しく見えます。
     if (uv.x > Progress)
     {
         discard;
     }
-
-    // -----------------------------------------------------------
-    // 2. �摜�T���v�����O
-    // -----------------------------------------------------------
-    float4 texColor = g_Texture.Sample(g_Sampler, uv);
-
-    // -----------------------------------------------------------
-    // 3. �G�b�W�̃A���`�G�C���A�X (����AA)
-    // -----------------------------------------------------------
-    // 3D��ԂŔ��s�p�ɌX����ƁA�e�N�X�`���̉����M�U�M�U���₷���Ȃ�܂��B
-    // fwidth�֐����g���A��ʏ�̃s�N�Z�����x�ɉ����ă{�P���������v�Z���A
-    // UV�̋��E(0.0��1.0)�t�߂����炩�Ƀt�F�[�h�����܂��B
+// 2. 画像サンプリング
+float4 texColor = g_Texture.Sample(g_Sampler, uv);
+// 3. エッジのアンチエイリアス (自動AA)
+// 3D空間で板を鋭角に傾けると、テクスチャの縁がギザギザしやすくなります。
+    // fwidth関数を使い、画面上のピクセル密度に応じてボケ足を自動計算し、
+    // UVの境界(0.0と1.0)付近を滑らかにフェードさせます。
     
-    float2 aaWidth = fwidth(uv) * 1.5; // �{�P���̋��x����
+    float2 aaWidth = fwidth(uv) * 1.5; // ボケ幅の強度調整
     
-    // smoothstep�ŋ��E�t�߂̃A���t�@��0~1�Ɋ��炩�ɂ���
+    // smoothstepで境界付近のアルファを0~1に滑らかにする
     float2 edgeAlpha = smoothstep(0.0, aaWidth, uv) * (1.0 - smoothstep(1.0 - aaWidth, 1.0, uv));
     
-    // �㉺���E�̍ŏ��l���Ƃ��Ęg�S�̂̃A���t�@�Ƃ���
+    // 上下左右の最小値をとって枠全体のアルファとする
     float borderFactor = edgeAlpha.x * edgeAlpha.y;
-
-    // -----------------------------------------------------------
-    // 4. �ŏI�o��
-    // -----------------------------------------------------------
-    // �e�N�X�`���F * �����J���[(C++) * ���_�J���[
+// 4. 最終出力
+// テクスチャ色 * 発光カラー(C++) * 頂点カラー
     float3 finalRGB = texColor.rgb * ColorCore.rgb * pin.color.rgb;
     float finalA = texColor.a * ColorCore.a * pin.color.a * borderFactor;
 
-    // �����x�`�F�b�N (�S�~�s�N�Z������)
+    // 透明度チェック (ゴミピクセル除去)
     if (finalA < 0.01)
         discard;
 

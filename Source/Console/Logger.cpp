@@ -1,42 +1,42 @@
-#include <windows.h>
+ï»¿#include <windows.h>
 #include <stdio.h>
 #include <cstdarg>
 #include <fstream>
 #include "Logger.h"
 #include "System/PathResolver.h"
 
-// ƒƒOo—Íæƒtƒ@ƒCƒ‹‚ÌƒpƒX‚ğ•Ô‚·B
-// ƒvƒƒWƒFƒNƒgƒ‹[ƒg”z‰º‚Ì Saved/Logs/runtime.log ‚ğg‚¤B
+// ãƒ­ã‚°å‡ºåŠ›å…ˆãƒ•ã‚¡ã‚¤ãƒ«ã®ãƒ‘ã‚¹ã‚’è¿”ã™ã€‚
+// ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆãƒ«ãƒ¼ãƒˆé…ä¸‹ã® Saved/Logs/runtime.log ã‚’ä½¿ã†ã€‚
 std::filesystem::path Logger::GetLogFilePath() const
 {
-    // Saved/Logs ƒfƒBƒŒƒNƒgƒŠ‚ğì¬‚·‚éB
+    // Saved/Logs ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã‚’ä½œæˆã™ã‚‹ã€‚
     auto dir = std::filesystem::path(PathResolver::Resolve("Saved/Logs"));
     std::filesystem::create_directories(dir);
 
-    // ÀÛ‚ÌƒƒOƒtƒ@ƒCƒ‹ƒpƒX‚ğ•Ô‚·B
+    // å®Ÿéš›ã®ãƒ­ã‚°ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹ã‚’è¿”ã™ã€‚
     return dir / "runtime.log";
 }
 
-// ‰Â•Ï’·ˆø”•t‚«‚ÅƒƒO‚ğo—Í‚·‚éB
-// OutputDebugStringA ‚Æ runtime.log ‚Ì—¼•û‚Ö‘‚«‚ŞB
+// å¯å¤‰é•·å¼•æ•°ä»˜ãã§ãƒ­ã‚°ã‚’å‡ºåŠ›ã™ã‚‹ã€‚
+// OutputDebugStringA ã¨ runtime.log ã®ä¸¡æ–¹ã¸æ›¸ãè¾¼ã‚€ã€‚
 void Logger::Print(LogLevel level, const char* format, ...)
 {
-    // printf Œ`®•¶š—ñ‚ğˆêƒoƒbƒtƒ@‚Ö“WŠJ‚·‚éB
+    // printf å½¢å¼æ–‡å­—åˆ—ã‚’ä¸€æ™‚ãƒãƒƒãƒ•ã‚¡ã¸å±•é–‹ã™ã‚‹ã€‚
     char message[1024];
     va_list args;
     va_start(args, format);
     vsnprintf(message, sizeof(message), format, args);
     va_end(args);
 
-    // std::string ‚É•ÏŠ·‚·‚éB
+    // std::string ã«å¤‰æ›ã™ã‚‹ã€‚
     std::string finalMessage = message;
 
-    // ––”ö‚É‰üs‚ª–³‚¯‚ê‚Î•â‚¤B
+    // æœ«å°¾ã«æ”¹è¡ŒãŒç„¡ã‘ã‚Œã°è£œã†ã€‚
     if (finalMessage.empty() || finalMessage.back() != '\n') {
         finalMessage += "\n";
     }
 
-    // ƒƒOƒŒƒxƒ‹‚É‰‚¶‚½ƒvƒŒƒtƒBƒbƒNƒX•t‚«•¶š—ñ‚ğì‚éB
+    // ãƒ­ã‚°ãƒ¬ãƒ™ãƒ«ã«å¿œã˜ãŸãƒ—ãƒ¬ãƒ•ã‚£ãƒƒã‚¯ã‚¹ä»˜ãæ–‡å­—åˆ—ã‚’ä½œã‚‹ã€‚
     std::string vsOutput;
     switch (level) {
     case LogLevel::Info:
@@ -52,13 +52,13 @@ void Logger::Print(LogLevel level, const char* format, ...)
         break;
     }
 
-    // Visual Studio ‚Ìo—ÍƒEƒBƒ“ƒhƒE‚Ö‘—‚éB
+    // Visual Studio ã®å‡ºåŠ›ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã¸é€ã‚‹ã€‚
     ::OutputDebugStringA(vsOutput.c_str());
 
-    // •¡”ƒXƒŒƒbƒh‚©‚çˆÀ‘S‚É‘‚¯‚é‚æ‚¤ƒƒbƒN‚·‚éB
+    // è¤‡æ•°ã‚¹ãƒ¬ãƒƒãƒ‰ã‹ã‚‰å®‰å…¨ã«æ›¸ã‘ã‚‹ã‚ˆã†ãƒ­ãƒƒã‚¯ã™ã‚‹ã€‚
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    // ‰‰ñ‚¾‚¯ƒƒOƒtƒ@ƒCƒ‹‚ğ‹ó‚É‚µ‚ÄƒŠƒZƒbƒg‚·‚éB
+    // åˆå›ã ã‘ãƒ­ã‚°ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç©ºã«ã—ã¦ãƒªã‚»ãƒƒãƒˆã™ã‚‹ã€‚
     static bool fileReset = false;
     const std::filesystem::path logFilePath = GetLogFilePath();
     if (!fileReset) {
@@ -66,12 +66,12 @@ void Logger::Print(LogLevel level, const char* format, ...)
         fileReset = true;
     }
 
-    // ˆÈ~‚Í’Ç‹Lƒ‚[ƒh‚Åƒtƒ@ƒCƒ‹‚Ö‘‚«‚ŞB
+    // ä»¥é™ã¯è¿½è¨˜ãƒ¢ãƒ¼ãƒ‰ã§ãƒ•ã‚¡ã‚¤ãƒ«ã¸æ›¸ãè¾¼ã‚€ã€‚
     std::ofstream file(logFilePath, std::ios::out | std::ios::app);
     if (file.is_open()) {
         file << vsOutput;
     }
 
-    // ƒƒ‚ƒŠã‚ÌƒƒO—š—ğ‚É‚à•Û‘¶‚·‚éB
+    // ãƒ¡ãƒ¢ãƒªä¸Šã®ãƒ­ã‚°å±¥æ­´ã«ã‚‚ä¿å­˜ã™ã‚‹ã€‚
     m_logs.push_back({ level, finalMessage });
 }

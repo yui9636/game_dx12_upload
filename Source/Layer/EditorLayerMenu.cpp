@@ -935,7 +935,7 @@ void EditorLayer::DrawMainToolbar()
         // ★現在のモードをカーネルから取得
         EngineMode mode = EngineKernel::Instance().GetMode();
 
-        // [Play]
+        // Play ボタン。
         bool isPlaying = (mode == EngineMode::Play);
         ImVec4 playColor = isPlaying ? ImVec4(0.26f, 0.90f, 0.26f, 1.00f) : ImVec4(0.4f, 0.4f, 0.4f, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Text, playColor);
@@ -947,7 +947,7 @@ void EditorLayer::DrawMainToolbar()
 
         ImGui::SameLine();
 
-        // [Pause]
+        // Pause ボタン。
         bool isPaused = (mode == EngineMode::Pause);
         ImVec4 pauseColor = isPaused ? ImVec4(1.00f, 0.60f, 0.00f, 1.00f) : ImVec4(0.4f, 0.4f, 0.4f, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Text, pauseColor);
@@ -976,7 +976,7 @@ void EditorLayer::DrawMainToolbar()
 
         ImGui::SameLine();
 
-        // [Stop]
+        // Stop ボタン。
         bool canStop = (mode != EngineMode::Editor);
         ImVec4 stopColor = canStop ? ImVec4(1.00f, 0.25f, 0.25f, 1.00f) : ImVec4(0.4f, 0.4f, 0.4f, 0.6f);
         ImGui::PushStyleColor(ImGuiCol_Text, stopColor);

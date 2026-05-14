@@ -1,4 +1,4 @@
-#include "UIEditor/UIEditorPanel.h"
+﻿#include "UIEditor/UIEditorPanel.h"
 
 #include <algorithm>
 #include <array>
@@ -228,6 +228,7 @@ namespace
     {
         return point.x >= min.x && point.x <= max.x && point.y >= min.y && point.y <= max.y;
     }
+// DesignerScreenRect は entry/min/max/headerMin を中心に、実行時やエディターで共有する状態を保持する。
 
     struct DesignerScreenRect
     {

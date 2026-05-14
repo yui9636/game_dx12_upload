@@ -1,7 +1,7 @@
-#pragma once
+﻿#pragma once
 #include "DX12Device.h"
 
-// Linear descriptor allocator (reset each frame)
+// 毎 frame reset する linear descriptor allocator。
 class DX12DescriptorAllocator {
 public:
     DX12DescriptorAllocator(ID3D12Device* device,

@@ -1,5 +1,5 @@
-// EffectMeshUberVS — Phase B Route B
-// Skinning + worldMatrix transform → ubershader PS_IN layout.
+// EffectMeshUberVS は Phase B Route B の頂点入力を処理する。
+// skinning と worldMatrix 変換を行い、ubershader の PS_IN レイアウトへ渡す。
 // Route A 移行時: particle_data/header buffer を読む別 VS に差し替える (PSO だけ入替)。
 
 #include "Skinning.hlsli"

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <algorithm>
 #include <cctype>
@@ -18,13 +18,13 @@
 struct ActionDatabaseComponent;
 class Model;
 
-// Internal helpers shared between PlayerEditorPanel.cpp and its extracted
-// sibling modules (PlayerEditorViewportPanel.cpp / PlayerEditorSkeletonPanel.cpp /
-// PlayerEditorStateMachinePanel.cpp / PlayerEditorTimelinePanel.cpp /
-// PlayerEditorInspectorPanel.cpp).
+// PlayerEditorPanel.cpp と分離済みパネル群で共有する内部補助処理。
+// 対象は PlayerEditorViewportPanel.cpp、PlayerEditorSkeletonPanel.cpp、
+// PlayerEditorStateMachinePanel.cpp と PlayerEditorTimelinePanel.cpp で共有する。
+// PlayerEditorInspectorPanel.cpp でも共有する。
 namespace PlayerEditorInternal
 {
-    // ---- Layout / window-title constants ----
+    // レイアウトとウィンドウタイトル用の定数。
     inline constexpr float kTrackHeaderWidth     = 160.0f;
     inline constexpr float kTrackHeight          = 26.0f;
     inline constexpr float kMinPixelsPerFrame    = 2.0f;
@@ -66,7 +66,7 @@ namespace PlayerEditorInternal
         "Animation", "Hitbox", "VFX", "Audio", "CameraShake", "Camera", "Event", "Custom"
     };
 
-    // ---- String helpers ----
+    // 文字列処理の補助関数。
     inline std::string ToLowerAscii(std::string value)
     {
         std::transform(value.begin(), value.end(), value.begin(),
@@ -82,7 +82,7 @@ namespace PlayerEditorInternal
         return ToLowerAscii(value) == ToLowerAscii(rhs);
     }
 
-    // ---- Path / file helpers ----
+    // パスとファイル操作の補助関数。
     inline std::string MakeDataRelativePath(const std::string& path)
     {
         if (path.empty()) {
@@ -111,7 +111,7 @@ namespace PlayerEditorInternal
         return false;
     }
 
-    // ---- Asset content checks ----
+    // アセット内容の検証処理。
     inline bool HasTimelineAssetContent(const TimelineAsset& asset)
     {
         return asset.id != 0
@@ -119,7 +119,7 @@ namespace PlayerEditorInternal
             || !asset.tracks.empty();
     }
 
-    // ---- Enum-to-label resolvers ----
+    // enum 値を UI ラベルへ変換する処理。
     inline const char* GetColliderAttributeLabel(ColliderAttribute attribute)
     {
         switch (attribute) {
@@ -191,11 +191,11 @@ namespace PlayerEditorInternal
         }
     }
 
-    // ---- Timeline helpers ----
+    // タイムライン操作の補助処理。
     std::string GenerateDefaultTrackName(const TimelineAsset& asset, TimelineTrackType type);
     TimelineItem CreateDefaultTimelineItem(TimelineTrackType type, int startFrame);
 
-    // ---- Input map helpers (used by ApplyFullPlayerPreset / EnsurePlayerInputMap) ----
+    // 変更を適用する。FullPlayerPreset と EnsurePlayerInputMap が使う入力マップ補助処理。
     AxisBinding*   FindAxisBinding(InputActionMapAsset& map, const char* axisName);
     ActionBinding* FindActionBinding(InputActionMapAsset& map, const char* actionName);
     bool EnsurePhase1AAxisBinding(InputActionMapAsset& map, const char* axisName,
@@ -206,11 +206,11 @@ namespace PlayerEditorInternal
     bool MoveActionBindingTo(InputActionMapAsset& map, const char* actionName, size_t targetIndex);
     bool EnsurePlayerInputMap(InputActionMapAsset& map);
 
-    // ---- ActionDatabase helpers ----
+    // ActionDatabase 操作用の補助処理。
     bool EnsureAttackComboActionNodes(ActionDatabaseComponent& database,
         int (*resolveAnim)(int slot, void* user), void* user);
 
-    // ---- Viewport helpers ----
+    // Viewport 操作用の補助処理。
     bool ProjectBoneMarkerToViewport(
         const Model* model,
         int boneIndex,

@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿// DX12ResourceFactory の RHI 関連インターフェースまたは実装宣言をまとめます。
+#pragma once
 
 
 #include "RHI/IResourceFactory.h"

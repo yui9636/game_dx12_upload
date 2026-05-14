@@ -87,7 +87,7 @@ namespace
     }
 
     // Entity の表示名を返す。
-    // NameComponent が無ければ index ベースの仮名を返す。
+    // 入力名。Component が無ければ index ベースの仮名を返す。
     std::string GetEntityDisplayName(Registry& registry, EntityID entity)
     {
         if (auto* name = registry.GetComponent<NameComponent>(entity)) {
@@ -180,7 +180,7 @@ namespace
         }
     }
 
-    // Name / Transform / Hierarchy を持つ単体 entity 用 snapshot を作る。
+    // 入力名。 / Transform / Hierarchy を持つ単体 entity 用 snapshot を作る。
     // 任意で Mesh / Light / ReflectionProbe も追加できる。
     EntitySnapshot::Snapshot BuildSingleEntitySnapshot(const std::string& name,
         const MeshComponent* meshComponent = nullptr,
@@ -374,7 +374,7 @@ namespace
         }
     }
 
-    // Text 用 2D entity の snapshot を作る。
+    // text 用色。 用 2D entity の snapshot を作る。
     EntitySnapshot::Snapshot BuildSingleTextSnapshot(const std::string& name,
         const std::string& fontPath)
     {
@@ -774,11 +774,8 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         ImGui::End();
         return;
     }
-
-    // ------------------------------------------
-    // 検索ボックス
-    // ------------------------------------------
-    static std::array<char, 256> searchBuffer{};
+// 検索ボックス
+static std::array<char, 256> searchBuffer{};
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0f, 4.0f));
     ImGui::SetNextItemWidth(-1.0f);
 
@@ -800,11 +797,8 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
         }
     }
     ImGui::Spacing();
-
-    // ------------------------------------------
-    // ルート entity を走査してツリー描画
-    // ------------------------------------------
-    auto archetypes = registry->GetAllArchetypes();
+// ルート entity を走査してツリー描画
+auto archetypes = registry->GetAllArchetypes();
     for (auto* archetype : archetypes) {
         const auto& entities = archetype->GetEntities();
         for (EntityID entity : entities) {
@@ -823,11 +817,8 @@ void HierarchyECSUI::Render(Registry* registry, bool* p_open, bool* outFocused) 
             }
         }
     }
-
-    // ------------------------------------------
-    // 何もない領域への D&D / 右クリックメニュー
-    // ------------------------------------------
-    ImVec2 availSize = ImGui::GetContentRegionAvail();
+// 何もない領域への D&D / 右クリックメニュー
+ImVec2 availSize = ImGui::GetContentRegionAvail();
     if (availSize.x <= 0.0f) { availSize.x = 1.0f; }
     if (availSize.y < 50.0f) { availSize.y = 50.0f; }
 
@@ -1131,7 +1122,7 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
         }
     }
 
-    // entity D&D source。
+    // entity drag and drop の source。
     if (ImGui::BeginDragDropSource()) {
         EntityID payloadEntity = entity;
         ImGui::SetDragDropPayload("ENGINE_ENTITY", &payloadEntity, sizeof(payloadEntity));
@@ -1489,10 +1480,8 @@ void HierarchyECSUI::DrawEntityNode(Registry* registry, EntityID entity) {
 // entity や asset の D&D を受け付けて、Reparent や生成を行う。
 void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEntity) {
     if (ImGui::BeginDragDropTarget()) {
-        // ------------------------------------------
-        // Entity の D&D: Reparent
-        // ------------------------------------------
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
+// Entity の D&D: Reparent
+if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
             if (payload->DataSize == sizeof(EntityID)) {
                 EntityID draggedEntity = *static_cast<const EntityID*>(payload->Data);
                 if (registry->IsAlive(draggedEntity) &&
@@ -1518,11 +1507,8 @@ void HierarchyECSUI::HandleDragDropTarget(Registry* registry, EntityID parentEnt
                 }
             }
         }
-
-        // ------------------------------------------
-        // Asset の D&D: 生成 / 割り当て
-        // ------------------------------------------
-        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+// Asset の D&D: 生成 / 割り当て
+if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
             std::string sourcePathStr((const char*)payload->Data);
             std::filesystem::path path(sourcePathStr);
             std::string ext = path.extension().string();

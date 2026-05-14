@@ -1,35 +1,35 @@
-#pragma once
+ï»¿#pragma once
 #include <cstdint>
 
-// Entity ‚ÌÀ‘Ì‚Í 64bit ®”B
-// ãˆÊ 32bit ‚É indexA‰ºˆÊ 32bit ‚É generation ‚ğ‹l‚ß‚éB
+// Entity ã®å®Ÿä½“ã¯ 64bit æ•´æ•°ã€‚
+// ä¸Šä½ 32bit ã« indexã€ä¸‹ä½ 32bit ã« generation ã‚’è©°ã‚ã‚‹ã€‚
 using EntityID = uint64_t;
 
-// EntityID ‚ğ‘g‚İ—§‚Ä‚½‚è•ª‰ğ‚µ‚½‚è‚·‚é•â•ŠÖ”ŒQB
+// EntityID ã‚’çµ„ã¿ç«‹ã¦ãŸã‚Šåˆ†è§£ã—ãŸã‚Šã™ã‚‹è£œåŠ©é–¢æ•°ç¾¤ã€‚
 namespace Entity {
 
-    // –³Œø‚È index ’lB
+    // ç„¡åŠ¹ãª index å€¤ã€‚
     constexpr uint32_t INVALID_INDEX = 0xFFFFFFFF;
 
-    // –³Œø‚È EntityIDB
+    // ç„¡åŠ¹ãª EntityIDã€‚
     constexpr EntityID NULL_ID = 0xFFFFFFFFFFFFFFFF;
 
-    // index ‚Æ generation ‚©‚ç EntityID ‚ğì‚éB
+    // index ã¨ generation ã‹ã‚‰ EntityID ã‚’ä½œã‚‹ã€‚
     inline EntityID Create(uint32_t index, uint32_t generation) {
         return (static_cast<uint64_t>(index) << 32) | static_cast<uint64_t>(generation);
     }
 
-    // EntityID ‚©‚ç index •”•ª‚ğæ‚èo‚·B
+    // EntityID ã‹ã‚‰ index éƒ¨åˆ†ã‚’å–ã‚Šå‡ºã™ã€‚
     inline uint32_t GetIndex(EntityID id) {
         return static_cast<uint32_t>(id >> 32);
     }
 
-    // EntityID ‚©‚ç generation •”•ª‚ğæ‚èo‚·B
+    // EntityID ã‹ã‚‰ generation éƒ¨åˆ†ã‚’å–ã‚Šå‡ºã™ã€‚
     inline uint32_t GetGeneration(EntityID id) {
         return static_cast<uint32_t>(id & 0xFFFFFFFF);
     }
 
-    // NULL_ID ‚©‚Ç‚¤‚©‚ğ”»’è‚·‚éB
+    // NULL_ID ã‹ã©ã†ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
     inline bool IsNull(EntityID id) {
         return id == NULL_ID;
     }

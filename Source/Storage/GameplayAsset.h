@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <cstdint>
@@ -8,10 +8,6 @@
 #include "EffectRuntime/EffectService.h"
 
 namespace Effekseer { class Effect; }
-
-// ============================================================================
-// ============================================================================
-
 struct GEHitboxPayload
 {
     int                   nodeIndex = 0;
@@ -20,8 +16,8 @@ struct GEHitboxPayload
     unsigned int          rgba = 0x40FF0000;
 };
 
-// Hand-rolled instead of NLOHMANN_DEFINE_TYPE_INTRUSIVE so any field added
-// later defaults gracefully when loading older assets.
+// NLOHMANN_DEFINE_TYPE_INTRUSIVE を使わず手書きにし、後から field が増えても
+// 古い asset 読み込み時に自然に既定値へ落ちるようにする。
 inline void to_json(nlohmann::json& j, const GEHitboxPayload& p) {
     j = nlohmann::json{
         {"nodeIndex", p.nodeIndex},

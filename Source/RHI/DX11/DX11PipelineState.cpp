@@ -1,3 +1,4 @@
+﻿// DX11PipelineState の RHI バックエンド実装をまとめます。
 #include "DX11PipelineState.h"
 
 DX11PipelineState::DX11PipelineState(const PipelineStateDesc& desc)

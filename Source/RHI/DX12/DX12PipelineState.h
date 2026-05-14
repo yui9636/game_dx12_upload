@@ -1,3 +1,4 @@
+﻿// DX12PipelineState の RHI 関連インターフェースまたは実装宣言をまとめます。
 #pragma once
 #include "RHI/IPipelineState.h"
 #include "DX12Device.h"

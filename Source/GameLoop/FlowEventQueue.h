@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 #include <vector>
+// FlowEvent は name/value を中心に、実行時やエディターで共有する状態を保持する。
 
 struct FlowEvent
 {

@@ -1,4 +1,4 @@
-#include "HealthSystem.h"
+﻿#include "HealthSystem.h"
 #include "HealthComponent.h"
 #include "DamageEventComponent.h"
 #include "HitStopComponent.h"
@@ -18,9 +18,9 @@
 
 namespace
 {
-    // Default i-frames after taking a hit. Tunable per-event later if reactionKind diverges.
+    // 被弾後の標準無敵時間。reactionKind が分岐したら event ごとに調整できるようにする。
     constexpr float kInvincibleAfterHitSec = 0.5f;
-    // Stack-the-larger semantics: don't shorten an already-running hitstop.
+    // 大きい値を優先する。既に走っているヒットストップを短くしない。
     constexpr float kVictimHitStopScale    = 0.05f;
 
     void TickInvincibility(Registry& registry, float dt)
@@ -59,12 +59,12 @@ namespace
             vh->isInvincible = true;
             vh->isDead = (vh->health <= 0);
 
-            // Trigger the StateMachine Damaged transition.
+            // StateMachine の Damaged 遷移を発火する。
             if (auto* smp = registry.GetComponent<StateMachineParamsComponent>(ev.victim)) {
                 smp->SetParam("Damaged", 1.0f);
             }
 
-            // Propagate hitstop to the victim. Don't shorten an already running freeze.
+            // 被弾側へヒットストップを伝播する。既に走っている停止時間は短くしない。
             if (auto* hs = registry.GetComponent<HitStopComponent>(ev.victim)) {
                 if (ev.hitStopSec > hs->timer) {
                     hs->timer      = ev.hitStopSec;
@@ -72,7 +72,7 @@ namespace
                 }
             }
 
-            // Optional knockback.
+            // 任意のノックバック。
             if (ev.knockbackPower > 0.0f) {
                 if (auto* phys = registry.GetComponent<CharacterPhysicsComponent>(ev.victim)) {
                     phys->velocity.x = ev.knockbackDir.x * ev.knockbackPower;
@@ -80,11 +80,11 @@ namespace
                 }
             }
 
-            // Floating damage number. Safe no-op if the pool wasn't initialized.
+            // 浮遊ダメージ数値。プール未初期化なら安全に何もしない。
             DamageTextManager::Instance().Spawn(ev.hitPoint, ev.amount);
 
-            // Hit VFX. Spawn at the contact point in world space if the
-            // authoring side specified a path on the Hitbox item.
+            // 被弾 VFX。Hitbox item にパスが指定されていれば、
+            // ワールド空間の接触点へ生成する。
             if (!ev.hitVfxPath.empty()) {
                 EffectPlayDesc desc;
                 desc.assetPath = ev.hitVfxPath;
@@ -96,7 +96,7 @@ namespace
                 EffectService::Instance().PlayWorld(registry, desc);
             }
 
-            // Hit SE. Always 3D-positional so distance attenuation works.
+            // 被弾 SE。距離減衰が効くよう、常に 3D 位置付きで鳴らす。
             if (!ev.hitSfxPath.empty()) {
                 auto& audio = EngineKernel::Instance().GetAudioWorld();
                 audio.PlayTransient3D(ev.hitSfxPath, ev.hitPoint, 1.0f, 1.0f, false);

@@ -10,10 +10,8 @@ void EditorLayer::DrawSceneView()
     {
         SetLastFocusedWindow(WindowFocusTarget::SceneView, ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows));
         m_sceneViewToolbarHovered = false;
-        // =========================================================
-        // ★ 判定の強化：子ウィンドウやアイテム（画像）の上でもホバーとみなす
-        // =========================================================
-        bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+// ★ 判定の強化：子ウィンドウやアイテム（画像）の上でもホバーとみなす
+bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
         m_sceneViewHovered = hovered;
         if (m_gameLayer) {

@@ -1,4 +1,5 @@
 #include "PrimitiveRenderer.hlsli"
+// main はデバッグ用プリミティブの頂点変換または色出力を行う。
 
 VS_OUT main(VS_IN vin)
 {

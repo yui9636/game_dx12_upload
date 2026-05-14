@@ -8,10 +8,10 @@
 class DX12Device;
 class IBuffer;
 
-// GPU frustum culling via compute shader (2D dispatch).
-// Input:  preparedInstanceData (all instances, unculled)
-// Output: compacted visible instances + indirect draw args on GPU
-// Overwrites rc.active* so renderers see culled data transparently.
+// compute shader の 2D dispatch で GPU frustum culling を行う。
+// 入力は culling 前の全 instance を含む preparedInstanceData。
+// 出力は GPU 上で compact した visible instance と indirect draw args。
+// rc.active* を上書きし、renderer 側からは culling 後データを透過的に見せる。
 class ComputeCullingPass : public IRenderPass {
 public:
     std::string GetName() const override { return "ComputeCullingPass"; }
@@ -39,27 +39,27 @@ private:
 
     bool m_initialized = false;
 
-    // Compute pipeline
+    // compute pipeline を保持する。
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_computeRootSig;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_computePSO;
 
-    // GPU buffers (DEFAULT heap, UAV) — owned by this pass
-    std::shared_ptr<IBuffer> m_culledInstanceBuffer;   // UAVStorage
-    std::shared_ptr<IBuffer> m_culledDrawArgsBuffer;    // UAVStorage
+    // この pass が所有する DEFAULT heap / UAV の GPU buffer。
+    std::shared_ptr<IBuffer> m_culledInstanceBuffer;   // UAVStorage 用。
+    std::shared_ptr<IBuffer> m_culledDrawArgsBuffer;    // UAVStorage 用。
     uint32_t m_instanceCapacity = 0;
     uint32_t m_drawArgsCapacity = 0;
 
-    // Staging buffer for DrawArgs initialization (IBuffer, UPLOAD)
+    // DrawArgs 初期化用の UPLOAD staging buffer。
     std::shared_ptr<IBuffer> m_stagingBuffer;
     uint32_t m_stagingCapacity = 0;
 
     std::shared_ptr<IBuffer> m_paramsBuffer;
 
-    // Count buffer for multi-draw ExecuteIndirect
-    std::shared_ptr<IBuffer> m_countBuffer;     // UAVStorage, holds uint32_t commandCount
-    std::shared_ptr<IBuffer> m_countStagingBuffer; // UPLOAD, dedicated staging for count value
+    // multi-draw ExecuteIndirect 用の count buffer。
+    std::shared_ptr<IBuffer> m_countBuffer;     // UAVStorage 用。。uint32_t の commandCount を保持する。
+    std::shared_ptr<IBuffer> m_countStagingBuffer; // UPLOAD heap。count value 専用 staging。
 
-    // Track buffer states across frames
+    // フレームをまたいで buffer state を追跡する。
     bool m_instanceInVBState = false;
     bool m_drawArgsInIndirectState = false;
     bool m_countInIndirectState = false;

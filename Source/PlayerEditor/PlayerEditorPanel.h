@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <memory>
 #include <vector>
@@ -17,18 +17,14 @@ class Registry;
 class ITexture;
 class Model;
 class PlayerEditorSession;
-
-// ============================================================================
-// Player Editor 窶・UE-style multi-panel DockSpace editor
-// 7 docked sub-windows:
-//   Left:   Skeleton Tree / StateMachine (tabbed)
-//   Center: 3D Viewport (large)
-//   Right:  Properties (top) / Animator+Input (bottom, tabbed)
-//   Bottom: Timeline (full width)
-// ============================================================================
-
-// v2.0 ActorEditor: PlayerEditor edits one of three actor kinds.
-// See Docs/ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md.
+// プレイヤーエディター: UE 風のマルチパネル DockSpace エディタ。
+// 7 つのドッキング済みサブウィンドウ:
+//   左:   スケルトンツリー / ステートマシン（タブ）
+//   中央: 3D ビューポート（大）
+//   右:   プロパティ（上） / アニメータ + 入力（下、タブ）
+//   下:   タイムライン（全幅）
+// v2.0 ActorEditor: PlayerEditor は 3 種類のアクターのいずれかを編集する。
+// 詳細は ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md を参照。
 enum class ActorEditorMode : uint8_t
 {
     Player = 0,
@@ -44,7 +40,7 @@ public:
     void DrawDetached(Registry* registry, bool* p_open, bool* outFocused);
     void Suspend();
 
-    // Viewport texture (set by EditorLayer/Renderer)
+    // ビューポートテクスチャ（EditorLayer / Renderer が設定）
     void SetViewportTexture(ITexture* tex) { m_viewportTexture = tex; }
     void SetSharedSceneCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction, float fovY);
     bool CanRenderPreview() const { return HasOpenModel(); }
@@ -67,17 +63,17 @@ public:
     const Model* GetPreviewModel() const { return m_model; }
     float GetPreviewModelScale() const { return m_previewModelScale; }
 
-    // Model for bone tree (legacy external sync path)
+    // ボーンツリー用モデル（旧外部同期経路）
     void SetModel(const Model* model);
     void SetPreviewEntity(EntityID entity);
     void SyncExternalSelection(EntityID entity, const std::string& modelPath);
 
-    // Asset access
+    // アセットアクセス
     TimelineAsset&       GetTimelineAsset()       { return m_timelineAsset; }
     StateMachineAsset&   GetStateMachineAsset()   { return m_stateMachineAsset; }
     PreviewState&        GetPreviewState()        { return m_previewState; }
 
-    // Selected bone (used by timeline item inspector)
+    // 選択中ボーン（タイムライン項目インスペクタで使用）
     int  GetSelectedBoneIndex() const { return m_selectedBoneIndex; }
 
 private:
@@ -114,25 +110,25 @@ private:
     void SelectPersistentCollider(int colliderIndex);
     void AddPersistentCollider(ColliderAttribute attribute);
 
-    // 笏笏 DockSpace Layout 笏笏
+    // DockSpace レイアウト
     void BuildDockLayout(unsigned int dockspaceId);
     bool m_needsLayoutRebuild = true;
     HostMode m_lastHostMode = HostMode::Window;
 
-    // 笏笏 Sub-windows 笏笏
+    // サブウィンドウ
     void DrawViewportPanel();
-    void DrawSkeletonPanel();       // Bone tree + Sockets
+    void DrawSkeletonPanel();       // ボーンツリー + ソケット
     void DrawStateMachinePanel();
     void DrawTimelinePanel();
     void DrawPropertiesPanel();
     void DrawAnimatorPanel();
     void DrawInputPanel();
 
-    // 笏笏 Skeleton internals 笏笏
+    // スケルトン内部処理
     void DrawBoneTreeNode(int nodeIndex);
     void DrawSocketList(float height);
 
-    // 笏笏 Timeline internals 笏笏
+    // タイムライン内部処理
     void DrawTimelineTrackHeaders(float height);
     void DrawTimelineGrid(float height);
     void DrawTimelinePlaybackToolbar();
@@ -148,11 +144,11 @@ private:
     void StartSelectedAnimationPreview();
     void PreviewStateNode(uint32_t stateId, bool restartTimeline);
 
-    // 笏笏 StateMachine internals 笏笏
+    // ステートマシン内部処理
     void DrawNodeGraph(ImVec2 canvasSize);
     void FitGraphToContent(const ImVec2& canvasSize);
     void DrawStateNodeInspector();
-    // v2.0 state-bound BT integration into State Inspector (Enemy / NPC mode only).
+    // v2.0: ステートに紐づく BT をステートインスペクタへ統合する（Enemy / NPC モードのみ）。
     void DrawStateAISection(StateNode& state);
     void DrawInlineBTTreeView();
     void DrawInlineBTNodeInspector();
@@ -183,15 +179,15 @@ private:
     int FindDamageAnimation() const;
     bool IsNonForwardLocomotionAnimation(int animationIndex) const;
 
-    // 笏笏 Connection mode (drag-wire) 笏笏
+    // 接続モード（ドラッグワイヤ）
     bool     m_isConnecting      = false;
     uint32_t m_connectFromNodeId = 0;
 
-    // 笏笏 Selection context for Properties panel 笏笏
+    // プロパティパネル用の選択コンテキスト
     enum class SelectionContext { None, StateNode, Transition, TimelineTrack, TimelineItem, Bone, Socket, PersistentCollider };
     SelectionContext m_selectionCtx = SelectionContext::None;
 
-    // 笏笏 Assets 笏笏
+    // アセット
     TimelineAsset       m_timelineAsset;
     StateMachineAsset   m_stateMachineAsset;
     bool                m_timelineDirty = false;
@@ -199,27 +195,27 @@ private:
     bool                m_socketDirty = false;
     bool                m_colliderDirty = false;
 
-    // v2.0: ActorEditor mode (Player / Enemy / NPC). Affects toolbar buttons
-    // and the StateMachinePanel AI section visibility.
+    // v2.0: ActorEditor モード（Player / Enemy / NPC）。ツールバーボタンと
+    // StateMachinePanel の AI セクション表示に影響する。
     ActorEditorMode     m_actorEditorMode = ActorEditorMode::Player;
 
-    // v2.0: state-bound BT inline editor state.
+    // v2.0: ステート紐づけ BT のインライン編集状態。
     BehaviorTreeAsset   m_inlineBtAsset;
-    uint32_t            m_inlineBtStateId        = 0;     // which StateNode owns the loaded asset
+    uint32_t            m_inlineBtStateId        = 0;     // 読み込み済みアセットを所有する StateNode
     int                 m_inlineBtSelectedIndex  = -1;
-    bool                m_inlineBtLoaded         = false; // false = empty / unsynced
+    bool                m_inlineBtLoaded         = false; // false なら空または未同期
     bool                m_inlineBtDirty          = false;
     BTValidateResult    m_inlineBtLastValidate;
     bool                m_inlineBtValidatedOnce  = false;
     bool                m_inlineBtExpanded       = false;
 
-    // 笏笏 Preview 笏笏
+    // プレビュー
     PreviewState m_previewState;
 
-    // 笏笏 Input mapping 笏笏
+    // 入力マッピング
     InputMappingTab m_inputMappingTab;
 
-    // 笏笏 Timeline state 笏笏
+    // タイムライン状態
     int   m_playheadFrame    = 0;
     bool  m_isPlaying        = false;
     float m_timelineZoom     = 1.0f;
@@ -227,7 +223,7 @@ private:
     int   m_selectedTrackId  = -1;
     int   m_selectedItemIdx  = -1;
 
-    // 笏笏 StateMachine state 笏笏
+    // ステートマシン状態
     uint32_t m_selectedNodeId       = 0;
     uint32_t m_selectedTransitionId = 0;
     DirectX::XMFLOAT2 m_graphOffset = { 200, 150 };
@@ -238,18 +234,18 @@ private:
     uint32_t m_graphConnectDragFrom   = 0;
     bool     m_graphFitRequested      = true;
 
-    // 笏笏 Skeleton state 笏笏
+    // スケルトン状態
     std::shared_ptr<Model> m_ownedModel;
     const Model* m_model             = nullptr;
     int          m_selectedBoneIndex  = -1;
     int          m_hoveredBoneIndex   = -1;
     std::string  m_selectedBoneName;
     char         m_boneSearchFilter[128] = {};
-    std::vector<NodeSocket> m_sockets;         // Editable socket list
+    std::vector<NodeSocket> m_sockets;         // 編集可能なソケット一覧
     int          m_selectedSocketIdx  = -1;
     int          m_selectedColliderIdx = -1;
 
-    // 笏笏 Animator state 笏笏
+    // アニメータ状態
     int m_selectedAnimIndex = -1;
     std::string m_currentModelPath;
     EntityID m_selectedEntity = Entity::NULL_ID;
@@ -260,7 +256,7 @@ private:
     uint32_t m_runtimePreviousStateId = 0;
     std::string m_runtimeLastTransitionLabel;
 
-    // 笏笏 Viewport 笏笏
+    // ビューポート
     ITexture* m_viewportTexture = nullptr;
     DirectX::XMFLOAT2 m_previewRenderSize = { 0.0f, 0.0f };
     DirectX::XMFLOAT4 m_viewportRect = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -278,6 +274,6 @@ private:
     DirectX::XMFLOAT3 m_pendingCameraFitForward = { 0.0f, 0.0f, 1.0f };
     float m_pendingCameraFitDistance = 0.0f;
 
-    // 笏笏 Per-frame 笏笏
+    // フレーム単位の状態
     Registry* m_registry = nullptr;
 };

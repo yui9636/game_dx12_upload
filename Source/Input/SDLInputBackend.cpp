@@ -1,4 +1,4 @@
-#include "SDLInputBackend.h"
+﻿#include "SDLInputBackend.h"
 #include "Console/Logger.h"
 #include <SDL3/SDL.h>
 #include <cstring>
@@ -50,7 +50,7 @@ void SDLInputBackend::Shutdown() {
 }
 
 void SDLInputBackend::BeginFrame() {
-    // Nothing needed before polling
+    // polling 前に必要な処理はない。
 }
 
 void SDLInputBackend::PollEvents(InputEventQueue& queue) {
@@ -189,13 +189,13 @@ void SDLInputBackend::PollEvents(InputEventQueue& queue) {
 }
 
 void SDLInputBackend::EndFrame() {
-    // Nothing needed after polling
+    // polling 後に必要な処理はない。
 }
 
 std::vector<InputDeviceInfo> SDLInputBackend::GetConnectedDevices() const {
     std::vector<InputDeviceInfo> devices;
 
-    // Always report keyboard and mouse
+    // keyboard と mouse は常に報告する。
     {
         InputDeviceInfo kb;
         kb.deviceId = 0;

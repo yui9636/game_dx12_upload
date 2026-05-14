@@ -1,4 +1,5 @@
-#pragma once
+﻿#pragma once
+// Console は m_autoScroll を中心に、実行時やエディターで共有する状態を保持する。
 
 class Console {
 public:

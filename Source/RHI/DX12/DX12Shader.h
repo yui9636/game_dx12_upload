@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 #include "RHI/IShader.h"
 #include <vector>
 #include <string>
 #include <cstdint>
 
-// DX12 shader holds bytecode only (PSO compiles it)
+// DX12 shader は bytecode だけを保持し、PSO 側で compile する。
 class DX12Shader : public IShader {
 public:
     DX12Shader(ShaderType type, const std::string& fileName);

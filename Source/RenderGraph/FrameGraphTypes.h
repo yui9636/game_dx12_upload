@@ -1,10 +1,8 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <string>
 #include "RHI/ITexture.h"
-
-// ============================================================
-// ============================================================
+// FrameGraph 内のリソースを世代付き index で参照する軽量ハンドル。
 struct ResourceHandle {
     uint16_t index   = 0xFFFF;
     uint16_t version = 0;
@@ -16,9 +14,7 @@ struct ResourceHandle {
     }
     bool operator!=(const ResourceHandle& o) const { return !(*this == o); }
 };
-
-// ============================================================
-// ============================================================
+// FrameGraph が生成するテクスチャの作成条件。
 struct TextureDesc {
     uint32_t width  = 0;
     uint32_t height = 0;

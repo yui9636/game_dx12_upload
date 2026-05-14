@@ -71,7 +71,7 @@ namespace
     }
 }
 
-// Synchronizes Jolt bodies and ECS transforms.
+// Jolt body と ECS transform を同期する。
 void PhysicsSyncSystem::Update(Registry& registry, bool isSimulation) {
     auto& physicsMgr = PhysicsManager::Instance();
     BodyInterface& bodyInterface = physicsMgr.GetBodyInterface();

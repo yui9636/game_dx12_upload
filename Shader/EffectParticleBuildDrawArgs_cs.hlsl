@@ -1,9 +1,6 @@
-// ============================================================================
-// BuildDrawArgs: Reads totalAliveBillboard from counter buffer,
-// writes D3D12_DRAW_ARGUMENTS for ExecuteIndirect
-// Dispatch: (1, 1, 1)
-// ============================================================================
-
+// BuildDrawArgs: カウンタバッファから totalAliveBillboard を読む。
+// ExecuteIndirect 用の D3D12_DRAW_ARGUMENTS を書き込む。
+// ディスパッチ: (1, 1, 1)
 #include "EffectParticleSoA.hlsli"
 
 RWByteAddressBuffer g_IndirectArgs  : register(u0);
@@ -16,7 +13,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID)
 
     uint aliveCount = g_CounterBuffer.Load(COUNTER_ALIVE_BILLBOARD);
 
-    // D3D12_DRAW_ARGUMENTS: VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation
+    // D3D12_DRAW_ARGUMENTS は VertexCountPerInstance、InstanceCount、StartVertexLocation、StartInstanceLocation の順で格納する。
     g_IndirectArgs.Store(0u, aliveCount);
     g_IndirectArgs.Store(4u, 1u);
     g_IndirectArgs.Store(8u, 0u);

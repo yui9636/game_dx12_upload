@@ -1,44 +1,11 @@
-//#pragma once
-//#include <wrl.h>
-//#include <d3d11.h>
-//#include "ShaderCommon.h"
-//#include "RenderContext/RenderState.h"
-//#include "ShadowMap.h"
-//
-//class GlobalRootSignature {
-//public:
-//    static GlobalRootSignature& Instance() {
-//        static GlobalRootSignature instance;
-//        return instance;
-//    }
-//
-//    void Initialize(ID3D11Device* device);
-//
-//    void BindAll(ID3D11DeviceContext* dc, const RenderState* renderState, const ShadowMap* shadowMap);
-//
-//    ID3D11Buffer* GetSceneBuffer() const { return m_cbScene.Get(); }
-//    ID3D11Buffer* GetShadowBuffer() const { return m_cbShadow.Get(); }
-//
-//    void SetIBL(ID3D11ShaderResourceView* diff, ID3D11ShaderResourceView* spec) {
-//        m_diffIBL = diff;
-//        m_specIBL = spec;
-//    }
-//
-//private:
-//    Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbScene;
-//    Microsoft::WRL::ComPtr<ID3D11Buffer> m_cbShadow;
-//    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_diffIBL;
-//    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_specIBL;
-//
-//    GlobalRootSignature() = default;
-//};
-#pragma once
+﻿#pragma once
 #include <memory>
 #include <wrl.h>
 #include <d3d11.h>
 #include "ShaderCommon.h"
 #include "RenderContext/RenderState.h"
 #include "ShadowMap.h"
+// ICommandList はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class ICommandList;
 class IBuffer;

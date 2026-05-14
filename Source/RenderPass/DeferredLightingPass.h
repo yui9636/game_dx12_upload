@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 #include <d3d12.h>
@@ -33,14 +33,11 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrv2D = {};
     D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrv2DArray = {};
     D3D12_CPU_DESCRIPTOR_HANDLE m_dx12NullSrvCube = {};
-
-    // ====================================================
-    // ====================================================
-    ResourceHandle m_hGBuffer0; // Albedo
-    ResourceHandle m_hGBuffer1; // Normal
-    ResourceHandle m_hGBuffer2; // WorldPos
-    ResourceHandle m_hGBuffer3; // Velocity (GBufferVelocity)
-    ResourceHandle m_hDepth;    // Depth
+    ResourceHandle m_hGBuffer0; // Albedo 用。
+    ResourceHandle m_hGBuffer1; // 法線。
+    ResourceHandle m_hGBuffer2; // WorldPos 用。
+    ResourceHandle m_hGBuffer3; // Velocity。GBufferVelocity に対応する。
+    ResourceHandle m_hDepth;    // Depth 用。
 
     ResourceHandle m_hGTAO;
     ResourceHandle m_hSSGI;

@@ -1,40 +1,40 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Entity/Entity.h"
 #include <DirectXMath.h>
 #include <string>
 #include <vector>
 
-// ‘O•ûéŒ¾B
+// å‰æ–¹å®£è¨€ã€‚
 class Registry;
 class Model;
 class AnimatorRuntimeRegistry;
 struct AnimatorComponent;
 
-// ƒAƒjƒ[ƒVƒ‡ƒ“Ä¶‚ğ entity ’PˆÊ‚ÅŠÇ—‚·‚éƒT[ƒrƒXƒNƒ‰ƒXB
-// AnimatorComponent ‚Ì¶¬EíœAbase/action Ä¶Adriver §ŒäA
-// ƒAƒjƒ–¼æ“¾Aroot motion æ“¾‚È‚Ç‚Ì‘‹Œû‚É‚È‚éB
+// ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³å†ç”Ÿã‚’ entity å˜ä½ã§ç®¡ç†ã™ã‚‹ã‚µãƒ¼ãƒ“ã‚¹ã‚¯ãƒ©ã‚¹ã€‚
+// AnimatorComponent ã®ç”Ÿæˆãƒ»å‰Šé™¤ã€base/action å†ç”Ÿã€driver åˆ¶å¾¡ã€
+// ã‚¢ãƒ‹ãƒ¡åå–å¾—ã€root motion å–å¾—ãªã©ã®çª“å£ã«ãªã‚‹ã€‚
 class AnimatorService
 {
 public:
-    // singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğæ“¾‚·‚éB
+    // singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’å–å¾—ã™ã‚‹ã€‚
     static AnimatorService& Instance();
 
-    // ‚±‚ÌƒT[ƒrƒX‚ªQÆ‚·‚é ECS Registry ‚ğİ’è‚·‚éB
+    // ã“ã®ã‚µãƒ¼ãƒ“ã‚¹ãŒå‚ç…§ã™ã‚‹ ECS Registry ã‚’è¨­å®šã™ã‚‹ã€‚
     void SetRegistry(Registry* registry);
 
-    // Œ»İQÆ‚µ‚Ä‚¢‚é Registry ‚ğ•Ô‚·B
+    // ç¾åœ¨å‚ç…§ã—ã¦ã„ã‚‹ Registry ã‚’è¿”ã™ã€‚
     Registry* GetRegistry() const { return m_registry; }
 
-    // w’è entity ‚É AnimatorComponent ‚ª–³‚¯‚ê‚Î’Ç‰Á‚·‚éB
+    // æŒ‡å®š entity ã« AnimatorComponent ãŒç„¡ã‘ã‚Œã°è¿½åŠ ã™ã‚‹ã€‚
     void EnsureAnimator(EntityID entity);
 
-    // w’è entity ‚©‚ç AnimatorComponent ‚ğíœ‚·‚éB
-    // •¹‚¹‚Ä runtime pose ƒLƒƒƒbƒVƒ…‚à”jŠü‚·‚éB
+    // æŒ‡å®š entity ã‹ã‚‰ AnimatorComponent ã‚’å‰Šé™¤ã™ã‚‹ã€‚
+    // ä½µã›ã¦ runtime pose ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚‚ç ´æ£„ã™ã‚‹ã€‚
     void RemoveAnimator(EntityID entity);
 
-    // base layer ‚ÌƒAƒjƒ[ƒVƒ‡ƒ“‚ğÄ¶‚·‚éB
-    // ‘Ò‹@‚âˆÚ“®‚È‚ÇAí—¬‚ê‚éŠî–{ƒ‚[ƒVƒ‡ƒ“Œü‚¯B
+    // base layer ã®ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ã‚’å†ç”Ÿã™ã‚‹ã€‚
+    // å¾…æ©Ÿã‚„ç§»å‹•ãªã©ã€å¸¸æ™‚æµã‚Œã‚‹åŸºæœ¬ãƒ¢ãƒ¼ã‚·ãƒ§ãƒ³å‘ã‘ã€‚
     void PlayBase(
         EntityID entity,
         int animIndex,
@@ -42,8 +42,8 @@ public:
         float blendTime = 0.2f,
         float speed = 1.0f);
 
-    // action layer ‚ÌƒAƒjƒ[ƒVƒ‡ƒ“‚ğÄ¶‚·‚éB
-    // UŒ‚‚âˆê“I‚Èã‘‚«ƒAƒNƒVƒ‡ƒ“Œü‚¯B
+    // action layer ã®ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³ã‚’å†ç”Ÿã™ã‚‹ã€‚
+    // æ”»æ’ƒã‚„ä¸€æ™‚çš„ãªä¸Šæ›¸ãã‚¢ã‚¯ã‚·ãƒ§ãƒ³å‘ã‘ã€‚
     void PlayAction(
         EntityID entity,
         int animIndex,
@@ -51,14 +51,14 @@ public:
         float blendTime = 0.1f,
         bool isFullBody = true);
 
-    // action layer ‚ÌÄ¶‚ğ’â~‚·‚éB
+    // action layer ã®å†ç”Ÿã‚’åœæ­¢ã™ã‚‹ã€‚
     void StopAction(EntityID entity, float blendTime = 0.2f);
 
-    // action layer ‚ÌÄ¶‚ğŠO•”‚©‚ç’¼Úİ’è‚·‚éB
+    // action layer ã®å†ç”Ÿæ™‚åˆ»ã‚’å¤–éƒ¨ã‹ã‚‰ç›´æ¥è¨­å®šã™ã‚‹ã€‚
     void SetActionTime(EntityID entity, float time);
 
-    // ŠO•” driver ‚©‚ç animator ‚ğ§Œä‚·‚éB
-    // Timeline ‚â StateMachine ‚©‚çÄ¶‚â override animation ‚ğ—^‚¦‚é—p“rB
+    // å¤–éƒ¨ driver ã‹ã‚‰ animator ã‚’åˆ¶å¾¡ã™ã‚‹ã€‚
+    // Timeline ã‚„ StateMachine ã‹ã‚‰å†ç”Ÿæ™‚åˆ»ã‚„ override animation ã‚’ä¸ãˆã‚‹ç”¨é€”ã€‚
     void SetDriver(
         EntityID entity,
         float time,
@@ -66,39 +66,39 @@ public:
         bool loop,
         bool allowInternalUpdate);
 
-    // ŠO•” driver ‚Æ‚ÌÚ‘±‚ğ‰ğœ‚·‚éB
+    // å¤–éƒ¨ driver ã¨ã®æ¥ç¶šã‚’è§£é™¤ã™ã‚‹ã€‚
     void ClearDriver(EntityID entity);
 
-    // w’è entity ‚Ìƒ‚ƒfƒ‹‚ª‚ÂƒAƒjƒ[ƒVƒ‡ƒ“–¼ˆê——‚ğ•Ô‚·B
+    // æŒ‡å®š entity ã®ãƒ¢ãƒ‡ãƒ«ãŒæŒã¤ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³åä¸€è¦§ã‚’è¿”ã™ã€‚
     std::vector<std::string> GetAnimationNameList(EntityID entity) const;
 
-    // ƒAƒjƒ[ƒVƒ‡ƒ“–¼‚©‚ç‘Î‰‚·‚é index ‚ğ•Ô‚·B
-    // Œ©‚Â‚©‚ç‚È‚¢ê‡‚Í -1 ‚ğ•Ô‚·B
+    // ã‚¢ãƒ‹ãƒ¡ãƒ¼ã‚·ãƒ§ãƒ³åã‹ã‚‰å¯¾å¿œã™ã‚‹ index ã‚’è¿”ã™ã€‚
+    // è¦‹ã¤ã‹ã‚‰ãªã„å ´åˆã¯ -1 ã‚’è¿”ã™ã€‚
     int GetAnimationIndexByName(EntityID entity, const std::string& name) const;
 
-    // Œ»İ‚Ì root motion delta ‚ğ•Ô‚·B
-    // AnimatorComponent ‚ª–³‚¢ê‡‚Íƒ[ƒƒxƒNƒgƒ‹‚ğ•Ô‚·B
+    // ç¾åœ¨ã® root motion delta ã‚’è¿”ã™ã€‚
+    // AnimatorComponent ãŒç„¡ã„å ´åˆã¯ã‚¼ãƒ­ãƒ™ã‚¯ãƒˆãƒ«ã‚’è¿”ã™ã€‚
     DirectX::XMFLOAT3 GetRootMotionDelta(EntityID entity) const;
 
-    // entity ‚²‚Æ‚Ì runtime pose î•ñ‚ğŠÇ—‚·‚éƒŒƒWƒXƒgƒŠ‚ğ•Ô‚·B
+    // entity ã”ã¨ã® runtime pose æƒ…å ±ã‚’ç®¡ç†ã™ã‚‹ãƒ¬ã‚¸ã‚¹ãƒˆãƒªã‚’è¿”ã™ã€‚
     AnimatorRuntimeRegistry& GetRuntimeRegistry() { return *m_runtimeRegistry; }
 
 private:
-    // singleton —p‚Ì private ƒRƒ“ƒXƒgƒ‰ƒNƒ^B
+    // singleton ç”¨ã® private ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã€‚
     AnimatorService();
 
-    // w’è entity ‚Ì AnimatorComponent ‚ğæ“¾‚·‚éB
-    // æ‚ê‚È‚¢ê‡‚Í nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š entity ã® AnimatorComponent ã‚’å–å¾—ã™ã‚‹ã€‚
+    // å–ã‚Œãªã„å ´åˆã¯ nullptr ã‚’è¿”ã™ã€‚
     AnimatorComponent* GetAnimator(EntityID entity) const;
 
-    // w’è entity ‚Ì MeshComponent ‚©‚ç Model ‚ğæ“¾‚·‚éB
-    // æ‚ê‚È‚¢ê‡‚Í nullptr ‚ğ•Ô‚·B
+    // æŒ‡å®š entity ã® MeshComponent ã‹ã‚‰ Model ã‚’å–å¾—ã™ã‚‹ã€‚
+    // å–ã‚Œãªã„å ´åˆã¯ nullptr ã‚’è¿”ã™ã€‚
     Model* GetModel(EntityID entity) const;
 
 private:
-    // AnimatorService ‚ªQÆ‚·‚é ECS RegistryB
+    // AnimatorService ãŒå‚ç…§ã™ã‚‹ ECS Registryã€‚
     Registry* m_registry = nullptr;
 
-    // entity ‚²‚Æ‚Ì pose ƒoƒbƒtƒ@‚â•âŠÔó‘Ô‚ğ•Û‚·‚é runtime registryB
+    // entity ã”ã¨ã® pose ãƒãƒƒãƒ•ã‚¡ã‚„è£œé–“çŠ¶æ…‹ã‚’ä¿æŒã™ã‚‹ runtime registryã€‚
     AnimatorRuntimeRegistry* m_runtimeRegistry = nullptr;
 };

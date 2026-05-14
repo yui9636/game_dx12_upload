@@ -1,4 +1,4 @@
-#include "System/Misc.h"
+﻿#include "System/Misc.h"
 #include "GpuResourceUtils.h"
 #include "PrimitiveRenderer.h"
 
@@ -74,7 +74,7 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 
 	const DirectX::XMFLOAT4 white = DirectX::XMFLOAT4(1, 1, 1, 1);
 
-	// Create vertical lines
+	// 縦方向の line を作成する。
 	float scaling = static_cast<float>(subdivisions) * scale;
 	DirectX::XMMATRIX M = DirectX::XMMatrixScaling(scaling, scaling, scaling);
 	DirectX::XMVECTOR V, P;
@@ -94,7 +94,7 @@ void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 		s += step;
 	}
 
-	// Create horizontal lines
+	// 横方向の line を作成する。
 	s = -corner;
 	for (int i = 0; i <= subdivisions; i++)
 	{

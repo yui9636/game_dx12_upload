@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -13,9 +13,6 @@ class ICommandList;
 class RenderQueue;
 struct RenderContext;
 class FrameGraphResources;
-
-// ============================================================
-// ============================================================
 struct ResourceNode {
     std::string name;
     TextureDesc desc;
@@ -36,9 +33,6 @@ struct ResourceNode {
         return isImported ? externalTexture : ownedTexture.get();
     }
 };
-
-// ============================================================
-// ============================================================
 struct PassNode {
     std::string name;
     uint16_t passIndex = 0;
@@ -51,10 +45,7 @@ struct PassNode {
     bool culled = false;
     bool hasSideEffects = false;
 };
-
-// ============================================================
-// FrameGraph: Frostbite-style FrameGraph
-// ============================================================
+// FrameGraph は Frostbite 形式の resource lifetime と pass 依存関係を扱う。
 class FrameGraph {
 public:
     FrameGraph() = default;

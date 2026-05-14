@@ -1,5 +1,6 @@
-#pragma once
+﻿#pragma once
 #include <DirectXMath.h>
+// CharacterPhysicsComponent は velocity を保持し、関連システムが実行時状態として参照する。
 
 struct CharacterPhysicsComponent {
     DirectX::XMFLOAT3 velocity = { 0, 0, 0 };

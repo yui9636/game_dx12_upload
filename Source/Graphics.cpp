@@ -53,9 +53,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	UINT h = rc.bottom - rc.top;
 	screenWidth = static_cast<float>(w);
 	screenHeight = static_cast<float>(h);
-
-	// ============================================================
-	// ============================================================
 	if (api == GraphicsAPI::DX12) {
 		m_dx12Device = std::make_unique<DX12Device>(hWnd, w, h);
 		resourceFactory = std::make_unique<DX12ResourceFactory>(m_dx12Device.get());
@@ -107,9 +104,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 		postEffect = std::make_unique<PostEffect>(factory, GraphicsAPI::DX12, m_dx12Device->GetDevice());
 		return;
 	}
-
-	// ============================================================
-	// ============================================================
 	HRESULT hr = S_OK;
 
 	{
@@ -190,9 +184,6 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	gizmos = std::make_unique<Gizmos>(resourceFactory.get());
 	shadowMap = std::make_unique<ShadowMap>(resourceFactory.get());
 	modelRenderer = std::make_unique<ModelRenderer>(resourceFactory.get());
-
-	//frameBuffers[static_cast<int>(FrameBufferId::Display)] = std::make_unique<FrameBuffer>(device.Get(), screenWidth, screenHeight);
-	//frameBuffers[static_cast<int>(FrameBufferId::Scene)] = std::make_unique<FrameBuffer>(device.Get(), w, h);
 	frameBuffers[static_cast<int>(FrameBufferId::Luminance)] = std::make_unique<FrameBuffer>(device.Get(), w, h);
 
 
@@ -204,9 +195,9 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	UINT halfH = renderH / 2;
 
 	std::vector<DXGI_FORMAT> gBufferFormats = {
-		DXGI_FORMAT_R16G16B16A16_FLOAT,   // Target 0: Albedo + Metallic
-		DXGI_FORMAT_R16G16B16A16_FLOAT,   // Target 1: Normal + Roughness
-		DXGI_FORMAT_R32G32B32A32_FLOAT,    // Target 2: World Position + Depth
+		DXGI_FORMAT_R16G16B16A16_FLOAT,   // ターゲット 0: アルベド + メタリック
+		DXGI_FORMAT_R16G16B16A16_FLOAT,   // ターゲット 1: 法線 + ラフネス
+		DXGI_FORMAT_R32G32B32A32_FLOAT,    // ターゲット 2: ワールド位置 + 深度
 		DXGI_FORMAT_R32G32_FLOAT
 	};
 
@@ -269,21 +260,21 @@ void Graphics::OnResize(uint32_t width, uint32_t height)
 	screenHeight = static_cast<float>(height);
 
 	if (m_api == GraphicsAPI::DX12 && m_dx12Device) {
-		// Release back buffer texture references BEFORE resizing swap chain
+		// スワップチェーンのリサイズ前にバックバッファテクスチャ参照を解放する。
 		backBufferTexture.reset();
 		m_dx12BackBuffers[0].reset();
 		m_dx12BackBuffers[1].reset();
 
 		m_dx12Device->ResizeSwapChain(width, height);
 
-		// Rebuild back buffer textures
+		// バックバッファテクスチャを再構築する。
 		m_dx12BackBuffers[0] = std::make_shared<DX12Texture>(
 			m_dx12Device.get(), m_dx12Device->GetBackBuffer(0), 0);
 		m_dx12BackBuffers[1] = std::make_shared<DX12Texture>(
 			m_dx12Device.get(), m_dx12Device->GetBackBuffer(1), 1);
 		backBufferTexture = m_dx12BackBuffers[m_dx12Device->GetCurrentBackBufferIndex()];
 
-		// Recreate all frame buffers at new resolution
+		// 新しい解像度で全フレームバッファを作り直す。
 		auto* factory = resourceFactory.get();
 		UINT renderW = static_cast<UINT>(width * m_renderScale);
 		UINT renderH = static_cast<UINT>(height * m_renderScale);

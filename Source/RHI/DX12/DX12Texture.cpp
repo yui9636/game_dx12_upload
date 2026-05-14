@@ -1,4 +1,4 @@
-#include "DX12Texture.h"
+﻿#include "DX12Texture.h"
 #include "Graphics.h"
 #include "Console/Logger.h"
 #include <cassert>
@@ -25,7 +25,7 @@ D3D12_RESOURCE_FLAGS DX12Texture::ToResourceFlags(TextureBindFlags flags) {
     if (flags & TextureBindFlags::RenderTarget)    result |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     if (flags & TextureBindFlags::DepthStencil)    result |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     if (flags & TextureBindFlags::UnorderedAccess) result |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    // If depth-only (no SRV), deny SRV
+    // depth 専用で SRV が不要な場合は SRV を拒否する。
     if ((flags & TextureBindFlags::DepthStencil) && !(flags & TextureBindFlags::ShaderResource)) {
         result |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
     }
@@ -39,13 +39,13 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
 {
     auto* d3dDevice = device->GetDevice();
 
-    // Determine DXGI format
+    // DXGI format を決定する。
     DXGI_FORMAT dxgiFormat = ToDXGIFormat(format);
     DXGI_FORMAT resourceFormat = dxgiFormat;
     DXGI_FORMAT dsvFormat = dxgiFormat;
     DXGI_FORMAT srvFormat = dxgiFormat;
 
-    // Use typeless for depth formats that also need SRV
+    // SRV を作成する。 も必要な depth format では typeless を使う。
     bool isDepth = (format == TextureFormat::D32_FLOAT || format == TextureFormat::D24_UNORM_S8_UINT
                     || format == TextureFormat::R32_TYPELESS);
     if (isDepth) {
@@ -127,8 +127,8 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
     }
     assert(SUCCEEDED(hr));
 
-    // Create views
-    // RTV
+    // view を作成する。
+    // RTV を作成する。
     if (bindFlags & TextureBindFlags::RenderTarget) {
         D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
         rtvDesc.Format = dxgiFormat;
@@ -138,7 +138,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         m_hasRTV = true;
     }
 
-    // DSV
+    // DSV を作成する。
     if (bindFlags & TextureBindFlags::DepthStencil) {
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
         dsvDesc.Format = dsvFormat;
@@ -148,7 +148,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         m_hasDSV = true;
     }
 
-    // SRV
+    // SRV を作成する。
     if (bindFlags & TextureBindFlags::ShaderResource) {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -169,29 +169,26 @@ DX12Texture::DX12Texture(DX12Device* device, ID3D12Resource* backBuffer, uint32_
     , m_currentState(ResourceState::Present)
     , m_device(device)
 {
-    m_resource = backBuffer; // AddRef via ComPtr assignment
+    m_resource = backBuffer; // ComPtr 代入で AddRef する。
 
     auto desc = backBuffer->GetDesc();
     m_width = static_cast<uint32_t>(desc.Width);
     m_height = desc.Height;
 
-    // Create RTV for back buffer
+    // back buffer 用 RTV を作成する。
     auto* d3dDevice = device->GetDevice();
     m_rtvHandle = device->GetRTVHeap()->GetCPUDescriptorHandleForHeapStart();
     m_rtvHandle.ptr += static_cast<SIZE_T>(index) * device->GetRTVDescriptorSize();
     d3dDevice->CreateRenderTargetView(backBuffer, nullptr, m_rtvHandle);
     m_hasRTV = true;
 }
-
-// ========================================================
-// File-loaded texture (SRV only, from upload heap)
-// ========================================================
+// upload heap から file 読み込み texture の SRV を作成する。
 DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
                          uint32_t width, uint32_t height, DXGI_FORMAT srvFormat,
                          bool isCubemap)
     : m_resource(resource)
     , m_width(width), m_height(height)
-    , m_format(TextureFormat::RGBA8_UNORM) // approximate - actual format is srvFormat
+    , m_format(TextureFormat::RGBA8_UNORM) // 近似値。実際の format は srvFormat。
     , m_currentState(ResourceState::ShaderResource)
     , m_device(device)
 {
@@ -225,10 +222,7 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
     d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
     m_hasSRV = true;
 }
-
-// ========================================================
-// Texture array (full resource + SRV)
-// ========================================================
+// text 用色。ure array (full resource + SRV)
 DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
                          TextureFormat format, uint32_t arraySize,
                          TextureBindFlags bindFlags)
@@ -291,7 +285,7 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         IID_PPV_ARGS(&m_resource));
     assert(SUCCEEDED(hr));
 
-    // SRV for the entire array
+    // SRV を作成する。 for the entire array
     if (bindFlags & TextureBindFlags::ShaderResource) {
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -306,12 +300,9 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         m_hasSRV = true;
     }
 
-    // Note: DSV is NOT created here - each slice has its own DSV (see array slice constructor)
+    // ここでは DSV を作らない。各 slice が専用 DSV を持つ。array slice constructor を参照。
 }
-
-// ========================================================
-// Texture array slice (shared resource, DSV only)
-// ========================================================
+// text 用色。ure array slice (shared resource, DSV only)
 DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> sharedResource,
                          uint32_t width, uint32_t height, uint32_t arraySlice)
     : m_resource(sharedResource)

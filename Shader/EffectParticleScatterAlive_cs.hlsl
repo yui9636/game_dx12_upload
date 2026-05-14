@@ -1,19 +1,16 @@
-// ============================================================================
-// ScatterAlive: Per-page scatter of alive particle indices into g_AliveList
-// Each thread group handles one page. Threads within group scan page slots.
-// Dispatch: (activePageCount, 1, 1)
-// Uses shared simulation root sig: u0=AliveList
-// Page table and header are read via SRV (t0, t1) but since we use shared
-// root sig, we read them through the UAV slots that are bound.
-// ============================================================================
-
+// ScatterAlive: ページごとに生存パーティクル index を g_AliveList へ散布する。
+// 各スレッドグループが 1 ページを担当し、グループ内スレッドがページ内 slot を走査する。
+// ディスパッチ: (activePageCount, 1, 1)
+// 共有 simulation root signature を使う: u0=AliveList
+// Page table と header は SRV（t0, t1）で読む設計だが、共有 root signature を使うため、
+// 実際にはバインド済みの UAV slot 経由で読む。
 #include "EffectParticleRuntimeCommon.hlsli"
 #include "EffectParticleSoA.hlsli"
 
-// We can't use separate SRVs with the shared root sig easily.
-// Instead, read page info from the simulation cbuffer and header from UAV.
-// The shader reads: g_BillboardHeader (to check alive), g_AliveList (to write).
-// Bind: u0=AliveList, u1=PageAliveOffset(read), u2=BillboardHeader(read)
+// 共有 root signature では個別 SRV を簡単に使えない。
+// そのため、ページ情報は simulation cbuffer から、header は UAV から読む。
+// このシェーダは g_BillboardHeader（alive 確認）と g_AliveList（書き込み）を使う。
+// バインド: u0=AliveList, u1=PageAliveOffset(read), u2=BillboardHeader(read)
 RWStructuredBuffer<uint>            g_AliveList         : register(u0);
 RWStructuredBuffer<uint>            g_PageAliveOffset   : register(u1);
 RWStructuredBuffer<BillboardHeader> g_BillboardHeader   : register(u2);
@@ -39,7 +36,7 @@ void CSMain(uint3 gid : SV_GroupID, uint gtid : SV_GroupIndex)
 
     uint baseSlot = pageIdx * PAGE_SIZE;
 
-    // Each thread scans multiple slots within this page
+    // 各スレッドはこのページ内の複数 slot を走査する。
     for (uint i = gtid; i < PAGE_SIZE; i += GROUP_SIZE)
     {
         uint slot = baseSlot + i;

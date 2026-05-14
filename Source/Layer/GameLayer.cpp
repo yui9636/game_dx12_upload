@@ -121,7 +121,7 @@ void GameLayer::Initialize()
     DamageEventRuntimeQueue::Clear();
     BattleFlowSystem::Reset();
 
-    // Default camera/light/probe used by newly opened editor scenes.
+    // 新規 editor scene 用の既定 camera / light / probe を作成する。
     EntityID cameraEntity = m_registry.CreateEntity();
     m_registry.AddComponent(cameraEntity, NameComponent{ "Main Camera" });
 
@@ -196,25 +196,25 @@ void GameLayer::Update(const EngineTime& time)
     InputTextSystem::Update(m_registry, eventQueue, kernel.GetInputBackend());
     InputFeedbackSystem::Update(m_registry, kernel.GetInputBackend(), time.unscaledDt);
 
-    // --- Gameplay Systems (spec order) ---
-    // Make sure Enemy entities have all AI components (cheap; only runs when needed).
+    // Gameplay system は仕様順に更新する。
+    // Enemy entity に必要な AI component がそろっていることを確認する。必要時だけ走る軽い処理。
     EnemyRuntimeSetup::EnsureAllEnemyRuntimeComponents(m_registry, false);
 
-    // AI: perception (write Aggro / Blackboard) before BT decision.
+    // BT 判定の前に Perception で Aggro / Blackboard を書く。
     PerceptionSystem::Update(m_registry, time.dt);
 
-    // Player input (writes SM params for player-tagged entities).
+    // PlayerTag 付き entity の入力を読み、StateMachine parameter へ書く。
     PlayerInputSystem::Update(m_registry);
 
-    // AI decision (writes SM params + locomotion for enemies).
+    // enemy の AI 判定で StateMachine parameter と locomotion を書く。
     BehaviorTreeSystem::Update(m_registry, time.dt);
 
     PlaybackSystem::Update(m_registry, time.dt);
     StateMachineSystem::Update(m_registry, time.dt);
     LocomotionSystem::Update(m_registry, time.dt);
     StaminaSystem::Update(m_registry, time.dt);
-    // HealthSystem moved below — it must run after DamageSystem so events
-    // produced this frame are applied the same frame.
+    // HealthSystem は DamageSystem の後に動かす必要があるため下へ移動している。
+    // この frame に生成された damage event を同じ frame 中に反映するため。
     DodgeSystem::Update(m_registry, time.dt);
     CharacterPhysicsSystem::Update(m_registry, time.dt);
     TimelineSystem::Update(m_registry);
@@ -228,8 +228,8 @@ void GameLayer::Update(const EngineTime& time)
     EffectPreviewSystem::Update(m_registry, previewDt);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
-    // Lock-on selects/clears the camera target before the third-person follow
-    // pulls a position from CameraTPVControlComponent.target.
+    // third-person follow が位置を読む前に lock-on が camera target を選択または解除する。
+    // CameraTPVControlComponent.target から追従位置を取得する。
     LockOnSystem::Update(m_registry, time.dt);
     ThirdPersonCameraSystem::Update(m_registry, time.dt);
 
@@ -253,9 +253,9 @@ void GameLayer::Update(const EngineTime& time)
     TrailSystem::Update(m_registry, time.dt);
     HitboxTrackingSystem::Update(m_registry);
 
-    // Body colliders are synced to the manager here. TimelineHitboxSystem
-    // already pushed the active Attack colliders above, so once we sync the
-    // bodies the (Attack vs Body) pairs are visible to ComputeAllContacts.
+    // Body collider はここで manager へ同期する。TimelineHitboxSystem は
+    // 先に active Attack collider を登録済みなので、
+    // Body を同期すれば Attack vs Body の組が ComputeAllContacts から見える。
     CollisionSystem collisionSystem;
     collisionSystem.Update(m_registry);
 

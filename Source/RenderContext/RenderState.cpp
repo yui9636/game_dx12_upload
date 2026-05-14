@@ -1,4 +1,4 @@
-#include "System/Misc.h"
+﻿#include "System/Misc.h"
 #include "RenderState.h"
 #include "RHI/ISampler.h"
 #include "RHI/DX11/DX11Sampler.h"
@@ -8,13 +8,10 @@
 #include "RHI/DX12/DX12Device.h"
 
 RenderState::~RenderState() = default;
-
-// ============================================================
-// ============================================================
-RenderState::RenderState(DX12Device* /*device*/)
+RenderState::RenderState(DX12Device*)
 {
 
-	// DepthStencilState
+	// DepthStencil 用。State の設定。
 	{ D3D12_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = TRUE; d.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL; d.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
 	  depthStencilStates[static_cast<int>(DepthState::TestAndWrite)] = std::make_unique<DX12DepthStencilState>(d); }
 	{ D3D12_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = TRUE; d.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; d.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
@@ -24,7 +21,7 @@ RenderState::RenderState(DX12Device* /*device*/)
 	{ D3D12_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = FALSE; d.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; d.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 	  depthStencilStates[static_cast<int>(DepthState::NoTestNoWrite)] = std::make_unique<DX12DepthStencilState>(d); }
 
-	// BlendState
+	// BlendState の設定。
 	auto mkB = [](bool en, D3D12_BLEND s, D3D12_BLEND d, D3D12_BLEND_OP o, D3D12_BLEND sa, D3D12_BLEND da, D3D12_BLEND_OP oa) {
 		D3D12_BLEND_DESC bd = {}; auto& rt = bd.RenderTarget[0];
 		rt.BlendEnable = en; rt.SrcBlend = s; rt.DestBlend = d; rt.BlendOp = o;
@@ -38,7 +35,7 @@ RenderState::RenderState(DX12Device* /*device*/)
 	blendStates[static_cast<int>(BlendState::Multiply)]     = std::make_unique<DX12BlendState>(mkB(true, D3D12_BLEND_ZERO, D3D12_BLEND_SRC_COLOR, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD));
 	blendStates[static_cast<int>(BlendState::Alpha)]        = std::make_unique<DX12BlendState>(mkB(true, D3D12_BLEND_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE, D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_OP_ADD));
 
-	// RasterizerState
+	// RasterizerState の設定。
 	auto mkR = [](D3D12_FILL_MODE f, D3D12_CULL_MODE c, bool aa = false) {
 		D3D12_RASTERIZER_DESC r = {}; r.FillMode = f; r.CullMode = c;
 		r.DepthClipEnable = TRUE; r.MultisampleEnable = TRUE; r.AntialiasedLineEnable = aa; return r; };
@@ -51,8 +48,6 @@ RenderState::RenderState(DX12Device* /*device*/)
 
 RenderState::RenderState(ID3D11Device* device)
 {
-    // ==========================================
-    // ==========================================
     {
         D3D11_SAMPLER_DESC desc = {};
         desc.MipLODBias = 0.0f; desc.MaxAnisotropy = 1; desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
@@ -89,9 +84,6 @@ RenderState::RenderState(ID3D11Device* device)
         desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         samplerStates[static_cast<int>(SamplerState::LinearClamp)] = std::make_unique<DX11Sampler>(device, desc);
     }
-
-    // ==========================================
-    // ==========================================
     auto createDepth = [&](D3D11_DEPTH_STENCIL_DESC desc, DepthState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11DepthStencilState> state;
         HRESULT hr = device->CreateDepthStencilState(&desc, state.GetAddressOf());
@@ -103,9 +95,6 @@ RenderState::RenderState(ID3D11Device* device)
     { D3D11_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = true; d.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; d.DepthFunc = D3D11_COMPARISON_LESS_EQUAL; createDepth(d, DepthState::TestOnly); }
     { D3D11_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = true; d.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL; d.DepthFunc = D3D11_COMPARISON_ALWAYS; createDepth(d, DepthState::WriteOnly); }
     { D3D11_DEPTH_STENCIL_DESC d = {}; d.DepthEnable = false; d.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO; d.DepthFunc = D3D11_COMPARISON_ALWAYS; createDepth(d, DepthState::NoTestNoWrite); }
-
-    // ==========================================
-    // ==========================================
     auto createBlend = [&](D3D11_BLEND_DESC desc, BlendState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11BlendState> state;
         HRESULT hr = device->CreateBlendState(&desc, state.GetAddressOf());
@@ -119,9 +108,6 @@ RenderState::RenderState(ID3D11Device* device)
     { D3D11_BLEND_DESC d{}; d.RenderTarget[0].BlendEnable = true; d.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA; d.RenderTarget[0].DestBlend = D3D11_BLEND_ONE; d.RenderTarget[0].BlendOp = D3D11_BLEND_OP_REV_SUBTRACT; d.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; d.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO; d.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD; d.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL; createBlend(d, BlendState::Subtraction); }
     { D3D11_BLEND_DESC d{}; d.RenderTarget[0].BlendEnable = true; d.RenderTarget[0].SrcBlend = D3D11_BLEND_ZERO; d.RenderTarget[0].DestBlend = D3D11_BLEND_SRC_COLOR; d.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; d.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; d.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO; d.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD; d.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL; createBlend(d, BlendState::Multiply); }
     { D3D11_BLEND_DESC d{}; d.RenderTarget[0].BlendEnable = true; d.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA; d.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA; d.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD; d.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; d.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA; d.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD; d.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL; createBlend(d, BlendState::Alpha); }
-
-    // ==========================================
-    // ==========================================
     auto createRasterizer = [&](D3D11_RASTERIZER_DESC desc, RasterizerState stateIdx) {
         Microsoft::WRL::ComPtr<ID3D11RasterizerState> state;
         HRESULT hr = device->CreateRasterizerState(&desc, state.GetAddressOf());

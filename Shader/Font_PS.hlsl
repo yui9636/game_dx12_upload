@@ -6,22 +6,22 @@ SamplerState diffuseMapSamplerState : register(s0);
 
 float4 main(VS_OUT pin) : SV_TARGET
 {
-    // 1. SDF�e�N�X�`�����狗�������T���v�����O
-    // ��ʓI��SDF�t�H���g��Alpha��Red�`�����l���ɋ������i�[����Ă��܂�
+    // 1. SDFテクスチャから距離情報をサンプリング
+    // 一般的なSDFフォントはAlphaやRedチャンネルに距離が格納されています
     float dist = diffuseMap.Sample(diffuseMapSamplerState, pin.texcoord).a;
 
-    // 2. �֊s�̒��o (SDF���W�b�N)
-    // fwidth���g�����ƂŁA��ʏ�̃s�N�Z�����x�ɍ��킹�Ċ��炩���������������܂�
-    // ����ɂ��A�g�債�Ă��{�P���A�k�����Ă��W���M�[���o�ɂ����Ȃ�܂�
+    // 2. 輪郭の抽出 (SDFロジック)
+    // fwidthを使うことで、画面上のピクセル密度に合わせて滑らかさを自動調整します
+    // これにより、拡大してもボケず、縮小してもジャギーが出にくくなります
     float smoothing = fwidth(dist) * Softness;
     float alpha = smoothstep(Threshold - smoothing, Threshold + smoothing, dist);
 
-    // 3. �����F�ƒ��_�J���[�̍���
-    // SDF�̌���(alpha)��s�����x�Ƃ��ēK�p
+    // 3. 文字色と頂点カラーの合成
+    // SDFの結果(alpha)を不透明度として適用
     float4 finalColor = pin.color * Color;
     finalColor.a *= alpha;
 
-    // �A���t�@�e�X�g (���S�ɓ����ȃs�N�Z���͕`�悵�Ȃ�)
+    // アルファテスト (完全に透明なピクセルは描画しない)
     clip(finalColor.a - 0.01f);
 
     return finalColor;

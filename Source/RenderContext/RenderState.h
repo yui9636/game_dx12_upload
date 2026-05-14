@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <wrl.h>
 #include <d3d11.h>
 #include <memory>
+// ISampler はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class ISampler;
 class IDepthStencilState;

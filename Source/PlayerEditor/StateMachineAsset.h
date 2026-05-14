@@ -1,14 +1,10 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 #include <cstdint>
 #include <unordered_map>
 #include <DirectXMath.h>
-
-// ============================================================================
-// State Types
-// ============================================================================
-
+// ステート種別
 enum class StateNodeType : uint8_t
 {
     Locomotion = 0,
@@ -19,19 +15,15 @@ enum class StateNodeType : uint8_t
     Dead,
     Custom
 };
-
-// ============================================================================
-// Transition Condition
-// ============================================================================
-
+// 遷移条件
 enum class ConditionType : uint8_t
 {
-    Input = 0,     // Action button pressed/held/released
-    Timer,         // Time elapsed in state
-    AnimEnd,       // Animation finished
-    Health,        // Health threshold
-    Stamina,       // Stamina threshold
-    Parameter,     // Custom parameter check
+    Input = 0,     // アクションボタンの押下 / 押し続け / 離し
+    Timer,         // ステート内の経過時間
+    AnimEnd,       // アニメーション終了
+    Health,        // HP しきい値
+    Stamina,       // スタミナしきい値
+    Parameter,     // カスタムパラメータ判定
 };
 
 enum class CompareOp : uint8_t
@@ -42,15 +34,11 @@ enum class CompareOp : uint8_t
 struct TransitionCondition
 {
     ConditionType type    = ConditionType::Input;
-    char          param[64] = {};   // Action name, parameter name, etc.
+    char          param[64] = {};   // アクション名、パラメータ名など
     CompareOp     compare = CompareOp::Equal;
     float         value   = 0.0f;
 };
-
-// ============================================================================
-// State Transition
-// ============================================================================
-
+// ステート遷移
 struct StateTransition
 {
     uint32_t id       = 0;
@@ -60,15 +48,11 @@ struct StateTransition
 
     std::vector<TransitionCondition> conditions;
 
-    float exitTimeNormalized = 0.0f;  // 0=immediate, 0.9=at 90% of anim
-    float blendDuration      = 0.2f;  // Transition blend in seconds
-    bool  hasExitTime        = false; // Must wait for exitTimeNormalized
+    float exitTimeNormalized = 0.0f;  // 0 なら即時、0.9 ならアニメーション 90% 時点
+    float blendDuration      = 0.2f;  // 遷移ブレンド秒数
+    bool  hasExitTime        = false; // exitTimeNormalized まで待つ必要がある
 };
-
-// ============================================================================
-// State Node
-// ============================================================================
-
+// ステートノード
 struct StateNode
 {
     uint32_t      id   = 0;
@@ -81,26 +65,21 @@ struct StateNode
     float         animSpeed      = 1.0f;
     bool          canInterrupt   = true;
 
-    // Editor layout position
+    // エディタ上の配置位置
     DirectX::XMFLOAT2 position{ 0, 0 };
 
-    // Custom properties (name -> value)
+    // カスタムプロパティ（名前 -> 値）
     std::unordered_map<std::string, float> properties;
-
-    // ---- v2.0: state-bound AI / Behavior Tree ----
-    // Path to a .bt file. Empty means "no AI for this state".
-    // BehaviorTreeSystem ticks this BT only while the entity is in this state.
-    // See ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md.
+    // ステートごとに AI / Behavior Tree の紐づけ情報を保持する。
+    // .bt ファイルへのパス。空なら「このステートでは AI なし」。
+    // BehaviorTreeSystem はエンティティがこのステート中のときだけ、この BT を tick する。
+    // ActorEditor_StateBoundBT_Spec_v2.0_2026-04-27.md を参照。
     std::string behaviorTreePath;
 
-    // Free-text designer note shown in the State Inspector AI section.
+    // State Inspector の AI セクションに表示するデザイナー向け自由記述メモ。
     std::string aiNote;
 };
-
-// ============================================================================
-// Parameter Definition
-// ============================================================================
-
+// パラメータ定義
 enum class ParameterType : uint8_t
 {
     Float = 0, Int, Bool, Trigger
@@ -112,11 +91,7 @@ struct ParameterDef
     ParameterType type         = ParameterType::Float;
     float         defaultValue = 0.0f;
 };
-
-// ============================================================================
-// State Machine Asset (top-level document)
-// ============================================================================
-
+// ステートマシンアセット（最上位ドキュメント）
 struct StateMachineAsset
 {
     std::string name;
@@ -128,7 +103,7 @@ struct StateMachineAsset
     uint32_t defaultStateId = 0;
     uint32_t nextId         = 1;
 
-    // Helpers
+    // 補助関数
     uint32_t GenerateId() { return nextId++; }
 
     StateNode* AddState(const std::string& stateName, StateNodeType type)
@@ -170,7 +145,7 @@ struct StateMachineAsset
                 [id](const StateNode& s) { return s.id == id; }),
             states.end()
         );
-        // Remove related transitions
+        // 関連する遷移を削除する。
         transitions.erase(
             std::remove_if(transitions.begin(), transitions.end(),
                 [id](const StateTransition& t) { return t.fromState == id || t.toState == id; }),
@@ -187,7 +162,7 @@ struct StateMachineAsset
         );
     }
 
-    // Get all transitions from a given state
+    // 指定ステートから出るすべての遷移を取得する。
     std::vector<const StateTransition*> GetTransitionsFrom(uint32_t stateId) const
     {
         std::vector<const StateTransition*> result;

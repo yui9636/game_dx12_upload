@@ -1,83 +1,4 @@
-//#include "System/Misc.h"
-//#include "Skybox.h"
-//#include "GpuResourceUtils.h"
-//#include "RHI/ICommandList.h"
-//
-//
-//std::unordered_map<std::string, std::unique_ptr<Skybox>> Skybox::s_cache;
-//
-//Skybox* Skybox::Get(ID3D11Device* device, const std::string& filename)
-//{
-//    if (filename.empty()) return nullptr;
-//
-//    auto it = s_cache.find(filename);
-//    if (it != s_cache.end())
-//    {
-//        return it->second.get();
-//    }
-//
-//    auto skybox = std::make_unique<Skybox>(device, filename.c_str());
-//    Skybox* ptr = skybox.get();
-//    s_cache[filename] = std::move(skybox);
-//
-//    return ptr;
-//}
-//
-//
-//
-//Skybox::Skybox(ID3D11Device* device, const char* filename)
-//{
-//    D3D11_TEXTURE2D_DESC texture2d_desc;
-//    GpuResourceUtils::LoadTexture(device, filename, shaderResourceView.GetAddressOf(), &texture2d_desc);
-//
-//
-//    GpuResourceUtils::LoadVertexShader(device, "Data/Shader/SkyBoxVS.cso", nullptr, 0, nullptr, vertexShader.GetAddressOf());
-//    GpuResourceUtils::LoadPixelShader(device, "Data/Shader/SkyBoxPS.cso", pixelShader.GetAddressOf());
-//
-//    D3D11_BUFFER_DESC buffer_desc{};
-//    buffer_desc.ByteWidth = sizeof(Constants);
-//    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
-//    buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-//
-//    HRESULT hr = device->CreateBuffer(&buffer_desc, nullptr, constantBuffer.GetAddressOf());
-//    _ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
-//}
-//
-//void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjection)
-//{
-//    ID3D11DeviceContext* dc = rc.commandList->GetNativeContext();
-//
-//    dc->OMSetDepthStencilState(rc.renderState->GetDepthStencilState(DepthState::TestAndWrite), 0);
-//    dc->RSSetState(rc.renderState->GetRasterizerState(RasterizerState::SolidCullNone));
-//
-//    ID3D11SamplerState* samplers[] = {
-//        rc.renderState->GetSamplerState(SamplerState::LinearClamp)
-//    };
-//    dc->PSSetSamplers(0, 1, samplers);
-//
-//    dc->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
-//    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-//    dc->IASetInputLayout(nullptr);
-//
-//    dc->VSSetShader(vertexShader.Get(), nullptr, 0);
-//    dc->PSSetShader(pixelShader.Get(), nullptr, 0);
-//
-//    dc->PSSetShaderResources(0, 1, shaderResourceView.GetAddressOf());
-//
-//    Constants data;
-//    DirectX::XMStoreFloat4x4(&data.inverseViewProjection,
-//        DirectX::XMMatrixInverse(nullptr, DirectX::XMLoadFloat4x4(&viewProjection)));
-//    dc->UpdateSubresource(constantBuffer.Get(), 0, nullptr, &data, 0, 0);
-//    dc->VSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
-//    dc->PSSetConstantBuffers(0, 1, constantBuffer.GetAddressOf());
-//
-//
-//    dc->Draw(4, 0);
-//
-//    dc->VSSetShader(nullptr, nullptr, 0);
-//    dc->PSSetShader(nullptr, nullptr, 0);
-//}
-#include "Skybox.h"
+﻿#include "Skybox.h"
 #include "System/Misc.h"
 #include "GpuResourceUtils.h"
 #include "Graphics.h"
@@ -261,8 +182,8 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
         rc.commandList->PSSetConstantBuffer(0, m_cb.get());
     }
 
-    // Use standard PSSetTextures path for all APIs.
-    // Avoids SetDescriptorHeaps thrashing which invalidates root descriptor tables.
+    // すべての API で標準の PSSetTextures 経路を使う。
+    // SetDescriptorHeaps の過剰な切り替えでルートディスクリプタテーブルが無効化されるのを避ける。
     if (m_hasFaceTextures) {
         ITexture* faces[6] = {
             m_faceTextures[0].get(), m_faceTextures[1].get(), m_faceTextures[2].get(),

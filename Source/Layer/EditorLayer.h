@@ -129,10 +129,10 @@ public:
     void RenderUI() override;
     void RenderDetachedWindows();
 
-    // PlayerEditor ������ editor camera �ɓK�p���� shake �I�t�Z�b�g��ݒ肷��B
+    // PlayerEditor から editor camera に適用する shake オフセットを設定する。
     void SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset);
 
-    // PlayerEditor �p camera shake �I�t�Z�b�g���N���A����B
+    // PlayerEditor 用 camera shake オフセットをクリアする。
     void ClearPlayerEditorCameraShakeOffset();
 
 
@@ -153,7 +153,7 @@ public:
             m_sceneViewMode == SceneViewMode::Mode3D;
     }
 
-    // Scene grid visibility is remembered separately for 2D and 3D modes.
+    // scene grid の表示状態は 2D mode と 3D mode で別々に保持する。
     bool IsSceneGridVisible() const {
         return (m_sceneViewMode == SceneViewMode::Mode2D) ? m_showSceneGrid2D : m_showSceneGrid3D;
     }
@@ -163,10 +163,6 @@ public:
     }
 
     DirectX::XMFLOAT3 GetEditorCameraPosition() const {
-
-        //return (m_sceneViewMode == SceneViewMode::Mode2D)
-        //    ? DirectX::XMFLOAT3{ m_editor2DCenter.x, m_editor2DCenter.y, -100.0f }
-        //    : m_editorCameraPosition;
 
         if (m_sceneViewMode == SceneViewMode::Mode2D) {
             return DirectX::XMFLOAT3{
@@ -235,10 +231,10 @@ public:
         m_gbufferDepthTexture = depth;
     }
 
-    // Current scene path (used by GameLoop Play/Stop to restore the editor scene).
+    // 現在の scene path。GameLoop の Play / Stop 時に editor scene を復元するために使う。
     const std::string& GetCurrentScenePath() const { return m_sceneSavePath; }
 
-    // Load a scene from a path (publicly exposed for EngineKernel::Stop).
+    // 入力データを読み込む。 a scene from a path (publicly exposed for EngineKernel::Stop).
     bool LoadSceneFromPath(const std::filesystem::path& scenePath);
 
 private:
@@ -337,11 +333,8 @@ private:
     bool m_hasCheckedRecovery = false;
     double m_autosaveAccumulator = 0.0;
 
-    // PlayerEditor ������ editor camera �ɉ��Z����ꎞ shake �I�t�Z�b�g�B
+    // PlayerEditor から editor camera に加算する一時 shake オフセット。
     DirectX::XMFLOAT3 m_editorCameraShakeOffset = { 0.0f, 0.0f, 0.0f };
-
-    // ==========================================
-    // ==========================================
     void DrawDockSpace();
     void DrawWorkspaceTabs();
     void DrawMenuBar();
@@ -398,9 +391,9 @@ private:
     bool m_requestSaveSceneAs = false;
     bool m_openNewSceneModePopup = false;
     SceneViewMode m_newSceneSelectedMode = SceneViewMode::Mode3D;
-    // Defer NewScene execution to Update (between frames). Calling it during
-    // RenderUI would tear down entities whose GPU resources are already
-    // recorded in the in-flight frame's command list.
+    // NewScene 実行は frame 間の Update へ遅延する。RenderUI 中に呼ぶと、
+    // GPU resource を持つ entity を破棄してしまい、
+    // in-flight frame の command list に記録済みの参照が残る。
     bool m_pendingNewSceneRequest = false;
     SceneViewMode m_pendingNewSceneMode = SceneViewMode::Mode3D;
     GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;

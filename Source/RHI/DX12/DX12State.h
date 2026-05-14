@@ -1,10 +1,10 @@
-#pragma once
+﻿#pragma once
 #include "RHI/IState.h"
 #include <d3d12.h>
 #include <vector>
 
-// DX12 state objects are thin wrappers holding descriptions.
-// Actual GPU state is baked into PSOs by DX12CommandList.
+// DX12 state object は description を保持する薄い wrapper。
+// 実際の GPU state は DX12CommandList が PSO へ焼き込む。
 
 class DX12InputLayout : public IInputLayout {
 public:

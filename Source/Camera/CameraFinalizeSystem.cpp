@@ -6,11 +6,8 @@
 #include "Component/CameraComponent.h"
 
 using namespace DirectX;
-
-// =========================================================
-// CameraLensComponent の設定と TransformComponent の姿勢から、
-// CameraMatricesComponent にビュー行列・射影行列を反映します。
-// =========================================================
+// LensComponent の設定と TransformComponent の姿勢から、
+// MatricesComponent にビュー行列と射影行列を反映する。
 void CameraFinalizeSystem::Update(Registry& registry) {
     // 対象となるコンポーネントの組み合わせを持つ Archetype だけを処理します。
     auto archetypes = registry.GetAllArchetypes();

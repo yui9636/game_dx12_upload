@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include <vector>
@@ -6,6 +6,7 @@
 #include <type_traits>
 
 template<typename... Ts>
+// Query は Func/Func/m_querySignature を中心に、実行時やエディターで共有する状態を保持する。
 class Query {
 public:
     Query(Registry& registry) : m_registry(registry) {

@@ -1,6 +1,4 @@
-// ==========================================
-// VolumetricFogPS.hlsl
-// ==========================================
+// main はボリュメトリックフォグの散乱色と透過を計算する。
 #include "FullScreenQuad.hlsli"
 
 Texture2D GBuffer2 : register(t0);

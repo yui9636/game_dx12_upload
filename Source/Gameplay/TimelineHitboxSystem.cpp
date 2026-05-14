@@ -1,4 +1,4 @@
-#include "TimelineHitboxSystem.h"
+﻿#include "TimelineHitboxSystem.h"
 #include "TimelineComponent.h"
 #include "TimelineItemBuffer.h"
 #include "Component/ColliderComponent.h"
@@ -141,18 +141,18 @@ void TimelineHitboxSystem::Update(Registry& registry) {
             auto& col = *static_cast<ColliderComponent*>(colCol->Get(i));
             const EntityID ownerEntity = arch->GetEntities()[i];
 
-            // Entity world position (for sphere center offset)
+            // エンティティのワールド位置（球中心 offset 用）
             TransformComponent* tx = txCol ? static_cast<TransformComponent*>(txCol->Get(i)) : nullptr;
 
-            // Collect active hitbox item indices
+            // active な hitbox item index を集める。
             for (int idx = 0; idx < static_cast<int>(buf.items.size()); ++idx) {
                 auto& item = buf.items[idx];
                 if (item.type != 0) continue;
 
                 bool active = tl.currentFrame >= item.start && tl.currentFrame <= item.end;
-                int tag = idx + 1; // runtimeTag: 1-based item index
+                int tag = idx + 1; // runtimeTag: 1 始まりの item index
 
-                // Find existing collider element by tag
+                // tag で既存 collider element を探す。
                 ColliderComponent::Element* found = nullptr;
                 for (auto& elem : col.elements) {
                     if (elem.runtimeTag == tag) { found = &elem; break; }
@@ -173,7 +173,7 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                     void* const ownerUserPtr =
                         reinterpret_cast<void*>(static_cast<uintptr_t>(ownerEntity));
                     if (found) {
-                        // Update existing
+                        // 既存要素を更新する。
                         found->radius = item.hb.radius;
                         found->offsetLocal = item.hb.offsetLocal;
                         found->nodeIndex = item.hb.nodeIndex;
@@ -181,12 +181,12 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         if (found->registeredId) {
                             cm.UpdateSphere(found->registeredId, { center, scaledRadius });
                             cm.SetEnabled(found->registeredId, true);
-                            // userPtr survives Update*, but defensively re-bind so DamageSystem
-                            // can always recover the attacker EntityID from a contact.
+                            // userPtr は Update* 後も生きるが、DamageSystem が接触から
+                            // 攻撃側 EntityID を常に復元できるよう、防御的に再 bind する。
                             cm.SetUserPtr(found->registeredId, ownerUserPtr);
                         }
                     } else {
-                        // Create new attack sphere
+                        // 新しい攻撃球を作る。
                         ColliderComponent::Element elem;
                         elem.type = ColliderShape::Sphere;
                         elem.attribute = ColliderAttribute::Attack;
@@ -199,7 +199,7 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                         col.elements.push_back(elem);
                     }
                 } else if (found) {
-                    // Deactivate
+                    // 非 active 化する。
                     if (found->registeredId) {
                         cm.SetEnabled(found->registeredId, false);
                     }
@@ -207,7 +207,7 @@ void TimelineHitboxSystem::Update(Registry& registry) {
                 }
             }
 
-            // Cleanup: remove runtime elements whose items no longer exist
+            // 掃除: 既に item が存在しない runtime element を削除する。
             for (auto it = col.elements.begin(); it != col.elements.end(); ) {
                 if (it->runtimeTag > 0 && it->runtimeTag > static_cast<int>(buf.items.size())) {
                     if (it->registeredId) cm.Remove(it->registeredId);

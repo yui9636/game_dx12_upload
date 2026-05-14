@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 
@@ -16,45 +16,41 @@ public:
 		last_time = this_time;
 	}
 
-	// Returns the total time elapsed since Reset() was called, NOT counting any
-	// time when the clock is stopped.
-	float TimeStamp() const  // in seconds
+	// Reset() が呼ばれてからの総経過時間を返す。停止中の時間は含めない。
+	float TimeStamp() const  // 秒単位
 	{
-		// If we are stopped, do not count the time that has passed since we stopped.
-		// Moreover, if we previously already had a pause, the distance 
-		// stop_time - base_time includes paused time, which we do not want to count.
-		// To correct this, we can subtract the paused time from mStopTime:  
-		//
-		//                     |<--paused_time-->|
-		// ----*---------------*-----------------*------------*------------*------> time
-		//  base_time       stop_time        start_time     stop_time    this_time
+		// 停止中なら、停止してから経過した時間を数えない。
+		// さらに以前にも pause があった場合、
+		// stop_time - base_time には数えたくない pause 時間が含まれる。
+		// それを補正するため、mStopTime から pause 時間を引く。
+		//                     |<--paused_time: 停止累積時間-->|
+		// 右方向が時間の進みを表す。
+		//  base_time:基準  stop_time:停止  start_time:再開  stop_time:停止  this_time:現在
 
 		if (stopped)
 		{
 			return static_cast<float>(((stop_time - paused_time) - base_time)*seconds_per_count);
 		}
 
-		// The distance this_time - mBaseTime includes paused time,
-		// which we do not want to count.  To correct this, we can subtract 
-		// the paused time from this_time:  
-		//
-		//  (this_time - paused_time) - base_time 
-		//
-		//                     |<--paused_time-->|
-		// ----*---------------*-----------------*------------*------> time
-		//  base_time       stop_time        start_time     this_time
+		// this_time - mBaseTime には pause 時間が含まれる。
+		// それを数えないようにするため、
+		// this_time から pause 時間を引く。
+		//  (this_time - paused_time) - base_time で停止時間を除外する。
+		//                     |<--paused_time: 停止累積時間-->|
+		// 右方向が時間の進みを表す。
+		//  base_time:基準  stop_time:停止  start_time:再開  this_time:現在
 		else
 		{
 			return static_cast<float>(((this_time - paused_time) - base_time)*seconds_per_count);
 		}
 	}
 
-	float TimeInterval() const  // in seconds
+	float TimeInterval() const  // 秒単位
 	{
 		return static_cast<float>(delta_time);
 	}
 
-	void Reset() // Call before message loop.
+	void Reset() // メッセージループ前に呼ぶ。
 	{
 		QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&this_time));
 		base_time = this_time;
@@ -64,16 +60,15 @@ public:
 		stopped = false;
 	}
 
-	void Start() // Call when unpaused.
+	void Start() // pause 解除時に呼ぶ。
 	{
 		LONGLONG start_time;
 		QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&start_time));
 
-		// Accumulate the time elapsed between stop and start pairs.
-		//
-		//                     |<-------d------->|
-		// ----*---------------*-----------------*------------> time
-		//  base_time       stop_time        start_time     
+		// stop と start の組の間に経過した時間を累積する。
+		//                     |<-------d:停止していた時間------->|
+		// 右方向が時間の進みを表す。
+		//  base_time:基準  stop_time:停止  start_time:再開
 		if (stopped)
 		{
 			paused_time += (start_time - stop_time);
@@ -83,7 +78,7 @@ public:
 		}
 	}
 
-	void Stop() // Call when paused.
+	void Stop() // pause 時に呼ぶ。
 	{
 		if (!stopped)
 		{
@@ -92,7 +87,7 @@ public:
 		}
 	}
 
-	void Tick() // Call every frame.
+	void Tick() // 毎フレーム呼ぶ。
 	{
 		if (stopped)
 		{
@@ -101,15 +96,15 @@ public:
 		}
 
 		QueryPerformanceCounter(reinterpret_cast<LARGE_INTEGER*>(&this_time));
-		// Time difference between this frame and the previous.
+		// 現フレームと前フレームの時間差。
 		delta_time = (this_time - last_time)*seconds_per_count;
 
-		// Prepare for next frame.
+		// 次フレームに備える。
 		last_time = this_time;
 
-		// Force nonnegative.  The DXSDK's CDXUTTimer mentions that if the 
-		// processor goes into a power save mode or we get shuffled to another
-		// processor, then mDeltaTime can be negative.
+		// 負値にならないようにする。DXSDK の CDXUTTimer では、
+		// CPU が省電力モードに入ったり、別 processor へ移されたりすると、
+		// mDeltaTime が負になることがあるとされている。
 		if (delta_time < 0.0)
 		{
 			delta_time = 0.0;

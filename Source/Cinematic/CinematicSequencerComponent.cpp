@@ -14,12 +14,8 @@
 
 using namespace Cinematic;
 using namespace DirectX;
-
-// ==================================================================================
 // CinematicSequencerComponent の実装。
 // タイムライン再生、ImGui 編集 UI、選択キーの可視化を担当する。
-// ==================================================================================
-
 // 初期状態のシーケンスを作成する。
 CinematicSequencerComponent::CinematicSequencerComponent()
 {
@@ -64,11 +60,8 @@ void CinematicSequencerComponent::Update(float dt)
 
         // 現在時間で各トラックを評価する。
         sequence->Evaluate(currentTime);
-
-        // =========================================================================
-        // AnimationTrack の現在有効なキーを調べ、外部へ渡す上書きアニメーションを決める。
-        // =========================================================================
-        int overrideAnim = -1;
+// AnimationTrack の現在有効なキーを調べ、外部へ渡す上書きアニメーションを決める。
+int overrideAnim = -1;
         float animLocalTime = 0.0f;
 
         for (auto& track : sequence->tracks)
@@ -104,39 +97,8 @@ void CinematicSequencerComponent::Update(float dt)
         else {
             driver.SetTime(0.0f);
         }
-
-        // =========================================================================
-        // 旧カメラ再生処理。現行カメラシステム移行により無効化されている。
-        // =========================================================================
-     /*   if (Camera* renderCam = Graphics::Instance().GetCamera())
-        {
-            for (auto& track : sequence->tracks)
-            {
-                if (track->GetType() == TrackType::Camera)
-                {
-                    CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
-                    if (!camTrack->isMuted)
-                    {
-                        XMFLOAT3 eye = camTrack->eyeCurve.Evaluate(currentTime);
-                        XMFLOAT3 focus = camTrack->focusCurve.Evaluate(currentTime);
-
-                        XMVECTOR vEye = XMLoadFloat3(&eye);
-                        XMVECTOR vFocus = XMLoadFloat3(&focus);
-                        XMVECTOR vDiff = XMVectorSubtract(vFocus, vEye);
-                        float lenSq = XMVectorGetX(XMVector3LengthSq(vDiff));
-
-                        if (lenSq < 0.0001f)
-                        {
-                            vFocus = XMVectorAdd(vEye, XMVectorSet(0, 0, 1, 0));
-                            XMStoreFloat3(&focus, vFocus);
-                        }
-
-                        renderCam->SetLookAt(eye, focus, { 0, 1, 0 });
-                    }
-                }
-            }
-        }*/
-    }
+// 旧カメラ再生処理。現行カメラシステム移行により無効化されている。
+}
 }
 
 // 選択中の CameraTrack キー位置に編集用ゴースト Actor を配置する。
@@ -332,13 +294,6 @@ void CinematicSequencerComponent::OnGUI()
             if (track->GetType() == TrackType::Camera) {
                 if (ImGui::Button("Add Camera Key")) {
                     // 現行カメラシステム移行中のため、実カメラからのキー取得は無効化中。
-                   /* if (cam) {
-                        CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
-                        camTrack->eyeCurve.AddKey(currentTime, cam->GetEye());
-                        camTrack->focusCurve.AddKey(currentTime, cam->GetFocus());
-                        selection.keyIndex = (int)camTrack->eyeCurve.keys.size() - 1;
-                        UpdateGhostCamera();
-                    }*/
                 }
             }
             else if (track->GetType() == TrackType::Animation) {
@@ -443,7 +398,6 @@ void CinematicSequencerComponent::DrawGizmo()
     if (editorGhost && selection.IsValid())
     {
         // 現行カメラシステム移行中のため、実カメラの view/projection 取得は無効化中。
-        //if (!camera) return;
 
         auto track = sequence->tracks[selection.trackIndex];
         if (track->GetType() != TrackType::Camera) return;
@@ -452,35 +406,12 @@ void CinematicSequencerComponent::DrawGizmo()
         // ImGuizmo の描画範囲を画面全体に設定する。
         ImGuizmo::Enable(true);
         ImGuizmo::SetRect(0, 0, (float)Graphics::Instance().GetScreenWidth(), (float)Graphics::Instance().GetScreenHeight());
-
-        //const XMFLOAT4X4& view = camera->GetView();
-        //const XMFLOAT4X4& proj = camera->GetProjection();
         XMFLOAT4X4 worldMatrix;
 
         // ゴースト Actor の位置・回転から編集用ワールド行列を作る。
         XMMATRIX T = XMMatrixTranslationFromVector(XMLoadFloat3(&editorGhost->GetPosition()));
         XMMATRIX R = XMMatrixRotationQuaternion(XMLoadFloat4(&editorGhost->GetRotation()));
         XMStoreFloat4x4(&worldMatrix, R * T);
-
-  /*      if (ImGuizmo::Manipulate((float*)&view, (float*)&proj, ImGuizmo::TRANSLATE | ImGuizmo::ROTATE, ImGuizmo::WORLD, (float*)&worldMatrix))
-        {
-            XMVECTOR scale, rot, trans;
-            XMMatrixDecompose(&scale, &rot, &trans, XMLoadFloat4x4(&worldMatrix));
-
-            XMFLOAT3 newPos; XMStoreFloat3(&newPos, trans);
-            editorGhost->SetPosition(newPos);
-            editorGhost->SetRotation(*(XMFLOAT4*)&rot);
-
-            camTrack->eyeCurve.keys[selection.keyIndex].value = newPos;
-
-            XMVECTOR Forward = XMVector3Rotate(XMVectorSet(0, 0, 1, 0), rot);
-            XMVECTOR NewFocus = XMVectorAdd(trans, XMVectorScale(Forward, 10.0f));
-            XMFLOAT3 newFocusPos; XMStoreFloat3(&newFocusPos, NewFocus);
-
-            if (selection.keyIndex < (int)camTrack->focusCurve.keys.size()) {
-                camTrack->focusCurve.keys[selection.keyIndex].value = newFocusPos;
-            }
-        }*/
     }
 }
 
@@ -564,11 +495,8 @@ void CinematicSequencerComponent::DrawTimelineWindow()
     for (int i = 0; i < (int)sequence->tracks.size(); ++i) {
         float y = p.y + i * rowHeight + 25.0f;
         auto track = sequence->tracks[i];
-
-        // -----------------------------------------------------------
-        // CameraTrack のキーをダイヤ型で表示する。
-        // -----------------------------------------------------------
-        if (track->GetType() == TrackType::Camera) {
+// Camera Track のキーをダイヤ型で表示する。
+if (track->GetType() == TrackType::Camera) {
             CameraTrack* camTrack = static_cast<CameraTrack*>(track.get());
             auto& keys = camTrack->eyeCurve.keys;
             for (int k = 0; k < (int)keys.size(); ++k) {
@@ -597,10 +525,8 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 drawList->AddQuad(ImVec2(x, y - 5), ImVec2(x + 5, y), ImVec2(x, y + 5), ImVec2(x - 5, y), 0xFF000000);
             }
         }
-        // -----------------------------------------------------------
-        // AnimationTrack のキーを横長バーとして表示する。
-        // -----------------------------------------------------------
-        else if (track->GetType() == TrackType::Animation)
+// AnimationTrack のキーを横長バーとして表示する。
+else if (track->GetType() == TrackType::Animation)
         {
             AnimationTrack* animTrack = static_cast<AnimationTrack*>(track.get());
             auto& keys = animTrack->keys;
@@ -646,10 +572,8 @@ void CinematicSequencerComponent::DrawTimelineWindow()
                 drawList->PopClipRect();
             }
         }
-        // -----------------------------------------------------------
-        // EffectTrack のキーを横長バーとして表示する。
-        // -----------------------------------------------------------
-        else if (track->GetType() == TrackType::Effect)
+// EffectTrack のキーを横長バーとして表示する。
+else if (track->GetType() == TrackType::Effect)
         {
             EffectTrack* effTrack = static_cast<EffectTrack*>(track.get());
             auto& keys = effTrack->keys;

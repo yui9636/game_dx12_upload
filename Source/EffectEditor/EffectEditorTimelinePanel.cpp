@@ -1,5 +1,5 @@
-﻿// Timeline panel for EffectEditorPanel — extracted from EffectEditorPanel.cpp.
-// Method body remains a member function of EffectEditorPanel.
+﻿// EffectEditorPanel 用タイムラインパネル。EffectEditorPanel.cpp から分離。
+// メソッド本体は EffectEditorPanel のメンバ関数のまま。
 
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"
@@ -101,7 +101,7 @@ void EffectEditorPanel::DrawTimelinePanel()
                 ImGui::Text("Sample Size: %.3f", sizeValue);
                 ImGui::Text("Sample Alpha: %.3f", alphaValue);
 
-                // Phase 1C: Size Curve Multi-Key
+                // フェーズ 1C: サイズカーブ複数キー
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::TextUnformatted("Size Curve (Multi-Key)");
@@ -130,7 +130,7 @@ void EffectEditorPanel::DrawTimelinePanel()
                     m_compileDirty |= ImGui::DragFloat("S3 (t=1)##SC", &spriteNode->vectorValue5.w, 0.01f, 0.0f, 25.0f, "%.2f");
                 }
 
-                // Phase 1C: Color Gradient Multi-Key
+                // フェーズ 1C: 色グラデーション複数キー
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::TextUnformatted("Color Gradient (Multi-Key)");
@@ -325,7 +325,7 @@ void EffectEditorPanel::DrawTimelinePanel()
             }
             ImGui::SameLine();
             if (ImGui::Button(ICON_FA_ARROWS_ROTATE " Refresh")) {
-                // Trigger rescan on next frame
+                // 次フレームで再スキャンを要求する。
             }
 
             ImGui::Spacing();
@@ -340,7 +340,7 @@ void EffectEditorPanel::DrawTimelinePanel()
                     const auto& path = entry.path();
                     if (path.extension() != ".json") continue;
                     std::string filename = path.stem().string();
-                    // Remove .effectgraph suffix if present
+                    // .effectgraph suffix があれば取り除く。
                     if (filename.size() > 12 && filename.substr(filename.size() - 12) == ".effectgraph") {
                         filename = filename.substr(0, filename.size() - 12);
                     }

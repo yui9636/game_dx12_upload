@@ -1,4 +1,4 @@
-#include "Dialog.h"
+﻿#include "Dialog.h"
 #include <shobjidl.h>
 #include <vector>
 #include <string>
@@ -11,6 +11,7 @@ namespace {
     { 0x1e20d5c1, 0x2d34, 0x4b7a,{ 0x8c, 0x6c, 0x91, 0x33, 0x52, 0x4e, 0x11, 0xa1 } };
     const GUID kSaveDialogClientGuid =
     { 0x7b26ef14, 0x0f37, 0x46b2,{ 0x9b, 0x6b, 0x43, 0x8c, 0x8f, 0x31, 0x2d, 0x44 } };
+// ToWide はこのモジュールの実行時処理を構成する補助処理を行う。
 
     std::wstring ToWide(const char* text)
     {

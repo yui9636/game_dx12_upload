@@ -1,7 +1,5 @@
-﻿// ============================================================================
-// PlayerEditor — Viewport panel (3D model preview window)
-// Sibling of PlayerEditorPanel.cpp; split out for readability.
-// ============================================================================
+﻿// PlayerEditor の 3D モデルプレビュー用 Viewport パネル。
+// PlayerEditorPanel.cpp から分離し、パネル単位で読みやすくしている。
 #include "PlayerEditorPanel.h"
 
 #ifndef NOMINMAX
@@ -61,7 +59,7 @@ void PlayerEditorPanel::DrawViewportPanel()
     }
 
     if (m_viewportTexture) {
-        // Display the dedicated render target
+        // 専用レンダーターゲットを ImGui 上に表示する。
         void* texId = ImGuiRenderer::GetTextureID(m_viewportTexture);
         if (texId) {
             ImGui::Image((ImTextureID)texId, avail);
@@ -128,13 +126,13 @@ void PlayerEditorPanel::DrawViewportPanel()
             }
         }
     } else {
-        // Placeholder: dark background with instructions
+        // プレビュー対象がないときの暗い背景を描画する。
         ImDrawList* dl = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
         m_viewportRect = { pos.x, pos.y, avail.x, avail.y };
         dl->AddRectFilled(pos, ImVec2(pos.x + avail.x, pos.y + avail.y), IM_COL32(20, 20, 25, 255));
 
-        // Center text
+        // プレースホルダーテキストを中央に配置する。
         const char* msg = "3D Model Viewport";
         ImVec2 textSize = ImGui::CalcTextSize(msg);
         dl->AddText(ImVec2(pos.x + (avail.x - textSize.x) * 0.5f, pos.y + avail.y * 0.4f),
@@ -148,9 +146,9 @@ void PlayerEditorPanel::DrawViewportPanel()
         ImGui::Dummy(avail);
     }
 
-    // Orbit camera controls (mouse drag on viewport)
+    // Viewport 上のマウス操作でオービットカメラを操作する。
     if (ImGui::IsItemHovered() && !usingSharedSceneView && !m_viewportTexture) {
-        // Right-drag: orbit
+        // 右ドラッグでカメラを回転する。
         if (ImGui::IsMouseDragging(1)) {
             ImVec2 delta = ImGui::GetMouseDragDelta(1);
             m_vpCameraYaw   += delta.x * 0.005f;
@@ -158,7 +156,7 @@ void PlayerEditorPanel::DrawViewportPanel()
             m_vpCameraPitch = (std::max)(-1.5f, (std::min)(1.5f, m_vpCameraPitch));
             ImGui::ResetMouseDragDelta(1);
         }
-        // Scroll: zoom
+        // ホイールでズームする。
         float wheel = ImGui::GetIO().MouseWheel;
         if (wheel != 0.0f) {
             m_vpCameraDist -= wheel * 0.5f;

@@ -38,10 +38,10 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
             auto& pb = *static_cast<PlaybackComponent*>(playCol->Get(i));
             if (!pb.playing) continue;
 
-            // Animation-less state (clipLength==0): mark finished immediately so
-            // AnimEnd transitions still fire. Otherwise non-loop states without an
-            // assigned animation lock the StateMachine forever (e.g. Dodge/Damage
-            // when their clip lookup failed).
+            // アニメーション無しステート（clipLength==0）は即時終了扱いにし、
+            // AnimEnd 遷移が発火するようにする。そうしないと、
+            // アニメーション未割り当ての非 loop ステートが StateMachine を永遠にロックする。
+            // 例: Dodge / Damage の clip lookup に失敗した場合。
             if (pb.clipLength <= 0.0f) {
                 if (pb.stopAtEnd && !pb.looping) {
                     pb.playing = false;
@@ -52,7 +52,7 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
 
             float timeScale = 1.0f;
 
-            // HitStop takes priority — override timeScale entirely
+            // HitStop を最優先し、timeScale を完全に上書きする。
             if (hitCol) {
                 auto& hs = *static_cast<HitStopComponent*>(hitCol->Get(i));
                 if (hs.timer > 0.0f) {
@@ -61,11 +61,11 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
                 }
             }
 
-            // Speed curve modulation (skip if hitstop froze time)
+            // 速度カーブ補正（hitstop で時間停止中なら省く）
             if (curveCol && timeScale > 0.0f) {
                 auto& curve = *static_cast<SpeedCurveComponent*>(curveCol->Get(i));
                 float t01;
-                // Use range-space normalization if enabled and range is active
+                // 有効化され、range が active なら range 空間で正規化する。
                 if (curve.useRangeSpace && rangeCol) {
                     auto& range = *static_cast<PlaybackRangeComponent*>(rangeCol->Get(i));
                     float w = range.endSeconds - range.startSeconds;
@@ -79,7 +79,7 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
             float delta = dt * pb.playSpeed * timeScale;
             pb.currentSeconds += delta;
 
-            // Range-constrained playback
+            // range 制約付き再生
             if (rangeCol) {
                 auto& range = *static_cast<PlaybackRangeComponent*>(rangeCol->Get(i));
                 if (range.enabled) {
@@ -97,12 +97,12 @@ void PlaybackSystem::Update(Registry& registry, float dt) {
                         } else if (pb.currentSeconds < lo) {
                             pb.currentSeconds = lo;
                         }
-                        continue; // Skip full-clip logic
+                        continue; // full clip 処理を飛ばす
                     }
                 }
             }
 
-            // Full-clip end / loop
+            // full clip の終了 / loop
             if (pb.currentSeconds >= pb.clipLength) {
                 if (pb.looping) {
                     pb.currentSeconds = fmodf(pb.currentSeconds, pb.clipLength);

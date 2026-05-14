@@ -1,3 +1,4 @@
+﻿// DX11State の RHI 関連インターフェースまたは実装宣言をまとめます。
 #pragma once
 #include "RHI/IState.h"
 #include <d3d11.h>

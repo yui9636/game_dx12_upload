@@ -1,8 +1,8 @@
 #include "PostEffect.hlsli"
 
-Texture2D<float4> SceneTexture : register(t0); // ƒƒCƒ“‰æ‘œ
-Texture2D<float4> BloomTexture : register(t1); // ƒuƒ‹[ƒ€‰æ‘œ
-Texture2D<float> DepthTexture : register(t2); // [“x‰æ‘œ
+Texture2D<float4> SceneTexture : register(t0); // ãƒ¡ã‚¤ãƒ³ç”»åƒ
+Texture2D<float4> BloomTexture : register(t1); // ãƒ–ãƒ«ãƒ¼ãƒ ç”»åƒ
+Texture2D<float> DepthTexture : register(t2); // æ·±åº¦ç”»åƒ
 
 SamplerState Sampler : register(s0);
 
@@ -14,21 +14,21 @@ struct PS_INPUT
 
 float4 main(PS_INPUT input) : SV_TARGET
 {
-    // 1. Šî–{F‚Æƒuƒ‹[ƒ€‚Ìæ“¾
+    // 1. åŸºæœ¬è‰²ã¨ãƒ–ãƒ«ãƒ¼ãƒ ã®å–å¾—
     float4 color = SceneTexture.Sample(Sampler, input.uv);
     float4 bloom = BloomTexture.Sample(Sampler, input.uv);
 
-    // 2. [“x‚Ìæ“¾ (R¬•ª‚Ì‚İ)
+    // 2. æ·±åº¦ã®å–å¾— (Ræˆåˆ†ã®ã¿)
     float depthVal = DepthTexture.Sample(Sampler, input.uv).r;
 
-    // 3. DoF (ƒ{ƒP) ‚ÌŒvZ
-    // [“x·‚ÉŠî‚Ã‚­ŠÈˆÕ“I‚Èƒ{ƒP‹­“xŒvZ
-    // focusDistance‚Íƒ[ƒgƒ‹’PˆÊ‚¾‚ªA‚±‚±‚Å‚Í[“x(0.0-1.0)‚Æ‚µ‚ÄŠÈˆÕ“I‚Éˆµ‚¤‚©A
-    // ‚ ‚é‚¢‚Í[“x’l‚ğƒŠƒjƒA•ÏŠ·‚µ‚Ä”äŠr‚·‚é•K—v‚ª‚ ‚éB
-    // ¡‰ñ‚Íu[“x’l‚Ì·v‚Åƒ{ƒP‚ğì‚éŠÈˆÕÀ‘•‚Æ‚·‚éB
+    // 3. DoF (ãƒœã‚±) ã®è¨ˆç®—
+    // æ·±åº¦å·®ã«åŸºã¥ãç°¡æ˜“çš„ãªãƒœã‚±å¼·åº¦è¨ˆç®—
+    // focusDistanceã¯ãƒ¡ãƒ¼ãƒˆãƒ«å˜ä½ã ãŒã€ã“ã“ã§ã¯æ·±åº¦(0.0-1.0)ã¨ã—ã¦ç°¡æ˜“çš„ã«æ‰±ã†ã‹ã€
+    // ã‚ã‚‹ã„ã¯æ·±åº¦å€¤ã‚’ãƒªãƒ‹ã‚¢å¤‰æ›ã—ã¦æ¯”è¼ƒã™ã‚‹å¿…è¦ãŒã‚ã‚‹ã€‚
+    // ä»Šå›ã¯ã€Œæ·±åº¦å€¤ã®å·®ã€ã§ãƒœã‚±ã‚’ä½œã‚‹ç°¡æ˜“å®Ÿè£…ã¨ã™ã‚‹ã€‚
     
-    // [“xƒoƒbƒtƒ@‚ª 0.0(è‘O) -> 1.0(‰œ) ‚Ìê‡
-    // ƒsƒ“ƒgˆÊ’u‚ğ 0.01 ”{‚·‚é‚È‚Ç‚µ‚Ä’²®
+    // æ·±åº¦ãƒãƒƒãƒ•ã‚¡ãŒ 0.0(æ‰‹å‰) -> 1.0(å¥¥) ã®å ´åˆ
+    // ãƒ”ãƒ³ãƒˆä½ç½®ã‚’ 0.01 å€ã™ã‚‹ãªã©ã—ã¦èª¿æ•´
     float distDiff = abs(depthVal - (focusDistance * 0.001));
     
     float blurFactor = 0.0;
@@ -37,7 +37,7 @@ float4 main(PS_INPUT input) : SV_TARGET
         blurFactor = saturate((distDiff - focusRange * 0.0001) * bokehRadius);
     }
 
-    // ƒ{ƒPˆ— (3x3 ƒ{ƒbƒNƒXƒuƒ‰[)
+    // ãƒœã‚±å‡¦ç† (3x3 ãƒœãƒƒã‚¯ã‚¹ãƒ–ãƒ©ãƒ¼)
     if (blurFactor > 0.01)
     {
         float4 blurredColor = 0;
@@ -47,8 +47,8 @@ float4 main(PS_INPUT input) : SV_TARGET
         SceneTexture.GetDimensions(texSize.x, texSize.y);
         float2 texelSize = 1.0 / texSize;
         
-        // ƒ‹[ƒv‚Åü•Ó‚ğƒTƒ“ƒvƒŠƒ“ƒO
-        // blurFactor‚ª‘å‚«‚¢‚Ù‚Ç‰“‚­‚ğƒTƒ“ƒvƒŠƒ“ƒO‚µ‚Äƒ{ƒP‚ğ‹­‚­‚·‚é
+        // ãƒ«ãƒ¼ãƒ—ã§å‘¨è¾ºã‚’ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°
+        // blurFactorãŒå¤§ãã„ã»ã©é ãã‚’ã‚µãƒ³ãƒ—ãƒªãƒ³ã‚°ã—ã¦ãƒœã‚±ã‚’å¼·ãã™ã‚‹
         for (int x = -1; x <= 1; x++)
         {
             for (int y = -1; y <= 1; y++)
@@ -61,15 +61,15 @@ float4 main(PS_INPUT input) : SV_TARGET
         color = blurredColor / totalWeight;
     }
 
-    // 4. ƒuƒ‹[ƒ€‡¬ (‰ÁZ)
+    // 4. ãƒ–ãƒ«ãƒ¼ãƒ åˆæˆ (åŠ ç®—)
     color += bloom * bloomIntensity;
 
-    // 5. ƒ”ƒBƒlƒbƒg (ü•ÓŒ¸Œõ)
+    // 5. ãƒ´ã‚£ãƒãƒƒãƒˆ (å‘¨è¾ºæ¸›å…‰)
     float2 center = float2(0.5, 0.5);
     float dist = distance(input.uv, center);
     color.rgb *= (1.0 - smoothstep(0.4, 1.0, dist) * vignetteAmount);
 
-    // 6. ƒtƒ‰ƒbƒVƒ… (ƒzƒƒCƒgƒAƒEƒg)
+    // 6. ãƒ•ãƒ©ãƒƒã‚·ãƒ¥ (ãƒ›ãƒ¯ã‚¤ãƒˆã‚¢ã‚¦ãƒˆ)
     color.rgb += flashAmount;
 
     return color;

@@ -7,7 +7,7 @@ enum class BufferType {
     Constant,
     Indirect,
     Structured,
-    UAVStorage   // DEFAULT heap + ALLOW_UNORDERED_ACCESS (DX12 compute output)
+    UAVStorage   // DEFAULT heap と ALLOW_UNORDERED_ACCESS を使う DX12 compute output。
 };
 
 class IBuffer {

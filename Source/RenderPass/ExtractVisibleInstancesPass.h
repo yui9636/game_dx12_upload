@@ -1,3 +1,4 @@
+﻿// ExtractVisibleInstancesPass のレンダーパス宣言をまとめます。
 #pragma once
 #include "RenderPass/IRenderPass.h"
 #include <vector>

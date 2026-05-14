@@ -459,7 +459,7 @@ namespace
             writeComponent("CameraLookAtComponent", value);
         }
 
-        // Camera lens 設定を JSON へ保存します。
+        // Camera lens 設定を JSON へ保存する。
         if (const auto& lens = std::get<std::optional<CameraLensComponent>>(node.components); lens.has_value()) {
             writeComponent("CameraLensComponent", json{
                 {"fovY", lens->fovY},
@@ -474,7 +474,7 @@ namespace
             writeComponent("CameraMainTagComponent", json::object());
         }
 
-        // Camera shake 設定を JSON へ保存します。
+        // Camera shake 設定を JSON へ保存する。
         if (const auto& shake = std::get<std::optional<CameraShakeComponent>>(node.components); shake.has_value()) {
             writeComponent("CameraShakeComponent", json{
                 {"amplitude", shake->amplitude},
@@ -1084,7 +1084,7 @@ namespace
             SetOptional(node.components, component);
         }
 
-        // Camera lens 設定を JSON から読み込みます。
+        // Camera lens 設定を JSON から読み込む。
         if (components.contains("CameraLensComponent")) {
             CameraLensComponent component;
             const json& value = components["CameraLensComponent"];
@@ -1100,7 +1100,7 @@ namespace
             SetOptional(node.components, CameraMainTagComponent{});
         }
 
-        // Camera shake 設定を JSON から読み込みます。
+        // Camera shake 設定を JSON から読み込む。
         if (components.contains("CameraShakeComponent")) {
             CameraShakeComponent component;
             const json& value = components["CameraShakeComponent"];
@@ -1143,8 +1143,8 @@ namespace
 
                     element.attribute = static_cast<ColliderAttribute>(elemJson.value("attribute", static_cast<int>(element.attribute)));
 
-                    // Backwards-compat: assets saved before these existed
-                    // load with empty strings (no VFX / SE).
+                    // 後方互換: これらの項目が追加される前に保存された asset は、
+                    // 空文字として読み込み、VFX / SE なしとして扱う。
                     element.hitVfxPath = elemJson.value("hitVfxPath", std::string{});
                     element.hitSfxPath = elemJson.value("hitSfxPath", std::string{});
 

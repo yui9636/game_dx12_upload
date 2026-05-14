@@ -1,3 +1,4 @@
+﻿// TimelineAssetRuntimeBuilder の Gameplay 関連実装をまとめます。
 #include "TimelineAssetRuntimeBuilder.h"
 
 #include "Gameplay/TimelineComponent.h"

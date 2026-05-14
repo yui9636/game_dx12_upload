@@ -21,7 +21,7 @@ float3 SampleSkyFace(float3 dir)
     float3 color = float3(0.0f, 0.0f, 0.0f);
     float majorAxis = 1.0f;
 
-    // DirectX cubemap face UV convention:
+    // DirectX のキューブマップ面 UV 規約:
     //   +X: sc=-z, tc=-y   -X: sc=+z, tc=-y
     //   +Y: sc=+x, tc=+z   -Y: sc=+x, tc=-z
     //   +Z: sc=+x, tc=-y   -Z: sc=-x, tc=-y

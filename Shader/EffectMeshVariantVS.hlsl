@@ -29,6 +29,7 @@ float3 RotateVector(float3 v, float4 q)
     float3 t = 2.0f * cross(q.xyz, v);
     return v + q.w * t + cross(q.xyz, t);
 }
+// main はエフェクトメッシュの頂点をワールド、ビュー、射影空間へ変換し、バリアント描画用の値を渡す。
 
 VS_OUT main(VS_IN input, uint instanceID : SV_InstanceID)
 {

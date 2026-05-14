@@ -1,9 +1,6 @@
-// ============================================================================
-// CoarseDepthBin: 2-stage group-local depth binning for alpha/premul billboard
-// 32 depth bins, log2 intervals, far-to-near render order
-// Dispatch: ((alphaAliveCount + 255) / 256, 1, 1)
-// ============================================================================
-
+// CoarseDepthBin: alpha / premul ビルボード向けの 2 段階グループローカル depth binning。
+// 32 個の depth bin を log2 間隔で使い、奥から手前の順に描画する。
+// ディスパッチ: ((alphaAliveCount + 255) / 256, 1, 1)
 #include "EffectParticleRuntimeCommon.hlsli"
 #include "EffectParticleSoA.hlsli"
 
@@ -13,13 +10,13 @@
 StructuredBuffer<uint>          g_AliveList     : register(t0);
 StructuredBuffer<BillboardHot>  g_BillboardHot  : register(t1);
 
-RWStructuredBuffer<uint>  g_DepthBinIndex   : register(u0); // output: depth-sorted particle indices
-RWByteAddressBuffer       g_DepthBinCounter : register(u1); // per-depth-bin global counter (4B * 32)
-RWByteAddressBuffer       g_CounterBuffer   : register(u2); // for alive count
+RWStructuredBuffer<uint>  g_DepthBinIndex   : register(u0); // 出力: depth ソート済みパーティクル index
+RWByteAddressBuffer       g_DepthBinCounter : register(u1); // depth bin ごとの global counter。4B * 32。
+RWByteAddressBuffer       g_CounterBuffer   : register(u2); // alive count 用
 
 cbuffer CoarseDepthParams : register(b0)
 {
-    float4x4 gViewMatrix;       // world-to-view transform
+    float4x4 gViewMatrix;       // world から view への変換
     float    gNearClip;
     float    gFarClip;
     uint     gAliveCount;
@@ -27,28 +24,28 @@ cbuffer CoarseDepthParams : register(b0)
 };
 
 groupshared uint s_localDepthCount[DEPTH_BINS];
-groupshared uint s_localDepthOffset[DEPTH_BINS]; // global offset for this group's chunk
+groupshared uint s_localDepthOffset[DEPTH_BINS]; // このグループチャンクのグローバルオフセット
 
 [numthreads(GROUP_SIZE, 1, 1)]
 void CSMain(uint3 dtid : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint gtid : SV_GroupIndex)
 {
-    // ── Stage 0: Zero local bins ──
+    // Stage 0: ローカル bin を 0 で初期化する。
     if (gtid < DEPTH_BINS)
     {
         s_localDepthCount[gtid] = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // ── Stage 1: Classify and accumulate locally ──
+    // Stage 1: 分類し、スレッドグループ内で集計する。
     uint depthBin = 0u;
     bool valid = dtid.x < gAliveCount;
     if (valid)
     {
         uint particleIdx = g_AliveList[dtid.x];
         float3 worldPos = g_BillboardHot[particleIdx].position;
-        // Transform to view space to get view-Z depth
+        // view-Z 深度を得るため view 空間へ変換する。
         float viewZ = dot(float4(worldPos, 1.0f), gViewMatrix[2]);
-        viewZ = abs(viewZ); // ensure positive
+        viewZ = abs(viewZ); // 正値にそろえる。
         depthBin = ComputeDepthBin(viewZ, gNearClip, gFarClip);
 
         uint localIdx;
@@ -56,7 +53,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint gtid 
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // ── Stage 2: One thread per bin does global atomic ──
+    // Stage 2: bin ごとに 1 スレッドだけ global atomic を行う。
     if (gtid < DEPTH_BINS)
     {
         uint count = s_localDepthCount[gtid];
@@ -73,7 +70,7 @@ void CSMain(uint3 dtid : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint gtid 
     }
     GroupMemoryBarrierWithGroupSync();
 
-    // ── Stage 3: Scatter to depth-sorted position ──
+    // Stage 3: depth sort 済み位置へ散布する。
     if (gtid < DEPTH_BINS)
     {
         s_localDepthCount[gtid] = 0u;

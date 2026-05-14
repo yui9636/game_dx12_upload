@@ -1,4 +1,4 @@
-#include "PhongShader.h"
+﻿#include "PhongShader.h"
 
 #include "Graphics.h"
 #include "ShadowMap.h"
@@ -14,6 +14,7 @@
 #include "RHI/IPipelineState.h"
 #include "RHI/DX12/DX12CommandList.h"
 #include <DirectXTex.h>
+// PhongShader::PhongShader はこのモジュールの実行時処理を構成する補助処理を行う。
 
 PhongShader::PhongShader(IResourceFactory* factory)
 {

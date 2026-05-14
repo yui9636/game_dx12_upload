@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <Windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
+// DX12Device はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class DX12Device;
 class Registry;

@@ -182,10 +182,10 @@ namespace
         action->stateTimer = 0.0f;
         action->reservedNodeIndex = -1;
 
-        // Spec §8: hand horizontal velocity control to the StateMachine-owned system
-        // (Action / Dodge / Damage / Dead). Without this, leftover Locomotion velocity
-        // — or DodgeSystem's per-frame override starting from a stale dodgeAngleY — keeps
-        // the character sliding after entering a non-Locomotion state.
+        // 仕様 §8: 水平速度制御を StateMachine 所有のシステムへ渡す。
+        // 対象は Action / Dodge / Damage / Dead。これが無いと、Locomotion の残り速度や
+        // 古い dodgeAngleY から始まる DodgeSystem のフレーム単位上書きによって、
+        // 非 Locomotion ステートへ入った後もキャラクターが滑り続ける。
         if (state.type != StateNodeType::Locomotion) {
             if (CharacterPhysicsComponent* physics = registry.GetComponent<CharacterPhysicsComponent>(entity)) {
                 physics->velocity.x = 0.0f;
@@ -448,7 +448,7 @@ void StateMachineSystem::Update(Registry& registry, float dt)
     }
 }
 
-void StateMachineSystem::InvalidateAssetCache(const char* /*path*/)
+void StateMachineSystem::InvalidateAssetCache(const char*)
 {
     TimelineAssetRuntimeBuilder::InvalidateAssetCache();
 }

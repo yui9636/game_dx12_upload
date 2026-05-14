@@ -1,9 +1,9 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 
-// Per-frame UI button click queue.
-// UIButtonClickSystem pushes, GameLoopSystem reads, EngineKernel clears at end-of-frame.
+// 1 frame 分の UI button click queue。
+// UIButtonClickSystem が積み、GameLoopSystem が読み、EngineKernel が frame 終端で clear する。
 class UIButtonClickEventQueue
 {
 public:

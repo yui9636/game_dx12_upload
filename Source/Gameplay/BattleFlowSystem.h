@@ -1,20 +1,18 @@
-#pragma once
+﻿#pragma once
 
 #include <string>
 
 class FlowEventQueue;
 class Registry;
 
-// Drives the 1v1 encounter state machine through a runtime service.
-// It is started/reset from GameFlow actions and does not require a
-// Hierarchy singleton entity.
-//
-// Phases:
-//   Idle      -> Encounter when the player enters the arena radius
-//   Encounter -> Combat after introDuration elapses
-//   Combat    -> Victory if the boss dies, Defeat if the player dies
-//   Victory/Defeat -> stay until phase is reset externally
-//
+// 実行時サービスを通じて 1 対 1 エンカウントのステートマシンを駆動する。
+// GameFlow action から開始 / リセットされるため、
+// Hierarchy 上の singleton entity は不要。
+// フェーズ:
+//   Idle      -> プレイヤーがアリーナ半径に入ると Encounter
+//   Encounter -> introDuration 経過後に Combat
+//   Combat    -> ボス死亡で Victory、プレイヤー死亡で Defeat
+//   Victory/Defeat -> 外部から phase がリセットされるまで維持
 class BattleFlowSystem {
 public:
     static void Update(Registry& registry, float dt);

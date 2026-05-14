@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -11,9 +11,9 @@ enum class ActionTriggerType : uint8_t {
 
 struct ActionBinding {
     std::string actionName;
-    uint32_t scancode = 0;       // SDL scancode
+    uint32_t scancode = 0;       // SDL の scancode。
     uint8_t mouseButton = 0;
-    uint8_t gamepadButton = 0xFF; // 0xFF = unbound
+    uint8_t gamepadButton = 0xFF; // 0xFF は未割り当て。
     uint8_t gamepadAxis = 0xFF;
     float axisDirection = 1.0f;   // +1 or -1
     ActionTriggerType trigger = ActionTriggerType::Pressed;
@@ -41,7 +41,7 @@ struct InputActionMapAsset {
     static nlohmann::json ToJson(const InputActionMapAsset& asset);
     static bool FromJson(const nlohmann::json& root, InputActionMapAsset& outAsset);
 
-    // Cache
+    // cache 状態。
     static InputActionMapAsset* Get(const std::string& path);
     static void ClearCache();
 

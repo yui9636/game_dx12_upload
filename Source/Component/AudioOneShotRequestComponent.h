@@ -1,3 +1,4 @@
+﻿// AudioOneShotRequestComponent の ECS コンポーネント定義をまとめます。
 #pragma once
 
 #include <string>

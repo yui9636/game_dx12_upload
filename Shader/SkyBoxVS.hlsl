@@ -1,4 +1,5 @@
 #include "SkyBox.hlsli"
+// main はカメラ周囲に描くスカイボックス用の頂点情報を生成する。
 
 VS_OUT main(uint id : SV_VertexID)
 {

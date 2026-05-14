@@ -9,14 +9,11 @@ float4 main(VS_OUT pin) : SV_TARGET
 {
     float4 color = colorMap.Sample(linerSampler, pin.texcoord) ;
 
-	////RGB > 輝度値に変換
- //   float luminance = RGB2Luminance(color.rgb);
+	////RGB > 霈晏ｺｦ蛟､縺ｫ螟画鋤
 
-	////闘値との差を算出
- //   float contribution = max(0, luminance - threshold*3);
+	////髣伜､縺ｨ縺ｮ蟾ｮ繧堤ｮ怜�ｺ
 
-	////出力する色を補正する
- //   contribution /= luminance;
+	////蜃ｺ蜉帙☆繧玖牡繧定｣懈ｭ｣縺吶ｋ
     color.rgb *= smoothstep(luminanceExtractionLowerEdge, luminanceExtractionHigherEdge, dot(color.rgb, float3(0.299f, 0.587f, 0.114f)));
 	
     return color;

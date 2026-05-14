@@ -1,4 +1,4 @@
-#include "ModelSerializerPanel.h"
+ï»¿#include "ModelSerializerPanel.h"
 
 #include "Engine/EditorSelection.h"
 
@@ -11,37 +11,37 @@
 
 namespace
 {
-    // InputText ‚É“n‚·ƒpƒX•¶š—ñƒoƒbƒtƒ@‚ÌŒÅ’èƒTƒCƒYB
+    // InputText ã«æ¸¡ã™ãƒ‘ã‚¹æ–‡å­—åˆ—ãƒãƒƒãƒ•ã‚¡ã®å›ºå®šã‚µã‚¤ã‚ºã€‚
     constexpr size_t kPathBufferSize = 512;
 
-    // std::string ‚Ì“à—e‚ğŒÅ’è’· char ƒoƒbƒtƒ@‚ÖˆÀ‘S‚ÉƒRƒs[‚·‚éB
-    // ––”ö‚Í•K‚¸ '\0' ‚ÅI’[‚·‚éB
+    // std::string ã®å†…å®¹ã‚’å›ºå®šé•· char ãƒãƒƒãƒ•ã‚¡ã¸å®‰å…¨ã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
+    // æœ«å°¾ã¯å¿…ãš '\0' ã§çµ‚ç«¯ã™ã‚‹ã€‚
     void CopyStringToBuffer(const std::string& value, std::array<char, kPathBufferSize>& buffer)
     {
-        // ‚¢‚Á‚½‚ñ‘S‘Ì‚ğƒ[ƒ–„‚ß‚·‚éB
+        // ã„ã£ãŸã‚“å…¨ä½“ã‚’ã‚¼ãƒ­åŸ‹ã‚ã™ã‚‹ã€‚
         buffer.fill('\0');
 
-        // ‹ó•¶š—ñ‚È‚ç‰½‚à‚µ‚È‚¢B
+        // ç©ºæ–‡å­—åˆ—ãªã‚‰ä½•ã‚‚ã—ãªã„ã€‚
         if (value.empty()) {
             return;
         }
 
-        // ƒoƒbƒtƒ@––”ö‚ÌI’[•¶š‚Ô‚ñ‚ğc‚µ‚ÄƒRƒs[’·‚ğŒˆ‚ß‚éB
+        // ãƒãƒƒãƒ•ã‚¡æœ«å°¾ã®çµ‚ç«¯æ–‡å­—ã¶ã‚“ã‚’æ®‹ã—ã¦ã‚³ãƒ”ãƒ¼é•·ã‚’æ±ºã‚ã‚‹ã€‚
         const size_t copyLength = (std::min)(value.size(), buffer.size() - 1);
 
-        // •¶š—ñ–{‘Ì‚ğƒRƒs[‚·‚éB
+        // æ–‡å­—åˆ—æœ¬ä½“ã‚’ã‚³ãƒ”ãƒ¼ã™ã‚‹ã€‚
         memcpy(buffer.data(), value.data(), copyLength);
 
-        // ”O‚Ì‚½‚ßI’[‚ğ–¾¦‚·‚éB
+        // å¿µã®ãŸã‚çµ‚ç«¯ã‚’æ˜ç¤ºã™ã‚‹ã€‚
         buffer[copyLength] = '\0';
     }
 }
 
-// ƒhƒƒbƒv‚³‚ê‚½ƒAƒZƒbƒg‚ğ serializer ‚Ì“ü—ÍŒ³‚Æ‚µ‚Äó‚¯“ü‚ê‚éB
-// ‘Î‰Šg’£q‚È‚ç source/output ‚ğXV‚µA”ñ‘Î‰‚È‚çŒ‹‰Ê—“‚ÖƒGƒ‰[‚ğo‚·B
+// ãƒ‰ãƒ­ãƒƒãƒ—ã•ã‚ŒãŸã‚¢ã‚»ãƒƒãƒˆã‚’ serializer ã®å…¥åŠ›å…ƒã¨ã—ã¦å—ã‘å…¥ã‚Œã‚‹ã€‚
+// å¯¾å¿œæ‹¡å¼µå­ãªã‚‰ source/output ã‚’æ›´æ–°ã—ã€éå¯¾å¿œãªã‚‰çµæœæ¬„ã¸ã‚¨ãƒ©ãƒ¼ã‚’å‡ºã™ã€‚
 bool ModelSerializerPanel::AcceptSourceAsset(const std::filesystem::path& path)
 {
-    // ‘Î‰‚µ‚Ä‚¢‚È‚¢Šg’£q‚È‚çƒGƒ‰[ƒƒbƒZ[ƒW‚ğİ’è‚µ‚ÄI—¹‚·‚éB
+    // å¯¾å¿œã—ã¦ã„ãªã„æ‹¡å¼µå­ãªã‚‰ã‚¨ãƒ©ãƒ¼ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’è¨­å®šã—ã¦çµ‚äº†ã™ã‚‹ã€‚
     if (!IsSupportedSourceAsset(path)) {
         m_hasResult = true;
         m_lastResult = {};
@@ -49,46 +49,46 @@ bool ModelSerializerPanel::AcceptSourceAsset(const std::filesystem::path& path)
         return false;
     }
 
-    // “ü—ÍŒ³ƒ‚ƒfƒ‹ƒpƒX‚ğ•Û‘¶‚·‚éB
+    // å…¥åŠ›å…ƒãƒ¢ãƒ‡ãƒ«ãƒ‘ã‚¹ã‚’ä¿å­˜ã™ã‚‹ã€‚
     m_sourcePath = path;
 
-    // o—Íæ‚Í“¯–¼ .cereal ‚ğ‰Šú’l‚Æ‚µ‚Äİ’è‚·‚éB
+    // å‡ºåŠ›å…ˆã¯åŒå .cereal ã‚’åˆæœŸå€¤ã¨ã—ã¦è¨­å®šã™ã‚‹ã€‚
     m_outputPath = BuildDefaultOutputPath(path).string();
 
     return true;
 }
 
-// serializer ‚Ì“ü—ÍŒ³‚Æ‚µ‚Äó‚¯•t‚¯‚éŠg’£q‚©‚Ç‚¤‚©‚ğ”»’è‚·‚éB
+// serializer ã®å…¥åŠ›å…ƒã¨ã—ã¦å—ã‘ä»˜ã‘ã‚‹æ‹¡å¼µå­ã‹ã©ã†ã‹ã‚’åˆ¤å®šã™ã‚‹ã€‚
 bool ModelSerializerPanel::IsSupportedSourceAsset(const std::filesystem::path& path)
 {
-    // Šg’£q‚ğ•¶š—ñ‚Åæ“¾‚·‚éB
+    // æ‹¡å¼µå­ã‚’æ–‡å­—åˆ—ã§å–å¾—ã™ã‚‹ã€‚
     std::string extension = path.extension().string();
 
-    // ‘å•¶š¬•¶š·‚ğÁ‚·‚½‚ß¬•¶š‰»‚·‚éB
+    // å¤§æ–‡å­—å°æ–‡å­—å·®ã‚’æ¶ˆã™ãŸã‚å°æ–‡å­—åŒ–ã™ã‚‹ã€‚
     std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
         });
 
-    // ‘Î‰ƒ‚ƒfƒ‹Œ`®‚Ì‚İ true ‚ğ•Ô‚·B
+    // å¯¾å¿œãƒ¢ãƒ‡ãƒ«å½¢å¼ã®ã¿ true ã‚’è¿”ã™ã€‚
     return extension == ".fbx" || extension == ".obj" || extension == ".blend" || extension == ".gltf" || extension == ".glb";
 }
 
-// “ü—ÍŒ³ƒ‚ƒfƒ‹ƒpƒX‚©‚çAŠù’è‚Ìo—Í .cereal ƒpƒX‚ğì‚éB
+// å…¥åŠ›å…ƒãƒ¢ãƒ‡ãƒ«ãƒ‘ã‚¹ã‹ã‚‰ã€æ—¢å®šã®å‡ºåŠ› .cereal ãƒ‘ã‚¹ã‚’ä½œã‚‹ã€‚
 std::filesystem::path ModelSerializerPanel::BuildDefaultOutputPath(const std::filesystem::path& sourcePath)
 {
-    // Œ³ƒpƒX‚ğƒx[ƒX‚É‚·‚éB
+    // å…ƒãƒ‘ã‚¹ã‚’ãƒ™ãƒ¼ã‚¹ã«ã™ã‚‹ã€‚
     std::filesystem::path outputPath = sourcePath;
 
-    // Šg’£q‚¾‚¯ .cereal ‚É’u‚«Š·‚¦‚éB
+    // æ‹¡å¼µå­ã ã‘ .cereal ã«ç½®ãæ›ãˆã‚‹ã€‚
     outputPath.replace_extension(".cereal");
 
     return outputPath;
 }
 
-// serializer ƒpƒlƒ‹‘S‘Ì‚ğ•`‰æ‚·‚éB
+// serializer ãƒ‘ãƒãƒ«å…¨ä½“ã‚’æç”»ã™ã‚‹ã€‚
 void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
 {
-    // ƒEƒBƒ“ƒhƒE‚ğŠJ‚­BÜ‚è‚½‚½‚Ü‚ê‚Ä‚¢‚éê‡‚ÍƒtƒH[ƒJƒX‚¾‚¯•Ô‚µ‚ÄI—¹‚·‚éB
+    // ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ã‚’é–‹ãã€‚æŠ˜ã‚ŠãŸãŸã¾ã‚Œã¦ã„ã‚‹å ´åˆã¯ãƒ•ã‚©ãƒ¼ã‚«ã‚¹ã ã‘è¿”ã—ã¦çµ‚äº†ã™ã‚‹ã€‚
     if (!ImGui::Begin("Serializer", p_open)) {
         if (outFocused) {
             *outFocused = false;
@@ -97,15 +97,15 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
         return;
     }
 
-    // Œ»İƒEƒBƒ“ƒhƒE‚ªƒtƒH[ƒJƒX‚³‚ê‚Ä‚¢‚é‚©‚ğ•Ô‚·B
+    // ç¾åœ¨ã‚¦ã‚£ãƒ³ãƒ‰ã‚¦ãŒãƒ•ã‚©ãƒ¼ã‚«ã‚¹ã•ã‚Œã¦ã„ã‚‹ã‹ã‚’è¿”ã™ã€‚
     if (outFocused) {
         *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     }
 
-    // ƒpƒlƒ‹‚Ìà–¾•¶‚ğ•\¦‚·‚éB
+    // ãƒ‘ãƒãƒ«ã®èª¬æ˜æ–‡ã‚’è¡¨ç¤ºã™ã‚‹ã€‚
     ImGui::TextWrapped("Drop a source model from the Asset Browser and build a manual .cereal serializer.");
 
-    // Œ»İ‘I‘ğ’†ƒAƒZƒbƒg‚ğ source ‚Ég‚¤ƒ{ƒ^ƒ“B
+    // ç¾åœ¨é¸æŠä¸­ã‚¢ã‚»ãƒƒãƒˆã‚’ source ã«ä½¿ã†ãƒœã‚¿ãƒ³ã€‚
     if (ImGui::Button("Use Selected Asset")) {
         const EditorSelection& selection = EditorSelection::Instance();
         if (selection.GetType() == SelectionType::Asset) {
@@ -115,7 +115,7 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
 
     ImGui::SameLine();
 
-    // source / output ‚ğƒNƒŠƒA‚·‚éƒ{ƒ^ƒ“B
+    // source / output ã‚’ã‚¯ãƒªã‚¢ã™ã‚‹ãƒœã‚¿ãƒ³ã€‚
     if (ImGui::Button("Clear")) {
         m_sourcePath.clear();
         m_outputPath.clear();
@@ -123,12 +123,12 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
 
     ImGui::Separator();
 
-    // Source ƒpƒX•\¦—p‚Ì“Ç‚İæ‚èê—pƒeƒLƒXƒg—“B
+    // Source ãƒ‘ã‚¹è¡¨ç¤ºç”¨ã®èª­ã¿å–ã‚Šå°‚ç”¨ãƒ†ã‚­ã‚¹ãƒˆæ¬„ã€‚
     std::array<char, kPathBufferSize> sourceBuffer{};
     CopyStringToBuffer(m_sourcePath.string(), sourceBuffer);
     ImGui::InputText("Source", sourceBuffer.data(), sourceBuffer.size(), ImGuiInputTextFlags_ReadOnly);
 
-    // Asset Browser ‚©‚ç‚Ìƒhƒ‰ƒbƒO&ƒhƒƒbƒv‚ğó‚¯•t‚¯‚éB
+    // Asset Browser ã‹ã‚‰ã®ãƒ‰ãƒ©ãƒƒã‚°&ãƒ‰ãƒ­ãƒƒãƒ—ã‚’å—ã‘ä»˜ã‘ã‚‹ã€‚
     if (ImGui::BeginDragDropTarget()) {
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
             AcceptSourceAsset(static_cast<const char*>(payload->Data));
@@ -136,7 +136,7 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
         ImGui::EndDragDropTarget();
     }
 
-    // Output ƒpƒX‚Í•ÒW‰Â”\‚É‚·‚éB
+    // Output ãƒ‘ã‚¹ã¯ç·¨é›†å¯èƒ½ã«ã™ã‚‹ã€‚
     std::array<char, kPathBufferSize> outputBuffer{};
     CopyStringToBuffer(m_outputPath, outputBuffer);
     if (ImGui::InputText("Output", outputBuffer.data(), outputBuffer.size())) {
@@ -145,7 +145,7 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
 
     ImGui::Spacing();
 
-    // ŠÈ—ª‰»İ’è UIB
+    // ç°¡ç•¥åŒ–è¨­å®š UIã€‚
     ImGui::Checkbox("Simplify static meshes", &m_settings.enableSimplification);
     if (m_settings.enableSimplification) {
         ImGui::SliderFloat("Triangle Ratio", &m_settings.targetTriangleRatio, 0.05f, 1.0f, "%.2f");
@@ -153,33 +153,33 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
         ImGui::Checkbox("Lock Border", &m_settings.lockBorder);
     }
 
-    // ’¸“_ƒLƒƒƒbƒVƒ…Å“K‰»İ’èB
+    // é ‚ç‚¹ã‚­ãƒ£ãƒƒã‚·ãƒ¥æœ€é©åŒ–è¨­å®šã€‚
     ImGui::Checkbox("Optimize Vertex Cache", &m_settings.optimizeVertexCache);
 
-    // ƒI[ƒo[ƒhƒ[Å“K‰»İ’èB
+    // ã‚ªãƒ¼ãƒãƒ¼ãƒ‰ãƒ­ãƒ¼æœ€é©åŒ–è¨­å®šã€‚
     ImGui::Checkbox("Optimize Overdraw", &m_settings.optimizeOverdraw);
     if (m_settings.optimizeOverdraw) {
         ImGui::SliderFloat("Overdraw Threshold", &m_settings.overdrawThreshold, 1.0f, 3.0f, "%.2f");
     }
 
-    // ’¸“_ƒtƒFƒbƒ`Å“K‰»İ’èB
+    // é ‚ç‚¹ãƒ•ã‚§ãƒƒãƒæœ€é©åŒ–è¨­å®šã€‚
     ImGui::Checkbox("Optimize Vertex Fetch", &m_settings.optimizeVertexFetch);
 
-    // ‘S‘ÌƒXƒP[ƒ‹İ’èB
+    // å…¨ä½“ã‚¹ã‚±ãƒ¼ãƒ«è¨­å®šã€‚
     ImGui::DragFloat("Scaling", &m_settings.scaling, 0.01f, 0.001f, 100.0f, "%.3f");
 
     ImGui::Spacing();
 
-    // ƒXƒLƒjƒ“ƒOƒƒbƒVƒ…ŠÈ—ª‰»‚ÍŠëŒ¯‚È‚Ì‚ÅŒ»óƒXƒLƒbƒv‚·‚é|‚ğ•\¦‚·‚éB
+    // ã‚¹ã‚­ãƒ‹ãƒ³ã‚°ãƒ¡ãƒƒã‚·ãƒ¥ç°¡ç•¥åŒ–ã¯å±é™ºãªã®ã§ç¾çŠ¶ã‚¹ã‚­ãƒƒãƒ—ã™ã‚‹æ—¨ã‚’è¡¨ç¤ºã™ã‚‹ã€‚
     ImGui::TextDisabled("Skinned mesh simplification is skipped automatically for safety.");
 
-    // source ‚ª—LŒø‚Å‘Î‰Šg’£q‚È‚ç build ‚ğ‹–‰Â‚·‚éB
+    // source ãŒæœ‰åŠ¹ã§å¯¾å¿œæ‹¡å¼µå­ãªã‚‰ build ã‚’è¨±å¯ã™ã‚‹ã€‚
     const bool canBuild = !m_sourcePath.empty() && IsSupportedSourceAsset(m_sourcePath);
     if (!canBuild) {
         ImGui::BeginDisabled();
     }
 
-    // Build Àsƒ{ƒ^ƒ“B
+    // Build å®Ÿè¡Œãƒœã‚¿ãƒ³ã€‚
     if (ImGui::Button("Build Serializer", ImVec2(180.0f, 0.0f))) {
         m_lastResult = ModelAssetSerializer::Build(m_sourcePath.string(), m_outputPath, m_settings);
         m_hasResult = true;
@@ -189,23 +189,23 @@ void ModelSerializerPanel::Draw(bool* p_open, bool* outFocused)
         ImGui::EndDisabled();
     }
 
-    // ‘O‰ñƒrƒ‹ƒhŒ‹‰Ê‚ª‚ ‚é‚È‚çŒ‹‰Ê—“‚ğ•\¦‚·‚éB
+    // å‰å›ãƒ“ãƒ«ãƒ‰çµæœãŒã‚ã‚‹ãªã‚‰çµæœæ¬„ã‚’è¡¨ç¤ºã™ã‚‹ã€‚
     if (m_hasResult) {
         ImGui::Separator();
 
-        // ¬Œ÷‚È‚ç—ÎA¸”s‚È‚çÔ‚ÅƒƒbƒZ[ƒW•\¦‚·‚éB
+        // æˆåŠŸãªã‚‰ç·‘ã€å¤±æ•—ãªã‚‰èµ¤ã§ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸è¡¨ç¤ºã™ã‚‹ã€‚
         const ImVec4 color = m_lastResult.success
             ? ImVec4(0.45f, 0.95f, 0.55f, 1.0f)
             : ImVec4(1.0f, 0.45f, 0.45f, 1.0f);
 
         ImGui::TextColored(color, "%s", m_lastResult.message.c_str());
 
-        // o—ÍæƒpƒX‚ª‚ ‚ê‚Î•\¦‚·‚éB
+        // å‡ºåŠ›å…ˆãƒ‘ã‚¹ãŒã‚ã‚Œã°è¡¨ç¤ºã™ã‚‹ã€‚
         if (!m_lastResult.outputPath.empty()) {
             ImGui::TextWrapped("Output: %s", m_lastResult.outputPath.c_str());
         }
 
-        // ˆ—“Œv‚ğ•\¦‚·‚éB
+        // å‡¦ç†çµ±è¨ˆã‚’è¡¨ç¤ºã™ã‚‹ã€‚
         ImGui::Text("Meshes: %zu", m_lastResult.processedMeshCount);
         ImGui::Text("Simplified: %zu", m_lastResult.simplifiedMeshCount);
         ImGui::Text("Skipped(skin): %zu", m_lastResult.skippedSimplificationMeshCount);

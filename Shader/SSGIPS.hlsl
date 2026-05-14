@@ -1,6 +1,4 @@
-// ==========================================
 // SSGIPS.hlsl (Screen Space Global Illumination - 完全版)
-// ==========================================
 #include "FullScreenQuad.hlsli"
 
 // GlobalRootSignature がバインドしてくれる定数バッファ (b7)
@@ -25,8 +23,8 @@ cbuffer CbScene : register(b7)
 };
 
 // 入力テクスチャ
-Texture2D normalMap : register(t0); // Target 1: Normal
-Texture2D worldPosMap : register(t1); // Target 2: WorldPosDepth
+Texture2D normalMap : register(t0); // ターゲット 1。: Normal
+Texture2D worldPosMap : register(t1); // ターゲット 2。: WorldPosDepth
 Texture2D prevSceneMap : register(t2); // PrevScene: 過去の光の記憶
 
 SamplerState pointSampler : register(s2);
@@ -111,12 +109,9 @@ float4 main(VS_OUT pin) : SV_TARGET
             // 衝突判定
             if (rayDist > sampleDist && (rayDist - sampleDist) < THICKNESS)
             {
-                
-                // =========================================================
-                // ★修正4：時間軸UVズレの完全解消（Reprojection）
+// ★修正4：時間軸UVズレの完全解消（Reprojection）
                 // 衝突したワールド座標が「前のフレームで画面のどこにあったか」を逆算する！
-                // =========================================================
-                float4 prevClipPos = mul(float4(sampleWorldPos, 1.0f), prevViewProjection);
+float4 prevClipPos = mul(float4(sampleWorldPos, 1.0f), prevViewProjection);
                 prevClipPos /= prevClipPos.w;
                 float2 prevUV = prevClipPos.xy * float2(0.5f, -0.5f) + 0.5f;
 

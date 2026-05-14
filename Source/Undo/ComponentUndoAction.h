@@ -7,6 +7,7 @@
 #include "Component/TransformComponent.h"
 
 template<typename T>
+// ComponentUndoAction は m_target/m_oldState/m_newState を中心に、実行時やエディターで共有する状態を保持する。
 class ComponentUndoAction : public IUndoAction {
     EntityID m_target;
     T m_oldState;

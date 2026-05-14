@@ -1,4 +1,4 @@
-#include "Sprite3D.h"
+﻿#include "Sprite3D.h"
 #include "GpuResourceUtils.h" 
 
 using namespace DirectX;
@@ -146,7 +146,7 @@ void Sprite3D::DrawInternal(ID3D11DeviceContext* dc, const XMMATRIX& world, cons
     dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 
     dc->VSSetShader(vertexShader.Get(), nullptr, 0);
-    dc->VSSetConstantBuffers(1, 1, matrixBuffer.GetAddressOf()); // Matrix -> b1
+    dc->VSSetConstantBuffers(1, 1, matrixBuffer.GetAddressOf()); // Matrix は b1 へバインドする。
 
     dc->PSSetShader(pixelShader.Get(), nullptr, 0);
     dc->PSSetConstantBuffers(0, 1, uiConstantBuffer.GetAddressOf()); // UI -> b0

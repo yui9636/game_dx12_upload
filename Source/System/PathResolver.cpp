@@ -1,4 +1,4 @@
-#include "PathResolver.h"
+﻿#include "PathResolver.h"
 #include <windows.h>
 #include <algorithm>
 #include <filesystem>
@@ -9,6 +9,7 @@ std::string PathResolver::s_RootPath = "";
 
 namespace
 {
+// LooksLikeProjectRoot はこのモジュールの実行時処理を構成する補助処理を行う。
     bool LooksLikeProjectRoot(const std::filesystem::path& dir)
     {
         std::error_code ec;

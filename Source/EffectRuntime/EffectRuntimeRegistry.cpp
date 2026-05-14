@@ -1,77 +1,77 @@
-#include "EffectRuntimeRegistry.h"
+ï»¿#include "EffectRuntimeRegistry.h"
 
 #include "EffectCompiler.h"
 #include "EffectGraphSerializer.h"
 
-// singleton ƒCƒ“ƒXƒ^ƒ“ƒX‚ğ•Ô‚·B
+// singleton ã‚¤ãƒ³ã‚¹ã‚¿ãƒ³ã‚¹ã‚’è¿”ã™ã€‚
 EffectRuntimeRegistry& EffectRuntimeRegistry::Instance()
 {
     static EffectRuntimeRegistry instance;
     return instance;
 }
 
-// w’è assetKey ‚Ì CompiledEffectAsset ‚ğ“Ç‚İ‚ŞB
-// ‚Ü‚¸ transientAŸ‚ÉƒLƒƒƒbƒVƒ…‚ğŒ©‚ÄA–³‚¯‚ê‚Î .effect graph ‚ğƒ[ƒh‚µ‚ÄƒRƒ“ƒpƒCƒ‹‚·‚éB
+// æŒ‡å®š assetKey ã® CompiledEffectAsset ã‚’èª­ã¿è¾¼ã‚€ã€‚
+// ã¾ãš transientã€æ¬¡ã«ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’è¦‹ã¦ã€ç„¡ã‘ã‚Œã° .effect graph ã‚’ãƒ­ãƒ¼ãƒ‰ã—ã¦ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã™ã‚‹ã€‚
 std::shared_ptr<CompiledEffectAsset> EffectRuntimeRegistry::LoadCompiledAsset(const std::string& assetKey)
 {
-    // ˆê“o˜^ƒAƒZƒbƒg‚ª‚ ‚ê‚Î‚»‚ê‚ğ—Dæ‚·‚éB
+    // ä¸€æ™‚ç™»éŒ²ã‚¢ã‚»ãƒƒãƒˆãŒã‚ã‚Œã°ãã‚Œã‚’å„ªå…ˆã™ã‚‹ã€‚
     auto transientIt = m_transientAssets.find(assetKey);
     if (transientIt != m_transientAssets.end()) {
         return transientIt->second;
     }
 
-    // Šù‚ÉƒRƒ“ƒpƒCƒ‹Ï‚İƒLƒƒƒbƒVƒ…‚ª‚ ‚ê‚Î‚»‚ê‚ğ•Ô‚·B
+    // æ—¢ã«ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«æ¸ˆã¿ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãŒã‚ã‚Œã°ãã‚Œã‚’è¿”ã™ã€‚
     auto cacheIt = m_compiledAssetCache.find(assetKey);
     if (cacheIt != m_compiledAssetCache.end()) {
         return cacheIt->second;
     }
 
-    // Œ³‚Ì EffectGraphAsset ‚ğƒ[ƒh‚·‚éB
+    // å…ƒã® EffectGraphAsset ã‚’ãƒ­ãƒ¼ãƒ‰ã™ã‚‹ã€‚
     EffectGraphAsset graphAsset;
     if (!EffectGraphSerializer::Load(assetKey, graphAsset)) {
         return nullptr;
     }
 
-    // “Ç‚İ‚ñ‚¾ƒOƒ‰ƒt‚ğƒRƒ“ƒpƒCƒ‹‚µ‚ÄƒLƒƒƒbƒVƒ…‚·‚éB
+    // èª­ã¿è¾¼ã‚“ã ã‚°ãƒ©ãƒ•ã‚’ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«ã—ã¦ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã™ã‚‹ã€‚
     auto compiled = EffectCompiler::Compile(graphAsset, assetKey);
     m_compiledAssetCache[assetKey] = compiled;
     return compiled;
 }
 
-// w’è assetKey ‚Ì CompiledEffectAsset ‚ğæ“¾‚·‚éB
-// Œ»ó‚Í LoadCompiledAsset ‚É‚»‚Ì‚Ü‚ÜˆÏ÷‚·‚éB
+// æŒ‡å®š assetKey ã® CompiledEffectAsset ã‚’å–å¾—ã™ã‚‹ã€‚
+// ç¾çŠ¶ã¯ LoadCompiledAsset ã«ãã®ã¾ã¾å§”è­²ã™ã‚‹ã€‚
 std::shared_ptr<CompiledEffectAsset> EffectRuntimeRegistry::GetCompiledAsset(const std::string& assetKey)
 {
     return LoadCompiledAsset(assetKey);
 }
 
-// ˆê“I‚È CompiledEffectAsset ‚ğ“o˜^‚·‚éB
-// compiledAsset ‚ª nullptr ‚Ìê‡‚Í“o˜^‰ğœ‚Æ‚µ‚Äˆµ‚¤B
+// ä¸€æ™‚çš„ãª CompiledEffectAsset ã‚’ç™»éŒ²ã™ã‚‹ã€‚
+// compiledAsset ãŒ nullptr ã®å ´åˆã¯ç™»éŒ²è§£é™¤ã¨ã—ã¦æ‰±ã†ã€‚
 void EffectRuntimeRegistry::RegisterTransientAsset(const std::string& assetKey, const std::shared_ptr<CompiledEffectAsset>& compiledAsset)
 {
-    // nullptr ‚ª—ˆ‚½‚ç transient “o˜^‚ğÁ‚·B
+    // nullptr ãŒæ¥ãŸã‚‰ transient ç™»éŒ²ã‚’æ¶ˆã™ã€‚
     if (!compiledAsset) {
         m_transientAssets.erase(assetKey);
         return;
     }
 
-    // ˆêƒAƒZƒbƒg‚ğ“o˜^‚·‚éB
+    // ä¸€æ™‚ã‚¢ã‚»ãƒƒãƒˆã‚’ç™»éŒ²ã™ã‚‹ã€‚
     m_transientAssets[assetKey] = compiledAsset;
 }
 
-// w’è assetKey ‚ÌƒGƒtƒFƒNƒg‚ğ runtime instance ‚Æ‚µ‚Ä¶¬‚·‚éB
-// ¬Œ÷‚Í instance IDA¸”s‚Í 0 ‚ğ•Ô‚·B
+// æŒ‡å®š assetKey ã®ã‚¨ãƒ•ã‚§ã‚¯ãƒˆã‚’ runtime instance ã¨ã—ã¦ç”Ÿæˆã™ã‚‹ã€‚
+// æˆåŠŸæ™‚ã¯ instance IDã€å¤±æ•—æ™‚ã¯ 0 ã‚’è¿”ã™ã€‚
 uint32_t EffectRuntimeRegistry::Spawn(const std::string& assetKey, uint32_t seed)
 {
-    // ‘ÎÛƒAƒZƒbƒg‚ğƒ[ƒh‚·‚éB
+    // å¯¾è±¡ã‚¢ã‚»ãƒƒãƒˆã‚’ãƒ­ãƒ¼ãƒ‰ã™ã‚‹ã€‚
     auto compiled = LoadCompiledAsset(assetKey);
 
-    // –³Œø‚Ü‚½‚ÍƒRƒ“ƒpƒCƒ‹¸”sÏ‚İ‚È‚ç¶¬‚Å‚«‚È‚¢B
+    // ç„¡åŠ¹ã¾ãŸã¯ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«å¤±æ•—æ¸ˆã¿ãªã‚‰ç”Ÿæˆã§ããªã„ã€‚
     if (!compiled || !compiled->valid) {
         return 0;
     }
 
-    // V‚µ‚¢ runtime instance ‚ğì¬‚·‚éB
+    // æ–°ã—ã„ runtime instance ã‚’ä½œæˆã™ã‚‹ã€‚
     EffectRuntimeInstance instance;
     instance.id = m_nextRuntimeInstanceId++;
     instance.assetKey = assetKey;
@@ -80,20 +80,20 @@ uint32_t EffectRuntimeRegistry::Spawn(const std::string& assetKey, uint32_t seed
     instance.seed = seed;
     instance.active = true;
 
-    // ŠÇ—ƒe[ƒuƒ‹‚Ö“o˜^‚·‚éB
+    // ç®¡ç†ãƒ†ãƒ¼ãƒ–ãƒ«ã¸ç™»éŒ²ã™ã‚‹ã€‚
     m_instances[instance.id] = instance;
     return instance.id;
 }
 
-// w’è instanceId ‚Ì runtime instance ‚ğæ“¾‚·‚éB
-// Œ©‚Â‚©‚ç‚È‚¯‚ê‚Î nullptr ‚ğ•Ô‚·B
+// æŒ‡å®š instanceId ã® runtime instance ã‚’å–å¾—ã™ã‚‹ã€‚
+// è¦‹ã¤ã‹ã‚‰ãªã‘ã‚Œã° nullptr ã‚’è¿”ã™ã€‚
 EffectRuntimeInstance* EffectRuntimeRegistry::GetRuntimeInstance(uint32_t instanceId)
 {
     auto it = m_instances.find(instanceId);
     return it != m_instances.end() ? &it->second : nullptr;
 }
 
-// w’è instanceId ‚Ì runtime instance ‚ğ”jŠü‚·‚éB
+// æŒ‡å®š instanceId ã® runtime instance ã‚’ç ´æ£„ã™ã‚‹ã€‚
 void EffectRuntimeRegistry::Destroy(uint32_t instanceId)
 {
     m_instances.erase(instanceId);

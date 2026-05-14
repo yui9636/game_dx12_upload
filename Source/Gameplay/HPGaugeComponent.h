@@ -1,9 +1,10 @@
-#pragma once
+﻿#pragma once
 
 #include <DirectXMath.h>
 #include <string>
 
 #include "Entity/Entity.h"
+// HPGaugeTargetMode はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 enum class HPGaugeTargetMode
 {

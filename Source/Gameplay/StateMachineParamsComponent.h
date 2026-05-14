@@ -1,11 +1,7 @@
-#pragma once
+﻿#pragma once
 #include <cstdint>
 #include <cstring>
-
-// ============================================================================
-// Runtime parameters for StateMachineSystem evaluation
-// ============================================================================
-
+// StateMachineSystem の評価に使う実行時パラメータ。
 struct StateMachineParamsComponent
 {
     static constexpr int MAX_PARAMS = 16;
@@ -18,12 +14,12 @@ struct StateMachineParamsComponent
     Param    params[MAX_PARAMS] = {};
     uint8_t  paramCount         = 0;
 
-    // Current runtime state
+    // 現在の実行時状態
     uint32_t currentStateId     = 0;
     float    stateTimer         = 0.0f;
     bool     animFinished       = false;
 
-    // Helpers
+    // 補助関数
     float GetParam(const char* name) const
     {
         for (int i = 0; i < paramCount; ++i)

@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 #include <DirectXMath.h>
 
 struct DodgeStateComponent {
-    float dodgeMoveSpeed = 30.0f;       // units/sec during dodge (was 6.0 * 5.0)
-    float dodgeDuration = 0.4f;         // Total dodge time in seconds
-    float dodgeExitNormalized = 0.9f;   // Exit at this % of duration
-    float dodgeTimer = 0.0f;            // Current elapsed time
-    float dodgeAngleY = 0.0f;           // Facing angle during dodge (radians)
-    bool dodgeTriggered = false;        // Input flag set by PlayerInputSystem
+    float dodgeMoveSpeed = 30.0f;       // 回避中の移動速度（単位/秒。以前は 6.0 * 5.0）
+    float dodgeDuration = 0.4f;         // 回避の総時間（秒）
+    float dodgeExitNormalized = 0.9f;   // 回避時間に対する終了位置
+    float dodgeTimer = 0.0f;            // 現在の経過時間
+    float dodgeAngleY = 0.0f;           // 回避中の向き（ラジアン）
+    bool dodgeTriggered = false;        // PlayerInputSystem が立てる入力フラグ
 };

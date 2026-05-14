@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CinematicSequenceAsset.h"
 #include "EffectRuntime/EffectService.h"
@@ -6,6 +6,7 @@
 
 #include <string>
 #include <unordered_map>
+// EngineTime はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 struct EngineTime;
 class Registry;

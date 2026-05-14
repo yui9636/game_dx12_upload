@@ -28,7 +28,7 @@ struct BlackboardValue
     BlackboardValueType type = BlackboardValueType::None;
     // bool / int 用の値。
     int                 i      = 0;
-    // float 用の値。
+    // float 値。 用の値。
     float               f      = 0.0f;
     // Vector3 用の値。
     DirectX::XMFLOAT3   v3   { 0.0f, 0.0f, 0.0f };

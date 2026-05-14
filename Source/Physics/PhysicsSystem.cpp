@@ -66,7 +66,7 @@ namespace
     }
 }
 
-// Steps Jolt and writes body transforms back to ECS local transforms.
+// Jolt を step し、body transform を ECS の local transform へ書き戻す。
 void PhysicsSystem::Update(Registry& registry, float deltaTime) {
     auto& physicsMgr = PhysicsManager::Instance();
 

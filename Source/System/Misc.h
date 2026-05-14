@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 #include <crtdbg.h>
@@ -18,6 +18,7 @@ inline LPWSTR HRTrace(HRESULT hr)
 	FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_ALLOCATE_BUFFER, NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<LPWSTR>(&msg), 0, NULL);
 	return msg;
 }
+// Benchmark は ticksPerSecond/startTicks/currentTicks を中心に、実行時やエディターで共有する状態を保持する。
 
 class Benchmark
 {

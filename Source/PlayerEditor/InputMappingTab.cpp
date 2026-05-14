@@ -1,4 +1,4 @@
-#include "InputMappingTab.h"
+﻿#include "InputMappingTab.h"
 #include <imgui.h>
 #include "Icon/IconsFontAwesome7.h"
 #include "Input/InputActionMapComponent.h"
@@ -72,7 +72,7 @@ void InputMappingTab::DrawActionTable()
             ImGui::PushID(i);
             ImGui::TableNextRow();
 
-            // Name
+            // 入力名。
             ImGui::TableSetColumnIndex(0);
             char nameBuf[64];
             strncpy_s(nameBuf, action.actionName.c_str(), _TRUNCATE);
@@ -82,7 +82,7 @@ void InputMappingTab::DrawActionTable()
                 m_dirty = true;
             }
 
-            // Keyboard
+            // キーボード割り当て。
             ImGui::TableSetColumnIndex(1);
             char kbLabel[32];
             snprintf(kbLabel, sizeof(kbLabel), "SC:%u", action.scancode);
@@ -93,7 +93,7 @@ void InputMappingTab::DrawActionTable()
                 ImGui::OpenPopup("KeyCapture");
             }
 
-            // Mouse
+            // マウス割り当て。
             ImGui::TableSetColumnIndex(2);
             char msLabel[16];
             snprintf(msLabel, sizeof(msLabel), "M%u", action.mouseButton);
@@ -104,7 +104,7 @@ void InputMappingTab::DrawActionTable()
                 ImGui::OpenPopup("KeyCapture");
             }
 
-            // Gamepad
+            // ゲームパッド割り当て。
             ImGui::TableSetColumnIndex(3);
             char gpLabel[16];
             if (action.gamepadButton == 0xFF)
@@ -118,7 +118,7 @@ void InputMappingTab::DrawActionTable()
                 ImGui::OpenPopup("KeyCapture");
             }
 
-            // Trigger type
+            // 入力トリガー種別。
             ImGui::TableSetColumnIndex(4);
             int trigInt = static_cast<int>(action.trigger);
             const char* trigNames[] = { "Pressed", "Released", "Held", "DoubleTap" };
@@ -128,7 +128,7 @@ void InputMappingTab::DrawActionTable()
                 m_dirty = true;
             }
 
-            // Delete
+            // この割り当てを削除する。
             ImGui::TableSetColumnIndex(5);
             if (ImGui::Button("X")) {
                 m_editingMap.actions.erase(m_editingMap.actions.begin() + i);
@@ -316,7 +316,7 @@ void InputMappingTab::DrawKeyBindPopup()
         ImGui::Text("Press any key/button...");
         ImGui::Text("(ESC to cancel)");
 
-        // Check for key press via ImGui IO
+        // ImGui IO 経由でキー入力を確認する。
         auto& io = ImGui::GetIO();
         for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
             if (ImGui::IsKeyPressed((ImGuiKey)k)) {
@@ -325,7 +325,7 @@ void InputMappingTab::DrawKeyBindPopup()
                     ImGui::CloseCurrentPopup();
                 }
                 else if (m_captureTargetAction >= 0 && m_captureTargetAction < (int)m_editingMap.actions.size()) {
-                    // Store scancode (simplified - in real impl, convert ImGuiKey to SDL scancode)
+                    // scancode を保存する。実運用では ImGuiKey から SDL scancode へ変換する。
                     m_editingMap.actions[m_captureTargetAction].scancode = (uint32_t)k;
                     m_dirty = true;
                     m_capturingKey = false;

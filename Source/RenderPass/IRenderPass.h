@@ -1,3 +1,4 @@
+﻿// IRenderPass のレンダーパス宣言をまとめます。
 #pragma once
 #include "RenderContext/RenderQueue.h"
 #include "RenderContext/RenderContext.h"

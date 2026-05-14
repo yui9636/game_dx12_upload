@@ -19,7 +19,7 @@ void TimelineSystem::Update(Registry& registry) {
             auto& tl = *static_cast<TimelineComponent*>(tlCol->Get(i));
             auto& pb = *static_cast<PlaybackComponent*>(playCol->Get(i));
 
-            // Seconds → frame with rounding (matches sequencer convention)
+            // 秒を sequencer の規約に合わせて丸めつつ frame へ変換する。
             int frame = static_cast<int>(pb.currentSeconds * tl.fps + 0.5f);
             tl.currentFrame = std::clamp(frame, tl.frameMin, tl.frameMax);
             tl.playing = pb.playing;

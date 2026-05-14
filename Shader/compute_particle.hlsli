@@ -1,8 +1,8 @@
 
-//  ƒp[ƒeƒBƒNƒ‹ƒXƒŒƒbƒh”
+//  ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«ã‚¹ãƒ¬ãƒƒãƒ‰æ•°
 static const int NumParticleThread = 1024;
 
-//  indirect_data_buffer‚Ö‚ÌƒAƒNƒZƒX—pƒoƒCƒgƒIƒtƒZƒbƒg
+//  indirect_data_bufferã¸ã®ã‚¢ã‚¯ã‚»ã‚¹ç”¨ãƒã‚¤ãƒˆã‚ªãƒ•ã‚»ãƒƒãƒˆ
 static const uint IndirectArgumentsNumCurrentParticle = 0;
 static const uint IndirectArgumentsNumPreviousParticle = 4;
 static const uint IndirectArgumentsNumDeadParticle = 8;
@@ -26,53 +26,53 @@ struct gradient_color
 
 
 
-//  ¶¬ƒp[ƒeƒBƒNƒ‹\‘¢‘Ì
+//  ç”Ÿæˆãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«æ§‹é€ ä½“
 struct emit_particle_data
 {
-    float4 parameter; // x : ƒp[ƒeƒBƒNƒ‹ˆ—ƒ^ƒCƒv, y : ¶‘¶ŠÔ, zw : ‹ó‚«
+    float4 parameter; // x : ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«å‡¦ç†ã‚¿ã‚¤ãƒ—, y : ç”Ÿå­˜æ™‚é–“, zw : ç©ºã
 
-    float4 position; // ¶¬À•W
-    float4 rotation; // Šgkî•ñ
-    float4 scale; // ‰ñ“]î•ñ
+    float4 position; // ç”Ÿæˆåº§æ¨™
+    float4 rotation; // æ‹¡ç¸®æƒ…å ±
+    float4 scale; // å›è»¢æƒ…å ±
 
-    float4 velocity; // ‰‘¬
-    float4 acceleration; // ‰Á‘¬“x
+    float4 velocity; // åˆé€Ÿ
+    float4 acceleration; // åŠ é€Ÿåº¦
     
-    //float4 color; // Fî•ñ
+    //float4 color; // è‰²æƒ…å ±
     
     gradient_color gradientColors[MaxGradientKeys];
     int gradientCount;
     float3 pad;
     
-    float4 scale_begin; // š’Ç‰Á
-    float4 scale_end; // š’Ç‰Á
+    float4 scale_begin; // â˜…è¿½åŠ 
+    float4 scale_end; // â˜…è¿½åŠ 
     
     float4 angular_velocity;
     float2 fade;
     
 };
 
-//  ƒp[ƒeƒBƒNƒ‹\‘¢‘Ì
+//  ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«æ§‹é€ ä½“
 struct particle_data
 {
-    float4 parameter; // x : ƒp[ƒeƒBƒNƒ‹ˆ—ƒ^ƒCƒv, y : ¶‘¶ŠÔ, w : ‹ó‚«
+    float4 parameter; // x : ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«å‡¦ç†ã‚¿ã‚¤ãƒ—, y : ç”Ÿå­˜æ™‚é–“, w : ç©ºã
 
-    float4 position; // ¶¬À•W
-    float4 rotation; // ‰ñ“]î•ñ
-    float4 scale; // Šgkî•ñ
+    float4 position; // ç”Ÿæˆåº§æ¨™
+    float4 rotation; // å›è»¢æƒ…å ±
+    float4 scale; // æ‹¡ç¸®æƒ…å ±
 
-    float4 scale_begin; // š’Ç‰Á
-    float4 scale_end; // š’Ç‰Á
+    float4 scale_begin; // â˜…è¿½åŠ 
+    float4 scale_end; // â˜…è¿½åŠ 
     
-    float4 velocity; // ‰‘¬
-    float4 acceleration; // ‰Á‘¬“x
+    float4 velocity; // åˆé€Ÿ
+    float4 acceleration; // åŠ é€Ÿåº¦
 
-    float4 texcoord; //  UVÀ•W
+    float4 texcoord; //  UVåº§æ¨™
     
     gradient_color gradientColors[MaxGradientKeys];
     int gradientCount;
     float3 pad;
-    float4 color; // Fî•ñ
+    float4 color; // è‰²æƒ…å ±
     
 
     float4 angular_velocity;
@@ -84,18 +84,18 @@ struct particle_data
 };
 
 
-//	ƒp[ƒeƒBƒNƒ‹ƒwƒbƒ_[\‘¢‘Ì
+//	ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«ãƒ˜ãƒƒãƒ€ãƒ¼æ§‹é€ ä½“
 struct particle_header
 {
-    uint alive; // ¶‘¶ƒtƒ‰ƒO
-    uint particle_index; // ƒp[ƒeƒBƒNƒ‹”Ô†
-    float depth; // [“x
+    uint alive; // ç”Ÿå­˜ãƒ•ãƒ©ã‚°
+    uint particle_index; // ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«ç•ªå·
+    float depth; // æ·±åº¦
     uint dummy;
 };
 
 
 
-//	DrawInstanced—pDrawIndirect—p\‘¢‘Ì
+//	DrawInstancedç”¨DrawIndirectç”¨æ§‹é€ ä½“
 struct draw_indirect
 {
     uint vertex_count_per_instance;
@@ -103,23 +103,19 @@ struct draw_indirect
     uint start_vertex_location;
     uint start_instance_location;
 };
-
-
-
-//=========================================================================================
-//  ”Ä—pî•ñ
+//  æ±ç”¨æƒ…å ±
 cbuffer COMPUTE_PARTICLE_COMMON_CONSTANT_BUFFER : register(b10)
 {
     float elapsed_time;
     uint2 texture_split_count;
     uint system_num_particles;
-    uint total_emit_count; // ¶¬—\’è‚Ìƒp[ƒeƒBƒNƒ‹”
+    uint total_emit_count; // ç”Ÿæˆäºˆå®šã®ãƒ‘ãƒ¼ãƒ†ã‚£ã‚¯ãƒ«æ•°
     uint common_dummy[3];
 
     
 };
 
-//	ƒoƒCƒgƒjƒbƒNƒ\[ƒgî•ñ
+//	ãƒã‚¤ãƒˆãƒ‹ãƒƒã‚¯ã‚½ãƒ¼ãƒˆæƒ…å ±
 cbuffer COMPUTE_PARTICLE_BITONIC_SORT_CONSTANT_BUFFER : register(b11)
 {
     uint increment;
@@ -145,34 +141,34 @@ cbuffer CbScene : register(b0)
     row_major float4x4 lightViewProjection;
 };
 
-#endif //_COMPUTE_PARTICLE_DISABLE_CBSCENE_
+#endif // _COMPUTE_PARTICLE_DISABLE_CBSCENE_ ã® guard çµ‚ç«¯ã€‚
 
 
 cbuffer COMPUTE_PARTICLE_RENDER_CONSTANT_BUFFER : register(b2)
 {
-    uint enable_velocity_stretch; // 0=off, 1=on
-    float velocity_stretch_scale; // ‘¬“x¨c”{—¦‚Ö‚ÌŒW”i—á 0.05j
-    float velocity_stretch_max_aspect; // c‰¡”ä‚ÌãŒÀi—á 8.0j
-    float velocity_stretch_min_speed; // ‚±‚êˆÈ‰º‚Ì‘¬“x‚ÍƒXƒgƒŒƒbƒ`‚µ‚È‚¢i—á 0.0j
+    uint enable_velocity_stretch; // 0 ã¯ offã€1 ã¯ onã€‚
+    float velocity_stretch_scale; // é€Ÿåº¦â†’ç¸¦å€ç‡ã¸ã®ä¿‚æ•°ï¼ˆä¾‹ 0.05ï¼‰
+    float velocity_stretch_max_aspect; // ç¸¦æ¨ªæ¯”ã®ä¸Šé™ï¼ˆä¾‹ 8.0ï¼‰
+    float velocity_stretch_min_speed; // ã“ã‚Œä»¥ä¸‹ã®é€Ÿåº¦ã¯ã‚¹ãƒˆãƒ¬ãƒƒãƒã—ãªã„ï¼ˆä¾‹ 0.0ï¼‰
     
     float global_alpha;
     
-    float curl_noise_strength; // ‹­‚³ (0‚È‚ç–³Œø)
-    float curl_noise_scale; // ƒmƒCƒY‚Ì‘e‚³ (À•WƒXƒP[ƒ‹)
-    float curl_move_speed; // ƒmƒCƒY‚ÌƒXƒNƒ[ƒ‹‘¬“x
+    float curl_noise_strength; // å¼·ã• (0ãªã‚‰ç„¡åŠ¹)
+    float curl_noise_scale; // ãƒã‚¤ã‚ºã®ç²—ã• (åº§æ¨™ã‚¹ã‚±ãƒ¼ãƒ«)
+    float curl_move_speed; // ãƒã‚¤ã‚ºã®ã‚¹ã‚¯ãƒ­ãƒ¼ãƒ«é€Ÿåº¦
 };
 
 
 
 
 
-//  ’¸“_ƒVƒF[ƒ_[‚©‚çƒWƒIƒƒgƒŠƒVƒF[ƒ_[‚É“]‘—‚·‚éî•ñ
+//  é ‚ç‚¹ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã‹ã‚‰ã‚¸ã‚ªãƒ¡ãƒˆãƒªã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã«è»¢é€ã™ã‚‹æƒ…å ±
 struct GS_IN
 {
     uint vertex_id : VERTEX_ID;
 };
 
-//  ƒWƒIƒƒgƒŠƒVƒF[ƒ_[‚©‚çƒsƒNƒZƒ‹ƒVƒF[ƒ_[‚É“]‘—‚·‚éî•ñ
+//  ã‚¸ã‚ªãƒ¡ãƒˆãƒªã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã‹ã‚‰ãƒ”ã‚¯ã‚»ãƒ«ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã«è»¢é€ã™ã‚‹æƒ…å ±
 struct PS_IN
 {
     float4 position : SV_POSITION;

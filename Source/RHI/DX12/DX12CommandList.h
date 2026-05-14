@@ -31,7 +31,7 @@ public:
     DX12CommandList(DX12Device* device, DX12RootSignature* rootSig, bool useDeviceFrameAllocator = true);
     ~DX12CommandList() override;
 
-    // Frame lifecycle (DX12 specific)
+    // DX12 固有の frame lifecycle。
     void Begin();
     void End();
     void Submit();
@@ -44,7 +44,7 @@ public:
     void VSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
     void PSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
 
-    // ICommandList implementation
+    // ICommandList の実装。
     void Draw(uint32_t vertexCount, uint32_t startVertex) override;
     void DrawIndexed(uint32_t indexCount, uint32_t startIndex, int32_t baseVertex) override;
     void DrawInstanced(uint32_t vertexCountPerInstance, uint32_t instanceCount, uint32_t startVertexLocation, uint32_t startInstanceLocation) override;
@@ -55,7 +55,7 @@ public:
         IBuffer* countBuffer = nullptr, uint32_t countBufferOffset = 0) override;
     void Dispatch(uint32_t threadGroupCountX, uint32_t threadGroupCountY, uint32_t threadGroupCountZ) override;
 
-    // Compute binding helpers (DX12-specific, used by ComputeCullingPass)
+    // ComputeCullingPass が使う DX12 固有の compute bind 補助処理。
     void SetComputeRootSignature(ID3D12RootSignature* rootSig);
     void SetComputePipelineState(ID3D12PipelineState* pso);
     void SetComputeRootCBV(uint32_t slot, D3D12_GPU_VIRTUAL_ADDRESS gpuVA);
@@ -123,20 +123,20 @@ private:
     uint32_t m_dynamicCbRingOffset = 0;
     std::vector<ComPtr<ID3D12Resource>> m_dynamicCbSpills;
 
-    // Frame-local descriptor allocator for SRV copies
+    // SRV copy 用の frame-local descriptor allocator。
     std::unique_ptr<DX12DescriptorAllocator> m_frameSrvAllocator;
 
-    // Deferred PSO state tracking
+    // 遅延 PSO state 追跡。
     PipelineStateDesc m_pendingDesc;
     bool m_psoDirty = true;
 
-    // PSO cache
+    // PSO cache を保持する。
     std::unique_ptr<DX12PSOCache> m_psoCache;
 
-    // Pending barriers for batch submission
+    // batch submit 用に保留する barrier。
     std::vector<D3D12_RESOURCE_BARRIER> m_pendingBarriers;
 
-    // SRV staging block (64 slots matching root signature t0-t63)
+    // SRV を作成する。 staging block (64 slots matching root signature t0-t63)
     static constexpr uint32_t kSrvSlotCount = 64;
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvBlockCpuBase = {};
     D3D12_GPU_DESCRIPTOR_HANDLE m_srvBlockGpuBase = {};

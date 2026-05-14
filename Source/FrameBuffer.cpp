@@ -1,4 +1,4 @@
-#include "FrameBuffer.h"
+﻿#include "FrameBuffer.h"
 #include "System/Misc.h"
 #include "RHI/ICommandList.h"
 #include "RHI/DX11/DX11Texture.h"
@@ -37,9 +37,8 @@ FrameBuffer::FrameBuffer(IResourceFactory* factory, uint32_t width, uint32_t hei
     }
     for (TextureFormat fmt : colorFormats) {
         desc.format = fmt;
-        // View history / preview framebuffers are sampled and rendered to,
-        // but never used as UAVs. Requesting UAV here widens format/flag
-        // requirements and was tripping DX12 resource creation in PlayerEditor.
+        // ビュー履歴とプレビュー用フレームバッファはサンプリングと描画に使うが、UAV としては使わない。
+        // ここで UAV を要求すると形式とフラグの条件が広がり、PlayerEditor の DX12 リソース生成で失敗していた。
         desc.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
         m_colorTextures.push_back(factory->CreateTexture("fb_color", desc));
     }

@@ -1,4 +1,4 @@
-#include "Transform/NodeAttachmentUtils.h"
+﻿#include "Transform/NodeAttachmentUtils.h"
 
 #include "Component/NodeSocket.h"
 #include "Component/NodeSocketComponent.h"
@@ -8,6 +8,7 @@ using namespace DirectX;
 
 namespace
 {
+// BuildOffsetMatrix はこのモジュールの実行時処理を構成する補助処理を行う。
     XMMATRIX BuildOffsetMatrix(const XMFLOAT3& offsetPos, const XMFLOAT3& offsetRotDeg, const XMFLOAT3& offsetScale)
     {
         const XMMATRIX scale = XMMatrixScaling(offsetScale.x, offsetScale.y, offsetScale.z);

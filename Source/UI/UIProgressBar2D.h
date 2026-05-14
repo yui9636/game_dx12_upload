@@ -1,11 +1,7 @@
-#pragma once
+﻿#pragma once
 #include "UIScreen.h"
 #include <RenderContext/RenderContext.h>
-
-// ============================================================================
-// UIProgressBar2D
-// 
-// ============================================================================
+// 2D の HP バーや進捗バーをスプライト矩形として描画する UI 要素。
 class UIProgressBar2D : public UIScreen
 {
 public:

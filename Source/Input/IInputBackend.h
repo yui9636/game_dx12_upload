@@ -1,3 +1,4 @@
+﻿// IInputBackend の入力処理関連宣言をまとめます。
 #pragma once
 #include "InputEvent.h"
 #include "InputEventQueue.h"

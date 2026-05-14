@@ -1165,11 +1165,11 @@ namespace {
             entities.insert(entities.end(), archetypeEntities.begin(), archetypeEntities.end());
         }
 
-        // Editor-only preview entities (Sequencer / Effect editor) own live GPU
-        // resources that the render pipeline references between frames. They
-        // must survive scene replacement; otherwise the next BeginFrame hits
-        // dangling state and the device is removed. Mirror the protection
-        // policy used by PrefabSystem::ClearRegistryForSceneReplace.
+        // editor 専用 preview entity は Sequencer / Effect editor の live GPU resource を所有する。
+        // render pipeline が frame 間で参照するため、
+        // scene replacement 後も生存させる必要がある。そうしないと次の BeginFrame で
+        // dangling state に触れて device removed になる。
+        // PrefabSystem::ClearRegistryForSceneReplace と同じ保護方針を使う。
         for (auto it = entities.rbegin(); it != entities.rend(); ++it) {
             const EntityID entity = *it;
             if (!registry.IsAlive(entity)) {
@@ -1284,12 +1284,12 @@ inline void ApplyUnityTheme()
     style.WindowBorderSize = 1.0f;
     style.FrameBorderSize = 1.0f;
 
-    // --- Unity 2022 Dark Theme Color Palette ---
-    const ImVec4 gray_100 = ImVec4(0.82f, 0.82f, 0.82f, 1.00f); // Text
-    const ImVec4 gray_070 = ImVec4(0.24f, 0.24f, 0.24f, 1.00f); // Header / Active
-    const ImVec4 gray_050 = ImVec4(0.22f, 0.22f, 0.22f, 1.00f); // Background
-    const ImVec4 gray_030 = ImVec4(0.18f, 0.18f, 0.18f, 1.00f); // Input / Darker
-    const ImVec4 unity_blue = ImVec4(0.17f, 0.36f, 0.53f, 1.00f); // Selection
+    // Unity 2022 dark theme を基準にした色 palette。
+    const ImVec4 gray_100 = ImVec4(0.82f, 0.82f, 0.82f, 1.00f); // text 用色。
+    const ImVec4 gray_070 = ImVec4(0.24f, 0.24f, 0.24f, 1.00f); // header と active 状態の色。
+    const ImVec4 gray_050 = ImVec4(0.22f, 0.22f, 0.22f, 1.00f); // background 用色。
+    const ImVec4 gray_030 = ImVec4(0.18f, 0.18f, 0.18f, 1.00f); // input と暗い面の色。
+    const ImVec4 unity_blue = ImVec4(0.17f, 0.36f, 0.53f, 1.00f); // selection 用色。
 
     colors[ImGuiCol_Text] = gray_100;
     colors[ImGuiCol_WindowBg] = gray_050;

@@ -1,37 +1,33 @@
 
 
-// UIƒpƒ‰ƒ[ƒ^ (Slot: b0) -> Sprite3D::UIConstants
+// UIãƒ‘ãƒ©ãƒ¡ãƒ¼ã‚¿ (Slot: b0) -> Sprite3D::UIConstants
 cbuffer UIParams : register(b0)
 {
-    float4 ColorCore; // ”­ŒõƒJƒ‰[ (RGBA)
-    float Progress; // is“x (0.0f ~ 1.0f)
-    float3 padding; // ƒpƒfƒBƒ“ƒO (12bytes)
+    float4 ColorCore; // ç™ºå…‰ã‚«ãƒ©ãƒ¼ (RGBA)
+    float Progress; // é€²è¡Œåº¦ (0.0f ~ 1.0f)
+    float3 padding; // ãƒ‘ãƒ‡ã‚£ãƒ³ã‚° (12bytes)
 };
 
-// s—ñƒf[ƒ^ (Slot: b1) -> Sprite3D::MatrixData
+// è¡Œåˆ—ãƒ‡ãƒ¼ã‚¿ (Slot: b1) -> Sprite3D::MatrixData
 cbuffer MatrixBuffer : register(b1)
 {
-    matrix World; // ƒ[ƒ‹ƒh•ÏŠ·s—ñ
-    matrix View; // ƒrƒ…[•ÏŠ·s—ñ
-    matrix Projection; // ƒvƒƒWƒFƒNƒVƒ‡ƒ“•ÏŠ·s—ñ
+    matrix World; // ãƒ¯ãƒ¼ãƒ«ãƒ‰å¤‰æ›è¡Œåˆ—
+    matrix View; // ãƒ“ãƒ¥ãƒ¼å¤‰æ›è¡Œåˆ—
+    matrix Projection; // ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ã‚·ãƒ§ãƒ³å¤‰æ›è¡Œåˆ—
 };
-
-// --------------------------------------------------------
-// “üo—Í\‘¢‘Ì
-// --------------------------------------------------------
-
-// ’¸“_ƒVƒF[ƒ_[‚Ö‚Ì“ü—Í
+// å…¥å‡ºåŠ›æ§‹é€ ä½“
+// é ‚ç‚¹ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã¸ã®å…¥åŠ›
 struct VS_IN
 {
-    float3 position : POSITION; // 3DÀ•W
+    float3 position : POSITION; // 3Dåº§æ¨™
     float4 color : COLOR;
     float2 texcoord : TEXCOORD;
 };
 
-// ƒsƒNƒZƒ‹ƒVƒF[ƒ_[‚Ö‚Ì“ü—Í (VS‚©‚ç‚Ìo—Í)
+// ãƒ”ã‚¯ã‚»ãƒ«ã‚·ã‚§ãƒ¼ãƒ€ãƒ¼ã¸ã®å…¥åŠ› (VSã‹ã‚‰ã®å‡ºåŠ›)
 struct VS_OUT
 {
-    float4 position : SV_POSITION; // ƒXƒNƒŠ[ƒ“À•W
+    float4 position : SV_POSITION; // ã‚¹ã‚¯ãƒªãƒ¼ãƒ³åº§æ¨™
     float4 color : COLOR;
     float2 texcoord : TEXCOORD;
 };

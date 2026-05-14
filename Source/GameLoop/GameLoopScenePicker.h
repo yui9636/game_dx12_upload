@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include <filesystem>
 #include <string>
 #include <vector>
+// GameLoopScenePicker は SceneEntry/scenePath/fileName/folderPath を中心に、実行時やエディターで共有する状態を保持する。
 
 class GameLoopScenePicker
 {
