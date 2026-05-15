@@ -300,29 +300,6 @@ void PlayerEditorPanel::DrawToolbar()
     }
 }
 
-void PlayerEditorPanel::DrawEmptyState()
-{
-    ImGui::Spacing();
-    ImGui::TextDisabled("No model opened.");
-    ImGui::TextWrapped("Open a model or prefab first. The current editor only becomes meaningful after a player source is resolved.");
-    ImGui::Spacing();
-
-    if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open...", ImVec2(180.0f, 0.0f))) {
-        char pathBuffer[MAX_PATH] = {};
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
-            OpenModelFromPath(pathBuffer);
-        }
-    }
-
-    if (HasSelectedEntityContext()) {
-        if (ImGui::Button(ICON_FA_ARROW_DOWN " Use Selected Entity Model", ImVec2(220.0f, 0.0f))) {
-            ImportFromSelectedEntity();
-        }
-        ImGui::TextDisabled("Selected: %s", m_selectedEntityModelPath.c_str());
-    } else {
-        ImGui::TextDisabled("No selected entity with MeshComponent.modelFilePath.");
-    }
-}
 // 上位 Draw 入口と DockSpace の外枠
 void PlayerEditorPanel::Draw(Registry* registry, bool* p_open, bool* outFocused)
 {

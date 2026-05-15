@@ -1,6 +1,8 @@
 ﻿#include "PlayerRuntimeSetup.h"
 
 #include "Component/ColliderComponent.h"
+#include "Component/CameraBehaviorComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NodeSocketComponent.h"
 #include "Collision/CollisionManager.h"
@@ -342,6 +344,12 @@ namespace
         entities.push_back(entity);
     }
 
+    bool IsPreviewOnlyEntity(Registry& registry, EntityID entity)
+    {
+        const auto* preview = registry.GetComponent<EffectPreviewTagComponent>(entity);
+        return preview && preview->previewOnly;
+    }
+
     template<typename T>
     void CollectEntitiesWithComponent(Registry& registry, std::vector<EntityID>& entities)
     {
@@ -387,6 +395,18 @@ namespace PlayerRuntimeSetup
         }
         EnsureComponent<StateMachineAssetComponent>(registry, entity);
         EnsureComponent<TimelineLibraryComponent>(registry, entity);
+        if (auto* thirdPerson = EnsureComponent<CameraTPVControlComponent>(registry, entity)) {
+            if (thirdPerson->distance <= 0.0f) {
+                thirdPerson->distance = CameraTPVControlComponent{}.distance;
+            }
+            if (thirdPerson->heightOffset <= 0.0f) {
+                thirdPerson->heightOffset = CameraTPVControlComponent{}.heightOffset;
+            }
+            if (thirdPerson->lookAtHeight <= 0.0f) {
+                thirdPerson->lookAtHeight = CameraTPVControlComponent{}.lookAtHeight;
+            }
+            thirdPerson->followTargetFacing = false;
+        }
         InputActionMapComponent* inputActionMap = EnsureComponent<InputActionMapComponent>(registry, entity);
         if (inputActionMap) {
             EnsureDefaultPlayerInputMap(inputActionMap->asset);
@@ -535,6 +555,10 @@ namespace PlayerRuntimeSetup
 
         for (EntityID entity : entities) {
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                continue;
+            }
+
+            if (IsPreviewOnlyEntity(registry, entity)) {
                 continue;
             }
 

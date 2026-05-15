@@ -420,6 +420,13 @@ void EditorLayer::DrawGameView()
                 ImGui::SameLine();
                 drawMenuLikeToggle("SceneCam", &m_gameViewUseSceneViewCameraFallback2D, "Use Scene View camera when no active Camera2D exists");
             }
+            if (m_sceneViewMode == SceneViewMode::Mode3D) {
+                ImGui::SameLine();
+                if (ImGui::Button("Align Cam")) {
+                    AlignMainCameraEntityToEditorCamera();
+                }
+                tooltip("Copy Scene View camera pose to the Game Main Camera");
+            }
             ImGui::SameLine();
             if (ImGui::Button("Reset")) {
                 ExecuteGameResetPreview();

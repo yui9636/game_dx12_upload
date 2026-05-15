@@ -228,10 +228,6 @@ void GameLayer::Update(const EngineTime& time)
     EffectPreviewSystem::Update(m_registry, previewDt);
 
     FreeCameraSystem::Update(m_registry, time.unscaledDt);
-    // third-person follow が位置を読む前に lock-on が camera target を選択または解除する。
-    // CameraTPVControlComponent.target から追従位置を取得する。
-    LockOnSystem::Update(m_registry, time.dt);
-    ThirdPersonCameraSystem::Update(m_registry, time.dt);
 
     TransformSystem transformSys;
 
@@ -249,6 +245,10 @@ void GameLayer::Update(const EngineTime& time)
     TimelineVFXSystem::Update(m_registry);
     TimelineAudioSystem::Update(m_registry);
     TimelineShakeSystem::Update(m_registry, time.dt);
+    // プレイヤーの最終 Transform が確定してから、Main Camera を TPV 追従位置へ置く。
+    LockOnSystem::Update(m_registry, time.dt);
+    ThirdPersonCameraSystem::Update(m_registry, time.dt);
+    transformSys.Update(m_registry);
     EffectAttachmentSystem::Update(m_registry, time.dt);
     TrailSystem::Update(m_registry, time.dt);
     HitboxTrackingSystem::Update(m_registry);

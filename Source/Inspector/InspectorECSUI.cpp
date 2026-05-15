@@ -1091,6 +1091,29 @@ bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker =
         }
     }
 
+    void DrawCameraTPVControlComponentInspector(Registry* registry, EntityID entity)
+    {
+        CameraTPVControlComponent* component = registry ? registry->GetComponent<CameraTPVControlComponent>(entity) : nullptr;
+        if (!component) {
+            return;
+        }
+
+        DrawCustomComponentRemovable(registry, entity, "CameraTPVControlComponent", component, [&]() {
+            DrawUndoableValueWidget(registry, entity, *component, "distance", component->distance);
+            DrawUndoableValueWidget(registry, entity, *component, "heightOffset", component->heightOffset);
+            DrawUndoableValueWidget(registry, entity, *component, "lookAtHeight", component->lookAtHeight);
+            DrawUndoableValueWidget(registry, entity, *component, "shoulderOffset", component->shoulderOffset);
+            DrawUndoableValueWidget(registry, entity, *component, "forwardOffset", component->forwardOffset);
+            DrawUndoableValueWidget(registry, entity, *component, "lookAheadDistance", component->lookAheadDistance);
+            DrawUndoableValueWidget(registry, entity, *component, "smoothness", component->smoothness);
+            DrawUndoableValueWidget(registry, entity, *component, "rotationSmoothness", component->rotationSmoothness);
+            DrawUndoableValueWidget(registry, entity, *component, "pitch", component->pitch);
+            DrawUndoableValueWidget(registry, entity, *component, "yaw", component->yaw);
+            DrawUndoableValueWidget(registry, entity, *component, "followTargetFacing", component->followTargetFacing);
+            DrawUndoableValueWidget(registry, entity, *component, "allowManualOrbit", component->allowManualOrbit);
+        });
+    }
+
     bool DrawFontSlot(const char* label, std::string& fontPath)
     {
         ImGui::PushID(label);
@@ -2011,7 +2034,9 @@ if (auto* prefabInstance = registry->GetComponent<PrefabInstanceComponent>(entit
             DrawComponentIfPresent<HierarchyComponent>(registry, entity);
             DrawComponentIfPresent<LightComponent>(registry, entity);
             DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);
+            DrawCameraTPVControlComponentInspector(registry, entity);
             DrawComponentIfPresent<CameraLensComponent>(registry, entity);
+            DrawComponentRemovable<CameraMainTagComponent>(registry, entity);
             DrawCamera2DComponentInspector(registry, entity);
             DrawComponentRemovable<Camera2DMainTagComponent>(registry, entity);
             DrawComponentIfPresent<EnvironmentComponent>(registry, entity);
@@ -2109,6 +2134,8 @@ ImGui::Spacing();
                 TryAddComponent<AudioListenerComponent>(registry, entity, "AudioListener");
                 TryAddComponent<CameraLensComponent>(registry, entity, "CameraLens");
                 TryAddComponent<CameraFreeControlComponent>(registry, entity, "CameraFreeControl");
+                TryAddComponent<CameraTPVControlComponent>(registry, entity, "CameraTPVControl");
+                TryAddComponent<CameraMainTagComponent>(registry, entity, "CameraMainTag");
                 TryAddComponent<Camera2DComponent>(registry, entity, "Camera2D");
                 TryAddComponent<Camera2DMainTagComponent>(registry, entity, "Camera2DMainTag");
                 TryAddComponent<SpriteComponent>(registry, entity, "Sprite");

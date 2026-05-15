@@ -26,142 +26,39 @@ void PlayerEditorPanel::DrawViewportPanel()
     ImGui::PopStyleVar();
     if (!open) { ImGui::End(); return; }
 
-    const float sharedDirLengthSq =
-        m_sharedSceneCameraDirection.x * m_sharedSceneCameraDirection.x +
-        m_sharedSceneCameraDirection.y * m_sharedSceneCameraDirection.y +
-        m_sharedSceneCameraDirection.z * m_sharedSceneCameraDirection.z;
-    const bool usingSharedSceneView = sharedDirLengthSq > 0.0001f;
-
-    (void)usingSharedSceneView;
     ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
     ImVec2 avail = ImGui::GetContentRegionAvail();
     m_previewRenderSize = {
         (std::max)(avail.x, 0.0f),
         (std::max)(avail.y, 0.0f)
     };
-    m_viewportHovered = false;
-    m_viewportRect = { 0.0f, 0.0f, avail.x, avail.y };
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const ImVec2 size((std::max)(avail.x, 1.0f), (std::max)(avail.y, 1.0f));
+    m_viewportRect = { pos.x, pos.y, avail.x, avail.y };
 
-    if (!HasOpenModel() && !m_viewportTexture) {
-        ImGui::SetCursorPos(ImVec2(12.0f, 12.0f));
-        DrawEmptyState();
-        if (ImGui::BeginDragDropTarget()) {
-            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
-                const std::string droppedPath(static_cast<const char*>(payload->Data));
-                if (HasExtension(droppedPath, { ".prefab", ".fbx", ".gltf", ".glb", ".obj" })) {
-                    OpenModelFromPath(droppedPath);
-                }
-            }
-            ImGui::EndDragDropTarget();
-        }
-        ImGui::End();
-        return;
-    }
-
-    if (m_viewportTexture) {
-        // 専用レンダーターゲットを ImGui 上に表示する。
-        void* texId = ImGuiRenderer::GetTextureID(m_viewportTexture);
-        if (texId) {
-            ImGui::Image((ImTextureID)texId, avail);
-
-            const ImVec2 imageMin = ImGui::GetItemRectMin();
-            const ImVec2 imageMax = ImGui::GetItemRectMax();
-            const ImVec2 imageSize = ImVec2(imageMax.x - imageMin.x, imageMax.y - imageMin.y);
-            m_viewportRect = { imageMin.x, imageMin.y, imageSize.x, imageSize.y };
-            m_viewportHovered = ImGui::IsItemHovered();
-            const int markerBoneIndex = (m_hoveredBoneIndex >= 0) ? m_hoveredBoneIndex : m_selectedBoneIndex;
-            if (m_model && markerBoneIndex >= 0) {
-                ImVec2 markerPos{};
-                if (ProjectBoneMarkerToViewport(
-                    m_model,
-                    markerBoneIndex,
-                    usingSharedSceneView ? 1.0f : m_previewModelScale,
-                    GetPreviewCameraPosition(),
-                    GetPreviewCameraTarget(),
-                    GetPreviewCameraFovY(),
-                    GetPreviewNearZ(),
-                    GetPreviewFarZ(),
-                    imageMin,
-                    imageSize,
-                    markerPos))
-                {
-                    const auto& nodes = m_model->GetNodes();
-                    const char* boneName = (markerBoneIndex >= 0 && markerBoneIndex < static_cast<int>(nodes.size()))
-                        ? nodes[markerBoneIndex].name.c_str()
-                        : "";
-
-                    ImDrawList* dl = ImGui::GetWindowDrawList();
-                    dl->PushClipRect(imageMin, imageMax, true);
-                    dl->AddCircleFilled(markerPos, 5.0f, IM_COL32(255, 230, 80, 255));
-                    dl->AddCircle(markerPos, 9.0f, IM_COL32(255, 255, 255, 220), 0, 1.5f);
-                    dl->AddLine(ImVec2(markerPos.x - 10.0f, markerPos.y), ImVec2(markerPos.x - 3.0f, markerPos.y), IM_COL32(255, 255, 255, 220), 2.0f);
-                    dl->AddLine(ImVec2(markerPos.x + 3.0f, markerPos.y), ImVec2(markerPos.x + 10.0f, markerPos.y), IM_COL32(255, 255, 255, 220), 2.0f);
-                    dl->AddLine(ImVec2(markerPos.x, markerPos.y - 10.0f), ImVec2(markerPos.x, markerPos.y - 3.0f), IM_COL32(255, 255, 255, 220), 2.0f);
-                    dl->AddLine(ImVec2(markerPos.x, markerPos.y + 3.0f), ImVec2(markerPos.x, markerPos.y + 10.0f), IM_COL32(255, 255, 255, 220), 2.0f);
-                    if (boneName && boneName[0] != '\0') {
-                        ImVec2 labelSize = ImGui::CalcTextSize(boneName);
-                        const float margin = 6.0f;
-                        ImVec2 labelPos(markerPos.x + 12.0f, markerPos.y - labelSize.y - 8.0f);
-                        if (labelPos.x + labelSize.x + 8.0f > imageMax.x - margin) {
-                            labelPos.x = markerPos.x - labelSize.x - 16.0f;
-                        }
-                        if (labelPos.x < imageMin.x + margin) {
-                            labelPos.x = imageMin.x + margin;
-                        }
-                        if (labelPos.y < imageMin.y + margin) {
-                            labelPos.y = markerPos.y + 12.0f;
-                        }
-                        if (labelPos.y + labelSize.y + 4.0f > imageMax.y - margin) {
-                            labelPos.y = imageMax.y - labelSize.y - 4.0f - margin;
-                        }
-                        dl->AddRectFilled(
-                            ImVec2(labelPos.x - 4.0f, labelPos.y - 2.0f),
-                            ImVec2(labelPos.x + labelSize.x + 4.0f, labelPos.y + labelSize.y + 2.0f),
-                            IM_COL32(20, 20, 20, 220),
-                            4.0f);
-                        dl->AddText(labelPos, IM_COL32(255, 255, 255, 240), boneName);
-                    }
-                    dl->PopClipRect();
-                }
-            }
-        }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    void* texId = m_viewportTexture ? ImGuiRenderer::GetTextureID(m_viewportTexture) : nullptr;
+    if (texId) {
+        ImGui::Image((ImTextureID)texId, size);
+        const ImVec2 imageMin = ImGui::GetItemRectMin();
+        const ImVec2 imageMax = ImGui::GetItemRectMax();
+        const ImVec2 imageSize(imageMax.x - imageMin.x, imageMax.y - imageMin.y);
+        m_viewportRect = { imageMin.x, imageMin.y, imageSize.x, imageSize.y };
+        m_viewportHovered = ImGui::IsItemHovered();
     } else {
-        // プレビュー対象がないときの暗い背景を描画する。
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetCursorScreenPos();
-        m_viewportRect = { pos.x, pos.y, avail.x, avail.y };
-        dl->AddRectFilled(pos, ImVec2(pos.x + avail.x, pos.y + avail.y), IM_COL32(20, 20, 25, 255));
-
-        // プレースホルダーテキストを中央に配置する。
-        const char* msg = "3D Model Viewport";
-        ImVec2 textSize = ImGui::CalcTextSize(msg);
-        dl->AddText(ImVec2(pos.x + (avail.x - textSize.x) * 0.5f, pos.y + avail.y * 0.4f),
-            IM_COL32(120, 120, 120, 255), msg);
-
-        const char* sub = "Set viewport texture via SetViewportTexture()";
-        ImVec2 subSize = ImGui::CalcTextSize(sub);
-        dl->AddText(ImVec2(pos.x + (avail.x - subSize.x) * 0.5f, pos.y + avail.y * 0.4f + 20),
-            IM_COL32(80, 80, 80, 255), sub);
-
-        ImGui::Dummy(avail);
+        dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0, 0, 0, 255));
+        ImGui::Dummy(size);
+        m_viewportHovered = ImGui::IsItemHovered();
     }
 
-    // Viewport 上のマウス操作でオービットカメラを操作する。
-    if (ImGui::IsItemHovered() && !usingSharedSceneView && !m_viewportTexture) {
-        // 右ドラッグでカメラを回転する。
-        if (ImGui::IsMouseDragging(1)) {
-            ImVec2 delta = ImGui::GetMouseDragDelta(1);
-            m_vpCameraYaw   += delta.x * 0.005f;
-            m_vpCameraPitch += delta.y * 0.005f;
-            m_vpCameraPitch = (std::max)(-1.5f, (std::min)(1.5f, m_vpCameraPitch));
-            ImGui::ResetMouseDragDelta(1);
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+            const std::string droppedPath(static_cast<const char*>(payload->Data));
+            if (HasExtension(droppedPath, { ".prefab", ".fbx", ".gltf", ".glb", ".obj" })) {
+                OpenModelFromPath(droppedPath);
+            }
         }
-        // ホイールでズームする。
-        float wheel = ImGui::GetIO().MouseWheel;
-        if (wheel != 0.0f) {
-            m_vpCameraDist -= wheel * 0.5f;
-            m_vpCameraDist = (std::max)(0.5f, (std::min)(50.0f, m_vpCameraDist));
-        }
+        ImGui::EndDragDropTarget();
     }
 
     ImGui::End();

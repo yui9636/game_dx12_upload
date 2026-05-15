@@ -21,6 +21,11 @@
 #include "PlayerEditorPanelInternal.h"
 #include "PlayerEditorSession.h"
 #include "Animator/AnimatorComponent.h"
+#include "Component/CameraBehaviorComponent.h"
+#include "Component/CameraComponent.h"
+#include "Component/HierarchyComponent.h"
+#include "Component/NameComponent.h"
+#include "Component/TransformComponent.h"
 #include "Gameplay/ActionDatabaseComponent.h"
 #include "Gameplay/ActionStateComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
@@ -28,9 +33,167 @@
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Model/Model.h"
+#include "System/Query.h"
 #include "Registry/Registry.h"
 
 using namespace PlayerEditorInternal;
+
+namespace
+{
+    template <typename T>
+    T* EnsureEditorComponent(Registry& registry, EntityID entity)
+    {
+        if (T* component = registry.GetComponent<T>(entity)) {
+            return component;
+        }
+
+        registry.AddComponent(entity, T{});
+        return registry.GetComponent<T>(entity);
+    }
+
+    EntityID FindPlayerEditorCameraEntity(Registry& registry)
+    {
+        EntityID found = Entity::NULL_ID;
+
+        Query<CameraMainTagComponent> mainCameraQuery(registry);
+        mainCameraQuery.ForEachWithEntity([&](EntityID entity, CameraMainTagComponent&) {
+            if (Entity::IsNull(found)) {
+                found = entity;
+            }
+        });
+        if (!Entity::IsNull(found)) {
+            return found;
+        }
+
+        Query<CameraLensComponent> lensQuery(registry);
+        lensQuery.ForEachWithEntity([&](EntityID entity, CameraLensComponent&) {
+            if (Entity::IsNull(found)) {
+                found = entity;
+            }
+        });
+        if (!Entity::IsNull(found)) {
+            return found;
+        }
+
+        Query<NameComponent> nameQuery(registry);
+        nameQuery.ForEachWithEntity([&](EntityID entity, NameComponent& name) {
+            if (Entity::IsNull(found) && name.name == "Main Camera") {
+                found = entity;
+            }
+        });
+        return found;
+    }
+
+    DirectX::XMVECTOR ResolvePresetForward(const TransformComponent* playerTransform)
+    {
+        using namespace DirectX;
+        if (!playerTransform) {
+            return XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        }
+
+        XMVECTOR forward = XMVector3Rotate(
+            XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+            XMLoadFloat4(&playerTransform->localRotation));
+        forward = XMVectorSetY(forward, 0.0f);
+        if (XMVectorGetX(XMVector3LengthSq(forward)) <= 0.0001f) {
+            return XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        }
+        return XMVector3Normalize(forward);
+    }
+
+    void PlaceCameraAtThirdPersonPreset(TransformComponent& cameraTransform,
+                                        const TransformComponent* playerTransform,
+                                        const CameraTPVControlComponent& tpv)
+    {
+        using namespace DirectX;
+        const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const XMVECTOR forward = ResolvePresetForward(playerTransform);
+        const XMVECTOR right = XMVector3Normalize(XMVector3Cross(up, forward));
+        const XMVECTOR playerPosition = playerTransform
+            ? XMLoadFloat3(&playerTransform->localPosition)
+            : XMVectorZero();
+
+        const float pitch = std::clamp(tpv.pitch, -1.2f, 1.2f);
+        const float horizontalDistance = tpv.distance * std::cos(pitch);
+        const float verticalOffset = tpv.heightOffset + tpv.distance * std::sin(pitch);
+        const XMVECTOR cameraPosition =
+            playerPosition
+            - forward * horizontalDistance
+            + right * tpv.shoulderOffset
+            + up * verticalOffset
+            + forward * tpv.forwardOffset;
+
+        XMStoreFloat3(&cameraTransform.localPosition, cameraPosition);
+
+        const XMVECTOR lookTarget = playerPosition + up * tpv.lookAtHeight + forward * tpv.lookAheadDistance;
+        const XMMATRIX lookAtMatrix = XMMatrixLookAtLH(cameraPosition, lookTarget, up);
+        XMVECTOR outScale, outRotation, outTranslation;
+        if (XMMatrixDecompose(&outScale, &outRotation, &outTranslation, XMMatrixInverse(nullptr, lookAtMatrix))) {
+            XMStoreFloat4(&cameraTransform.localRotation, XMQuaternionNormalize(outRotation));
+        }
+        cameraTransform.isDirty = true;
+    }
+
+    void EnsureThirdPersonCameraForPlayer(Registry& registry, EntityID playerEntity)
+    {
+        if (Entity::IsNull(playerEntity) || !registry.IsAlive(playerEntity)) {
+            return;
+        }
+
+        EntityID cameraEntity = FindPlayerEditorCameraEntity(registry);
+        const bool createdCamera = Entity::IsNull(cameraEntity);
+        if (createdCamera) {
+            cameraEntity = registry.CreateEntity();
+            registry.AddComponent(cameraEntity, NameComponent{ "Third Person Camera" });
+            registry.AddComponent(cameraEntity, HierarchyComponent{});
+        } else if (!registry.GetComponent<NameComponent>(cameraEntity)) {
+            registry.AddComponent(cameraEntity, NameComponent{ "Third Person Camera" });
+        }
+
+        TransformComponent* cameraTransform = EnsureEditorComponent<TransformComponent>(registry, cameraEntity);
+        EnsureEditorComponent<HierarchyComponent>(registry, cameraEntity);
+        EnsureEditorComponent<CameraLensComponent>(registry, cameraEntity);
+        EnsureEditorComponent<CameraMatricesComponent>(registry, cameraEntity);
+        EnsureEditorComponent<CameraMainTagComponent>(registry, cameraEntity);
+        if (cameraEntity != playerEntity && registry.GetComponent<CameraTPVControlComponent>(cameraEntity)) {
+            registry.RemoveComponent<CameraTPVControlComponent>(cameraEntity);
+        }
+
+        const bool hadThirdPersonControl = registry.GetComponent<CameraTPVControlComponent>(playerEntity) != nullptr;
+        CameraTPVControlComponent* tpv = EnsureEditorComponent<CameraTPVControlComponent>(registry, playerEntity);
+        if (!tpv) {
+            return;
+        }
+
+        if (!hadThirdPersonControl) {
+            *tpv = CameraTPVControlComponent{};
+        }
+        if (!hadThirdPersonControl || tpv->distance <= 0.0f || std::fabs(tpv->distance - 5.0f) <= 0.0001f) {
+            tpv->distance = 5.5f;
+        }
+        if (!hadThirdPersonControl || tpv->heightOffset <= 0.0f || std::fabs(tpv->heightOffset - 1.5f) <= 0.0001f) {
+            tpv->heightOffset = 2.2f;
+        }
+        if (tpv->lookAtHeight <= 0.0f) {
+            tpv->lookAtHeight = 1.2f;
+        }
+        if (!hadThirdPersonControl || std::fabs(tpv->smoothness - 8.0f) <= 0.0001f) {
+            tpv->smoothness = 0.0f;
+        }
+        if (!hadThirdPersonControl) {
+            tpv->rotationSmoothness = 0.0f;
+        }
+        tpv->followTargetFacing = false;
+        tpv->allowManualOrbit = false;
+        tpv->pitch = 0.0f;
+        tpv->yaw = 0.0f;
+
+        if (cameraTransform) {
+            PlaceCameraAtThirdPersonPreset(*cameraTransform, registry.GetComponent<TransformComponent>(playerEntity), *tpv);
+        }
+    }
+}
+
 // アセット検索補助
 StateNode* PlayerEditorPanel::FindStateByName(const char* name)
 {
@@ -689,6 +852,9 @@ void PlayerEditorPanel::ApplyFullPlayerPreset()
 
     if (CanUsePreviewEntity()) {
         ApplyEditorBindingsToPreviewEntity();
+        if (!m_previewEntityOwned) {
+            EnsureThirdPersonCameraForPlayer(*m_registry, m_previewEntity);
+        }
         if (ActionDatabaseComponent* database = m_registry->GetComponent<ActionDatabaseComponent>(m_previewEntity)) {
             struct ResolverCtx { const PlayerEditorPanel* self; };
             ResolverCtx ctx{ this };

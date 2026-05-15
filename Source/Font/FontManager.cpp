@@ -5,6 +5,7 @@
 
 #include "Graphics.h"
 #include "ImGuiRenderer.h"
+#include "Console/Logger.h"
 #include "RHI/DX11/DX11CommandList.h"
 #include "RHI/ICommandList.h"
 #include "RHI/IResourceFactory.h"
@@ -20,8 +21,6 @@ using namespace DirectX;
 
 namespace
 {
-    // フォントキーが未登録だった場合に読み込む既定のビットマップフォント。
-    constexpr const char* kDefaultBitmapFontPath = "Data/Font/Unnamed-1.fnt";
     // ランタイム文字描画で使用するビューポート幅。0なら画面サイズへフォールバックする。
     float g_runtimeViewportWidth = 0.0f;
     // ランタイム文字描画で使用するビューポート高さ。0なら画面サイズへフォールバックする。
@@ -33,14 +32,14 @@ namespace
         return std::filesystem::path(path).lexically_normal().string();
     }
 
-    // ランタイムで直接読み込めるフォントアセットかを判定する。
-    bool IsRuntimeFontAssetPath(const std::string& key)
+    // ランタイムTextが直接読み込めるアウトラインフォントかを判定する。
+    bool IsRuntimeTrueTypeFontPath(const std::string& key)
     {
         std::string ext = std::filesystem::path(key).extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
             return static_cast<char>(std::tolower(c));
         });
-        return ext == ".fnt" || ext == ".ttf" || ext == ".otf";
+        return ext == ".ttf" || ext == ".otf";
     }
 
     // printf形式のワイド文字列を安全に展開してバッファとして返す。
@@ -87,6 +86,7 @@ namespace
 void FontManager::Clear()
 {
     fonts.clear();
+    m_runtimeFontFailures.clear();
 }
 
 // DX11互換呼び出し用。実際の読み込みはRHIファクトリ版へ委譲する。
@@ -131,7 +131,7 @@ void FontManager::ClearRuntimeViewport()
     g_runtimeViewportHeight = 0.0f;
 }
 
-// 指定キーのフォントを取得し、無ければ既定フォントを読み込む。
+// 指定キーのフォントを取得し、無ければ指定されたTTF/OTFだけを読み込む。
 std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)
 {
     auto font = Get(key);
@@ -139,16 +139,32 @@ std::shared_ptr<Font> FontManager::GetOrLoadDefault(const std::string& key)
         return font;
     }
 
-    if (IsRuntimeFontAssetPath(key)) {
-        Load(Graphics::Instance().GetResourceFactory(), key, key.c_str());
-        font = Get(key);
-        if (font) {
-            return font;
+    if (key.empty()) {
+        if (m_runtimeFontFailures.insert(key).second) {
+            LOG_ERROR("[FontManager] Runtime text font path is empty. No fallback font will be loaded.");
         }
+        return nullptr;
     }
 
-    Load(Graphics::Instance().GetResourceFactory(), key, kDefaultBitmapFontPath);
-    return Get(key);
+    if (m_runtimeFontFailures.find(key) != m_runtimeFontFailures.end()) {
+        return nullptr;
+    }
+
+    if (!IsRuntimeTrueTypeFontPath(key)) {
+        m_runtimeFontFailures.insert(key);
+        LOG_ERROR("[FontManager] Runtime text font must be .ttf or .otf: %s", key.c_str());
+        return nullptr;
+    }
+
+    Load(Graphics::Instance().GetResourceFactory(), key, key.c_str());
+    font = Get(key);
+    if (font) {
+        return font;
+    }
+
+    m_runtimeFontFailures.insert(key);
+    LOG_ERROR("[FontManager] Failed to load runtime text font: %s", key.c_str());
+    return nullptr;
 }
 
 // 指定キーのランタイムフォントの行高さを返す。

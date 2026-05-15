@@ -13,12 +13,18 @@ struct CameraFreeControlComponent {
 };
 
 struct CameraTPVControlComponent {
-    EntityID target = Entity::NULL_ID;
-    float distance = 5.0f;
-    float heightOffset = 1.5f;
-    float smoothness = 8.0f;
+    float distance = 5.5f;
+    float heightOffset = 2.2f;
+    float lookAtHeight = 1.2f;
+    float shoulderOffset = 0.0f;
+    float forwardOffset = 0.0f;
+    float lookAheadDistance = 0.0f;
+    float smoothness = 0.0f;
+    float rotationSmoothness = 0.0f;
     float pitch = 0.0f;
     float yaw = 0.0f;
+    bool followTargetFacing = false;
+    bool allowManualOrbit = false;
 };
 
 struct CameraLookAtComponent {

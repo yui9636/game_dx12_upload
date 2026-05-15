@@ -218,10 +218,6 @@ namespace EntitySnapshot
             hierarchy->nextSibling = Entity::NULL_ID;
         }
 
-        if (auto* tpc = registry.GetComponent<CameraTPVControlComponent>(entity)) {
-            tpc->target = RemapEntityReference(tpc->target, sourceToLocal, localToEntity);
-        }
-
         if (auto* lookAt = registry.GetComponent<CameraLookAtComponent>(entity)) {
             lookAt->target = RemapEntityReference(lookAt->target, sourceToLocal, localToEntity);
         }

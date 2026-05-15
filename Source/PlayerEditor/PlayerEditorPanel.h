@@ -89,7 +89,6 @@ private:
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
     void DrawToolbar();
     bool DrawToolbarButton(const char* label, bool enabled = true);
-    void DrawEmptyState();
     void ResetSelectionState();
     bool HasOpenModel() const;
     bool HasAnyDirtyDocument() const;
@@ -252,6 +251,8 @@ private:
     std::string m_selectedEntityModelPath;
     EntityID m_previewEntity = Entity::NULL_ID;
     bool m_previewEntityOwned = false;
+    DirectX::XMFLOAT3 m_ownedPreviewAuthoringScale = { 1.0f, 1.0f, 1.0f };
+    bool m_hasOwnedPreviewAuthoringScale = false;
     uint32_t m_runtimeObservedStateId = 0;
     uint32_t m_runtimePreviousStateId = 0;
     std::string m_runtimeLastTransitionLabel;

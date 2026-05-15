@@ -83,7 +83,7 @@ public:
                 x = maxX;
             }
 
-            const std::string fontKey = packet.fontAssetPath.empty() ? std::string("ComboFont") : packet.fontAssetPath;
+            const std::string fontKey = packet.fontAssetPath;
             const float fontSize = (std::max)(1.0f, packet.fontSize);
             const float lineHeight = (std::max)(1.0f, FontManager::Instance().GetLineHeight(fontKey));
             const float scale = (std::max)(0.01f, fontSize / lineHeight);

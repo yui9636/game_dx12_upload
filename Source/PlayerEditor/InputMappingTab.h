@@ -2,10 +2,19 @@
 #include "Input/InputActionMapAsset.h"
 
 class Registry;
-// PlayerEditorPanel 内に描画される Input Mapping タブ。
+// Input Mapping tab drawn inside PlayerEditorPanel.
 class InputMappingTab
 {
 public:
+    enum class CaptureField {
+        ActionKeyboard,
+        ActionMouse,
+        ActionGamepad,
+        AxisPositiveKey,
+        AxisNegativeKey,
+        AxisGamepad
+    };
+
     void Draw(Registry* registry);
 
     void SetEditingMap(const InputActionMapAsset& map);
@@ -25,9 +34,9 @@ private:
     InputActionMapAsset m_editingMap;
     bool m_dirty = false;
 
-    // キー割り当て待ちの入力状態。
+    // Pending input binding capture state.
     bool m_capturingKey = false;
     int  m_captureTargetAction = -1;
-    enum class CaptureField { Keyboard, Mouse, Gamepad };
-    CaptureField m_captureField = CaptureField::Keyboard;
+    int  m_captureTargetAxis = -1;
+    CaptureField m_captureField = CaptureField::ActionKeyboard;
 };

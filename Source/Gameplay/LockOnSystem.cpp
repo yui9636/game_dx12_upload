@@ -1,6 +1,6 @@
 ﻿#include "LockOnSystem.h"
 
-#include "Component/CameraBehaviorComponent.h"
+#include "Component/CameraComponent.h"
 #include "Component/TransformComponent.h"
 #include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/HealthComponent.h"
@@ -36,8 +36,8 @@ namespace
     EntityID FindCameraEntity(Registry& registry)
     {
         EntityID found = Entity::NULL_ID;
-        Query<CameraTPVControlComponent, TransformComponent> q(registry);
-        q.ForEachWithEntity([&](EntityID e, CameraTPVControlComponent&, TransformComponent&) {
+        Query<CameraMainTagComponent, TransformComponent> q(registry);
+        q.ForEachWithEntity([&](EntityID e, CameraMainTagComponent&, TransformComponent&) {
             if (Entity::IsNull(found)) found = e;
         });
         return found;
@@ -95,9 +95,8 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
 {
     const EntityID cameraEntity = FindCameraEntity(registry);
     if (Entity::IsNull(cameraEntity)) return;
-    auto* cameraTPV = registry.GetComponent<CameraTPVControlComponent>(cameraEntity);
     auto* cameraTr  = registry.GetComponent<TransformComponent>(cameraEntity);
-    if (!cameraTPV || !cameraTr) return;
+    if (!cameraTr) return;
 
     Query<PlayerTagComponent, LockOnTargetComponent, TransformComponent, ResolvedInputStateComponent, InputActionMapComponent> q(registry);
     q.ForEachWithEntity([&](EntityID playerEntity,
@@ -119,7 +118,6 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
             }
             if (!stillValid) {
                 lock.currentTarget = Entity::NULL_ID;
-                cameraTPV->target = playerEntity;
             }
         }
 
@@ -138,12 +136,10 @@ void LockOnSystem::Update(Registry& registry, float /*dt*/)
                     registry, playerTr.worldPosition, forward, lock.maxRange, lock.fovRadians);
                 if (!Entity::IsNull(picked)) {
                     lock.currentTarget = picked;
-                    cameraTPV->target = picked;
                 }
             } else {
                 // 解除。
                 lock.currentTarget = Entity::NULL_ID;
-                cameraTPV->target = playerEntity;
             }
         }
 

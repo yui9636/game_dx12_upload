@@ -58,7 +58,7 @@ public:
     // 指定キーのフォントを取得する。存在しない場合はnullptrを返す。
     std::shared_ptr<Font> Get(const std::string& key);
 
-    // 指定キーのランタイムフォントの行高さを返す。未登録なら既定フォントを読み込む。
+    // 指定キーのランタイムフォントの行高さを返す。未登録なら指定されたTTF/OTFだけを読み込む。
     float GetLineHeight(const std::string& key);
 
     // ランタイム描画で使用するビューポートサイズを設定する。
@@ -157,11 +157,14 @@ public:
 
 
 private:
-    // 指定キーのフォントを取得し、無ければ既定フォントを読み込む。
+    // 指定キーのフォントを取得し、無ければ指定されたTTF/OTFだけを読み込む。
     std::shared_ptr<Font> GetOrLoadDefault(const std::string& key);
 
     // ランタイム描画用Fontのキャッシュ。
     std::map<std::string, std::shared_ptr<Font>> fonts;
+
+    // ランタイムフォント読み込みに失敗したキー。毎フレーム同じ失敗ログを出さないために保持する。
+    std::unordered_set<std::string> m_runtimeFontFailures;
 
     // エディタプレビュー用に読み込んだImGuiフォント。
     std::unordered_map<std::string, ImFont*> m_editorPreviewFonts;

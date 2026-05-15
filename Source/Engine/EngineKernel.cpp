@@ -1101,6 +1101,7 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<EffectParticlePass>());
     if (isDX12) {
         SpriteRenderer::Instance().Initialize(factory);
+        m_renderPipeline->AddPass(std::make_shared<FinalBlitPass>(factory));
         m_renderPipeline->AddPass(std::make_shared<PostProcessPass>());
         m_renderPipeline->AddPass(std::make_shared<HUDPass>(factory));
     }
@@ -1283,16 +1284,22 @@ void EngineKernel::Update(float rawDt)
 
     bool sceneLoadedByGameLoop = false;
 
-    if (m_gameLayer) {
+    auto consumePendingGameLoopScene = [&]() -> bool {
+        if (!m_gameLayer) {
+            return false;
+        }
+
         Registry& gameRegistry = m_gameLayer->GetRegistry();
 
         SceneFileMetadata transitionMetadata;
-        sceneLoadedByGameLoop = SceneTransitionSystem::UpdateEndOfFrame(
+        const bool loaded = SceneTransitionSystem::UpdateEndOfFrame(
             m_gameLoopRuntime,
             gameRegistry,
             &transitionMetadata);
 
-        if (sceneLoadedByGameLoop) {
+        if (loaded) {
+            // Scene を差し替えたフレームでは、旧 Scene の入力イベントを次のノードへ持ち越さない。
+            m_flowEventQueue.Clear();
             m_flowEventQueue.Push("scene.loaded", m_gameLoopRuntime.currentScenePath);
 
             if (m_editorLayer) {
@@ -1312,7 +1319,11 @@ void EngineKernel::Update(float rawDt)
             PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(gameRegistry, true);
             EditorSelection::Instance().Clear();
         }
-    }
+
+        return loaded;
+    };
+
+    sceneLoadedByGameLoop = consumePendingGameLoopScene();
 
     if (m_gameLayer) {
         m_gameLayer->Update(time);
@@ -1367,6 +1378,10 @@ void EngineKernel::Update(float rawDt)
                     m_gameLoopRegistry,
                     m_flowEventQueue,
                     time.dt);
+
+                if (m_gameLoopRuntime.sceneTransitionRequested) {
+                    sceneLoadedByGameLoop = consumePendingGameLoopScene() || sceneLoadedByGameLoop;
+                }
             }
         }
 
@@ -1414,8 +1429,7 @@ void EngineKernel::Render()
     // 優先度は MaterialPreview > Thumbnail。
     static int s_thumbnailSkipCounter = 0;
     const bool usePlayerPreviewAsPrimary = false;
-    const bool usePlayerWorkspaceScene = m_editorLayer && m_editorLayer->IsPlayerWorkspaceActive();
-    const bool wantsPlayerPreview = false;
+    const bool wantsPlayerPreview = m_editorLayer && m_editorLayer->ShouldRenderPlayerPreview();
     if (m_sharedOffscreen && m_sharedOffscreen->IsGpuIdle() && !wantsPlayerPreview) {
         if (MaterialPreviewStudio::Instance().IsDirty())
             MaterialPreviewStudio::Instance().PumpPreview();
@@ -1448,8 +1462,8 @@ void EngineKernel::Render()
         m_editorLayer->SetPlayerPreviewTexture(nullptr);
         m_editorLayer->SetEffectPreviewTexture(nullptr);
 
-        const bool useEffectPreviewAsPrimary = !usePlayerWorkspaceScene && !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
-        const bool isEditorPreviewView = usePlayerWorkspaceScene || usePlayerPreviewAsPrimary || useEffectPreviewAsPrimary;
+        const bool useEffectPreviewAsPrimary = !usePlayerPreviewAsPrimary && m_editorLayer->ShouldRenderEffectPreview();
+        const bool isEditorPreviewView = usePlayerPreviewAsPrimary || useEffectPreviewAsPrimary;
 
         // Editor camera にユーザー override も auto frame も無いなら、
         // opaque packet 群からバウンディングボックスを作って自動で見やすい位置へ寄せる。
@@ -1518,13 +1532,11 @@ void EngineKernel::Render()
         }
 
         // SceneView / PlayerPreview / EffectPreview のどれを primary view にするか決める。
-        const DirectX::XMFLOAT2 sceneViewSize = usePlayerWorkspaceScene
-            ? m_editorLayer->GetPlayerPreviewRenderSize()
-            : (usePlayerPreviewAsPrimary
+        const DirectX::XMFLOAT2 sceneViewSize = usePlayerPreviewAsPrimary
                 ? m_editorLayer->GetPlayerPreviewRenderSize()
                 : (useEffectPreviewAsPrimary
                     ? m_editorLayer->GetEffectPreviewRenderSize()
-                    : m_editorLayer->GetSceneViewSize()));
+                    : m_editorLayer->GetSceneViewSize());
 
         const uint32_t panelWidth = static_cast<uint32_t>((std::max)(sceneViewSize.x, 0.0f));
         const uint32_t panelHeight = static_cast<uint32_t>((std::max)(sceneViewSize.y, 0.0f));
@@ -1646,16 +1658,6 @@ void EngineKernel::Render()
                 : state.aspect;
             state.projectionMatrix = m_editorLayer->BuildEditorProjectionMatrix(state.aspect);
             state.enablePostProcess = false;
-            if (usePlayerWorkspaceScene) {
-                state.enableComputeCulling = false;
-                state.enableAsyncCompute = false;
-                state.enableGTAO = false;
-                state.enableSSGI = false;
-                state.enableVolumetricFog = false;
-                state.enableSSR = false;
-                state.enableSkybox = m_editorLayer->ShouldPlayerPreviewUseSkybox();
-                state.clearColor = m_editorLayer->GetPlayerPreviewClearColor();
-            }
 
             {
                 using namespace DirectX;
@@ -1935,10 +1937,7 @@ void EngineKernel::Render()
             nullptr,
             primaryView.debugDepth ? primaryView.debugDepth : rc.debugGBufferDepth);
 
-        if (m_editorLayer->IsPlayerWorkspaceActive()) {
-            m_editorLayer->SetPlayerPreviewTexture(sceneViewTexture);
-        }
-        else if (m_editorLayer->ShouldRenderPlayerPreview()) {
+        if (m_editorLayer->ShouldRenderPlayerPreview()) {
             RenderPlayerPreviewOffscreen();
         }
         else if (m_editorLayer->ShouldRenderEffectPreview()) {
@@ -2192,6 +2191,9 @@ void EngineKernel::Render()
 void EngineKernel::Play()
 {
     if (mode == EngineMode::Editor) {
+        if (m_editorLayer) {
+            m_editorLayer->GetPlayerEditorPanel().Suspend();
+        }
         if (m_gameLayer) {
             PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(m_gameLayer->GetRegistry(), true);
         }

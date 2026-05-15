@@ -437,14 +437,17 @@ namespace
             json value{
                 {"distance", tpv->distance},
                 {"heightOffset", tpv->heightOffset},
+                {"lookAtHeight", tpv->lookAtHeight},
+                {"shoulderOffset", tpv->shoulderOffset},
+                {"forwardOffset", tpv->forwardOffset},
+                {"lookAheadDistance", tpv->lookAheadDistance},
                 {"smoothness", tpv->smoothness},
+                {"rotationSmoothness", tpv->rotationSmoothness},
                 {"pitch", tpv->pitch},
-                {"yaw", tpv->yaw}
+                {"yaw", tpv->yaw},
+                {"followTargetFacing", tpv->followTargetFacing},
+                {"allowManualOrbit", tpv->allowManualOrbit}
             };
-            const auto localIt = sourceToLocal.find(tpv->target);
-            if (localIt != sourceToLocal.end()) {
-                value["targetLocalId"] = localIt->second;
-            }
             writeComponent("CameraTPVControlComponent", value);
         }
 
@@ -1076,12 +1079,16 @@ namespace
             const json& value = components["CameraTPVControlComponent"];
             component.distance = value.value("distance", component.distance);
             component.heightOffset = value.value("heightOffset", component.heightOffset);
+            component.lookAtHeight = value.value("lookAtHeight", component.lookAtHeight);
+            component.shoulderOffset = value.value("shoulderOffset", component.shoulderOffset);
+            component.forwardOffset = value.value("forwardOffset", component.forwardOffset);
+            component.lookAheadDistance = value.value("lookAheadDistance", component.lookAheadDistance);
             component.smoothness = value.value("smoothness", component.smoothness);
+            component.rotationSmoothness = value.value("rotationSmoothness", component.rotationSmoothness);
             component.pitch = value.value("pitch", component.pitch);
             component.yaw = value.value("yaw", component.yaw);
-            component.target = value.contains("targetLocalId")
-                ? Entity::Create(value["targetLocalId"].get<uint32_t>(), 0)
-                : Entity::NULL_ID;
+            component.followTargetFacing = value.value("followTargetFacing", component.followTargetFacing);
+            component.allowManualOrbit = value.value("allowManualOrbit", component.allowManualOrbit);
             SetOptional(node.components, component);
         }
 

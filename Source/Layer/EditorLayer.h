@@ -187,16 +187,14 @@ public:
     bool HasEditorCameraUserOverride() const { return m_editorCameraUserOverride; }
     bool HasEditorCameraAutoFramed() const { return m_editorCameraAutoFramed; }
     void SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& target);
-    void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture;
-    m_playerEditorPanel.SetViewportTexture(texture);
-    }
+    void SetSceneViewTexture(ITexture* texture) { m_sceneViewTexture = texture; }
     void SetGameViewTexture(ITexture* texture) { m_gameViewTexture = texture; }
     void SetPlayerPreviewTexture(ITexture* texture) { m_playerEditorPanel.SetViewportTexture(texture); }
     void SetEffectPreviewTexture(ITexture* texture) { m_effectEditorPanel.SetViewportTexture(texture); }
     PlayerEditorPanel& GetPlayerEditorPanel() { return m_playerEditorPanel; }
     const PlayerEditorPanel& GetPlayerEditorPanel() const { return m_playerEditorPanel; }
     bool IsPlayerWorkspaceActive() const { return m_showPlayerEditor && m_activeWorkspace == WorkspaceTab::PlayerEditor; }
-    bool ShouldRenderPlayerPreview() const { return IsPlayerWorkspaceActive(); }
+    bool ShouldRenderPlayerPreview() const { return IsPlayerWorkspaceActive() && m_playerEditorPanel.CanRenderPreview(); }
     DirectX::XMFLOAT2 GetPlayerPreviewRenderSize() const { return m_playerEditorPanel.GetPreviewRenderSize(); }
     DirectX::XMFLOAT3 GetPlayerPreviewCameraPosition() const { return m_playerEditorPanel.GetPreviewCameraPosition(); }
     DirectX::XMFLOAT3 GetPlayerPreviewCameraTarget() const { return m_playerEditorPanel.GetPreviewCameraTarget(); }
@@ -439,7 +437,7 @@ private:
     void RequestWindowFocus(WindowFocusTarget target);
     void ApplyPendingWindowFocus(WindowFocusTarget target);
     void SetLastFocusedWindow(WindowFocusTarget target, bool focused);
-    void SyncMainCameraEntityToEditorCamera();
+    void AlignMainCameraEntityToEditorCamera();
     void SaveCameraBookmark(size_t slot);
     void LoadCameraBookmark(size_t slot);
     void DrawRenamePopup();

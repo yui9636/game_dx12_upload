@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <filesystem>
 #include <initializer_list>
 
@@ -87,6 +88,32 @@ namespace
         }
 
         return false;
+    }
+
+    DirectX::XMFLOAT3 ResolveAuthoringScaleFromEntity(Registry* registry, EntityID entity)
+    {
+        if (!registry || Entity::IsNull(entity) || !registry->IsAlive(entity)) {
+            return { 1.0f, 1.0f, 1.0f };
+        }
+
+        const auto* transform = registry->GetComponent<TransformComponent>(entity);
+        if (!transform) {
+            return { 1.0f, 1.0f, 1.0f };
+        }
+
+        return transform->localScale;
+    }
+
+    void ApplyPreviewDisplayScale(Registry* registry, EntityID entity)
+    {
+        if (!registry || Entity::IsNull(entity) || !registry->IsAlive(entity)) {
+            return;
+        }
+
+        if (auto* transform = registry->GetComponent<TransformComponent>(entity)) {
+            transform->localScale = { 1.0f, 1.0f, 1.0f };
+            transform->isDirty = true;
+        }
     }
 
     static bool HasTimelineAssetContent(const TimelineAsset& asset)
@@ -265,6 +292,8 @@ void PlayerEditorSession::Suspend(PlayerEditorPanel& panel)
     panel.m_playheadFrame = 0;
 
     panel.m_isPlaying = false;
+    panel.m_hasOwnedPreviewAuthoringScale = false;
+    panel.m_ownedPreviewAuthoringScale = { 1.0f, 1.0f, 1.0f };
 
     SyncPreviewTimelinePlayback(panel);
 
@@ -294,6 +323,8 @@ void PlayerEditorSession::DestroyOwnedPreviewEntity(PlayerEditorPanel& panel)
 
     panel.m_previewEntity = Entity::NULL_ID;
     panel.m_previewEntityOwned = false;
+    panel.m_hasOwnedPreviewAuthoringScale = false;
+    panel.m_ownedPreviewAuthoringScale = { 1.0f, 1.0f, 1.0f };
 }
 
 void PlayerEditorSession::EnsureOwnedPreviewEntity(PlayerEditorPanel& panel)
@@ -337,6 +368,8 @@ void PlayerEditorSession::EnsureOwnedPreviewEntity(PlayerEditorPanel& panel)
     transform.isDirty = true;
 
     panel.m_registry->AddComponent(panel.m_previewEntity, transform);
+    panel.m_ownedPreviewAuthoringScale = { 1.0f, 1.0f, 1.0f };
+    panel.m_hasOwnedPreviewAuthoringScale = true;
 
     MeshComponent mesh{};
 
@@ -372,6 +405,8 @@ void PlayerEditorSession::SetPreviewEntity(PlayerEditorPanel& panel, EntityID en
     panel.m_previewEntity = entity;
 
     panel.m_previewEntityOwned = false;
+    panel.m_previewModelScale = 1.0f;
+    panel.m_hasOwnedPreviewAuthoringScale = false;
 
     ImportSocketsFromPreviewEntity(panel);
 }
@@ -381,6 +416,10 @@ void PlayerEditorSession::SyncExternalSelection(PlayerEditorPanel& panel, Entity
     panel.m_selectedEntity = entity;
 
     panel.m_selectedEntityModelPath = modelPath;
+
+    if (!panel.m_previewEntityOwned && panel.m_previewEntity == entity) {
+        panel.m_previewModelScale = 1.0f;
+    }
 
     if (!Entity::IsNull(panel.m_previewEntity) && panel.m_registry && !panel.m_registry->IsAlive(panel.m_previewEntity)) {
         panel.m_previewEntity = Entity::NULL_ID;
@@ -452,6 +491,9 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
 
         panel.m_previewEntity = restore.root;
         panel.m_previewEntityOwned = true;
+        panel.m_ownedPreviewAuthoringScale = ResolveAuthoringScaleFromEntity(panel.m_registry, restore.root);
+        panel.m_hasOwnedPreviewAuthoringScale = true;
+        ApplyPreviewDisplayScale(panel.m_registry, restore.root);
         panel.m_ownedModel = std::move(model);
         panel.m_model = panel.m_ownedModel.get();
         panel.m_currentModelPath = mesh->modelFilePath;
@@ -577,7 +619,21 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
         prefabPath = pathBuffer;
     }
 
-    if (!PrefabSystem::SaveEntityToPrefabPath(panel.m_previewEntity, *panel.m_registry, prefabPath)) {
+    TransformComponent* previewTransform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity);
+    const DirectX::XMFLOAT3 displayScale = previewTransform ? previewTransform->localScale : DirectX::XMFLOAT3{ 1.0f, 1.0f, 1.0f };
+    if (previewTransform && panel.m_previewEntityOwned && panel.m_hasOwnedPreviewAuthoringScale) {
+        previewTransform->localScale = panel.m_ownedPreviewAuthoringScale;
+        previewTransform->isDirty = true;
+    }
+
+    const bool saved = PrefabSystem::SaveEntityToPrefabPath(panel.m_previewEntity, *panel.m_registry, prefabPath);
+
+    if (previewTransform && panel.m_previewEntityOwned) {
+        previewTransform->localScale = displayScale;
+        previewTransform->isDirty = true;
+    }
+
+    if (!saved) {
         return false;
     }
 
@@ -615,8 +671,9 @@ void PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& 
         embeddedInputMap->asset = panel.m_inputMappingTab.GetEditingMap();
     }
 
-    if (auto* transform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity)) {
-        transform->localScale = { panel.m_previewModelScale, panel.m_previewModelScale, panel.m_previewModelScale };
+    if (auto* transform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity);
+        transform && panel.m_previewEntityOwned) {
+        transform->localScale = { 1.0f, 1.0f, 1.0f };
         transform->isDirty = true;
     }
 

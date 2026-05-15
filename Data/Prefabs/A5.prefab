@@ -53,6 +53,20 @@
           "factionId": 0,
           "type": 1
         },
+        "CameraTPVControlComponent": {
+          "allowManualOrbit": false,
+          "distance": 5.5,
+          "followTargetFacing": true,
+          "forwardOffset": 0.0,
+          "heightOffset": 2.200000047683716,
+          "lookAheadDistance": 0.0,
+          "lookAtHeight": 1.2000000476837158,
+          "pitch": 0.0,
+          "rotationSmoothness": 0.0,
+          "shoulderOffset": 0.0,
+          "smoothness": 0.0,
+          "yaw": 0.0
+        },
         "CharacterPhysicsComponent": {
           "acceleration": 50.0,
           "friction": 5.0,
@@ -962,9 +976,9 @@
             "z": 0.0
           },
           "localScale": {
-            "x": 1.0,
-            "y": 1.0,
-            "z": 1.0
+            "x": 0.10000000149011612,
+            "y": 0.10000000149011612,
+            "z": 0.10000000149011612
           }
         }
       },

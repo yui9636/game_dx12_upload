@@ -167,7 +167,6 @@ void EditorLayer::Update(const EngineTime& time)
     }
 
     XMStoreFloat3(&m_editorCameraPosition, pos);
-    SyncMainCameraEntityToEditorCamera();
 
     if (m_showSequencer && m_gameLayer && m_activeWorkspace == WorkspaceTab::LevelEditor) {
         m_sequencerPanel.Update(time, &m_gameLayer->GetRegistry());
@@ -176,17 +175,9 @@ void EditorLayer::Update(const EngineTime& time)
     }
 }
 
-void EditorLayer::SyncMainCameraEntityToEditorCamera()
+void EditorLayer::AlignMainCameraEntityToEditorCamera()
 {
     if (!m_gameLayer) {
-        return;
-    }
-
-    const bool useEditorCamera =
-        m_activeWorkspace == WorkspaceTab::PlayerEditor ||
-        (m_activeWorkspace == WorkspaceTab::LevelEditor &&
-            (m_sceneViewHovered || m_lastFocusedWindow == WindowFocusTarget::SceneView));
-    if (!useEditorCamera) {
         return;
     }
 
@@ -199,6 +190,8 @@ void EditorLayer::SyncMainCameraEntityToEditorCamera()
 
     const XMFLOAT3 cameraPosition = GetEditorCameraPosition();
     const XMVECTOR cameraRotation = XMQuaternionRotationRollPitchYaw(m_editorCameraPitch, m_editorCameraYaw, 0.0f);
+    XMFLOAT4 cameraRotationValue{};
+    XMStoreFloat4(&cameraRotationValue, cameraRotation);
 
     for (auto* archetype : registry.GetAllArchetypes()) {
         if (!SignatureMatches(archetype->GetSignature(), targetSig)) {
@@ -213,20 +206,35 @@ void EditorLayer::SyncMainCameraEntityToEditorCamera()
             continue;
         }
 
+        const auto& entities = archetype->GetEntities();
         for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+            const EntityID entity = entities[i];
             auto& transform = *static_cast<TransformComponent*>(transformColumn->Get(i));
+            TransformComponent beforeTransform = transform;
             transform.localPosition = cameraPosition;
-            XMStoreFloat4(&transform.localRotation, cameraRotation);
+            transform.localRotation = cameraRotationValue;
             transform.isDirty = true;
+
+            auto action = std::make_unique<CompositeUndoAction>("Align Game Camera");
+            action->Add(std::make_unique<ComponentUndoAction<TransformComponent>>(entity, beforeTransform, transform));
 
             if (cameraCtrlColumn) {
                 auto& cameraCtrl = *static_cast<CameraFreeControlComponent*>(cameraCtrlColumn->Get(i));
+                CameraFreeControlComponent beforeCameraCtrl = cameraCtrl;
                 cameraCtrl.pitch = m_editorCameraPitch;
                 cameraCtrl.yaw = m_editorCameraYaw;
+                action->Add(std::make_unique<ComponentUndoAction<CameraFreeControlComponent>>(entity, beforeCameraCtrl, cameraCtrl));
             }
+
+            UndoSystem::Instance().RecordAction(std::move(action));
+            HierarchySystem::MarkDirtyRecursive(entity, registry);
+            PrefabSystem::MarkPrefabOverride(entity, registry);
+            LOG_INFO("[Editor] Aligned Game Camera with Scene View camera");
             return;
         }
     }
+
+    LOG_WARN("[Editor] Align Game Camera failed: no Main Camera entity");
 }
 
 void EditorLayer::RenderUI()
