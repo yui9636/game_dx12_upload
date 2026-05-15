@@ -1,4 +1,6 @@
 ﻿#include "HierarchyECSUI.h"
+#include "Terrain/TerrainComponent.h"
+#include "Terrain/TerrainAsset.h"
 #include "Engine/EngineKernel.h"
 #include "Registry/Registry.h"
 #include "Engine/Editor2DEntityUtils.h"
@@ -950,6 +952,18 @@ ImVec2 availSize = ImGui::GetContentRegionAvail();
         }
         if (ImGui::MenuItem("Create Audio Source")) {
             CreateEntityFromSnapshot(registry, BuildAudioEmitterSnapshot("Audio Source", "", false), Entity::NULL_ID, "Create Audio Source");
+        }
+        if (ImGui::MenuItem("Create Terrain")) {
+            EntityID e = registry->CreateEntity();
+            registry->AddComponent(e, NameComponent{ "Terrain" });
+            registry->AddComponent(e, TransformComponent{});
+            registry->AddComponent(e, HierarchyComponent{});
+            TerrainComponent tc;
+            tc.asset = std::make_shared<TerrainAsset>();
+            tc.asset->GenerateFromNoise();
+            tc.needsRebuild = true;
+            registry->AddComponent(e, tc);
+            EditorSelection::Instance().SelectEntity(e);
         }
 
         ImGui::Separator();

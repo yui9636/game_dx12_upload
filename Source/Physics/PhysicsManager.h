@@ -54,6 +54,8 @@ public:
     // Jolt の登録解除と物理関連リソースの解放を行う。
     void Finalize();
 
+    bool IsInitialized() const { return m_physicsSystem != nullptr; }
+
     // Jolt の PhysicsSystem 本体を取得する。
     JPH::PhysicsSystem* GetJoltSystem() { return m_physicsSystem.get(); }
 

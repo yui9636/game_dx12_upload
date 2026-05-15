@@ -817,6 +817,7 @@ void EditorLayer::DrawMenuBar()
             ImGui::MenuItem("Grid Settings", nullptr, &m_showGridSettingsWindow);
             ImGui::MenuItem(ICON_FA_IMAGES " G-Buffer Debug", nullptr, &m_showGBufferDebug);
             ImGui::MenuItem(ICON_FA_GAMEPAD " Input Debug", nullptr, &m_showInputDebug);
+            ImGui::MenuItem(ICON_FA_MOUNTAIN " Terrain Editor", nullptr, &m_showTerrainEditor);
             bool showPlayerEditor = m_showPlayerEditor;
             if (ImGui::MenuItem(ICON_FA_USER " Player Editor", nullptr, &showPlayerEditor)) {
                 m_showPlayerEditor = showPlayerEditor;

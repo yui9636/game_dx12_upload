@@ -107,6 +107,8 @@ public:
 
 // Jolt Physics を使用できる状態に初期化する。
 void PhysicsManager::Initialize() {
+    if (m_physicsSystem) return;
+
     RegisterDefaultAllocator();
 
     Trace = TraceImpl;

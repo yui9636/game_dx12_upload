@@ -1201,3 +1201,12 @@ void EditorLayer::DrawGBufferDebugWindow()
     }
     ImGui::End();
 }
+
+void EditorLayer::DrawTerrainEditor()
+{
+    if (!m_showTerrainEditor) return;
+    if (!m_gameLayer) return;
+    Registry& reg = m_gameLayer->GetRegistry();
+    m_createTerrainDialog.Draw();
+    m_terrainEditorPanel.Draw(reg, m_selectedEntity);
+}

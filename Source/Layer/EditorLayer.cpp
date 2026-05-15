@@ -326,6 +326,18 @@ void EditorLayer::RenderUI()
         if (m_showInputDebug) {
             InputDebugSystem::DrawDebugWindow(m_gameLayer->GetRegistry(), EngineKernel::Instance().GetInputBackend(), EngineKernel::Instance().GetInputEventQueue());
         }
+        // TerrainComponent を持つエンティティが選択されたとき自動で開く。
+        if (m_gameLayer) {
+            const EntityID sel = EditorSelection::Instance().GetPrimaryEntity();
+            if (!Entity::IsNull(sel) && m_gameLayer->GetRegistry().IsAlive(sel)) {
+                if (m_gameLayer->GetRegistry().GetComponent<TerrainComponent>(sel)) {
+                    m_showTerrainEditor = true;
+                }
+            }
+        }
+        if (m_showTerrainEditor) {
+            DrawTerrainEditor();
+        }
     }
 
     if (m_showStatusBar) {

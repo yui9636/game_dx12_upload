@@ -10,6 +10,8 @@
 #include "GameLoop/GameLoopEditorPanel.h"
 #include "Sequencer/SequencerPanel.h"
 #include "UIEditor/UIEditorPanel.h"
+#include "Terrain/TerrainEditorPanel.h"
+#include "Terrain/CreateTerrainDialog.h"
 #include <memory>
 #include <array>
 #include <DirectXMath.h>
@@ -273,6 +275,9 @@ private:
     bool m_showEffectEditor = false;
     bool m_showUIEditor = false;
     bool m_showGameLoopEditor = false;
+    bool m_showTerrainEditor  = false;
+    TerrainEditorPanel m_terrainEditorPanel;
+    CreateTerrainDialog m_createTerrainDialog;
     WorkspaceTab m_activeWorkspace = WorkspaceTab::LevelEditor;
     PlayerEditorPanel m_playerEditorPanel;
     EffectEditorPanel m_effectEditorPanel;
@@ -351,6 +356,7 @@ private:
     void DrawRenderPassesWindow();
     void DrawGridSettingsWindow();
     void DrawGBufferDebugWindow();
+    void DrawTerrainEditor();
     void DrawStatusBar();
     void DrawUnsavedChangesPopup();
     void DrawRecoveryPopup();

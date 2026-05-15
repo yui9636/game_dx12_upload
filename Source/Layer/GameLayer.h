@@ -3,6 +3,9 @@
 #include "Registry/Registry.h"
 #include <Component\PostEffectComponent.h>
 #include <memory>
+#include "Terrain/TerrainBuildSystem.h"
+#include "Terrain/TerrainLODSystem.h"
+#include "Terrain/TerrainPhysicsSystem.h"
 // HeadUpDisplay はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class HeadUpDisplay;
@@ -29,4 +32,8 @@ private:
     PostEffectComponent m_postEffect;
 
     std::shared_ptr<HeadUpDisplay> m_headUpDisplay;
+
+    TerrainBuildSystem   m_terrainBuildSystem;
+    TerrainLODSystem     m_terrainLODSystem;
+    TerrainPhysicsSystem m_terrainPhysicsSystem;
 };

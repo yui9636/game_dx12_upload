@@ -13,6 +13,7 @@
 
 class ModelResource;
 class MaterialAsset;
+class IBuffer;
 class ITexture;
 
 struct RenderQueueMetrics {
@@ -292,6 +293,17 @@ struct UI2DTextPacket {
     bool pixelSnap = false;
 };
 
+// Terrain チャンク 1 枚分の描画リクエスト。TerrainRenderPass が消費する。
+struct TerrainChunkDrawCall {
+    IBuffer* vertexBuffer     = nullptr;
+    IBuffer* indexBuffer      = nullptr;
+    uint32_t indexCount       = 0;
+    DirectX::XMFLOAT3 chunkWorldOffset = { 0.0f, 0.0f, 0.0f };
+    float worldSizeX  = 512.0f;
+    float worldSizeZ  = 512.0f;
+    float heightScale = 64.0f;
+};
+
 class RenderQueue {
 public:
     std::vector<RenderPacket> opaquePackets;
@@ -303,6 +315,7 @@ public:
     std::vector<UI2DLayoutNode> ui2DLayoutNodes;
     std::vector<UI2DSpritePacket> ui2DSpritePackets;
     std::vector<UI2DTextPacket> ui2DTextPackets;
+    std::vector<TerrainChunkDrawCall> terrainChunks;
     RenderQueueMetrics metrics;
 
     void Clear() {
@@ -315,6 +328,7 @@ public:
         ui2DLayoutNodes.clear();
         ui2DSpritePackets.clear();
         ui2DTextPackets.clear();
+        terrainChunks.clear();
         metrics = {};
     }
 };

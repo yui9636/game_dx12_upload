@@ -58,7 +58,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -96,7 +96,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -351,6 +351,16 @@
     <ClInclude Include="Source\Physics\PhysicsManager.h" />
     <ClInclude Include="Source\Physics\PhysicsSyncSystem.h" />
     <ClInclude Include="Source\Physics\PhysicsSystem.h" />
+    <ClInclude Include="Source\Terrain\TerrainAsset.h" />
+    <ClInclude Include="Source\Terrain\TerrainBrush.h" />
+    <ClInclude Include="Source\Terrain\TerrainBuildSystem.h" />
+    <ClInclude Include="Source\Terrain\TerrainComponent.h" />
+    <ClInclude Include="Source\Terrain\TerrainEditorPanel.h" />
+    <ClInclude Include="Source\Terrain\TerrainExtractSystem.h" />
+    <ClInclude Include="Source\Terrain\TerrainLODSystem.h" />
+    <ClInclude Include="Source\Terrain\TerrainPhysicsSystem.h" />
+    <ClInclude Include="Source\Terrain\TerrainRenderPass.h" />
+    <ClInclude Include="Source\Terrain\CreateTerrainDialog.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\EffectRuntime\EffectCompiler.h" />
@@ -676,6 +686,14 @@
     <ClCompile Include="Source\Physics\PhysicsManager.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSyncSystem.cpp" />
     <ClCompile Include="Source\Physics\PhysicsSystem.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainAsset.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainBuildSystem.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainEditorPanel.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainExtractSystem.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainLODSystem.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainPhysicsSystem.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainRenderPass.cpp" />
+    <ClCompile Include="Source\Terrain\CreateTerrainDialog.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorTemplates.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorAssetPicker.cpp" />
@@ -1222,6 +1240,18 @@
     <FxCompile Include="Shader\SwordTrailVS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\TerrainVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\TerrainPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

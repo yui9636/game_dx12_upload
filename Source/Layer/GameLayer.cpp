@@ -1,4 +1,5 @@
 ﻿#include "GameLayer.h"
+#include "Terrain/TerrainExtractSystem.h"
 #include "Graphics.h"
 #include <Transform\TransformSystem.h>
 #include <Transform\NodeAttachmentSystem.h>
@@ -266,6 +267,10 @@ void GameLayer::Update(const EngineTime& time)
     BattleFlowSystem::Update(m_registry, time.dt);
 
     CameraFinalizeSystem::Update(m_registry);
+
+    m_terrainLODSystem.Update(m_registry);
+    m_terrainBuildSystem.Update(m_registry);
+    m_terrainPhysicsSystem.Update(m_registry);
 }
 
 void GameLayer::InitializeHUD()
@@ -335,6 +340,9 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     TrailExtractSystem::Extract(m_registry, queue, rc);
     UI2DSpriteExtractSystem::Extract(m_registry, queue);
     UI2DTextExtractSystem::Extract(m_registry, queue);
+
+    TerrainExtractSystem terrainExtractSys;
+    terrainExtractSys.Extract(m_registry, m_terrainBuildSystem, queue);
 
     DebugRenderSystem debugRenderSystem;
     debugRenderSystem.Render(m_registry);

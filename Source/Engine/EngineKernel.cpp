@@ -24,6 +24,7 @@
 #include <RenderPass\VolumetricFogPass.h>
 #include <RenderPass\SSRPass.h>
 #include "RenderPass/FinalBlitPass.h"
+#include "Terrain/TerrainRenderPass.h"
 #include "RenderPass/PostProcessPass.h"
 #include "RenderPass/HUDPass.h"
 #include <Material\MaterialPreviewStudio.h>
@@ -71,6 +72,7 @@
 #include "System/Query.h"
 #include "Asset/PrefabSystem.h"
 #include "Engine/EditorSelection.h"
+#include "Physics/PhysicsManager.h"
 
 namespace {
     // DX12 実行時診断の有効フラグ。
@@ -1076,6 +1078,8 @@ void EngineKernel::Initialize()
     time = EngineTime();
     mode = EngineMode::Editor;
 
+    PhysicsManager::Instance().Initialize();
+
     m_renderPipeline = std::make_unique<RenderPipeline>();
 
     const bool isDX12 = (Graphics::Instance().GetAPI() == GraphicsAPI::DX12);
@@ -1095,6 +1099,7 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<VolumetricFogPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<SSRPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<DeferredLightingPass>(factory));
+    m_renderPipeline->AddPass(std::make_shared<TerrainRenderPass>());
     m_renderPipeline->AddPass(std::make_shared<SkyboxPass>());
     m_renderPipeline->AddPass(std::make_shared<ForwardTransparentPass>());
     m_renderPipeline->AddPass(std::make_shared<EffectMeshPass>());
@@ -1245,6 +1250,8 @@ void EngineKernel::Finalize()
 
     if (m_editorLayer) m_editorLayer->Finalize();
     if (m_gameLayer) m_gameLayer->Finalize();
+
+    PhysicsManager::Instance().Finalize();
 }
 
 // 入力を 1 フレームぶん収集する。

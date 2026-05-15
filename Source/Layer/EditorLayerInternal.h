@@ -48,6 +48,7 @@
 #include "Component/PostEffectComponent.h"
 #include "Component/PrefabInstanceComponent.h"
 #include "Gameplay/HealthComponent.h"
+#include "Terrain/TerrainComponent.h"
 #include "Gameplay/HPGaugeComponent.h"
 #include "Console/Console.h"
 #include "RHI/ITexture.h"
