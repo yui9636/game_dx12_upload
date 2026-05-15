@@ -15,7 +15,7 @@ public:
         AxisGamepad
     };
 
-    void Draw(Registry* registry);
+    bool Draw(Registry* registry);
 
     void SetEditingMap(const InputActionMapAsset& map);
     InputActionMapAsset& GetEditingMapMutable() { return m_editingMap; }
@@ -30,13 +30,19 @@ private:
     void DrawSettings();
     void DrawLiveTest(Registry* registry);
     void DrawKeyBindPopup();
+    void OpenBindingPopup(CaptureField field, int actionIndex, int axisIndex);
+    void MarkChanged();
 
     InputActionMapAsset m_editingMap;
     bool m_dirty = false;
+    bool m_changedThisFrame = false;
 
     // Pending input binding capture state.
     bool m_capturingKey = false;
     int  m_captureTargetAction = -1;
     int  m_captureTargetAxis = -1;
+    int  m_captureSuppressFrames = 0;
+    bool m_openBindingPopupRequested = false;
+    char m_bindingSearch[64] = {};
     CaptureField m_captureField = CaptureField::ActionKeyboard;
 };

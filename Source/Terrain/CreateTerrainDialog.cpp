@@ -42,6 +42,9 @@ void CreateTerrainDialog::Draw()
             asset->chunkCountX = static_cast<uint32_t>(m_chunkCountX);
             asset->chunkCountZ = static_cast<uint32_t>(m_chunkCountZ);
             asset->GenerateFromNoise();
+            asset->EnsureDefaultLayers();
+            asset->GenerateAutoSplat(asset->autoSplat);
+            asset->SetupDefaultWater();
             if (m_callback) m_callback(std::move(asset));
             m_open = false;
             ImGui::CloseCurrentPopup();

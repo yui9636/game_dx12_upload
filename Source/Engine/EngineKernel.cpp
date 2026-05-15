@@ -25,6 +25,7 @@
 #include <RenderPass\SSRPass.h>
 #include "RenderPass/FinalBlitPass.h"
 #include "Terrain/TerrainRenderPass.h"
+#include "Terrain/WaterRenderPass.h"
 #include "RenderPass/PostProcessPass.h"
 #include "RenderPass/HUDPass.h"
 #include <Material\MaterialPreviewStudio.h>
@@ -1094,12 +1095,13 @@ void EngineKernel::Initialize()
     }
     m_renderPipeline->AddPass(std::make_shared<ShadowPass>());
     m_renderPipeline->AddPass(std::make_shared<GBufferPass>());
+    m_renderPipeline->AddPass(std::make_shared<TerrainRenderPass>());
     m_renderPipeline->AddPass(std::make_shared<GTAOPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<SSGIPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<VolumetricFogPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<SSRPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<DeferredLightingPass>(factory));
-    m_renderPipeline->AddPass(std::make_shared<TerrainRenderPass>());
+    m_renderPipeline->AddPass(std::make_shared<WaterRenderPass>());
     m_renderPipeline->AddPass(std::make_shared<SkyboxPass>());
     m_renderPipeline->AddPass(std::make_shared<ForwardTransparentPass>());
     m_renderPipeline->AddPass(std::make_shared<EffectMeshPass>());
@@ -1494,6 +1496,20 @@ void EngineKernel::Render()
                 }
                 else {
                     DirectX::BoundingBox::CreateMerged(mergedBounds, mergedBounds, worldBounds);
+                }
+            }
+
+            for (const auto& terrainChunk : m_renderQueue.terrainChunks) {
+                DirectX::BoundingBox terrainBounds{};
+                terrainBounds.Center = terrainChunk.boundsCenter;
+                terrainBounds.Extents = terrainChunk.boundsExtents;
+
+                if (!hasMergedBounds) {
+                    mergedBounds = terrainBounds;
+                    hasMergedBounds = true;
+                }
+                else {
+                    DirectX::BoundingBox::CreateMerged(mergedBounds, mergedBounds, terrainBounds);
                 }
             }
 

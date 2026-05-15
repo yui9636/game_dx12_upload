@@ -299,9 +299,50 @@ struct TerrainChunkDrawCall {
     IBuffer* indexBuffer      = nullptr;
     uint32_t indexCount       = 0;
     DirectX::XMFLOAT3 chunkWorldOffset = { 0.0f, 0.0f, 0.0f };
-    float worldSizeX  = 512.0f;
-    float worldSizeZ  = 512.0f;
+    DirectX::XMFLOAT3 boundsCenter = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 boundsExtents = { 0.0f, 0.0f, 0.0f };
+    float worldSizeX  = 1280.0f;
+    float worldSizeZ  = 1280.0f;
     float heightScale = 64.0f;
+    // スプラットマップと 3 レイヤーの PBR テクスチャ (null 許容)
+    ITexture* splatTexture        = nullptr;
+    ITexture* albedoTextures[3]   = {};
+    ITexture* normalTextures[3]   = {};   // タンジェントスペース法線マップ (RGB)
+    ITexture* mraTextures[3]      = {};   // R=Metallic, G=Roughness, B=AO
+    float     layerTileScales[3]  = { 8.0f, 6.0f, 4.0f };
+};
+
+// 草インスタンス描画リクエスト (Terrain エンティティごとに 1 つ)。
+struct GrassDrawCall {
+    IBuffer* meshVertexBuffer = nullptr;
+    IBuffer* meshIndexBuffer  = nullptr;
+    uint32_t meshIndexCount   = 0;
+    IBuffer* instanceBuffer   = nullptr;
+    uint32_t instanceCount    = 0;
+    DirectX::XMFLOAT3 boundsCenter  = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 boundsExtents = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 windDirection = { 1.0f, 0.0f, 0.0f };
+    float windStrength = 0.35f;
+    float windSpeed    = 1.4f;
+    DirectX::XMFLOAT3 colorBottom = { 0.16f, 0.28f, 0.10f };
+    DirectX::XMFLOAT3 colorTop    = { 0.55f, 0.78f, 0.30f };
+    float drawDistance = 80.0f;
+};
+
+// Terrain に紐づく水面メッシュの描画リクエスト。
+struct TerrainWaterDrawCall {
+    IBuffer* vertexBuffer = nullptr;
+    IBuffer* indexBuffer = nullptr;
+    uint32_t indexCount = 0;
+    DirectX::XMFLOAT3 worldOffset = { 0.0f, 0.0f, 0.0f };
+    float worldSizeX = 1280.0f;
+    float worldSizeZ = 1280.0f;
+    float seaLevel = 4.0f;
+    DirectX::XMFLOAT4 shallowColor = { 0.12f, 0.44f, 0.56f, 0.55f };
+    DirectX::XMFLOAT4 deepColor = { 0.015f, 0.11f, 0.24f, 0.68f };
+    float depthFade = 5.0f;
+    float waveSpeed = 0.45f;
+    float waveScale = 0.035f;
 };
 
 class RenderQueue {
@@ -316,6 +357,8 @@ public:
     std::vector<UI2DSpritePacket> ui2DSpritePackets;
     std::vector<UI2DTextPacket> ui2DTextPackets;
     std::vector<TerrainChunkDrawCall> terrainChunks;
+    std::vector<TerrainWaterDrawCall> terrainWater;
+    std::vector<GrassDrawCall>        grassDraws;
     RenderQueueMetrics metrics;
 
     void Clear() {
@@ -329,6 +372,8 @@ public:
         ui2DSpritePackets.clear();
         ui2DTextPackets.clear();
         terrainChunks.clear();
+        terrainWater.clear();
+        grassDraws.clear();
         metrics = {};
     }
 };

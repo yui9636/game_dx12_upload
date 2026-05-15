@@ -5,6 +5,7 @@
 #include <Jolt/Physics/Body/BodyID.h>
 
 class Registry;
+struct TransformComponent;
 
 // TerrainComponent の地形データを Jolt HeightFieldShape として物理ワールドに登録する。
 class TerrainPhysicsSystem {
@@ -13,7 +14,7 @@ public:
     void Clear(Registry& registry);
 
 private:
-    void RegisterBody(EntityID entity, struct TerrainAsset& asset);
+    void RegisterBody(EntityID entity, struct TerrainAsset& asset, const TransformComponent* transform);
     void RemoveBody(EntityID entity);
 
     std::unordered_map<EntityID, JPH::BodyID> m_bodyMap;

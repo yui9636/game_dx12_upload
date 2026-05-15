@@ -151,6 +151,7 @@ public:
             m_activeWorkspace == WorkspaceTab::PlayerEditor;
 
         return isGridWorkspace &&
+            !m_showTerrainEditor &&
             IsSceneGridVisible() &&
             m_sceneViewMode == SceneViewMode::Mode3D;
     }
@@ -365,6 +366,7 @@ private:
     void HandleEditorShortcuts();
     void DrawSceneViewToolbar();
     void DrawTransformGizmo();
+    void HandleTerrainBrushStroke();
     void Draw2DOverlay();
     void Draw2DOverlayForRect(const DirectX::XMFLOAT4& viewRect,
                               const DirectX::XMFLOAT4X4& view,

@@ -60,7 +60,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include;.\External\tinyexr-release;.\External\tinyexr-release\deps\miniz</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -98,7 +98,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING;JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\Source;.\External\imgui-docking;.\External\assimp\include;.\External\stb;.\External\cereal\include;.\External\json-develop\include;.\External\ImGuizmo;.\External\Effekseer170e\include;.\External\imgui-node-editor-master;.\External\imgui_gradient-main\include;.\External\FastNoiseLite-master\Cpp;.\External\meshoptimizer-cpp-master\src;.\External\recastnavigation-main\Detour\Include;.\External\recastnavigation-main\Recast\Include;.\External\recastnavigation-main\DetourCrowd\Include;.\External\JoltPhysics-master;.\External\FSR2;.\External\FSR2\shaders;.\External\SDL-release-3.4.x\include;.\External\tinyexr-release;.\External\tinyexr-release\deps\miniz</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -360,6 +360,7 @@
     <ClInclude Include="Source\Terrain\TerrainLODSystem.h" />
     <ClInclude Include="Source\Terrain\TerrainPhysicsSystem.h" />
     <ClInclude Include="Source\Terrain\TerrainRenderPass.h" />
+    <ClInclude Include="Source\Terrain\WaterRenderPass.h" />
     <ClInclude Include="Source\Terrain\CreateTerrainDialog.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
@@ -609,6 +610,9 @@
     <ClCompile Include="Source\FrameBuffer.cpp" />
     <ClCompile Include="Source\Gizmos.cpp" />
     <ClCompile Include="Source\GpuResourceUtils.cpp" />
+    <ClCompile Include="External\tinyexr-release\deps\miniz\miniz.c">
+      <CompileAs>CompileAsC</CompileAs>
+    </ClCompile>
     <ClCompile Include="Source\Graphics.cpp" />
     <ClCompile Include="Source\Grid\GridRenderSystem.cpp" />
     <ClCompile Include="Source\HeadUpDisplay.cpp" />
@@ -693,6 +697,7 @@
     <ClCompile Include="Source\Terrain\TerrainLODSystem.cpp" />
     <ClCompile Include="Source\Terrain\TerrainPhysicsSystem.cpp" />
     <ClCompile Include="Source\Terrain\TerrainRenderPass.cpp" />
+    <ClCompile Include="Source\Terrain\WaterRenderPass.cpp" />
     <ClCompile Include="Source\Terrain\CreateTerrainDialog.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorTemplates.cpp" />
@@ -1248,6 +1253,18 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\TerrainPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\WaterVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\WaterPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

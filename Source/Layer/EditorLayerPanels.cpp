@@ -1208,5 +1208,5 @@ void EditorLayer::DrawTerrainEditor()
     if (!m_gameLayer) return;
     Registry& reg = m_gameLayer->GetRegistry();
     m_createTerrainDialog.Draw();
-    m_terrainEditorPanel.Draw(reg, m_selectedEntity);
+    m_terrainEditorPanel.Draw(reg, EditorSelection::Instance().GetPrimaryEntity());
 }

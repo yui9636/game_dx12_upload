@@ -268,8 +268,8 @@ void GameLayer::Update(const EngineTime& time)
 
     CameraFinalizeSystem::Update(m_registry);
 
-    m_terrainLODSystem.Update(m_registry);
     m_terrainBuildSystem.Update(m_registry);
+    m_terrainLODSystem.Update(m_registry, m_terrainBuildSystem);
     m_terrainPhysicsSystem.Update(m_registry);
 }
 

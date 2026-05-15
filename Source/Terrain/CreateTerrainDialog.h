@@ -19,8 +19,8 @@ private:
     bool   m_open = false;
     char   m_name[128]     = "Terrain";
     int    m_resolution    = 512;
-    float  m_worldSizeX    = 512.0f;
-    float  m_worldSizeZ    = 512.0f;
+    float  m_worldSizeX    = kDefaultTerrainWorldSize;
+    float  m_worldSizeZ    = kDefaultTerrainWorldSize;
     float  m_heightScale   = 64.0f;
     int    m_chunkCountX   = 8;
     int    m_chunkCountZ   = 8;

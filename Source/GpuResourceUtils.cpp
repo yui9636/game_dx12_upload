@@ -4,6 +4,15 @@
 #include <DirectXTex.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#pragma push_macro("min")
+#pragma push_macro("max")
+#undef min
+#undef max
+#define TINYEXR_IMPLEMENTATION
+#define TINYEXR_USE_MINIZ 1
+#include "tinyexr.h"
+#pragma pop_macro("min")
+#pragma pop_macro("max")
 #include "System/Misc.h"
 #include "GpuResourceUtils.h"
 
@@ -51,6 +60,55 @@ namespace
 
 		outMetadata = outImage.GetMetadata();
 		stbi_image_free(pixels);
+		return S_OK;
+	}
+
+	// EXR をロードして ScratchImage (R32G32B32A32_FLOAT) に変換する。
+	// ファイル名に "_nor_gl" が含まれる場合は G チャンネルを反転して DirectX 法線規約に合わせる。
+	HRESULT LoadImageFromEXR(
+		const char* filename,
+		DirectX::ScratchImage& outImage,
+		DirectX::TexMetadata& outMetadata)
+	{
+		float* rgba = nullptr;
+		int width = 0, height = 0;
+		const char* err = nullptr;
+		int ret = LoadEXR(&rgba, &width, &height, filename, &err);
+		if (ret != TINYEXR_SUCCESS) {
+			if (err) FreeEXRErrorMessage(err);
+			return E_FAIL;
+		}
+
+		// _nor_gl ファイルは G チャンネル反転 (OpenGL → DirectX 法線規約)
+		std::string path(filename);
+		const bool flipG = path.find("_nor_gl") != std::string::npos;
+		if (flipG) {
+			const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+			for (size_t i = 0; i < pixelCount; ++i) {
+				rgba[i * 4 + 1] = 1.0f - rgba[i * 4 + 1];
+			}
+		}
+
+		HRESULT hr = outImage.Initialize2D(
+			DXGI_FORMAT_R32G32B32A32_FLOAT,
+			static_cast<size_t>(width),
+			static_cast<size_t>(height),
+			1u, 1u);
+		if (FAILED(hr)) { free(rgba); return hr; }
+
+		const DirectX::Image* img = outImage.GetImage(0, 0, 0);
+		if (!img || !img->pixels) { free(rgba); return E_FAIL; }
+
+		const size_t srcRowPitch = static_cast<size_t>(width) * 4u * sizeof(float);
+		for (int y = 0; y < height; ++y) {
+			memcpy(
+				img->pixels + img->rowPitch * static_cast<size_t>(y),
+				rgba + static_cast<size_t>(width) * 4u * static_cast<size_t>(y),
+				srcRowPitch);
+		}
+
+		outMetadata = outImage.GetMetadata();
+		free(rgba);
 		return S_OK;
 	}
 }
@@ -168,7 +226,11 @@ HRESULT GpuResourceUtils::LoadImageFromFile(
 	std::wstring wfilename = filepath.wstring();
 
 	HRESULT hr;
-	if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
+	if (extension == ".exr")
+	{
+		hr = LoadImageFromEXR(filename, outImage, outMetadata);
+	}
+	else if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp")
 	{
 		hr = LoadImageWithStb(filename, outImage, outMetadata);
 	}

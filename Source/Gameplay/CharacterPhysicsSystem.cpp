@@ -3,12 +3,64 @@
 #include "ActionStateComponent.h"
 #include "StageBoundsComponent.h"
 #include "Component/TransformComponent.h"
+#include "Terrain/TerrainComponent.h"
 #include "Registry/Registry.h"
 #include "Component/ComponentSignature.h"
 #include "Type/TypeInfo.h"
 #include "Archetype/Archetype.h"
 #include <cmath>
 #include <algorithm>
+#include <cfloat>
+
+namespace
+{
+    bool SampleTerrainGroundHeight(Registry& registry, float worldX, float worldZ, float& outHeight)
+    {
+        bool found = false;
+        float bestHeight = -FLT_MAX;
+
+        Signature terrainSig = CreateSignature<TerrainComponent, TransformComponent>();
+        for (auto* arch : registry.GetAllArchetypes()) {
+            if (!SignatureMatches(arch->GetSignature(), terrainSig)) continue;
+
+            auto* terrainCol = arch->GetColumn(TypeManager::GetComponentTypeID<TerrainComponent>());
+            auto* transformCol = arch->GetColumn(TypeManager::GetComponentTypeID<TransformComponent>());
+            if (!terrainCol || !transformCol) continue;
+
+            for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                const auto& terrain = *static_cast<TerrainComponent*>(terrainCol->Get(i));
+                const auto& transform = *static_cast<TransformComponent*>(transformCol->Get(i));
+                if (!terrain.asset || terrain.asset->heightData.empty()) {
+                    continue;
+                }
+
+                const TerrainAsset& asset = *terrain.asset;
+                if (asset.worldSizeX <= 0.0001f || asset.worldSizeZ <= 0.0001f) {
+                    continue;
+                }
+
+                const float localX = worldX - transform.localPosition.x;
+                const float localZ = worldZ - transform.localPosition.z;
+                const float normX = (localX + asset.worldSizeX * 0.5f) / asset.worldSizeX;
+                const float normZ = (localZ + asset.worldSizeZ * 0.5f) / asset.worldSizeZ;
+                if (normX < 0.0f || normX > 1.0f || normZ < 0.0f || normZ > 1.0f) {
+                    continue;
+                }
+
+                const float height = transform.localPosition.y + asset.SampleHeight(normX, normZ);
+                if (!found || height > bestHeight) {
+                    bestHeight = height;
+                    found = true;
+                }
+            }
+        }
+
+        if (found) {
+            outHeight = bestHeight;
+        }
+        return found;
+    }
+}
 
 void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
     if (dt <= 0.0f) return;
@@ -71,11 +123,23 @@ void CharacterPhysicsSystem::Update(Registry& registry, float dt) {
             trans.localPosition.y += phys.verticalVelocity * dt;
             trans.localPosition.z += phys.velocity.z * dt;
 
-            // 地面へ押し戻す（y=0 の平面地形）。
-            if (trans.localPosition.y <= 0.0f) {
-                trans.localPosition.y = 0.0f;
+            float groundHeight = 0.0f;
+            SampleTerrainGroundHeight(
+                registry,
+                trans.localPosition.x,
+                trans.localPosition.z,
+                groundHeight);
+
+            const float snapOffset = phys.isGround ? (std::max)(phys.stepOffset, 0.05f) : 0.0f;
+
+            // 地面へ押し戻す。Terrain があればその高さ、無ければ y=0 平面を使う。
+            // 接地中は stepOffset 範囲の下り坂にも吸着させる。
+            if (trans.localPosition.y <= groundHeight + snapOffset && phys.verticalVelocity <= 0.0f) {
+                trans.localPosition.y = groundHeight;
                 phys.verticalVelocity = 0.0f;
                 phys.isGround = true;
+            } else {
+                phys.isGround = false;
             }
 
             // 円形ステージ範囲内へ押し戻し、外向き速度を取り除く。

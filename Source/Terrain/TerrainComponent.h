@@ -13,6 +13,9 @@ struct TerrainComponent {
     // ランタイムメッシュデータ(ビルド後に有効になる)
     bool needsRebuild = true;
 
+    // スプラットテクスチャのみ更新したい時 (ペイント等)。メッシュは触らない。
+    bool needsSplatUpload = false;
+
     // エディタ用フラグ
     bool showInEditor = true;
 };

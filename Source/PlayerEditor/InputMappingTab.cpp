@@ -1,4 +1,5 @@
-﻿#include "InputMappingTab.h"
+#include "InputMappingTab.h"
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <imgui.h>
@@ -12,6 +13,89 @@
 
 namespace
 {
+    struct KeyOption {
+        const char* label;
+        uint32_t scancode;
+    };
+
+    struct ByteOption {
+        const char* label;
+        uint8_t value;
+    };
+
+    constexpr KeyOption kKeyboardOptions[] = {
+        { "None", 0 },
+        { "A", 4 }, { "B", 5 }, { "C", 6 }, { "D", 7 }, { "E", 8 }, { "F", 9 },
+        { "G", 10 }, { "H", 11 }, { "I", 12 }, { "J", 13 }, { "K", 14 }, { "L", 15 },
+        { "M", 16 }, { "N", 17 }, { "O", 18 }, { "P", 19 }, { "Q", 20 }, { "R", 21 },
+        { "S", 22 }, { "T", 23 }, { "U", 24 }, { "V", 25 }, { "W", 26 }, { "X", 27 },
+        { "Y", 28 }, { "Z", 29 },
+        { "1", 30 }, { "2", 31 }, { "3", 32 }, { "4", 33 }, { "5", 34 },
+        { "6", 35 }, { "7", 36 }, { "8", 37 }, { "9", 38 }, { "0", 39 },
+        { "Enter", 40 }, { "Esc", 41 }, { "Backspace", 42 }, { "Tab", 43 }, { "Space", 44 },
+        { "-", 45 }, { "=", 46 }, { "[", 47 }, { "]", 48 }, { "\\", 49 },
+        { ";", 51 }, { "'", 52 }, { "`", 53 }, { ",", 54 }, { ".", 55 }, { "/", 56 },
+        { "CapsLock", 57 },
+        { "F1", 58 }, { "F2", 59 }, { "F3", 60 }, { "F4", 61 }, { "F5", 62 }, { "F6", 63 },
+        { "F7", 64 }, { "F8", 65 }, { "F9", 66 }, { "F10", 67 }, { "F11", 68 }, { "F12", 69 },
+        { "Delete", 76 }, { "Right", 79 }, { "Left", 80 }, { "Down", 81 }, { "Up", 82 },
+        { "Ctrl L", 224 }, { "Shift L", 225 }, { "Alt L", 226 },
+        { "Ctrl R", 228 }, { "Shift R", 229 }, { "Alt R", 230 },
+    };
+
+    constexpr ByteOption kMouseOptions[] = {
+        { "None", 0 },
+        { "Left", 1 },
+        { "Middle", 2 },
+        { "Right", 3 },
+        { "Back", 4 },
+        { "Forward", 5 },
+    };
+
+    constexpr ByteOption kGamepadButtonOptions[] = {
+        { "None", 0xFF },
+        { "A", 0 }, { "B", 1 }, { "X", 2 }, { "Y", 3 },
+        { "Back", 4 }, { "Guide", 5 }, { "Start", 6 },
+        { "L3", 7 }, { "R3", 8 }, { "LB", 9 }, { "RB", 10 },
+        { "DPad Up", 11 }, { "DPad Down", 12 }, { "DPad Left", 13 }, { "DPad Right", 14 },
+    };
+
+    constexpr ByteOption kGamepadAxisOptions[] = {
+        { "None", 0xFF },
+        { "Left Stick X", 0 },
+        { "Left Stick Y", 1 },
+        { "Right Stick X", 2 },
+        { "Right Stick Y", 3 },
+        { "LT", 4 },
+        { "RT", 5 },
+    };
+
+    bool LabelMatchesFilter(const char* label, const char* filter)
+    {
+        if (!filter || filter[0] == '\0') {
+            return true;
+        }
+        if (!label) {
+            return false;
+        }
+
+        for (const char* start = label; *start; ++start) {
+            const char* scan = start;
+            const char* needle = filter;
+            while (*scan && *needle &&
+                std::tolower(static_cast<unsigned char>(*scan)) ==
+                std::tolower(static_cast<unsigned char>(*needle)))
+            {
+                ++scan;
+                ++needle;
+            }
+            if (*needle == '\0') {
+                return true;
+            }
+        }
+        return false;
+    }
+
     const char* FormatKeyboardLabel(uint32_t scancode)
     {
         switch (scancode) {
@@ -263,16 +347,37 @@ void InputMappingTab::SetEditingMap(const InputActionMapAsset& map)
 {
     m_editingMap = map;
     m_dirty = false;
+    m_changedThisFrame = false;
 }
 
 void InputMappingTab::ClearEditingMap()
 {
     m_editingMap = InputActionMapAsset{};
     m_dirty = false;
+    m_changedThisFrame = false;
 }
 
-void InputMappingTab::Draw(Registry* registry)
+void InputMappingTab::MarkChanged()
 {
+    m_dirty = true;
+    m_changedThisFrame = true;
+}
+
+void InputMappingTab::OpenBindingPopup(CaptureField field, int actionIndex, int axisIndex)
+{
+    m_capturingKey = true;
+    m_captureTargetAction = actionIndex;
+    m_captureTargetAxis = axisIndex;
+    m_captureField = field;
+    m_captureSuppressFrames = 2;
+    m_openBindingPopupRequested = true;
+    m_bindingSearch[0] = '\0';
+}
+
+bool InputMappingTab::Draw(Registry* registry)
+{
+    m_changedThisFrame = false;
+
     if (!m_editingMap.name.empty()) {
         ImGui::TextDisabled("%s", m_editingMap.name.c_str());
         if (m_dirty) {
@@ -303,6 +408,7 @@ void InputMappingTab::Draw(Registry* registry)
     }
 
     DrawKeyBindPopup();
+    return m_changedThisFrame;
 }
 
 void InputMappingTab::DrawActionTable()
@@ -330,18 +436,14 @@ void InputMappingTab::DrawActionTable()
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputText("##name", nameBuf, sizeof(nameBuf))) {
                 action.actionName = nameBuf;
-                m_dirty = true;
+                MarkChanged();
             }
 
             // Keyboard binding.
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID("action_keyboard");
             if (ImGui::Button(FormatKeyboardLabel(action.scancode), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = i;
-                m_captureTargetAxis = -1;
-                m_captureField = CaptureField::ActionKeyboard;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::ActionKeyboard, i, -1);
             }
             ImGui::PopID();
 
@@ -349,11 +451,7 @@ void InputMappingTab::DrawActionTable()
             ImGui::TableSetColumnIndex(2);
             ImGui::PushID("action_mouse");
             if (ImGui::Button(FormatMouseButtonLabel(action.mouseButton), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = i;
-                m_captureTargetAxis = -1;
-                m_captureField = CaptureField::ActionMouse;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::ActionMouse, i, -1);
             }
             ImGui::PopID();
 
@@ -361,11 +459,7 @@ void InputMappingTab::DrawActionTable()
             ImGui::TableSetColumnIndex(3);
             ImGui::PushID("action_gamepad");
             if (ImGui::Button(FormatGamepadButtonLabel(action.gamepadButton), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = i;
-                m_captureTargetAxis = -1;
-                m_captureField = CaptureField::ActionGamepad;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::ActionGamepad, i, -1);
             }
             ImGui::PopID();
 
@@ -376,14 +470,14 @@ void InputMappingTab::DrawActionTable()
             ImGui::SetNextItemWidth(-1);
             if (ImGui::Combo("##trig", &trigInt, trigNames, 4)) {
                 action.trigger = static_cast<ActionTriggerType>(trigInt);
-                m_dirty = true;
+                MarkChanged();
             }
 
             // Remove this binding.
             ImGui::TableSetColumnIndex(5);
             if (ImGui::Button("X")) {
                 m_editingMap.actions.erase(m_editingMap.actions.begin() + i);
-                m_dirty = true;
+                MarkChanged();
                 ImGui::PopID();
                 break;
             }
@@ -398,7 +492,7 @@ void InputMappingTab::DrawActionTable()
         ActionBinding ab;
         ab.actionName = "NewAction";
         m_editingMap.actions.push_back(ab);
-        m_dirty = true;
+        MarkChanged();
     }
 }
 
@@ -427,54 +521,42 @@ void InputMappingTab::DrawAxisTable()
             ImGui::SetNextItemWidth(-1);
             if (ImGui::InputText("##name", nameBuf, sizeof(nameBuf))) {
                 axis.axisName = nameBuf;
-                m_dirty = true;
+                MarkChanged();
             }
 
             ImGui::TableSetColumnIndex(1);
             ImGui::PushID("axis_positive_key");
             if (ImGui::Button(FormatKeyboardLabel(axis.positiveKey), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = -1;
-                m_captureTargetAxis = i;
-                m_captureField = CaptureField::AxisPositiveKey;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::AxisPositiveKey, -1, i);
             }
             ImGui::PopID();
 
             ImGui::TableSetColumnIndex(2);
             ImGui::PushID("axis_negative_key");
             if (ImGui::Button(FormatKeyboardLabel(axis.negativeKey), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = -1;
-                m_captureTargetAxis = i;
-                m_captureField = CaptureField::AxisNegativeKey;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::AxisNegativeKey, -1, i);
             }
             ImGui::PopID();
 
             ImGui::TableSetColumnIndex(3);
             ImGui::PushID("axis_gamepad");
             if (ImGui::Button(FormatGamepadAxisLabel(axis.gamepadAxis), ImVec2(-1, 0))) {
-                m_capturingKey = true;
-                m_captureTargetAction = -1;
-                m_captureTargetAxis = i;
-                m_captureField = CaptureField::AxisGamepad;
-                ImGui::OpenPopup("Input Binding");
+                OpenBindingPopup(CaptureField::AxisGamepad, -1, i);
             }
             ImGui::PopID();
 
             ImGui::TableSetColumnIndex(4);
             ImGui::SetNextItemWidth(-1);
-            if (ImGui::DragFloat("##dz", &axis.deadzone, 0.01f, 0.0f, 1.0f)) m_dirty = true;
+            if (ImGui::DragFloat("##dz", &axis.deadzone, 0.01f, 0.0f, 1.0f)) MarkChanged();
 
             ImGui::TableSetColumnIndex(5);
             ImGui::SetNextItemWidth(-1);
-            if (ImGui::DragFloat("##sens", &axis.sensitivity, 0.01f, 0.0f, 10.0f)) m_dirty = true;
+            if (ImGui::DragFloat("##sens", &axis.sensitivity, 0.01f, 0.0f, 10.0f)) MarkChanged();
 
             ImGui::TableSetColumnIndex(6);
             if (ImGui::Button("X")) {
                 m_editingMap.axes.erase(m_editingMap.axes.begin() + i);
-                m_dirty = true;
+                MarkChanged();
                 ImGui::PopID();
                 break;
             }
@@ -489,16 +571,16 @@ void InputMappingTab::DrawAxisTable()
         AxisBinding ab;
         ab.axisName = "NewAxis";
         m_editingMap.axes.push_back(ab);
-        m_dirty = true;
+        MarkChanged();
     }
 }
 
 void InputMappingTab::DrawSettings()
 {
     if (ImGui::DragInt("Hold Threshold (frames)", &m_editingMap.holdThresholdFrames, 1, 1, 120))
-        m_dirty = true;
+        MarkChanged();
     if (ImGui::DragInt("Double Tap Gap (frames)", &m_editingMap.doubleTapGapFrames, 1, 1, 60))
-        m_dirty = true;
+        MarkChanged();
 }
 
 void InputMappingTab::DrawLiveTest(Registry* registry)
@@ -581,6 +663,11 @@ void InputMappingTab::DrawLiveTest(Registry* registry)
 
 void InputMappingTab::DrawKeyBindPopup()
 {
+    if (m_openBindingPopupRequested) {
+        ImGui::OpenPopup("Input Binding");
+        m_openBindingPopupRequested = false;
+    }
+
     if (ImGui::BeginPopupModal("Input Binding", nullptr,
         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
     {
@@ -591,55 +678,183 @@ void InputMappingTab::DrawKeyBindPopup()
             m_capturingKey = false;
             m_captureTargetAction = -1;
             m_captureTargetAxis = -1;
+            m_captureSuppressFrames = 0;
             ImGui::CloseCurrentPopup();
+        };
+
+        auto assignKeyboard = [&](uint32_t scancode) {
+            if (m_captureField == CaptureField::ActionKeyboard &&
+                m_captureTargetAction >= 0 &&
+                m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+            {
+                m_editingMap.actions[m_captureTargetAction].scancode = scancode;
+                MarkChanged();
+                finishCapture();
+            }
+            else if (m_captureField == CaptureField::AxisPositiveKey &&
+                m_captureTargetAxis >= 0 &&
+                m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+            {
+                m_editingMap.axes[m_captureTargetAxis].positiveKey = scancode;
+                MarkChanged();
+                finishCapture();
+            }
+            else if (m_captureField == CaptureField::AxisNegativeKey &&
+                m_captureTargetAxis >= 0 &&
+                m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+            {
+                m_editingMap.axes[m_captureTargetAxis].negativeKey = scancode;
+                MarkChanged();
+                finishCapture();
+            }
+        };
+
+        auto assignMouse = [&](uint8_t button) {
+            if (m_captureTargetAction >= 0 &&
+                m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+            {
+                m_editingMap.actions[m_captureTargetAction].mouseButton = button;
+                MarkChanged();
+                finishCapture();
+            }
+        };
+
+        auto assignGamepadButton = [&](uint8_t button) {
+            if (m_captureTargetAction >= 0 &&
+                m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+            {
+                m_editingMap.actions[m_captureTargetAction].gamepadButton = button;
+                MarkChanged();
+                finishCapture();
+            }
+        };
+
+        auto assignGamepadAxis = [&](uint8_t axis) {
+            if (m_captureTargetAxis >= 0 &&
+                m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+            {
+                m_editingMap.axes[m_captureTargetAxis].gamepadAxis = axis;
+                MarkChanged();
+                finishCapture();
+            }
         };
 
         if (ImGui::Button("Clear Binding")) {
             switch (m_captureField) {
             case CaptureField::ActionKeyboard:
-                if (m_captureTargetAction >= 0 && m_captureTargetAction < static_cast<int>(m_editingMap.actions.size())) {
-                    m_editingMap.actions[m_captureTargetAction].scancode = 0;
-                    m_dirty = true;
-                }
+                assignKeyboard(0);
                 break;
             case CaptureField::ActionMouse:
-                if (m_captureTargetAction >= 0 && m_captureTargetAction < static_cast<int>(m_editingMap.actions.size())) {
-                    m_editingMap.actions[m_captureTargetAction].mouseButton = 0;
-                    m_dirty = true;
-                }
+                assignMouse(0);
                 break;
             case CaptureField::ActionGamepad:
-                if (m_captureTargetAction >= 0 && m_captureTargetAction < static_cast<int>(m_editingMap.actions.size())) {
-                    m_editingMap.actions[m_captureTargetAction].gamepadButton = 0xFF;
-                    m_dirty = true;
-                }
+                assignGamepadButton(0xFF);
                 break;
             case CaptureField::AxisPositiveKey:
-                if (m_captureTargetAxis >= 0 && m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size())) {
-                    m_editingMap.axes[m_captureTargetAxis].positiveKey = 0;
-                    m_dirty = true;
-                }
+                assignKeyboard(0);
                 break;
             case CaptureField::AxisNegativeKey:
-                if (m_captureTargetAxis >= 0 && m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size())) {
-                    m_editingMap.axes[m_captureTargetAxis].negativeKey = 0;
-                    m_dirty = true;
-                }
+                assignKeyboard(0);
                 break;
             case CaptureField::AxisGamepad:
-                if (m_captureTargetAxis >= 0 && m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size())) {
-                    m_editingMap.axes[m_captureTargetAxis].gamepadAxis = 0xFF;
-                    m_dirty = true;
-                }
+                assignGamepadAxis(0xFF);
                 break;
             }
+            ImGui::EndPopup();
+            return;
+        }
+
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(220.0f);
+        ImGui::InputTextWithHint("##BindingSearch", "Search...", m_bindingSearch, sizeof(m_bindingSearch));
+
+        ImGui::BeginChild("##BindingOptions", ImVec2(360.0f, 190.0f), true);
+        if (m_captureField == CaptureField::ActionKeyboard ||
+            m_captureField == CaptureField::AxisPositiveKey ||
+            m_captureField == CaptureField::AxisNegativeKey)
+        {
+            uint32_t current = 0;
+            if (m_captureField == CaptureField::ActionKeyboard &&
+                m_captureTargetAction >= 0 &&
+                m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+            {
+                current = m_editingMap.actions[m_captureTargetAction].scancode;
+            }
+            else if (m_captureField == CaptureField::AxisPositiveKey &&
+                m_captureTargetAxis >= 0 &&
+                m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+            {
+                current = m_editingMap.axes[m_captureTargetAxis].positiveKey;
+            }
+            else if (m_captureField == CaptureField::AxisNegativeKey &&
+                m_captureTargetAxis >= 0 &&
+                m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+            {
+                current = m_editingMap.axes[m_captureTargetAxis].negativeKey;
+            }
+
+            for (const auto& option : kKeyboardOptions) {
+                if (!LabelMatchesFilter(option.label, m_bindingSearch)) {
+                    continue;
+                }
+                if (ImGui::Selectable(option.label, current == option.scancode)) {
+                    assignKeyboard(option.scancode);
+                }
+            }
+        }
+        else if (m_captureField == CaptureField::ActionMouse) {
+            const uint8_t current =
+                (m_captureTargetAction >= 0 && m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+                    ? m_editingMap.actions[m_captureTargetAction].mouseButton
+                    : 0;
+            for (const auto& option : kMouseOptions) {
+                if (!LabelMatchesFilter(option.label, m_bindingSearch)) {
+                    continue;
+                }
+                if (ImGui::Selectable(option.label, current == option.value)) {
+                    assignMouse(option.value);
+                }
+            }
+        }
+        else if (m_captureField == CaptureField::ActionGamepad) {
+            const uint8_t current =
+                (m_captureTargetAction >= 0 && m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
+                    ? m_editingMap.actions[m_captureTargetAction].gamepadButton
+                    : 0xFF;
+            for (const auto& option : kGamepadButtonOptions) {
+                if (!LabelMatchesFilter(option.label, m_bindingSearch)) {
+                    continue;
+                }
+                if (ImGui::Selectable(option.label, current == option.value)) {
+                    assignGamepadButton(option.value);
+                }
+            }
+        }
+        else if (m_captureField == CaptureField::AxisGamepad) {
+            const uint8_t current =
+                (m_captureTargetAxis >= 0 && m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
+                    ? m_editingMap.axes[m_captureTargetAxis].gamepadAxis
+                    : 0xFF;
+            for (const auto& option : kGamepadAxisOptions) {
+                if (!LabelMatchesFilter(option.label, m_bindingSearch)) {
+                    continue;
+                }
+                if (ImGui::Selectable(option.label, current == option.value)) {
+                    assignGamepadAxis(option.value);
+                }
+            }
+        }
+        ImGui::EndChild();
+        ImGui::TextDisabled("You can also press an input directly.");
+
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             finishCapture();
             ImGui::EndPopup();
             return;
         }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            finishCapture();
+        if (m_captureSuppressFrames > 0) {
+            --m_captureSuppressFrames;
             ImGui::EndPopup();
             return;
         }
@@ -650,9 +865,7 @@ void InputMappingTab::DrawKeyBindPopup()
                 m_captureTargetAction >= 0 &&
                 m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
             {
-                m_editingMap.actions[m_captureTargetAction].mouseButton = mouseButton;
-                m_dirty = true;
-                finishCapture();
+                assignMouse(mouseButton);
                 ImGui::EndPopup();
                 return;
             }
@@ -664,9 +877,7 @@ void InputMappingTab::DrawKeyBindPopup()
                 m_captureTargetAction >= 0 &&
                 m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
             {
-                m_editingMap.actions[m_captureTargetAction].gamepadButton = gamepadButton;
-                m_dirty = true;
-                finishCapture();
+                assignGamepadButton(gamepadButton);
                 ImGui::EndPopup();
                 return;
             }
@@ -678,9 +889,7 @@ void InputMappingTab::DrawKeyBindPopup()
                 m_captureTargetAxis >= 0 &&
                 m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
             {
-                m_editingMap.axes[m_captureTargetAxis].gamepadAxis = gamepadAxis;
-                m_dirty = true;
-                finishCapture();
+                assignGamepadAxis(gamepadAxis);
                 ImGui::EndPopup();
                 return;
             }
@@ -696,25 +905,19 @@ void InputMappingTab::DrawKeyBindPopup()
                     m_captureTargetAction >= 0 &&
                     m_captureTargetAction < static_cast<int>(m_editingMap.actions.size()))
                 {
-                    m_editingMap.actions[m_captureTargetAction].scancode = scancode;
-                    m_dirty = true;
-                    finishCapture();
+                    assignKeyboard(scancode);
                 }
                 else if (m_captureField == CaptureField::AxisPositiveKey &&
                     m_captureTargetAxis >= 0 &&
                     m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
                 {
-                    m_editingMap.axes[m_captureTargetAxis].positiveKey = scancode;
-                    m_dirty = true;
-                    finishCapture();
+                    assignKeyboard(scancode);
                 }
                 else if (m_captureField == CaptureField::AxisNegativeKey &&
                     m_captureTargetAxis >= 0 &&
                     m_captureTargetAxis < static_cast<int>(m_editingMap.axes.size()))
                 {
-                    m_editingMap.axes[m_captureTargetAxis].negativeKey = scancode;
-                    m_dirty = true;
-                    finishCapture();
+                    assignKeyboard(scancode);
                 }
                 break;
             }

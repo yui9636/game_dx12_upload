@@ -462,6 +462,7 @@ bool hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows | Im
         }
         DrawSceneViewToolbar();
         DrawTransformGizmo();
+        HandleTerrainBrushStroke();
         HandleScenePicking();
     }
     ImGui::End();
@@ -1255,9 +1256,152 @@ void EditorLayer::DrawTransformGizmo()
     m_gizmoWasUsing = isUsing;
 }
 
+namespace
+{
+    bool RaycastTerrainSurface(const TerrainAsset& asset,
+                               const DirectX::XMFLOAT3& entityOffset,
+                               const DirectX::XMFLOAT3& rayOrigin,
+                               const DirectX::XMFLOAT3& rayDirection,
+                               DirectX::XMFLOAT3& outWorld,
+                               DirectX::XMFLOAT2& outLocal)
+    {
+        const float halfW = asset.worldSizeX * 0.5f;
+        const float halfZ = asset.worldSizeZ * 0.5f;
+        const float cellSize = (std::max)(1.0f, (asset.worldSizeX + asset.worldSizeZ) * 0.5f /
+            static_cast<float>((std::max)(asset.resolution - 1u, 1u)));
+        const float step = (std::min)(cellSize * 1.5f, 8.0f);
+        const float maxDistance = 100000.0f;
+
+        bool hasPrev = false;
+        float prevT = 0.0f;
+        float prevSigned = 0.0f;
+        for (float t = 0.0f; t <= maxDistance; t += step) {
+            const DirectX::XMFLOAT3 p = {
+                rayOrigin.x + rayDirection.x * t,
+                rayOrigin.y + rayDirection.y * t,
+                rayOrigin.z + rayDirection.z * t
+            };
+            const float localX = p.x - entityOffset.x;
+            const float localZ = p.z - entityOffset.z;
+            if (localX < -halfW || localX > halfW || localZ < -halfZ || localZ > halfZ) {
+                hasPrev = false;
+                continue;
+            }
+
+            const float normX = (localX + halfW) / asset.worldSizeX;
+            const float normZ = (localZ + halfZ) / asset.worldSizeZ;
+            const float terrainY = asset.SampleHeight(normX, normZ) + entityOffset.y;
+            const float signedDistance = p.y - terrainY;
+            if (std::abs(signedDistance) <= step * 0.5f ||
+                (hasPrev && prevSigned > 0.0f && signedDistance <= 0.0f)) {
+                float lo = hasPrev ? prevT : (std::max)(0.0f, t - step);
+                float hi = t;
+                for (int i = 0; i < 8; ++i) {
+                    const float mid = (lo + hi) * 0.5f;
+                    const float mx = rayOrigin.x + rayDirection.x * mid;
+                    const float my = rayOrigin.y + rayDirection.y * mid;
+                    const float mz = rayOrigin.z + rayDirection.z * mid;
+                    const float lx = mx - entityOffset.x;
+                    const float lz = mz - entityOffset.z;
+                    const float nx = (lx + halfW) / asset.worldSizeX;
+                    const float nz = (lz + halfZ) / asset.worldSizeZ;
+                    const float ty = asset.SampleHeight(nx, nz) + entityOffset.y;
+                    if (my > ty) {
+                        lo = mid;
+                    } else {
+                        hi = mid;
+                    }
+                }
+
+                const float hitT = (lo + hi) * 0.5f;
+                outWorld = {
+                    rayOrigin.x + rayDirection.x * hitT,
+                    rayOrigin.y + rayDirection.y * hitT,
+                    rayOrigin.z + rayDirection.z * hitT
+                };
+                outLocal = { outWorld.x - entityOffset.x, outWorld.z - entityOffset.z };
+                return true;
+            }
+
+            hasPrev = true;
+            prevT = t;
+            prevSigned = signedDistance;
+        }
+
+        return false;
+    }
+}
+
+void EditorLayer::HandleTerrainBrushStroke()
+{
+    if (!m_gameLayer || !m_showTerrainEditor || !m_terrainEditorPanel.WantsSceneBrush()) {
+        return;
+    }
+    if (m_sceneViewMode == SceneViewMode::Mode2D || !m_sceneViewHovered || m_sceneViewToolbarHovered) {
+        return;
+    }
+    if (m_gizmoIsOver || m_gizmoWasUsing || ImGui::GetIO().KeyAlt) {
+        return;
+    }
+
+    Registry& registry = m_gameLayer->GetRegistry();
+    const EntityID entity = EditorSelection::Instance().GetPrimaryEntity();
+    TerrainComponent* terrain = registry.GetComponent<TerrainComponent>(entity);
+    if (!terrain || !terrain->asset) {
+        return;
+    }
+
+    const DirectX::XMFLOAT4X4 view = GetEditorViewMatrix();
+    const float aspect = (m_sceneViewRect.w > 0.0f) ? (m_sceneViewRect.z / m_sceneViewRect.w) : (16.0f / 9.0f);
+    const DirectX::XMFLOAT4X4 projection = BuildEditorProjectionMatrix(aspect);
+    DirectX::XMFLOAT3 rayOrigin{};
+    DirectX::XMFLOAT3 rayDirection{};
+    if (!BuildWorldRay(m_sceneViewRect, view, projection, ImGui::GetMousePos(), rayOrigin, rayDirection)) {
+        return;
+    }
+
+    DirectX::XMFLOAT3 entityOffset = { 0.0f, 0.0f, 0.0f };
+    if (const TransformComponent* transform = registry.GetComponent<TransformComponent>(entity)) {
+        entityOffset = transform->worldPosition;
+    }
+
+    DirectX::XMFLOAT3 hitWorld{};
+    DirectX::XMFLOAT2 hitLocal{};
+    if (!RaycastTerrainSurface(*terrain->asset, entityOffset, rayOrigin, rayDirection, hitWorld, hitLocal)) {
+        return;
+    }
+
+    ImVec2 hitScreen{};
+    if (ProjectWorldToSceneScreen(m_sceneViewRect, view, projection, hitWorld, hitScreen)) {
+        DirectX::XMFLOAT3 radiusWorld = hitWorld;
+        radiusWorld.x += m_terrainEditorPanel.GetBrushRadius();
+        ImVec2 radiusScreen{};
+        float radius = 24.0f;
+        if (ProjectWorldToSceneScreen(m_sceneViewRect, view, projection, radiusWorld, radiusScreen)) {
+            const float dx = radiusScreen.x - hitScreen.x;
+            const float dy = radiusScreen.y - hitScreen.y;
+            radius = std::clamp(std::sqrt(dx * dx + dy * dy), 8.0f, 180.0f);
+        }
+        ImDrawList* drawList = ImGui::GetForegroundDrawList();
+        drawList->AddCircle(hitScreen, radius, IM_COL32(120, 220, 120, 220), 48, 2.0f);
+        drawList->AddCircleFilled(hitScreen, 3.0f, IM_COL32(120, 220, 120, 220), 12);
+    }
+
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::GetIO().KeyCtrl) {
+        m_terrainEditorPanel.ApplyBrush(registry, entity, hitLocal.x, hitLocal.y);
+        m_scenePickPending = false;
+        m_scenePickBlockedByGizmo = true;
+    }
+}
+
 void EditorLayer::HandleScenePicking()
 {
     if (!m_gameLayer) {
+        m_scenePickPending = false;
+        return;
+    }
+
+    if (m_showTerrainEditor && m_terrainEditorPanel.WantsSceneBrush() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
         m_scenePickPending = false;
         return;
     }

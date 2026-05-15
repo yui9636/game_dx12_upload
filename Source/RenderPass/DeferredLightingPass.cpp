@@ -170,11 +170,14 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         return;
     }
 
-    const bool hasOpaqueGeometry =
+    // Terrain は GBuffer に書く Deferred 経路になったので、地形だけのシーンでも
+    // ライティングを走らせる必要がある。
+    const bool hasGBufferContent =
         !queue.opaquePackets.empty() ||
         !queue.opaqueInstanceBatches.empty() ||
-        rc.HasPreparedOpaqueCommands();
-    if (!hasOpaqueGeometry) {
+        rc.HasPreparedOpaqueCommands() ||
+        !queue.terrainChunks.empty();
+    if (!hasGBufferContent) {
         return;
     }
 

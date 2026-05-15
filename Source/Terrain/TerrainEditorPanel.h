@@ -9,17 +9,12 @@ class Registry;
 class TerrainEditorPanel {
 public:
     void Draw(Registry& registry, EntityID selectedEntity);
-
-private:
-    void DrawGenerateTab(Registry& registry, EntityID entity);
-    void DrawSculptTab(Registry& registry, EntityID entity);
-    void DrawPaintTab(Registry& registry, EntityID entity);
-    void DrawLayersTab(Registry& registry, EntityID entity);
-    void DrawSettingsTab(Registry& registry, EntityID entity);
-
+    bool WantsSceneBrush() const { return m_sceneBrushEnabled; }
+    float GetBrushRadius() const { return m_brush.radius; }
     void ApplyBrush(Registry& registry, EntityID entity,
                     float worldHitX, float worldHitZ);
 
+private:
     TerrainBrush m_brush;
-    int          m_activeTab = 0;
+    bool         m_sceneBrushEnabled = false;
 };

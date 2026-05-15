@@ -324,6 +324,8 @@ void PlayerEditorPanel::DrawAnimatorPanel()
 void PlayerEditorPanel::DrawInputPanel()
 {
     if (!ImGui::Begin(kPEInputTitle)) { ImGui::End(); return; }
-    m_inputMappingTab.Draw(m_registry);
+    if (m_inputMappingTab.Draw(m_registry)) {
+        ApplyEditorBindingsToPreviewEntity();
+    }
     ImGui::End();
 }

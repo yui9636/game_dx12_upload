@@ -4,6 +4,7 @@
 #include "Physics/PhysicsManager.h"
 #include "Registry/Registry.h"
 #include "System/Query.h"
+#include "Component/TransformComponent.h"
 #include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 
@@ -20,12 +21,12 @@ void TerrainPhysicsSystem::Update(Registry& registry)
             bodyExists = false;
         }
         if (!bodyExists) {
-            RegisterBody(entity, *tc.asset);
+            RegisterBody(entity, *tc.asset, registry.GetComponent<TransformComponent>(entity));
         }
     });
 }
 
-void TerrainPhysicsSystem::RegisterBody(EntityID entity, TerrainAsset& asset)
+void TerrainPhysicsSystem::RegisterBody(EntityID entity, TerrainAsset& asset, const TransformComponent* transform)
 {
     if (asset.heightData.empty()) return;
 
@@ -35,10 +36,14 @@ void TerrainPhysicsSystem::RegisterBody(EntityID entity, TerrainAsset& asset)
 
     const float cellSizeX = asset.worldSizeX / static_cast<float>(asset.resolution - 1);
     const float cellSizeZ = asset.worldSizeZ / static_cast<float>(asset.resolution - 1);
+    const DirectX::XMFLOAT3 entityPosition = transform ? transform->worldPosition : DirectX::XMFLOAT3{ 0.0f, 0.0f, 0.0f };
 
     JPH::HeightFieldShapeSettings settings(
         asset.heightData.data(),
-        JPH::Vec3(-asset.worldSizeX * 0.5f, 0.0f, -asset.worldSizeZ * 0.5f),
+        JPH::Vec3(
+            entityPosition.x - asset.worldSizeX * 0.5f,
+            entityPosition.y - asset.heightScale * 0.5f,
+            entityPosition.z - asset.worldSizeZ * 0.5f),
         JPH::Vec3(cellSizeX, asset.heightScale, cellSizeZ),
         asset.resolution);
 
