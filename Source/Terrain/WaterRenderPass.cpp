@@ -71,7 +71,6 @@ void WaterRenderPass::Setup(FrameGraphBuilder& builder, const RenderContext&)
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth      = builder.GetHandle("GBufferDepth");
     m_hGBuffer2   = builder.GetHandle("GBuffer2");
-    m_hPrevScene  = builder.GetHandle("PrevScene");
 
     if (m_hSceneColor.IsValid()) {
         m_hSceneColor = builder.Write(m_hSceneColor);
@@ -82,9 +81,6 @@ void WaterRenderPass::Setup(FrameGraphBuilder& builder, const RenderContext&)
     }
     if (m_hGBuffer2.IsValid()) {
         builder.Read(m_hGBuffer2);
-    }
-    if (m_hPrevScene.IsValid()) {
-        builder.Read(m_hPrevScene);
     }
 }
 
@@ -128,11 +124,9 @@ void WaterRenderPass::Execute(FrameGraphResources& resources, const RenderQueue&
         cmd->PSSetConstantBuffer(0, m_cbWater.get());
     }
 
-    // Bind GBuffer2 (worldPos/depth) and PrevScene as PS shader resources.
     ITexture* gbuffer2 = m_hGBuffer2.IsValid() ? resources.GetTexture(m_hGBuffer2) : nullptr;
-    ITexture* prevScene = m_hPrevScene.IsValid() ? resources.GetTexture(m_hPrevScene) : nullptr;
+    ITexture* prevScene = nullptr;
     if (gbuffer2) cmd->TransitionBarrier(gbuffer2, ResourceState::ShaderResource);
-    if (prevScene) cmd->TransitionBarrier(prevScene, ResourceState::ShaderResource);
 
     if (dx12Cmd) {
         DX12CommandList::PixelTextureBinding waterBindings[] = {
@@ -152,7 +146,7 @@ void WaterRenderPass::Execute(FrameGraphResources& resources, const RenderQueue&
     const XMMATRIX vp = XMMatrixTranspose(XMLoadFloat4x4(&rc.viewProjectionUnjittered));
     const float renderW = static_cast<float>(rtScene->GetWidth());
     const float renderH = static_cast<float>(rtScene->GetHeight());
-    const float hasRefraction = (prevScene != nullptr) ? 1.0f : 0.0f;
+    const float hasRefraction = 0.0f;
     constexpr uint32_t kStride = sizeof(XMFLOAT3) + sizeof(XMFLOAT2) + sizeof(XMFLOAT2);
     for (const TerrainWaterDrawCall& water : queue.terrainWater) {
         if (!water.vertexBuffer || !water.indexBuffer || water.indexCount == 0) continue;

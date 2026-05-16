@@ -176,7 +176,8 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
         !queue.opaquePackets.empty() ||
         !queue.opaqueInstanceBatches.empty() ||
         rc.HasPreparedOpaqueCommands() ||
-        !queue.terrainChunks.empty();
+        !queue.terrainChunks.empty() ||
+        !queue.grassDraws.empty();
     if (!hasGBufferContent) {
         return;
     }

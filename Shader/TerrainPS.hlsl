@@ -1,9 +1,3 @@
-// 地形 GBuffer 出力シェーダー。3 レイヤースプラット + PBR + Height-blend + Triplanar。
-// Slot 配置:
-//   t0: splat map (RGBA, R=Grass G=Dirt B=Rock)
-//   t1..t3: albedo for layer 0..2
-//   t4..t6: normal map for layer 0..2 (tangent space, RGB)
-//   t7..t9: MRA for layer 0..2 (R=Metallic, G=Roughness, B=AO)
 Texture2D gSplatMap : register(t0);
 Texture2D gAlbedo0  : register(t1);
 Texture2D gAlbedo1  : register(t2);
@@ -28,8 +22,8 @@ cbuffer TerrainCB : register(b0)
 
 cbuffer TerrainMaterialCB : register(b1)
 {
-    float4 tileScales;          // xyz = レイヤー 0..2 の tileScale
-    float4 triplanarParams;     // x = triplanar 強度 (0..1), yzw = unused
+    float4 tileScales;
+    float4 triplanarParams;
 };
 
 struct PS_INPUT
@@ -50,29 +44,58 @@ struct PS_OUTPUT
     float2 velocity        : SV_TARGET3;
 };
 
-// --- Triplanar サンプリングヘルパー ---
-struct TriplanarUVs {
-    float2 xPlane;   // (z, y)
-    float2 yPlane;   // (x, z)
-    float2 zPlane;   // (x, y)
-    float3 weights;  // ブレンド係数 (合計 = 1)
+struct TriplanarUVs
+{
+    float2 xPlane;
+    float2 yPlane;
+    float2 zPlane;
+    float3 weights;
 };
+
+float Hash21(float2 p)
+{
+    p = frac(p * float2(123.34f, 456.21f));
+    p += dot(p, p + 45.32f);
+    return frac(p.x * p.y);
+}
+
+float ValueNoise(float2 p)
+{
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float a = Hash21(i);
+    float b = Hash21(i + float2(1.0f, 0.0f));
+    float c = Hash21(i + float2(0.0f, 1.0f));
+    float d = Hash21(i + float2(1.0f, 1.0f));
+    float2 u = f * f * (3.0f - 2.0f * f);
+    return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+}
+
+float Fbm2(float2 p)
+{
+    float v = 0.0f;
+    float a = 0.5f;
+    [unroll]
+    for (int i = 0; i < 4; ++i) {
+        v += ValueNoise(p) * a;
+        p *= 2.02f;
+        a *= 0.52f;
+    }
+    return v;
+}
 
 TriplanarUVs ComputeTriplanar(float3 worldPos, float3 normal, float tileScale, float strength)
 {
     TriplanarUVs t;
-    float ts = max(tileScale, 0.001f);
-    // ワールド座標を tile スケール基準の UV へ
-    t.xPlane = worldPos.zy * ts * 0.05f;
-    t.yPlane = worldPos.xz * ts * 0.05f;
-    t.zPlane = worldPos.xy * ts * 0.05f;
+    float scale = max(tileScale, 0.001f) * 0.045f;
+    t.xPlane = worldPos.zy * scale;
+    t.yPlane = worldPos.xz * scale;
+    t.zPlane = worldPos.xy * scale;
 
-    // 平面ごとの重み (法線の絶対値 ^ pow)
-    float3 w = pow(abs(normal), lerp(2.0f, 8.0f, strength));
-    // 平面方向の影響を絞る (天面メインで sloped 部分のみ三方向)
-    w.y *= lerp(1.0f, 2.5f, strength);   // 平地は yPlane 優位
-    float wsum = max(w.x + w.y + w.z, 0.0001f);
-    t.weights = w / wsum;
+    float blendPower = lerp(2.0f, 8.0f, saturate(strength));
+    float3 w = pow(abs(normal), blendPower);
+    w.y *= lerp(1.0f, 2.35f, saturate(strength));
+    t.weights = w / max(w.x + w.y + w.z, 0.0001f);
     return t;
 }
 
@@ -92,33 +115,25 @@ float3 SampleMRATriplanar(Texture2D tex, TriplanarUVs t)
     return ax * t.weights.x + ay * t.weights.y + az * t.weights.z;
 }
 
-// 法線マップは平面ごとに「世界空間法線」を構築してから合成 (RNM: Reoriented Normal Mapping 簡易版)
+float3 DecodeNormal(Texture2D tex, float2 uv)
+{
+    float3 n = tex.Sample(gLinearWrap, uv).xyz * 2.0f - 1.0f;
+    return normalize(n);
+}
+
 float3 SampleNormalTriplanar(Texture2D tex, TriplanarUVs t, float3 worldNormal)
 {
-    // 各平面のタンジェントスペース法線 (.xy が摂動)
-    float3 nx_ts = tex.Sample(gLinearWrap, t.xPlane).rgb * 2.0f - 1.0f;
-    float3 ny_ts = tex.Sample(gLinearWrap, t.yPlane).rgb * 2.0f - 1.0f;
-    float3 nz_ts = tex.Sample(gLinearWrap, t.zPlane).rgb * 2.0f - 1.0f;
+    float3 nx = DecodeNormal(tex, t.xPlane);
+    float3 ny = DecodeNormal(tex, t.yPlane);
+    float3 nz = DecodeNormal(tex, t.zPlane);
 
-    // UDN (Unity-style) 簡易合成: 平面の主軸に法線摂動を加える
-    // X 平面: (z, y) 上の摂動を yz 軸へ展開
-    float3 nx_world = float3(worldNormal.x + nx_ts.x * sign(worldNormal.x), nx_ts.y, nx_ts.z * 0.0f);
-    float3 ny_world = float3(ny_ts.x, worldNormal.y + ny_ts.y * sign(worldNormal.y), ny_ts.z * 0.0f);
-    // 上記式は不完全。UDN 標準形式: tsNormal の xy を base normal の接面上に乗せる。
-    // ここでは Reoriented (BLEND) を使う:
-    nx_world = float3(nx_ts.xy + worldNormal.zy, abs(nx_ts.z) * worldNormal.x);
-    ny_world = float3(ny_ts.xy + worldNormal.xz, abs(ny_ts.z) * worldNormal.y);
-    float3 nz_world = float3(nz_ts.xy + worldNormal.xy, abs(nz_ts.z) * worldNormal.z);
-    // 軸入れ替え (Unity UDN 標準)
-    nx_world = nx_world.zyx;
-    ny_world = ny_world.xzy;
+    float sx = (worldNormal.x < 0.0f) ? -1.0f : 1.0f;
+    float sz = (worldNormal.z < 0.0f) ? -1.0f : 1.0f;
 
-    float3 result = normalize(
-        nx_world * t.weights.x +
-        ny_world * t.weights.y +
-        nz_world * t.weights.z
-    );
-    return result;
+    float3 xWorld = normalize(float3(nx.z * sx, nx.y, nx.x));
+    float3 yWorld = normalize(float3(ny.x, ny.z, ny.y));
+    float3 zWorld = normalize(float3(nz.x, nz.y, nz.z * sz));
+    return normalize(xWorld * t.weights.x + yWorld * t.weights.y + zWorld * t.weights.z);
 }
 
 PS_OUTPUT main(PS_INPUT input)
@@ -126,76 +141,67 @@ PS_OUTPUT main(PS_INPUT input)
     PS_OUTPUT output;
 
     float3 worldNormal = normalize(input.normal);
-
-    // === Step 1: スプラットウェイト取得 (R=Grass, G=Dirt, B=Rock) ===
     float4 splat = gSplatMap.Sample(gLinearWrap, input.uv);
     float3 weights = max(splat.rgb, 0.0f);
     float weightSum = weights.r + weights.g + weights.b;
-    if (weightSum <= 0.0001f) {
-        weights = float3(1.0f, 0.0f, 0.0f);  // 旧データ互換: グラスのみ
-    } else {
-        weights /= weightSum;
-    }
+    weights = (weightSum > 0.0001f) ? (weights / weightSum) : float3(1.0f, 0.0f, 0.0f);
 
-    // === Step 2: レイヤーごとの Triplanar UV ===
     float triStrength = saturate(triplanarParams.x);
     TriplanarUVs tri0 = ComputeTriplanar(input.worldPos, worldNormal, tileScales.x, triStrength);
     TriplanarUVs tri1 = ComputeTriplanar(input.worldPos, worldNormal, tileScales.y, triStrength);
     TriplanarUVs tri2 = ComputeTriplanar(input.worldPos, worldNormal, tileScales.z, triStrength);
 
-    // === Step 3: アルベド (Triplanar) ===
     float3 albedo0 = SampleAlbedoTriplanar(gAlbedo0, tri0);
     float3 albedo1 = SampleAlbedoTriplanar(gAlbedo1, tri1);
     float3 albedo2 = SampleAlbedoTriplanar(gAlbedo2, tri2);
 
-    // === Step 4: Height-blend (albedo の輝度をハイト hint として使う) ===
-    // 各レイヤーの「高さ」推定 = 輝度 + splat weight。最大値が勝つ blend。
-    float h0 = dot(albedo0, float3(0.30f, 0.59f, 0.11f)) + weights.r * 1.4f;
-    float h1 = dot(albedo1, float3(0.30f, 0.59f, 0.11f)) + weights.g * 1.4f;
-    float h2 = dot(albedo2, float3(0.30f, 0.59f, 0.11f)) + weights.b * 1.4f;
-    // 急峻なブレンド: max - blendRange より下のレイヤーは 0 にする
-    const float blendRange = 0.18f;
-    float hmax = max(h0, max(h1, h2));
-    float w0 = max(h0 - hmax + blendRange, 0.0f);
-    float w1 = max(h1 - hmax + blendRange, 0.0f);
-    float w2 = max(h2 - hmax + blendRange, 0.0f);
-    float wsum = max(w0 + w1 + w2, 0.0001f);
-    w0 /= wsum;
-    w1 /= wsum;
-    w2 /= wsum;
+    float height0 = dot(albedo0, float3(0.30f, 0.59f, 0.11f)) * 0.35f + weights.r * 1.55f;
+    float height1 = dot(albedo1, float3(0.30f, 0.59f, 0.11f)) * 0.35f + weights.g * 1.55f;
+    float height2 = dot(albedo2, float3(0.30f, 0.59f, 0.11f)) * 0.35f + weights.b * 1.55f;
+    float blendRange = 0.26f;
+    float maxHeight = max(height0, max(height1, height2));
+    float w0 = max(height0 - maxHeight + blendRange, 0.0f);
+    float w1 = max(height1 - maxHeight + blendRange, 0.0f);
+    float w2 = max(height2 - maxHeight + blendRange, 0.0f);
+    float hsum = max(w0 + w1 + w2, 0.0001f);
+    float3 blendWeights = float3(w0, w1, w2) / hsum;
 
-    float3 albedoSrgb = albedo0 * w0 + albedo1 * w1 + albedo2 * w2;
-    // DeferredLightingPS は線形空間アルベドを期待するので、sRGB から線形へ変換。
-    float3 albedoLin = pow(saturate(albedoSrgb), 2.2f);
+    float3 albedoSrgb = albedo0 * blendWeights.r + albedo1 * blendWeights.g + albedo2 * blendWeights.b;
 
-    // === Step 5: 法線マップ (Triplanar 合成) と MRA ===
+    float macro = Fbm2(input.worldPos.xz * 0.018f);
+    float micro = Fbm2(input.worldPos.xz * 0.115f + 17.3f);
+    albedoSrgb *= lerp(0.86f, 1.13f, macro);
+    albedoSrgb *= lerp(0.94f, 1.06f, micro);
+
+    float3 wetTint = float3(0.58f, 0.56f, 0.48f);
+    float3 rockTint = float3(0.82f, 0.86f, 0.88f);
+    albedoSrgb = lerp(albedoSrgb, albedoSrgb * wetTint, saturate(weights.g * 0.32f));
+    albedoSrgb = lerp(albedoSrgb, albedoSrgb * rockTint, saturate(weights.b * 0.22f));
+
     float3 n0 = SampleNormalTriplanar(gNormal0, tri0, worldNormal);
     float3 n1 = SampleNormalTriplanar(gNormal1, tri1, worldNormal);
     float3 n2 = SampleNormalTriplanar(gNormal2, tri2, worldNormal);
-    float3 blendedNormal = n0 * w0 + n1 * w1 + n2 * w2;
-    // 正規化前に長さチェック (normalize(0) は NaN になり、後段の length() 検出を裏切る)
-    float blendedLen = length(blendedNormal);
-    float3 finalNormal = (blendedLen > 0.001f) ? blendedNormal / blendedLen : worldNormal;
+    float3 detailNormal = normalize(n0 * blendWeights.r + n1 * blendWeights.g + n2 * blendWeights.b);
+    float normalStrength = lerp(0.35f, 0.78f, saturate(weights.b + weights.g * 0.45f));
+    float3 finalNormal = normalize(lerp(worldNormal, detailNormal, normalStrength));
 
     float3 mra0 = SampleMRATriplanar(gMRA0, tri0);
     float3 mra1 = SampleMRATriplanar(gMRA1, tri1);
     float3 mra2 = SampleMRATriplanar(gMRA2, tri2);
-    float3 mra = mra0 * w0 + mra1 * w1 + mra2 * w2;
-    // MRA テクスチャが未設定 (全 0) なら地形の既定値を使う
-    float metallic  = mra.r;
-    float roughness = (mra.g > 0.001f) ? mra.g : 0.85f;
-    float ao        = (mra.b > 0.001f) ? mra.b : 1.0f;
+    float3 mra = mra0 * blendWeights.r + mra1 * blendWeights.g + mra2 * blendWeights.b;
+    float metallic = saturate(mra.r);
+    float roughness = saturate((mra.g > 0.001f) ? mra.g : lerp(0.88f, 0.72f, weights.b));
+    float ao = saturate((mra.b > 0.001f) ? mra.b : 1.0f);
 
-    // === Step 6: Velocity (motion vector) ===
-    float2 currentNDC = input.curClipPos.xy  / input.curClipPos.w;
-    float2 prevNDC    = input.prevClipPos.xy / input.prevClipPos.w;
-    float2 currentUV  = currentNDC * float2(0.5f, -0.5f) + 0.5f;
-    float2 prevUV     = prevNDC    * float2(0.5f, -0.5f) + 0.5f;
+    float2 currentNDC = input.curClipPos.xy / input.curClipPos.w;
+    float2 prevNDC = input.prevClipPos.xy / input.prevClipPos.w;
+    float2 currentUV = currentNDC * float2(0.5f, -0.5f) + 0.5f;
+    float2 prevUV = prevNDC * float2(0.5f, -0.5f) + 0.5f;
 
-    // === Step 7: GBuffer 出力 ===
-    output.albedoMetallic  = float4(saturate(albedoLin * ao), metallic);
+    float3 albedoLin = pow(saturate(albedoSrgb), 2.2f);
+    output.albedoMetallic = float4(saturate(albedoLin * ao), metallic);
     output.normalRoughness = float4(finalNormal, roughness);
-    output.worldPosDepth   = float4(input.worldPos, input.position.z);
-    output.velocity        = prevUV - currentUV;
+    output.worldPosDepth = float4(input.worldPos, input.position.z);
+    output.velocity = prevUV - currentUV;
     return output;
 }

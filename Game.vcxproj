@@ -362,6 +362,10 @@
     <ClInclude Include="Source\Terrain\TerrainRenderPass.h" />
     <ClInclude Include="Source\Terrain\WaterRenderPass.h" />
     <ClInclude Include="Source\Terrain\CreateTerrainDialog.h" />
+    <ClInclude Include="Source\Vegetation\GrassComponent.h" />
+    <ClInclude Include="Source\Vegetation\GrassBuildSystem.h" />
+    <ClInclude Include="Source\Vegetation\GrassExtractSystem.h" />
+    <ClInclude Include="Source\Vegetation\GrassRenderPass.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorPanel.h" />
     <ClInclude Include="Source\EffectEditor\EffectEditorTemplates.h" />
     <ClInclude Include="Source\EffectRuntime\EffectCompiler.h" />
@@ -699,6 +703,10 @@
     <ClCompile Include="Source\Terrain\TerrainRenderPass.cpp" />
     <ClCompile Include="Source\Terrain\WaterRenderPass.cpp" />
     <ClCompile Include="Source\Terrain\CreateTerrainDialog.cpp" />
+    <ClCompile Include="Source\Vegetation\GrassBuildSystem.cpp" />
+    <ClCompile Include="Source\Vegetation\GrassComponent.cpp" />
+    <ClCompile Include="Source\Vegetation\GrassExtractSystem.cpp" />
+    <ClCompile Include="Source\Vegetation\GrassRenderPass.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorPanel.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorTemplates.cpp" />
     <ClCompile Include="Source\EffectEditor\EffectEditorAssetPicker.cpp" />
@@ -1253,6 +1261,18 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\TerrainPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\GrassVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\GrassPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

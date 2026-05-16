@@ -6,6 +6,7 @@
 #include "Component/NameComponent.h"
 #include "Component/TransformComponent.h"
 #include "Engine/EditorSelection.h"
+#include "Vegetation/GrassComponent.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -24,10 +25,17 @@ EntityID CreateDefaultTerrain(Registry& registry)
     terrain.asset = std::make_shared<TerrainAsset>();
     terrain.asset->GenerateFromNoise();
     terrain.asset->EnsureDefaultLayers();
-    terrain.asset->GenerateAutoSplat(terrain.asset->autoSplat);
     terrain.asset->SetupDefaultWater();
+    terrain.asset->GenerateAutoSplat(terrain.asset->autoSplat);
     terrain.needsRebuild = true;
     registry.AddComponent(entity, terrain);
+
+    // Attach a default foliage component (3 layer multi-foliage out of the box).
+    GrassComponent grass;
+    grass.enabled = true;
+    grass.needsRebuild = true;
+    grass.EnsureDefaultLayers();
+    registry.AddComponent(entity, grass);
 
     EditorSelection::Instance().SelectEntity(entity);
     return entity;
@@ -63,10 +71,10 @@ void DrawCompactMetric(const char* label, const char* value)
 void RegenerateTerrain(TerrainAsset& asset, TerrainComponent& tc)
 {
     asset.GenerateFromNoise();
-    asset.GenerateAutoSplat(asset.autoSplat);
     if (asset.water.enabled) {
         asset.water.seaLevel = asset.SuggestVisibleWaterLevel();
     }
+    asset.GenerateAutoSplat(asset.autoSplat);
     tc.needsRebuild = true;
 }
 
@@ -109,8 +117,8 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
         tc->asset = std::make_shared<TerrainAsset>();
         tc->asset->GenerateFromNoise();
         tc->asset->EnsureDefaultLayers();
-        tc->asset->GenerateAutoSplat(tc->asset->autoSplat);
         tc->asset->SetupDefaultWater();
+        tc->asset->GenerateAutoSplat(tc->asset->autoSplat);
         tc->needsRebuild = true;
     }
 
@@ -230,6 +238,115 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
             }
         }
 
+        // Foliage / multi-layer vegetation scattering.
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Foliage (Multi-Layer)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            GrassComponent* gc = registry.GetComponent<GrassComponent>(selectedEntity);
+            if (!gc) {
+                ImGui::TextDisabled("No foliage component on this terrain.");
+                if (ImGui::Button("Enable Foliage", ImVec2(-1, 28.0f))) {
+                    GrassComponent newGrass;
+                    newGrass.enabled = true;
+                    newGrass.needsRebuild = true;
+                    newGrass.EnsureDefaultLayers();
+                    registry.AddComponent(selectedEntity, newGrass);
+                }
+            } else {
+                bool foliageChanged = false;
+                foliageChanged |= ImGui::Checkbox("Enabled##foliage", &gc->enabled);
+                ImGui::PushItemWidth(-100.0f);
+                foliageChanged |= ImGui::SliderFloat("Draw Dist", &gc->drawDistance, 10.0f, 500.0f, "%.0f");
+                foliageChanged |= ImGui::DragFloat3("Wind Dir",   &gc->windDirection.x, 0.01f, -1.0f, 1.0f);
+                ImGui::PopItemWidth();
+
+                // Totals across layers
+                uint32_t total = 0;
+                for (const auto& l : gc->layers) total += l.lastInstanceCount;
+                ImGui::Text("Total instances: %u (%d layers)", total, (int)gc->layers.size());
+                if (gc->needsRebuild) {
+                    ImGui::SameLine();
+                    ImGui::TextColored(ImVec4(0.95f, 0.76f, 0.28f, 1.0f), " (rebuild pending)");
+                }
+
+                // Layer list
+                ImGui::Separator();
+                if (ImGui::Button("+ Add Layer", ImVec2(120, 22))) {
+                    gc->layers.emplace_back();
+                    foliageChanged = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Reset Defaults", ImVec2(140, 22))) {
+                    gc->layers.clear();
+                    gc->EnsureDefaultLayers();
+                    foliageChanged = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Force Rebuild", ImVec2(140, 22))) {
+                    foliageChanged = true;
+                }
+
+                for (int li = 0; li < (int)gc->layers.size(); ++li) {
+                    FoliageLayer& layer = gc->layers[li];
+                    ImGui::PushID(li);
+                    char header[128];
+                    std::snprintf(header, sizeof(header), "[%d] %s  (instances=%u)",
+                                  li, layer.name.c_str(), layer.lastInstanceCount);
+                    if (ImGui::CollapsingHeader(header)) {
+                        foliageChanged |= ImGui::Checkbox("Enabled", &layer.enabled);
+                        ImGui::SameLine();
+                        if (ImGui::Button("Remove", ImVec2(80, 20))) {
+                            gc->layers.erase(gc->layers.begin() + li);
+                            foliageChanged = true;
+                            ImGui::PopID();
+                            break;
+                        }
+                        ImGui::PushItemWidth(-110.0f);
+                        char nameBuf[64];
+                        strncpy_s(nameBuf, layer.name.c_str(), sizeof(nameBuf) - 1);
+                        if (ImGui::InputText("Name", nameBuf, sizeof(nameBuf))) {
+                            layer.name = nameBuf;
+                            foliageChanged = true;
+                        }
+                        char meshBuf[256];
+                        strncpy_s(meshBuf, layer.meshPath.c_str(), sizeof(meshBuf) - 1);
+                        if (ImGui::InputText("Model", meshBuf, sizeof(meshBuf))) {
+                            layer.meshPath = meshBuf;
+                            foliageChanged = true;
+                        }
+                        const char* channelNames[] = { "R (Grass)", "G (Dirt)", "B (Rock)", "A", "Any" };
+                        int channelIdx = (layer.splatChannel < 0 || layer.splatChannel > 3) ? 4 : layer.splatChannel;
+                        if (ImGui::Combo("Splat Ch", &channelIdx, channelNames, 5)) {
+                            layer.splatChannel = (channelIdx == 4) ? -1 : channelIdx;
+                            foliageChanged = true;
+                        }
+                        foliageChanged |= ImGui::SliderFloat("Density",      &layer.densityMultiplier, 0.0f, 4.0f, "%.2f");
+                        int maxPer = (int)layer.maxPerCell;
+                        if (ImGui::SliderInt("Max/Cell", &maxPer, 1, 16)) {
+                            layer.maxPerCell = (uint32_t)maxPer;
+                            foliageChanged = true;
+                        }
+                        foliageChanged |= ImGui::SliderFloat("Threshold",    &layer.densityThreshold, 0.0f, 1.0f, "%.2f");
+                        foliageChanged |= ImGui::SliderFloat("Size",         &layer.sizeScale,        0.05f, 6.0f, "%.2f");
+                        foliageChanged |= ImGui::SliderFloat("Size Var",     &layer.sizeVariance,     0.0f, 1.0f, "%.2f");
+                        foliageChanged |= ImGui::SliderFloat("Min Alt",      &layer.minAltitudeNorm,  0.0f, 1.0f, "%.2f");
+                        foliageChanged |= ImGui::SliderFloat("Max Alt",      &layer.maxAltitudeNorm,  0.0f, 1.0f, "%.2f");
+                        foliageChanged |= ImGui::SliderFloat("Max Slope deg",&layer.maxSlopeDegrees,  0.0f, 90.0f, "%.0f");
+                        foliageChanged |= ImGui::Checkbox("Use Wind",        &layer.useWind);
+                        if (layer.useWind) {
+                            foliageChanged |= ImGui::SliderFloat("Wind Str", &layer.windStrength, 0.0f, 1.0f, "%.2f");
+                            foliageChanged |= ImGui::SliderFloat("Wind Spd", &layer.windSpeed,    0.0f, 4.0f, "%.2f");
+                        }
+                        foliageChanged |= ImGui::ColorEdit3("Color Top",     &layer.colorTop.x);
+                        foliageChanged |= ImGui::ColorEdit3("Color Bottom",  &layer.colorBottom.x);
+                        ImGui::PopItemWidth();
+                    }
+                    ImGui::PopID();
+                }
+
+                if (foliageChanged) gc->needsRebuild = true;
+            }
+        }
+
         // PBR layer texture paths (collapsing for compactness)
         ImGui::Spacing();
         if (ImGui::CollapsingHeader("PBR Layer Textures", ImGuiTreeNodeFlags_None)) {
@@ -279,6 +396,9 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
         terrainChanged |= ImGui::DragFloat("Height", &asset.heightScale, 1.0f, 1.0f, 512.0f, "%.0f");
         terrainChanged |= ImGui::InputInt("Seed", &asset.seed);
         terrainChanged |= ImGui::DragFloat("Noise", &asset.noiseFreq, 0.0001f, 0.0001f, 0.1f, "%.4f");
+        terrainChanged |= ImGui::SliderInt("Octaves", &asset.octaves, 1, 8);
+        terrainChanged |= ImGui::DragFloat("Lacunarity", &asset.lacunarity, 0.05f, 1.2f, 4.0f, "%.2f");
+        terrainChanged |= ImGui::DragFloat("Gain", &asset.gain, 0.02f, 0.1f, 0.9f, "%.2f");
         ImGui::PopItemWidth();
         if (terrainChanged) {
             tc->needsRebuild = true;
@@ -298,6 +418,7 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
         bool rulesChanged = false;
         rulesChanged |= ImGui::SliderFloat("Rock Height", &asset.autoSplat.rockAltitudeMin, 0.0f, 1.0f, "%.2f");
         rulesChanged |= ImGui::SliderFloat("Rock Slope", &asset.autoSplat.rockSlopeDegrees, 0.0f, 89.0f, "%.0f");
+        rulesChanged |= ImGui::SliderFloat("Dirt Height", &asset.autoSplat.dirtMidAltitude, 0.0f, 1.0f, "%.2f");
         rulesChanged |= ImGui::SliderFloat("Dirt Mix", &asset.autoSplat.dirtStrength, 0.0f, 1.0f, "%.2f");
         ImGui::PopItemWidth();
         if (rulesChanged) {
@@ -308,19 +429,29 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
         ImGui::Spacing();
         ImGui::TextUnformatted("Water");
         bool waterChanged = false;
-        waterChanged |= ImGui::Checkbox("Visible", &asset.water.enabled);
+        bool waterShapeChanged = false;
+        waterShapeChanged |= ImGui::Checkbox("Visible", &asset.water.enabled);
         ImGui::PushItemWidth(-1);
-        waterChanged |= ImGui::DragFloat("Level", &asset.water.seaLevel, 0.25f, -512.0f, 512.0f, "%.2f");
+        waterShapeChanged |= ImGui::DragFloat("Level", &asset.water.seaLevel, 0.25f, -512.0f, 512.0f, "%.2f");
+        waterChanged |= ImGui::DragFloat("Depth Fade", &asset.water.depthFade, 0.1f, 0.5f, 64.0f, "%.1f");
+        waterChanged |= ImGui::DragFloat("Wave Size", &asset.water.waveScale, 0.001f, 0.0f, 0.10f, "%.3f");
+        waterChanged |= ImGui::DragFloat("Wave Speed", &asset.water.waveSpeed, 0.01f, 0.0f, 3.0f, "%.2f");
+        waterChanged |= ImGui::ColorEdit4("Shallow", &asset.water.shallowColor.x);
+        waterChanged |= ImGui::ColorEdit4("Deep", &asset.water.deepColor.x);
         ImGui::PopItemWidth();
         if (ImGui::Button("Fit Water", ImVec2(-1, 28.0f))) {
             asset.water.enabled = true;
             asset.water.seaLevel = asset.SuggestVisibleWaterLevel();
-            waterChanged = true;
+            waterShapeChanged = true;
         }
         if (ImGui::Button("Natural Water", ImVec2(-1, 28.0f))) {
             asset.water.enabled = true;
             asset.ApplyNaturalWaterPreset();
             asset.water.seaLevel = asset.SuggestVisibleWaterLevel();
+            waterShapeChanged = true;
+        }
+        if (waterShapeChanged) {
+            asset.GenerateAutoSplat(asset.autoSplat);
             waterChanged = true;
         }
         if (waterChanged) {

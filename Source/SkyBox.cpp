@@ -155,7 +155,7 @@ Skybox::Skybox(IResourceFactory* factory, const char* filename)
 
     auto* rs = Graphics::Instance().GetRenderState();
     desc.rasterizerState = rs->GetRasterizerState(RasterizerState::SolidCullNone);
-    desc.depthStencilState = rs->GetDepthStencilState(DepthState::TestAndWrite);
+    desc.depthStencilState = rs->GetDepthStencilState(DepthState::TestOnly);
     desc.blendState = rs->GetBlendState(BlendState::Opaque);
     desc.numRenderTargets = 1;
     desc.rtvFormats[0] = TextureFormat::R16G16B16A16_FLOAT;

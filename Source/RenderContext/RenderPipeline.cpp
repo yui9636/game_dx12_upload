@@ -37,6 +37,7 @@
 #include "RenderPass/HUDPass.h"
 #include "Terrain/TerrainRenderPass.h"
 #include "Terrain/WaterRenderPass.h"
+#include "Vegetation/GrassRenderPass.h"
 #include "Console/Logger.h"
 #include "System/TaskSystem.h"
 #include <chrono>
@@ -87,6 +88,7 @@ namespace
         if (dynamic_cast<SSRPass*>(pass.get())) return std::make_shared<SSRPass>(factory);
         if (dynamic_cast<DeferredLightingPass*>(pass.get())) return std::make_shared<DeferredLightingPass>(factory);
         if (dynamic_cast<TerrainRenderPass*>(pass.get())) return std::make_shared<TerrainRenderPass>();
+        if (dynamic_cast<GrassRenderPass*>(pass.get())) return std::make_shared<GrassRenderPass>();
         if (dynamic_cast<WaterRenderPass*>(pass.get())) return std::make_shared<WaterRenderPass>();
         if (dynamic_cast<SkyboxPass*>(pass.get())) return std::make_shared<SkyboxPass>();
         if (dynamic_cast<ForwardTransparentPass*>(pass.get())) return std::make_shared<ForwardTransparentPass>();

@@ -9,7 +9,9 @@
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "RHI/DX12/DX12CommandList.h"
+#include "Console/Logger.h"
 #include <DirectXMath.h>
+#include <algorithm>
 #include <cmath>
 
 using namespace DirectX;
@@ -21,16 +23,16 @@ struct GrassCB {
     XMFLOAT4X4 viewProjectionUnjittered;
     XMFLOAT4X4 prevViewProjection;
     XMFLOAT4   windDirSpeed;       // xyz = dir, w = speed
-    XMFLOAT4   windStrengthTime;   // x = strength, y = time
+    XMFLOAT4   windStrengthTime;   // x = strength, y = time, z = alphaCutoff
     XMFLOAT4   colorBottom;
     XMFLOAT4   colorTop;
     XMFLOAT4   cameraPosition;
+    XMFLOAT4   meshLocalMin;       // xyz = mesh local min, w unused
+    XMFLOAT4   meshLocalMax;       // xyz = mesh local max, w unused
 };
 
 // 32 bytes per instance, layout matches GrassInstanceData.
 constexpr uint32_t kInstanceStride = 32u;
-// Per-vertex (slot 0) stride: float3 position + float2 uv = 20 bytes.
-constexpr uint32_t kVertexStride = sizeof(XMFLOAT3) + sizeof(XMFLOAT2);
 
 } // anonymous namespace
 
@@ -48,18 +50,22 @@ void GrassRenderPass::Initialize()
     m_ps = factory->CreateShader(ShaderType::Pixel,  "Data/Shader/GrassPS.cso");
     if (!m_vs || !m_ps) return;
 
-    // Per-vertex (slot 0): POSITION (12), TEXCOORD0 (8)
-    // Per-instance (slot 1): TEXCOORD1 (worldPos, 12), TEXCOORD2 (scale, 4),
-    //                        TEXCOORD3 (tint, 12), TEXCOORD4 (rotY, 4)
+    // Per-vertex (slot 0) matches engine Model::Vertex layout (stride 92 bytes):
+    //   POSITION (float3) @ 0
+    //   TEXCOORD0 (float2) @ 44 (after boneWeight float4 + boneIndex uint4)
+    //   NORMAL (float3) @ 52
+    // Other vertex fields (bone weights/indices, tangent, color) are unused.
+    // Per-instance (slot 1) packed as two float4 (32 bytes total):
+    //   TEXCOORD1 = (worldPos.xyz, scale)
+    //   TEXCOORD2 = (colorTint.xyz, rotationY)
     static const InputLayoutElement kLayout[] = {
-        { "POSITION", 0, TextureFormat::R32G32B32_FLOAT, 0,  0,  false, 0 },
-        { "TEXCOORD", 0, TextureFormat::R32G32_FLOAT,    0, 12,  false, 0 },
-        { "TEXCOORD", 1, TextureFormat::R32G32B32_FLOAT, 1,  0,  true,  1 },
-        { "TEXCOORD", 2, TextureFormat::R32_FLOAT,       1, 12,  true,  1 },
-        { "TEXCOORD", 3, TextureFormat::R32G32B32_FLOAT, 1, 16,  true,  1 },
-        { "TEXCOORD", 4, TextureFormat::R32_FLOAT,       1, 28,  true,  1 },
+        { "POSITION", 0, TextureFormat::R32G32B32_FLOAT,    0,  0,  false, 0 },
+        { "TEXCOORD", 0, TextureFormat::R32G32_FLOAT,       0, 44,  false, 0 },
+        { "NORMAL",   0, TextureFormat::R32G32B32_FLOAT,    0, 52,  false, 0 },
+        { "TEXCOORD", 1, TextureFormat::R32G32B32A32_FLOAT, 1,  0,  true,  1 },
+        { "TEXCOORD", 2, TextureFormat::R32G32B32A32_FLOAT, 1, 16,  true,  1 },
     };
-    m_inputLayout = factory->CreateInputLayout(InputLayoutDesc{ kLayout, 6 }, m_vs.get());
+    m_inputLayout = factory->CreateInputLayout(InputLayoutDesc{ kLayout, 5 }, m_vs.get());
     m_cb = factory->CreateBuffer(sizeof(GrassCB), BufferType::Constant);
 
     auto* rs = Graphics::Instance().GetRenderState();
@@ -162,26 +168,34 @@ void GrassRenderPass::Execute(FrameGraphResources& resources, const RenderQueue&
     XMMATRIX prevVp       = XMMatrixTranspose(XMLoadFloat4x4(&rc.prevViewProjectionMatrix));
     XMMATRIX vp           = vpUnjittered;
 
+    if (rs) {
+        cmd->PSSetSampler(0, rs->GetSamplerState(SamplerState::LinearWrap));
+    }
+
     for (const GrassDrawCall& dc : queue.grassDraws) {
         if (!dc.meshVertexBuffer || !dc.meshIndexBuffer || !dc.instanceBuffer) continue;
         if (dc.instanceCount == 0 || dc.meshIndexCount == 0) continue;
 
-        // Distance cull (entity bounds center vs camera)
+        // Distance cull (entity bounds center vs camera, horizontal only).
         const float dx = dc.boundsCenter.x - rc.cameraPosition.x;
         const float dz = dc.boundsCenter.z - rc.cameraPosition.z;
-        const float horizDist = std::sqrt(dx * dx + dz * dz)
-            - std::max({ dc.boundsExtents.x, dc.boundsExtents.z });
+        const float horizExtent = (dc.boundsExtents.x > dc.boundsExtents.z)
+            ? dc.boundsExtents.x : dc.boundsExtents.z;
+        const float horizDist = std::sqrt(dx * dx + dz * dz) - horizExtent;
         if (horizDist > dc.drawDistance) continue;
 
         GrassCB cb{};
         XMStoreFloat4x4(&cb.viewProj,                  vp);
         XMStoreFloat4x4(&cb.viewProjectionUnjittered,  vpUnjittered);
         XMStoreFloat4x4(&cb.prevViewProjection,        prevVp);
+        const float effStrength = dc.useWind ? dc.windStrength : 0.0f;
         cb.windDirSpeed      = { dc.windDirection.x, dc.windDirection.y, dc.windDirection.z, dc.windSpeed };
-        cb.windStrengthTime  = { dc.windStrength, rc.time, 0.0f, 0.0f };
+        cb.windStrengthTime  = { effStrength, rc.time, dc.alphaCutoff, 0.0f };
         cb.colorBottom       = { dc.colorBottom.x, dc.colorBottom.y, dc.colorBottom.z, 0.0f };
         cb.colorTop          = { dc.colorTop.x,    dc.colorTop.y,    dc.colorTop.z,    0.0f };
         cb.cameraPosition    = { rc.cameraPosition.x, rc.cameraPosition.y, rc.cameraPosition.z, 0.0f };
+        cb.meshLocalMin      = { dc.meshLocalMin.x, dc.meshLocalMin.y, dc.meshLocalMin.z, 0.0f };
+        cb.meshLocalMax      = { dc.meshLocalMax.x, dc.meshLocalMax.y, dc.meshLocalMax.z, 0.0f };
 
         if (dx12Cmd) {
             dx12Cmd->VSSetDynamicConstantBuffer(0, &cb, sizeof(GrassCB));
@@ -190,9 +204,19 @@ void GrassRenderPass::Execute(FrameGraphResources& resources, const RenderQueue&
             cmd->UpdateBuffer(m_cb.get(), &cb, sizeof(GrassCB));
         }
 
-        cmd->SetVertexBuffer(0, dc.meshVertexBuffer, kVertexStride);
+        // Bind albedo texture (slot t0).
+        if (dx12Cmd) {
+            DX12CommandList::PixelTextureBinding bindings[] = {
+                { 0, dc.albedoTexture, DX12CommandList::NullSrvKind::Texture2D },
+            };
+            dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
+        } else if (dc.albedoTexture) {
+            cmd->PSSetTexture(0, dc.albedoTexture);
+        }
+
+        cmd->SetVertexBuffer(0, dc.meshVertexBuffer, dc.meshVertexStride);
         cmd->SetVertexBuffer(1, dc.instanceBuffer,   kInstanceStride);
-        cmd->SetIndexBuffer(dc.meshIndexBuffer, IndexFormat::Uint16);
+        cmd->SetIndexBuffer(dc.meshIndexBuffer, IndexFormat::Uint32);
         cmd->DrawIndexedInstanced(dc.meshIndexCount, dc.instanceCount, 0, 0, 0);
     }
 

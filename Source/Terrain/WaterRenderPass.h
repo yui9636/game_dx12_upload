@@ -25,9 +25,7 @@ public:
 private:
     ResourceHandle m_hSceneColor;
     ResourceHandle m_hDepth;
-    ResourceHandle m_hGBuffer2;     // WorldPos / linear depth (used for true water depth)
-    ResourceHandle m_hPrevScene;    // Previous frame scene (used for screen-space refraction)
-
+    ResourceHandle m_hGBuffer2;
     std::unique_ptr<IShader>        m_vs;
     std::unique_ptr<IShader>        m_ps;
     std::unique_ptr<IInputLayout>   m_inputLayout;

@@ -314,19 +314,25 @@ struct TerrainChunkDrawCall {
 
 // 草インスタンス描画リクエスト (Terrain エンティティごとに 1 つ)。
 struct GrassDrawCall {
-    IBuffer* meshVertexBuffer = nullptr;
-    IBuffer* meshIndexBuffer  = nullptr;
-    uint32_t meshIndexCount   = 0;
-    IBuffer* instanceBuffer   = nullptr;
-    uint32_t instanceCount    = 0;
+    IBuffer*  meshVertexBuffer = nullptr;
+    IBuffer*  meshIndexBuffer  = nullptr;
+    uint32_t  meshIndexCount   = 0;
+    uint32_t  meshVertexStride = 0;        // bytes per model vertex
+    ITexture* albedoTexture    = nullptr;  // grass blade albedo (with alpha)
+    float     alphaCutoff      = 0.5f;
+    IBuffer*  instanceBuffer   = nullptr;
+    uint32_t  instanceCount    = 0;
     DirectX::XMFLOAT3 boundsCenter  = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 boundsExtents = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 meshLocalMin  = { 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT3 meshLocalMax  = { 1.0f, 1.0f, 1.0f };
     DirectX::XMFLOAT3 windDirection = { 1.0f, 0.0f, 0.0f };
     float windStrength = 0.35f;
     float windSpeed    = 1.4f;
     DirectX::XMFLOAT3 colorBottom = { 0.16f, 0.28f, 0.10f };
     DirectX::XMFLOAT3 colorTop    = { 0.55f, 0.78f, 0.30f };
-    float drawDistance = 80.0f;
+    float drawDistance = 250.0f;
+    bool  useWind     = true;   // false for rigid props (rocks etc)
 };
 
 // Terrain に紐づく水面メッシュの描画リクエスト。

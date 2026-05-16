@@ -33,12 +33,6 @@ struct WaterVertex {
     XMFLOAT2 shoreData;
 };
 
-struct WaterClipVertex {
-    float u;
-    float v;
-    float heightDelta;
-};
-
 static float SampleH(const std::vector<float>& data, uint32_t res, int x, int z, float hs)
 {
     x = std::clamp(x, 0, static_cast<int>(res) - 1);
@@ -101,70 +95,6 @@ static std::vector<uint32_t> BuildLodIndices(uint32_t vertsPerChunkX, uint32_t v
     return indices;
 }
 
-static WaterClipVertex LerpWaterClipVertex(const WaterClipVertex& a, const WaterClipVertex& b)
-{
-    const float denom = a.heightDelta - b.heightDelta;
-    const float t = (std::abs(denom) > 0.00001f)
-        ? std::clamp(a.heightDelta / denom, 0.0f, 1.0f)
-        : 0.5f;
-    return {
-        a.u + (b.u - a.u) * t,
-        a.v + (b.v - a.v) * t,
-        0.0f
-    };
-}
-
-static void AppendClippedWaterTriangle(
-    const WaterClipVertex (&tri)[3],
-    float waterY,
-    float halfW,
-    float halfZ,
-    float worldSizeX,
-    float worldSizeZ,
-    float shoreDepth,
-    std::vector<WaterVertex>& vertices,
-    std::vector<uint32_t>& indices)
-{
-    std::vector<WaterClipVertex> poly;
-    poly.reserve(4);
-
-    for (int i = 0; i < 3; ++i) {
-        const WaterClipVertex& a = tri[i];
-        const WaterClipVertex& b = tri[(i + 1) % 3];
-        const bool aInside = a.heightDelta <= 0.0f;
-        const bool bInside = b.heightDelta <= 0.0f;
-
-        if (aInside && bInside) {
-            poly.push_back(b);
-        } else if (aInside && !bInside) {
-            poly.push_back(LerpWaterClipVertex(a, b));
-        } else if (!aInside && bInside) {
-            poly.push_back(LerpWaterClipVertex(a, b));
-            poly.push_back(b);
-        }
-    }
-
-    if (poly.size() < 3) {
-        return;
-    }
-
-    const uint32_t base = static_cast<uint32_t>(vertices.size());
-    for (const WaterClipVertex& p : poly) {
-        const float shore = std::clamp((-p.heightDelta) / shoreDepth, 0.0f, 1.0f);
-        vertices.push_back({
-            { p.u * worldSizeX - halfW, waterY, p.v * worldSizeZ - halfZ },
-            { p.u, p.v },
-            { shore, 0.0f }
-        });
-    }
-
-    for (uint32_t i = 1; i + 1 < static_cast<uint32_t>(poly.size()); ++i) {
-        indices.push_back(base);
-        indices.push_back(base + i);
-        indices.push_back(base + i + 1);
-    }
-}
-
 static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, const TerrainAsset& asset)
 {
     rd.waterVertexBuffer.reset();
@@ -181,43 +111,48 @@ static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, co
     const float seaLevel = asset.water.seaLevel;
     const float waterY = seaLevel + (std::max)(0.05f, asset.heightScale * 0.003f);
     const float shoreDepth = (std::max)(0.75f, asset.heightScale * 0.06f);
-
-    auto terrainHeightAt = [&](float u, float v) {
-        return asset.SampleHeight(u, v);
-    };
+    const uint32_t vertsPerSide = kGrid + 1u;
 
     std::vector<WaterVertex> vertices;
     std::vector<uint32_t> indices;
-    vertices.reserve(static_cast<size_t>(kGrid) * kGrid * 8u);
-    indices.reserve(static_cast<size_t>(kGrid) * kGrid * 12u);
+    vertices.reserve(static_cast<size_t>(vertsPerSide) * vertsPerSide);
+    indices.reserve(static_cast<size_t>(kGrid) * kGrid * 6u);
 
-    for (uint32_t z = 0; z < kGrid; ++z) {
-        for (uint32_t x = 0; x < kGrid; ++x) {
+    bool hasVisibleWater = false;
+    for (uint32_t z = 0; z < vertsPerSide; ++z) {
+        for (uint32_t x = 0; x < vertsPerSide; ++x) {
             const float u0 = static_cast<float>(x) / static_cast<float>(kGrid);
             const float v0 = static_cast<float>(z) / static_cast<float>(kGrid);
-            const float u1 = static_cast<float>(x + 1) / static_cast<float>(kGrid);
-            const float v1 = static_cast<float>(z + 1) / static_cast<float>(kGrid);
+            const float terrainY = asset.SampleHeight(u0, v0);
+            const float waterDepth = seaLevel - terrainY;
+            const float shore = std::clamp(waterDepth / shoreDepth, 0.0f, 1.0f);
+            hasVisibleWater = hasVisibleWater || waterDepth > 0.02f;
 
-            const WaterClipVertex p00 = { u0, v0, terrainHeightAt(u0, v0) - seaLevel };
-            const WaterClipVertex p10 = { u1, v0, terrainHeightAt(u1, v0) - seaLevel };
-            const WaterClipVertex p01 = { u0, v1, terrainHeightAt(u0, v1) - seaLevel };
-            const WaterClipVertex p11 = { u1, v1, terrainHeightAt(u1, v1) - seaLevel };
-
-            const WaterClipVertex triA[3] = { p00, p01, p10 };
-            const WaterClipVertex triB[3] = { p10, p01, p11 };
-            AppendClippedWaterTriangle(
-                triA, waterY, halfW, halfZ,
-                asset.worldSizeX, asset.worldSizeZ, shoreDepth,
-                vertices, indices);
-            AppendClippedWaterTriangle(
-                triB, waterY, halfW, halfZ,
-                asset.worldSizeX, asset.worldSizeZ, shoreDepth,
-                vertices, indices);
+            vertices.push_back({
+                { u0 * asset.worldSizeX - halfW, waterY, v0 * asset.worldSizeZ - halfZ },
+                { u0, v0 },
+                { shore, 0.0f }
+            });
         }
     }
 
-    if (vertices.empty() || indices.empty()) {
+    if (!hasVisibleWater) {
         return;
+    }
+
+    for (uint32_t z = 0; z < kGrid; ++z) {
+        for (uint32_t x = 0; x < kGrid; ++x) {
+            const uint32_t i0 = z * vertsPerSide + x;
+            const uint32_t i1 = i0 + 1u;
+            const uint32_t i2 = (z + 1u) * vertsPerSide + x;
+            const uint32_t i3 = i2 + 1u;
+            indices.push_back(i0);
+            indices.push_back(i2);
+            indices.push_back(i1);
+            indices.push_back(i1);
+            indices.push_back(i2);
+            indices.push_back(i3);
+        }
     }
 
     rd.waterVertexBuffer = factory.CreateBuffer(
