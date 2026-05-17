@@ -105,9 +105,6 @@ void ThumbnailGenerator::Request(const std::string& modelPath)
         return;
     }
 
-    // 遅延初期化がまだなら行う。
-    if (!m_initialized && !LazyInitialize()) return;
-
     // 空パス、キャッシュ済み、キュー済みなら何もしない。
     if (modelPath.empty() || m_cache.count(modelPath) || m_pendingSet.count(modelPath)) return;
 
@@ -121,9 +118,6 @@ void ThumbnailGenerator::RequestMaterial(const std::string& matPath)
 {
     // 利用不可なら何もしない。
     if (!IsAvailable()) return;
-
-    // 遅延初期化がまだなら行う。
-    if (!m_initialized && !LazyInitialize()) return;
 
     // 空パス、キャッシュ済み、キュー済みなら何もしない。
     if (matPath.empty() || m_cache.count(matPath) || m_pendingSet.count(matPath)) return;
@@ -230,6 +224,12 @@ void ThumbnailGenerator::PumpOne()
     // 完了済み fence までの deferred release を処理する。
     const uint64_t completedFenceValue = m_offscreen->GetCompletedFenceValue();
     m_texturePool.ProcessDeferred(completedFenceValue);
+
+    // キャッシュ満杯時は、先に古い項目を返却してから新しい描画先を取得する。
+    if (m_cache.size() >= MAX_CACHE) {
+        EvictOldest();
+        m_texturePool.ProcessDeferred(m_offscreen->GetCompletedFenceValue());
+    }
 
     // まず可視アセットの中から 1 件選ぶ。
     auto selected = m_pendingQueue.end();

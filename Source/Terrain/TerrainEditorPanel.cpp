@@ -7,6 +7,8 @@
 #include "Component/TransformComponent.h"
 #include "Engine/EditorSelection.h"
 #include "Vegetation/GrassComponent.h"
+#include "Terrain/TerrainGpuPipeline.h"
+#include "Graphics.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>
@@ -23,10 +25,30 @@ EntityID CreateDefaultTerrain(Registry& registry)
 
     TerrainComponent terrain;
     terrain.asset = std::make_shared<TerrainAsset>();
-    terrain.asset->GenerateFromNoise();
     terrain.asset->EnsureDefaultLayers();
-    terrain.asset->SetupDefaultWater();
-    terrain.asset->GenerateAutoSplat(terrain.asset->autoSplat);
+
+    // Default = Flat Plains: gentle grass + dirt with minimal relief so the
+    // player has a walkable surface immediately on creation. Other landscapes
+    // can be applied via the Quick Presets buttons in the editor.
+    auto& a = *terrain.asset;
+    a.noiseType = 1;             // Simplex (no Cellular spikes)
+    a.noiseFreq = 0.0025f;       // low frequency for broad gentle features
+    a.octaves = 3;
+    a.lacunarity = 2.0f;
+    a.gain = 0.42f;
+    a.domainWarpStrength = 25.0f;
+    a.terraceSteps = 0.0f;
+    a.heightScale = 14.0f;       // shallow vertical range -> walkable
+    a.autoSplat.rockAltitudeMin = 0.92f;  // rock only at top fringe
+    a.autoSplat.rockSlopeDegrees = 60.0f;
+    a.autoSplat.dirtMidAltitude = 0.55f;
+    a.autoSplat.dirtStrength = 0.40f;
+    a.water.enabled = false;     // no water in the default flat plain
+
+    // Noise + auto-splat only. Skip erosion for the default to keep it tame.
+    TerrainGpuPipeline::Instance().Run(
+        a,
+        TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat);
     terrain.needsRebuild = true;
     registry.AddComponent(entity, terrain);
 
@@ -143,17 +165,26 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
     const size_t chunkEstimate =
         static_cast<size_t>(asset.chunkCountX) * static_cast<size_t>(asset.chunkCountZ);
 
-    char terrainSummary[128]{};
+    const char* kNoiseTypeNames[] = { "Hybrid", "Simplex", "Cellular" };
+    const int   noiseTypeNameIdx = std::clamp(asset.noiseType, 0, 2);
+    char terrainSummary[160]{};
     std::snprintf(
         terrainSummary,
         sizeof(terrainSummary),
-        "%.0fx%.0f  H%.0f  R%u  C%zu",
+        "%.0fx%.0fm  H%.0f  R%u  Chunks %zu  Noise:%s  Seed:%d  Water:%s",
         asset.worldSizeX,
         asset.worldSizeZ,
         asset.heightScale,
         asset.resolution,
-        chunkEstimate);
+        chunkEstimate,
+        kNoiseTypeNames[noiseTypeNameIdx],
+        asset.seed,
+        asset.water.enabled ? "on" : "off");
     DrawCompactMetric("Terrain", terrainSummary);
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip(
+            "World size in meters / Heightscale / Resolution / Chunk count / Noise type / Seed / Water state");
+    }
     if (tc->needsRebuild) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.95f, 0.76f, 0.28f, 1.0f), "Rebuild pending");
@@ -216,26 +247,31 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
         }
 
         ImGui::Spacing();
-        ImGui::TextDisabled("Materials");
+        ImGui::TextDisabled("Splat Paint (click to select a layer, then paint in scene view)");
         const float layerWidth = (std::max)(
             76.0f,
             (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f);
-        const char* layerLabels[] = { "Grass", "Dirt", "Rock" };
+        // Suffix "##splat" disambiguates from any future button using the same words.
+        const char* layerLabels[] = { "Grass##splat", "Dirt##splat", "Rock##splat" };
+        const ImVec4 layerColors[] = {
+            ImVec4(0.26f, 0.55f, 0.30f, 1.0f),   // grass = green
+            ImVec4(0.55f, 0.39f, 0.22f, 1.0f),   // dirt = brown
+            ImVec4(0.45f, 0.45f, 0.50f, 1.0f),   // rock = grey
+        };
         for (int i = 0; i < (std::min)(layerCount, 3); ++i) {
             if (i > 0) ImGui::SameLine();
             const bool selected = m_brush.mode == TerrainBrush::Mode::Paint && m_brush.layerIndex == i;
-            if (selected) {
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f, 0.45f, 0.28f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.54f, 0.34f, 1.0f));
-            }
+            const ImVec4 baseCol = layerColors[i];
+            const ImVec4 dim = ImVec4(baseCol.x * 0.55f, baseCol.y * 0.55f, baseCol.z * 0.55f, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button,        selected ? baseCol : dim);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, baseCol);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  baseCol);
             if (ImGui::Button(layerLabels[i], ImVec2(layerWidth, 28.0f))) {
                 m_brush.mode = TerrainBrush::Mode::Paint;
                 m_brush.layerIndex = i;
                 m_sceneBrushEnabled = true;
             }
-            if (selected) {
-                ImGui::PopStyleColor(2);
-            }
+            ImGui::PopStyleColor(3);
         }
 
         // Foliage / multi-layer vegetation scattering.
@@ -388,28 +424,243 @@ void TerrainEditorPanel::Draw(Registry& registry, EntityID selectedEntity)
 
         ImGui::TableNextColumn();
         ImGui::BeginChild("TerrainSetupPanel", ImVec2(0.0f, 0.0f), true);
-        ImGui::TextUnformatted("Terrain");
-        ImGui::PushItemWidth(-1);
-        bool terrainChanged = false;
-        terrainChanged |= ImGui::DragFloat("Width", &asset.worldSizeX, 1.0f, 1.0f, 4096.0f, "%.0f");
-        terrainChanged |= ImGui::DragFloat("Depth", &asset.worldSizeZ, 1.0f, 1.0f, 4096.0f, "%.0f");
-        terrainChanged |= ImGui::DragFloat("Height", &asset.heightScale, 1.0f, 1.0f, 512.0f, "%.0f");
-        terrainChanged |= ImGui::InputInt("Seed", &asset.seed);
-        terrainChanged |= ImGui::DragFloat("Noise", &asset.noiseFreq, 0.0001f, 0.0001f, 0.1f, "%.4f");
-        terrainChanged |= ImGui::SliderInt("Octaves", &asset.octaves, 1, 8);
-        terrainChanged |= ImGui::DragFloat("Lacunarity", &asset.lacunarity, 0.05f, 1.2f, 4.0f, "%.2f");
-        terrainChanged |= ImGui::DragFloat("Gain", &asset.gain, 0.02f, 0.1f, 0.9f, "%.2f");
+
+        // -- Quick Presets --------------------------------------------------
+        ImGui::TextUnformatted("Quick Presets");
+        auto runPipeline = [&](uint32_t stages) {
+            TerrainGpuPipeline::Instance().Run(asset, stages);
+            tc->needsRebuild = true;
+        };
+        auto applyPreset = [&](auto&& setup, uint32_t stages) {
+            setup(asset);
+            runPipeline(stages);
+        };
+        const ImVec2 presetBtn(-1.0f, 24.0f);
+        const ImVec2 halfBtn((ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f, 24.0f);
+
+        if (ImGui::Button("Flat Plains", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;            // Simplex
+                a.noiseFreq = 0.0025f;
+                a.octaves = 3;
+                a.lacunarity = 2.0f;
+                a.gain = 0.42f;
+                a.domainWarpStrength = 25.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 14.0f;
+                a.autoSplat = { 0.92f, 60.0f, 0.55f, 0.40f };
+                a.water.enabled = false;
+            }, TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Rolling Hills", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;
+                a.noiseFreq = 0.0035f;
+                a.octaves = 4;
+                a.lacunarity = 2.0f;
+                a.gain = 0.5f;
+                a.domainWarpStrength = 60.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 32.0f;
+                a.autoSplat = { 0.78f, 38.0f, 0.5f, 0.45f };
+            }, TerrainGpuPipeline::StageAll);
+        }
+        if (ImGui::Button("Mountain Range", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 0;            // Hybrid
+                a.noiseFreq = 0.0045f;
+                a.octaves = 5;
+                a.lacunarity = 2.2f;
+                a.gain = 0.5f;
+                a.domainWarpStrength = 100.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 80.0f;
+                a.autoSplat = { 0.55f, 28.0f, 0.42f, 0.40f };
+                a.erosion.iterations = 80000;
+            }, TerrainGpuPipeline::StageAll);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Plateau / Mesa", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;
+                a.noiseFreq = 0.003f;
+                a.octaves = 4;
+                a.lacunarity = 2.0f;
+                a.gain = 0.5f;
+                a.domainWarpStrength = 50.0f;
+                a.terraceSteps = 8.0f;
+                a.heightScale = 55.0f;
+                a.autoSplat = { 0.7f, 45.0f, 0.45f, 0.4f };
+            }, TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat);
+        }
+        if (ImGui::Button("Lake Basin", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;
+                a.noiseFreq = 0.0028f;
+                a.octaves = 4;
+                a.lacunarity = 2.0f;
+                a.gain = 0.5f;
+                a.domainWarpStrength = 70.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 30.0f;
+                a.water.enabled = true;
+                a.autoSplat = { 0.85f, 50.0f, 0.4f, 0.5f };
+            }, TerrainGpuPipeline::StageAll);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Rocky Wasteland", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 2;            // Cellular
+                a.noiseFreq = 0.006f;
+                a.octaves = 4;
+                a.lacunarity = 2.0f;
+                a.gain = 0.5f;
+                a.domainWarpStrength = 50.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 50.0f;
+                a.autoSplat = { 0.35f, 22.0f, 0.35f, 0.35f };
+                a.water.enabled = false;
+            }, TerrainGpuPipeline::StageAll);
+        }
+        if (ImGui::Button("Archipelago", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;
+                a.noiseFreq = 0.0045f;
+                a.octaves = 4;
+                a.lacunarity = 2.0f;
+                a.gain = 0.55f;
+                a.domainWarpStrength = 90.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 35.0f;
+                a.water.enabled = true;
+                a.water.seaLevel = 2.0f;   // high sea -> islands
+                a.autoSplat = { 0.8f, 45.0f, 0.4f, 0.5f };
+            }, TerrainGpuPipeline::StageAll);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Volcanic Crater", halfBtn)) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 0;
+                a.noiseFreq = 0.005f;
+                a.octaves = 5;
+                a.lacunarity = 2.3f;
+                a.gain = 0.55f;
+                a.domainWarpStrength = 60.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 90.0f;
+                a.autoSplat = { 0.45f, 25.0f, 0.4f, 0.5f };
+                a.erosion.iterations = 100000;
+            }, TerrainGpuPipeline::StageAll);
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+
+        // -- Dimensions / Mesh ----------------------------------------------
+        ImGui::TextUnformatted("Dimensions");
+        ImGui::PushItemWidth(-110.0f);
+        bool dimsChanged = false;
+        dimsChanged |= ImGui::DragFloat("Width##dim",   &asset.worldSizeX, 1.0f, 1.0f, 8192.0f, "%.0f m");
+        dimsChanged |= ImGui::DragFloat("Depth##dim",   &asset.worldSizeZ, 1.0f, 1.0f, 8192.0f, "%.0f m");
+        dimsChanged |= ImGui::DragFloat("Height##dim",  &asset.heightScale, 1.0f, 1.0f, 512.0f, "%.0f m");
+        int resInt = (int)asset.resolution;
+        if (ImGui::SliderInt("Resolution##dim", &resInt, 64, 1024)) {
+            asset.resolution = (uint32_t)std::clamp(resInt, 64, 1024);
+            dimsChanged = true;
+        }
+        int cx = (int)asset.chunkCountX, cz = (int)asset.chunkCountZ;
+        if (ImGui::SliderInt("Chunks X##dim", &cx, 1, 16)) { asset.chunkCountX = (uint32_t)cx; dimsChanged = true; }
+        if (ImGui::SliderInt("Chunks Z##dim", &cz, 1, 16)) { asset.chunkCountZ = (uint32_t)cz; dimsChanged = true; }
         ImGui::PopItemWidth();
-        if (terrainChanged) {
+        if (dimsChanged) {
             tc->needsRebuild = true;
         }
 
-        if (ImGui::Button("Regenerate Terrain", ImVec2(-1, 30.0f))) {
-            RegenerateTerrain(asset, *tc);
+        // -- Action buttons -------------------------------------------------
+        const float halfActW = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ImGui::Button("Regenerate (All)", ImVec2(halfActW, 28.0f))) {
+            runPipeline(TerrainGpuPipeline::StageAll);
         }
-        if (ImGui::Button("Retexture From Rules", ImVec2(-1, 28.0f))) {
-            asset.GenerateAutoSplat(asset.autoSplat);
-            tc->needsRebuild = true;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("GPU: Noise + Erosion + AutoSplat");
+        ImGui::SameLine();
+        if (ImGui::Button("Retexture##act", ImVec2(halfActW, 28.0f))) {
+            runPipeline(TerrainGpuPipeline::StageAutoSplat);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Re-runs AutoSplat only (uses existing heightmap)");
+
+        if (ImGui::Button("Randomize Seed", ImVec2(halfActW, 24.0f))) {
+            asset.seed = static_cast<int>((uint32_t)rand() ^ ((uint32_t)rand() << 15));
+            asset.erosion.seed = asset.seed + 7919;
+            runPipeline(TerrainGpuPipeline::StageAll);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset to Flat##act", ImVec2(halfActW, 24.0f))) {
+            applyPreset([](TerrainAsset& a) {
+                a.noiseType = 1;
+                a.noiseFreq = 0.0025f;
+                a.octaves = 3;
+                a.lacunarity = 2.0f;
+                a.gain = 0.42f;
+                a.domainWarpStrength = 25.0f;
+                a.terraceSteps = 0.0f;
+                a.heightScale = 14.0f;
+                a.autoSplat = { 0.92f, 60.0f, 0.55f, 0.40f };
+                a.water.enabled = false;
+            }, TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Resets the terrain to the default Flat Plains preset");
+
+        // -- Noise / Shape (GPU compute) ------------------------------------
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Terrain Noise", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushItemWidth(-100.0f);
+            const char* kNoiseTypes[] = { "Hybrid (Simplex + Cellular)", "Simplex", "Cellular" };
+            int noiseTypeIdx = std::clamp(asset.noiseType, 0, 2);
+            if (ImGui::Combo("Noise Type##n", &noiseTypeIdx, kNoiseTypes, 3)) {
+                asset.noiseType = noiseTypeIdx;
+            }
+            ImGui::SliderFloat("Frequency##n",  &asset.noiseFreq,  0.0001f, 0.05f, "%.4f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Cycles per meter. Low = big features, High = small features.");
+            ImGui::SliderInt("Octaves##n",      &asset.octaves,    1, 8);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("More octaves = more detail but slower. 3-5 is typical.");
+            ImGui::SliderFloat("Lacunarity##n", &asset.lacunarity, 1.5f, 4.0f, "%.2f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Frequency multiplier between octaves. 2.0 standard.");
+            ImGui::SliderFloat("Gain##n",       &asset.gain,       0.1f, 0.9f, "%.2f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Amplitude multiplier per octave. <0.5 smoother, >0.5 rougher.");
+            ImGui::SliderFloat("Warp Strength (m)##n", &asset.domainWarpStrength, 0.0f, 250.0f, "%.0f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Domain warp magnitude in meters. Hides the underlying noise grid pattern.");
+            ImGui::SliderFloat("Terrace Steps (0=off)##n", &asset.terraceSteps, 0.0f, 32.0f, "%.0f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Quantize height into N flat plateaus. 0 = smooth, 8-16 = mesa landscape.");
+            ImGui::InputInt("Seed##n", &asset.seed);
+            ImGui::PopItemWidth();
+        }
+
+        // -- Phase 1.5: Hydraulic Erosion -----------------------------------
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Erosion (Hydraulic)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& ep = asset.erosion;
+            ImGui::PushItemWidth(-100.0f);
+            ImGui::SliderInt("Iterations",   &ep.iterations,        1000, 200000);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Number of water droplets simulated. More = stronger erosion.");
+            ImGui::SliderInt("Radius",       &ep.erosionRadius,     1, 8);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Erosion brush radius in cells. Wider = smoother valleys.");
+            ImGui::SliderInt("Lifetime",     &ep.maxDropletLifetime,5, 80);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Max steps a droplet can travel. Longer = deeper rivers.");
+            ImGui::SliderFloat("Inertia",    &ep.inertia,           0.0f, 1.0f, "%.2f");
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("How much droplets keep their old direction. 0 = pure gravity, 1 = straight lines.");
+            ImGui::SliderFloat("Capacity",   &ep.sedimentCapacityFactor, 0.5f, 16.0f, "%.2f");
+            ImGui::SliderFloat("Erode Spd",  &ep.erodeSpeed,        0.0f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Deposit Spd",&ep.depositSpeed,      0.0f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Evaporate",  &ep.evaporateSpeed,    0.0f, 0.1f, "%.3f");
+            ImGui::SliderFloat("Gravity",    &ep.gravity,           0.5f, 20.0f, "%.2f");
+            ImGui::PopItemWidth();
+            if (ImGui::Button("Run Erosion (keeps current shape)", ImVec2(-1, 28.0f))) {
+                asset.RunHydraulicErosion(ep);
+                tc->needsRebuild = true;
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Uploads existing heightmap, applies erosion, refreshes splat");
+            ImGui::TextDisabled("All terrain ops run on GPU compute (~30-100ms).");
         }
 
         ImGui::Spacing();
@@ -507,8 +758,8 @@ void TerrainEditorPanel::ApplyBrush(Registry& registry, EntityID entity,
 
             float& h = asset.heightData[static_cast<size_t>(iz) * asset.resolution + ix];
             switch (m_brush.mode) {
-            case TerrainBrush::Mode::Raise:   h = std::min(1.0f, h + w * 0.01f); break;
-            case TerrainBrush::Mode::Lower:   h = std::max(0.0f, h - w * 0.01f); break;
+            case TerrainBrush::Mode::Raise:   h = (std::min)(1.0f, h + w * 0.01f); break;
+            case TerrainBrush::Mode::Lower:   h = (std::max)(0.0f, h - w * 0.01f); break;
             case TerrainBrush::Mode::Flatten: h += (m_brush.targetHeight - h) * w; break;
             case TerrainBrush::Mode::Smooth:
             {

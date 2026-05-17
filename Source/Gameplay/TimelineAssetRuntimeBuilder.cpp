@@ -6,6 +6,7 @@
 #include "PlayerEditor/TimelineAsset.h"
 
 #include <algorithm>
+#include <cstring>
 
 namespace
 {
@@ -17,6 +18,8 @@ namespace
         outTimeline.frameMin = 0;
         outTimeline.frameMax = 0;
         outTimeline.clipLengthSec = 0.0f;
+        outTimeline.previousFrame = -1;
+        outTimeline.currentFrame = 0;
         outTimeline.playing = true;
     }
 
@@ -60,16 +63,8 @@ namespace TimelineAssetRuntimeBuilder
         if (asset.animationIndex >= 0 &&
             animationIndex >= 0 &&
             asset.animationIndex != animationIndex) {
-            if (outPartialBuild) {
-                *outPartialBuild = false;
-            }
-            if (outWarningCount) {
-                *outWarningCount = 0;
-            }
-            if (outUnsupportedTrackMask) {
-                *outUnsupportedTrackMask = 0;
-            }
-            return true;
+            partialBuild = true;
+            ++warningCount;
         }
 
         outTimeline.fps = asset.fps > 0.0f ? asset.fps : 60.0f;
@@ -110,6 +105,12 @@ namespace TimelineAssetRuntimeBuilder
                     runtimeItem.type = 4;
                     runtimeItem.shake = item.shake;
                     break;
+                case TimelineTrackType::Event:
+                    runtimeItem.type = static_cast<int>(TimelineTrackType::Event);
+                    strncpy_s(runtimeItem.eventName, item.eventName, _TRUNCATE);
+                    strncpy_s(runtimeItem.eventData, item.eventData, _TRUNCATE);
+                    runtimeItem.end = (std::max)(runtimeItem.start, runtimeItem.end);
+                    break;
                 default:
                     partialBuild = true;
                     ++warningCount;
@@ -124,7 +125,6 @@ namespace TimelineAssetRuntimeBuilder
                 switch (track.type) {
                 case TimelineTrackType::Animation:
                 case TimelineTrackType::Camera:
-                case TimelineTrackType::Event:
                 case TimelineTrackType::Custom:
                     partialBuild = true;
                     ++warningCount;

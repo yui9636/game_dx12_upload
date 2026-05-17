@@ -1052,9 +1052,6 @@ void EngineKernel::RenderPlayerPreviewOffscreen()
     }
 
     const Model* previewModel = m_editorLayer->GetPlayerEditorPanel().GetPreviewModel();
-    if (!previewModel) {
-        return;
-    }
 
     const DirectX::XMFLOAT2 renderSize = m_editorLayer->GetPlayerPreviewRenderSize();
     const float width = (std::max)(renderSize.x, 1.0f);

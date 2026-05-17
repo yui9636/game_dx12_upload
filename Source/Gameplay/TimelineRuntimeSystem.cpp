@@ -26,6 +26,7 @@ void TimelineRuntimeSystem::Update(Registry& registry, float dt)
 
             if (tc.currentFrame < tc.frameMin) tc.currentFrame = tc.frameMin;
             if (tc.currentFrame > tc.frameMax) tc.currentFrame = tc.frameMax;
+            tc.previousFrame = tc.currentFrame;
         }
     }
 }

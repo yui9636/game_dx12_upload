@@ -32,6 +32,23 @@ enum class ActorEditorMode : uint8_t
     NPC    = 2,
 };
 
+enum class PlayerEditorViewMode : uint8_t
+{
+    Edit = 0,
+    Test = 1,
+};
+
+enum class PlayerEditorTool : uint8_t
+{
+    None = 0,
+    State,
+    Timeline,
+    Hitbox,
+    Body,
+    Input,
+    Bone,
+};
+
 class PlayerEditorPanel
 {
 public:
@@ -43,7 +60,7 @@ public:
     // ビューポートテクスチャ（EditorLayer / Renderer が設定）
     void SetViewportTexture(ITexture* tex) { m_viewportTexture = tex; }
     void SetSharedSceneCamera(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& direction, float fovY);
-    bool CanRenderPreview() const { return HasOpenModel(); }
+    bool CanRenderPreview() const { return true; }
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
     DirectX::XMFLOAT4 GetViewportRect() const { return m_viewportRect; }
     bool IsViewportHovered() const { return m_viewportHovered; }
@@ -89,6 +106,23 @@ private:
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
     void DrawToolbar();
     bool DrawToolbarButton(const char* label, bool enabled = true);
+    void DrawMainWorkspace();
+    void DrawViewportSurface();
+    void DrawViewportOverlay(const ImVec2& imageMin, const ImVec2& imageSize);
+    void DrawToolPopover();
+    void DrawStateTool();
+    void DrawTimelineTool();
+    void DrawHitboxTool();
+    void DrawBodyTool();
+    void DrawInputTool();
+    void DrawBoneTool();
+    void RequestCameraFit();
+    void ResetPreviewRuntime();
+    const char* GetActiveToolLabel() const;
+    bool TryBuildThirdPersonPreviewCamera(
+        DirectX::XMFLOAT3& outPosition,
+        DirectX::XMFLOAT3& outTarget,
+        DirectX::XMFLOAT3& outDirection) const;
     void ResetSelectionState();
     bool HasOpenModel() const;
     bool HasAnyDirtyDocument() const;
@@ -197,6 +231,13 @@ private:
     // v2.0: ActorEditor モード（Player / Enemy / NPC）。ツールバーボタンと
     // StateMachinePanel の AI セクション表示に影響する。
     ActorEditorMode     m_actorEditorMode = ActorEditorMode::Player;
+
+    // 小窓の常時表示を避け、中央プレビューと必要な道具だけで編集する。
+    PlayerEditorViewMode m_viewMode = PlayerEditorViewMode::Edit;
+    PlayerEditorTool     m_activeTool = PlayerEditorTool::State;
+    bool                 m_toolPopoverOpen = false;
+    bool                 m_overlayHitboxes = true;
+    bool                 m_overlayRuntime = true;
 
     // v2.0: ステート紐づけ BT のインライン編集状態。
     BehaviorTreeAsset   m_inlineBtAsset;

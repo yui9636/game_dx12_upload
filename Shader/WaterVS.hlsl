@@ -37,9 +37,11 @@ float3 AccumulatePondWaves(float2 worldXZ, float time, float waveScale, float wa
         float2(-0.95f, -0.31f),
         float2( 0.52f,  0.85f)
     };
+    // Pond-scale waves: small amplitudes so the surface looks calm rather
+    // than choppy. Larger water bodies can raise amplitudes via waveScale.
     const float wavelengths[5] = { 18.0f, 11.0f, 6.5f, 3.2f, 1.7f };
-    const float amplitudes[5]  = { 0.16f, 0.10f, 0.055f, 0.030f, 0.016f };
-    const float speeds[5]      = { 0.42f, 0.58f, 0.74f, 0.96f, 1.20f };
+    const float amplitudes[5]  = { 0.06f, 0.045f, 0.025f, 0.014f, 0.008f };
+    const float speeds[5]      = { 0.32f, 0.46f, 0.60f, 0.78f, 0.98f };
 
     tangent = float3(1.0f, 0.0f, 0.0f);
     binormal = float3(0.0f, 0.0f, 1.0f);
@@ -74,7 +76,10 @@ VS_OUTPUT main(VS_INPUT input)
     VS_OUTPUT output;
     float3 worldPos = input.position + worldOffsetSeaLevel.xyz;
     float shore = saturate(input.shoreData.x);
-    float waveMask = smoothstep(0.02f, 0.38f, shore);
+    // No vertical displacement until we're well past the shore. Otherwise
+    // the wave peaks push water above the terrain right at the shoreline
+    // and the water bleeds through as a thin colored rim.
+    float waveMask = smoothstep(0.12f, 0.55f, shore);
 
     float3 tangent;
     float3 binormal;

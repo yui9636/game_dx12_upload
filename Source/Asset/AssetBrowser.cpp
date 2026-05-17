@@ -397,12 +397,9 @@ void AssetBrowser::RenderContentGrid() {
         // 検索フィルタがある場合は一致しないものを飛ばす。
         if (!m_searchFilter.empty() && asset.fileName.find(m_searchFilter) == std::string::npos) continue;
 
-        // モデル/マテリアルは可視パスとして記録する。
-        if (asset.type == AssetType::Model || asset.type == AssetType::Material) {
-            visiblePaths.insert(asset.path.string());
-        }
+        const std::string assetPathString = asset.path.string();
 
-        ImGui::PushID(asset.path.string().c_str());
+        ImGui::PushID(assetPathString.c_str());
 
         // 現在の描画開始位置を保存する。
         ImVec2 startCursorPos = ImGui::GetCursorPos();
@@ -412,8 +409,8 @@ void AssetBrowser::RenderContentGrid() {
         // 選択状態を確認する。
         auto& selection = EditorSelection::Instance();
         EditorAssetContext& assetContext = EditorAssetContext::Instance();
-        const bool isAssetSelection = selection.GetType() == SelectionType::Asset && selection.GetAssetPath() == asset.path.string();
-        const bool isActiveAsset = assetContext.GetActiveAssetPath() == asset.path.string();
+        const bool isAssetSelection = selection.GetType() == SelectionType::Asset && selection.GetAssetPath() == assetPathString;
+        const bool isActiveAsset = assetContext.GetActiveAssetPath() == assetPathString;
         bool isSelected = isAssetSelection || isActiveAsset;
 
         // 選択中なら背景ハイライトを描画する。
@@ -423,12 +420,23 @@ void AssetBrowser::RenderContentGrid() {
             ImGui::GetWindowDrawList()->AddRectFilled(p_min, p_max, IM_COL32(50, 100, 200, 128));
         }
 
-        // サムネイル表示用 ID を用意する。
+        // サムネイル表示用 ID を用意する。重い生成/ロードは画面内セルだけで行う。
         void* thumbnailId = nullptr;
-
-        // モデル/マテリアルでまだサムネイル未取得なら再取得を試みる。
-        if (!asset.thumbnailTexture && (asset.type == AssetType::Model || asset.type == AssetType::Material)) {
-            asset.thumbnailTexture = ThumbnailGenerator::Instance().Get(asset.path.string());
+        const bool thumbnailVisible = ImGui::IsRectVisible(ImVec2(64.0f, 64.0f));
+        if (thumbnailVisible) {
+            if (asset.type == AssetType::Model) {
+                visiblePaths.insert(assetPathString);
+                ThumbnailGenerator::Instance().Request(assetPathString);
+                asset.thumbnailTexture = ThumbnailGenerator::Instance().Get(assetPathString);
+            }
+            else if (asset.type == AssetType::Material) {
+                visiblePaths.insert(assetPathString);
+                ThumbnailGenerator::Instance().RequestMaterial(assetPathString);
+                asset.thumbnailTexture = ThumbnailGenerator::Instance().Get(assetPathString);
+            }
+            else if (asset.type == AssetType::Texture) {
+                asset.thumbnailTexture = ResourceManager::Instance().GetTexture(assetPathString);
+            }
         }
 
         // サムネイルテクスチャがあれば ImGui 表示用 ID を取得する。
@@ -584,7 +592,7 @@ void AssetBrowser::RenderContentGrid() {
     // カラム状態を戻す。
     ImGui::Columns(1);
 
-    // 現在見えているモデル/マテリアルを ThumbnailGenerator へ通知する。
+    // 現在画面内にあるモデル/マテリアルだけを ThumbnailGenerator へ通知する。
     ThumbnailGenerator::Instance().SetVisiblePaths(visiblePaths);
 
     // 何もない領域でも entity ドロップを受けられるようにダミー領域を作る。

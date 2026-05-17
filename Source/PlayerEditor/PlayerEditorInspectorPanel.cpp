@@ -22,6 +22,23 @@
 
 using namespace PlayerEditorInternal;
 
+namespace
+{
+    bool IsRuntimeTimelineTrackType(TimelineTrackType type)
+    {
+        switch (type) {
+        case TimelineTrackType::Hitbox:
+        case TimelineTrackType::VFX:
+        case TimelineTrackType::Audio:
+        case TimelineTrackType::CameraShake:
+        case TimelineTrackType::Event:
+            return true;
+        default:
+            return false;
+        }
+    }
+}
+
 void PlayerEditorPanel::DrawPropertiesPanel()
 {
     if (!ImGui::Begin(kPEPropertiesTitle)) { ImGui::End(); return; }
@@ -53,6 +70,13 @@ void PlayerEditorPanel::DrawPropertiesPanel()
             if (ImGui::Combo("Type", &typeInt, kTrackTypeNames, 8)) {
                 track.type = static_cast<TimelineTrackType>(typeInt);
                 m_timelineDirty = true;
+                RebuildPreviewTimelineRuntimeData();
+                SyncPreviewTimelinePlayback();
+            }
+
+            if (!IsRuntimeTimelineTrackType(track.type)) {
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.25f, 1.0f),
+                    "Runtime: unsupported marker track");
             }
 
             if (ImGui::Checkbox("Muted", &track.muted)) m_timelineDirty = true;
@@ -263,12 +287,13 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
 
         case TimelineTrackType::Event:
             ImGui::Text(ICON_FA_BOLT " Event Payload");
-            if (ImGui::InputText("Event Name", item.eventName, sizeof(item.eventName))) m_timelineDirty = true;
-            if (ImGui::InputTextMultiline("Event Data", item.eventData, sizeof(item.eventData), ImVec2(-FLT_MIN, 80.0f))) m_timelineDirty = true;
+            if (ImGui::InputText("Event Name", item.eventName, sizeof(item.eventName))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::InputTextMultiline("Event Data", item.eventData, sizeof(item.eventData), ImVec2(-FLT_MIN, 80.0f))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
 
         default:
-            ImGui::TextDisabled("No payload editor for this track type.");
+            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.25f, 1.0f),
+                "This track is editor-only and is not exported to runtime.");
             break;
         }
 

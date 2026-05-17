@@ -86,22 +86,51 @@ float3 ProceduralSky(float3 reflDir, float3 lightDir)
     return sky + float3(2.3f, 2.0f, 1.55f) * sun;
 }
 
+// Organic caustic pattern: Voronoi-flavoured cells with fine-grain detail.
+// Replaces the previous sin*sin pattern which produced clearly visible
+// arc-shaped interference bands across the water surface.
 float Caustics(float2 worldXZ, float time)
 {
-    float2 a = worldXZ * 0.18f + float2(time * 0.10f, time * 0.07f);
-    float2 b = worldXZ * 0.29f + float2(-time * 0.06f, time * 0.09f);
-    float v = (sin(a.x + b.y) * sin(a.y - b.x)) * 0.5f + 0.5f;
-    return pow(saturate(v), 2.2f);
+    float2 p = worldXZ * 0.55f;
+    float2 i = floor(p);
+    float2 f = frac(p);
+
+    // Cheap 3x3 Voronoi (F1 distance) for irregular spots.
+    float minDist = 1.0f;
+    [unroll]
+    for (int dy = -1; dy <= 1; ++dy) {
+        [unroll]
+        for (int dx = -1; dx <= 1; ++dx) {
+            float2 g = float2((float)dx, (float)dy);
+            float2 seed = i + g;
+            float h = Hash21(seed);
+            // Animate each cell point in a small circle.
+            float angle = h * 6.2831853f + time * (0.6f + h * 0.7f);
+            float2 cellPoint = g + 0.5f + 0.45f * float2(cos(angle), sin(angle));
+            float2 diff = cellPoint - f;
+            float d = dot(diff, diff);
+            minDist = min(minDist, d);
+        }
+    }
+    // Highlights at cell borders.
+    float caustic = smoothstep(0.30f, 0.05f, minDist);
+    // Add a soft secondary band to break the regularity.
+    float band = Fbm3(worldXZ * 0.22f + time * float2(0.04f, -0.03f));
+    return saturate(caustic * (0.45f + band * 0.55f));
 }
 
 float4 main(PS_INPUT input) : SV_Target
 {
+    // Mesh-level culling now removes dry-land quads; just trim near-shore
+    // pixels with no actual depth.
+    if (input.shore < 0.015f) discard;
+
     float time = params.x;
     float waveSpeed = params.y;
     float depthFade = max(params.w, 0.001f);
 
     float3 ripple = RippleNormal(input.worldPos.xz, time, waveSpeed);
-    float3 normal = normalize(input.baseNormal + ripple * 0.35f);
+    float3 normal = normalize(input.baseNormal + ripple * 0.18f);
     float3 viewDir = normalize(cameraPosition.xyz - input.worldPos);
     float3 lightDir = normalize(float3(-0.35f, 0.82f, -0.28f));
 
@@ -115,16 +144,28 @@ float4 main(PS_INPUT input) : SV_Target
     float2 refractOffset = normal.xz * lerp(0.002f, 0.018f, shoreSafe) * farFade;
     float2 refractUV = saturate(screenUV + refractOffset);
 
-    float4 g2Refract = gGBuffer2.SampleLevel(gPointClamp, refractUV, 0);
+    // Two GBuffer2 samples: straight (this exact screen pixel) for the
+    // discard / depth comparison, refract-offset for visual refraction.
     float4 g2Straight = gGBuffer2.SampleLevel(gPointClamp, screenUV, 0);
-    float refractValid = (length(g2Refract.xyz) > 0.01f) ? 1.0f : 0.0f;
+    float4 g2Refract  = gGBuffer2.SampleLevel(gPointClamp, refractUV, 0);
     float straightValid = (length(g2Straight.xyz) > 0.01f) ? 1.0f : 0.0f;
-    float3 floorWorld = (refractValid > 0.5f) ? g2Refract.xyz : g2Straight.xyz;
-    float gbufferValid = max(refractValid, straightValid);
+    float refractValid  = (length(g2Refract.xyz)  > 0.01f) ? 1.0f : 0.0f;
+
+    // Discard pixels where the terrain at THIS screen pixel sits above the
+    // water surface. Use the straight (non-refracted) sample so we judge the
+    // pixel we're actually drawing, not a neighbouring one. This eliminates
+    // water bleed onto land caused by water-mesh quads extending past the
+    // shoreline.
+    float straightDepth = input.worldPos.y - g2Straight.xyz.y;
+    if (straightValid > 0.5f && straightDepth < 0.06f) discard;
+
+    // Refraction uses its own sample; if invalid (e.g. sky), fall back to straight.
+    float3 floorWorld   = (refractValid > 0.5f) ? g2Refract.xyz : g2Straight.xyz;
+    float  gbufferValid = max(refractValid, straightValid);
 
     float proceduralDepth = pow(saturate(input.shore), 1.15f) * depthFade;
-    float realDepth = max(input.worldPos.y - floorWorld.y, 0.0f);
-    float waterDepth = lerp(proceduralDepth, realDepth, gbufferValid);
+    float realDepth       = max(input.worldPos.y - floorWorld.y, 0.0f);
+    float waterDepth      = lerp(proceduralDepth, realDepth, gbufferValid);
 
     float ndotvFlat = saturate(dot(float3(0.0f, 1.0f, 0.0f), viewDir));
     float opticalDepth = waterDepth / max(ndotvFlat, 0.18f);
@@ -144,29 +185,42 @@ float4 main(PS_INPUT input) : SV_Target
         refractedScene = lerp(waterCol, refractedColor, gbufferValid);
     }
 
-    float caustic = Caustics((gbufferValid > 0.5f) ? floorWorld.xz : input.worldPos.xz, time);
-    refractedScene += float3(0.42f, 0.56f, 0.48f) * caustic * saturate(transmittance.g * 1.4f) * 0.34f;
+    // Caustics belong on the underwater floor, fade out as depth grows
+    // (light doesn't reach far down) and as we approach the deep open water.
+    float2 causticUV = (gbufferValid > 0.5f) ? floorWorld.xz : input.worldPos.xz;
+    float caustic = Caustics(causticUV, time);
+    // Only show caustics in shallow-to-mid water and only where we actually
+    // have refracted scene data; far from camera fade them out entirely.
+    float causticFade = transmittance.g * (1.0f - saturate(opticalDepth * 0.25f)) * farFade * gbufferValid;
+    refractedScene += float3(0.36f, 0.46f, 0.40f) * caustic * causticFade * 0.18f;
 
     float ndotv = saturate(dot(normal, viewDir));
     float fresnel = SchlickFresnel(ndotv, 0.022f);
     float3 sky = ProceduralSky(reflect(-viewDir, normal), lightDir);
 
     float3 halfDir = normalize(lightDir + viewDir);
-    float specTight = pow(saturate(dot(normal, halfDir)), 180.0f) * 4.8f;
-    float specWide = pow(saturate(dot(normal, halfDir)), 18.0f) * 0.20f * saturate(dot(normal, lightDir));
+    // Soft, wide specular -- avoids per-wave-crest line highlights.
+    float specTight = pow(saturate(dot(normal, halfDir)), 48.0f) * 1.4f;
+    float specWide  = pow(saturate(dot(normal, halfDir)), 14.0f) * 0.18f * saturate(dot(normal, lightDir));
 
+    // Pond / lake aesthetic: no whitecap crest foam (only oceans break visibly).
+    // Keep shore foam for the gentle lapping look at the waterline.
     float foamNoise = Fbm3(input.worldPos.xz * 0.42f + float2(time * 0.04f, time * 0.06f));
-    float shoreFoam = (1.0f - smoothstep(0.0f, 0.58f, waterDepth)) * (0.35f + foamNoise * 0.65f);
-    float crestFoam = smoothstep(0.58f, 0.95f, input.crest) * (0.45f + foamNoise * 0.55f);
-    float foam = saturate(max(shoreFoam, crestFoam));
+    float shoreFoam = (1.0f - smoothstep(0.0f, 0.58f, waterDepth)) * (0.30f + foamNoise * 0.55f);
+    float foam = saturate(shoreFoam);
 
     float skyMix = fresnel * smoothstep(0.18f, 0.62f, input.shore);
     float3 color = lerp(refractedScene, sky, skyMix);
     color += float3(1.0f, 0.96f, 0.84f) * (specTight + specWide) * farFade;
     color = lerp(color, float3(0.96f, 0.985f, 1.0f), foam * 0.82f);
 
-    float softEdge = saturate(waterDepth * 0.78f);
-    float shoreCoverage = 1.0f - smoothstep(0.0f, 0.34f, waterDepth);
-    float alpha = saturate(0.58f + softEdge * 0.30f + fresnel * 0.16f + foam * 0.34f + shoreCoverage * 0.24f);
+    // Alpha: fade in slowly from the shore so the transition against sky
+    // (visible through partial-alpha water) is below 1px detectable.
+    float softEdge   = saturate(waterDepth * 0.78f);
+    float shoreFade  = smoothstep(0.06f, 0.45f, input.shore);
+    // Damp sky reflection in the near-shore band too -- otherwise the
+    // partial-alpha pixels show a sky-tinted color against the actual sky.
+    float skyDamp = smoothstep(0.06f, 0.50f, input.shore);
+    float alpha = saturate((0.55f + softEdge * 0.32f + fresnel * 0.16f * skyDamp + foam * 0.34f) * shoreFade);
     return float4(color, alpha);
 }

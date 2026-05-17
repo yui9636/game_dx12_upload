@@ -129,6 +129,8 @@ struct GESequencerItem
     GEVfxPayload    vfx;
     GEAudioPayload  audio;
     GECameraShakePayload shake;
+    char eventName[64] = {};
+    char eventData[256] = {};
 
     bool                         vfxActive = false;
     EffectHandle                 vfxHandle;
@@ -148,7 +150,9 @@ inline void to_json(nlohmann::json& j, const GESequencerItem& p) {
         {"hb", p.hb},
         {"vfx", p.vfx},
         {"audio", p.audio},
-        {"shake", p.shake}
+        {"shake", p.shake},
+        {"eventName", std::string(p.eventName)},
+        {"eventData", std::string(p.eventData)}
     };
 }
 inline void from_json(const nlohmann::json& j, GESequencerItem& p) {
@@ -162,6 +166,10 @@ inline void from_json(const nlohmann::json& j, GESequencerItem& p) {
     if (j.contains("vfx")) j.at("vfx").get_to(p.vfx);
     if (j.contains("audio")) j.at("audio").get_to(p.audio);
     if (j.contains("shake")) j.at("shake").get_to(p.shake);
+    const std::string eventName = j.value("eventName", "");
+    const std::string eventData = j.value("eventData", "");
+    strncpy_s(p.eventName, eventName.c_str(), _TRUNCATE);
+    strncpy_s(p.eventData, eventData.c_str(), _TRUNCATE);
 
  
 }

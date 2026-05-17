@@ -32,9 +32,13 @@ private:
     PlayerModelPreviewStudio() = default;
     ~PlayerModelPreviewStudio() = default;
 
+    Model* EnsureTrainingStageModel();
+
     static constexpr uint32_t PREVIEW_SIZE = 512;
 
     OffscreenRenderer* m_offscreen = nullptr;
     std::shared_ptr<ITexture> m_previewTexture;
     std::unique_ptr<ITexture> m_previewDepth;
+    std::shared_ptr<Model> m_trainingStageModel;
+    bool m_trainingStageLoadAttempted = false;
 };

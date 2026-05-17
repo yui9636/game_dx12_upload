@@ -1,11 +1,11 @@
 ﻿#pragma once
 #include <unordered_map>
 #include "Entity/Entity.h"
+#include "Component/TransformComponent.h"
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyID.h>
 
 class Registry;
-struct TransformComponent;
 
 // TerrainComponent の地形データを Jolt HeightFieldShape として物理ワールドに登録する。
 class TerrainPhysicsSystem {

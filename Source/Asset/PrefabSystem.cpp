@@ -56,6 +56,10 @@
 #include "Input/InputUserComponent.h"
 #include "PlayerEditor/StateMachineAssetSerializer.h"
 #include "PlayerEditor/TimelineAssetSerializer.h"
+#include "Terrain/TerrainComponent.h"
+#include "Terrain/TerrainAsset.h"
+#include "Terrain/TerrainAssetIO.h"
+#include "Vegetation/GrassComponent.h"
 #include "JSONManager.h"
 #include "Registry/Registry.h"
 #include "Undo/EntitySnapshot.h"
@@ -83,6 +87,34 @@ namespace
         }
         value = in.at(key).get<T>();
         return true;
+    }
+
+    // Write every TerrainComponent's asset to a sidecar .terrain file in the
+    // scene/prefab directory and patch the JSON nodes with the relative path.
+    void WriteTerrainSidecars(const std::filesystem::path& sceneDir,
+                              const std::string& baseName,
+                              const EntitySnapshot::Snapshot& snapshot,
+                              json& document)
+    {
+        if (!document.contains("nodes")) return;
+        auto& nodesJson = document["nodes"];
+        if (!nodesJson.is_array()) return;
+        if (nodesJson.size() != snapshot.nodes.size()) return;
+
+        for (size_t i = 0; i < snapshot.nodes.size(); ++i) {
+            const auto& node = snapshot.nodes[i];
+            const auto& tc = std::get<std::optional<TerrainComponent>>(node.components);
+            if (!tc.has_value() || !tc->asset) continue;
+
+            const std::string filename = baseName + "_terrain_" + std::to_string(node.localID) + ".terrain";
+            const std::filesystem::path fullPath = sceneDir / filename;
+            TerrainAssetIO::SaveToFile(*tc->asset, fullPath);
+
+            auto& nodeJson = nodesJson[i];
+            if (nodeJson.contains("components") && nodeJson["components"].contains("TerrainComponent")) {
+                nodeJson["components"]["TerrainComponent"]["assetPath"] = filename;
+            }
+        }
     }
 
     // EntitySnapshot の 1 ノードを JSON 形式へ変換します。
@@ -362,6 +394,51 @@ namespace
                 {"color", grid->color},
                 {"enabled", grid->enabled}
                 });
+        }
+
+        // TerrainComponent: write the heavy heightData/splatData to a sidecar
+        // .terrain file alongside the prefab/scene and embed only its path
+        // + lightweight metadata in JSON.
+        if (const auto& terrain = std::get<std::optional<TerrainComponent>>(node.components); terrain.has_value() && terrain->asset) {
+            json terrainJson;
+            terrainJson["assetPath"] = "";   // populated below by caller (needs scene dir context)
+            terrainJson["showInEditor"] = terrain->showInEditor;
+            writeComponent("TerrainComponent", terrainJson);
+        }
+
+        // GrassComponent: small enough to inline directly.
+        if (const auto& grass = std::get<std::optional<GrassComponent>>(node.components); grass.has_value()) {
+            json layersJson = json::array();
+            for (const auto& l : grass->layers) {
+                layersJson.push_back(json{
+                    {"enabled", l.enabled},
+                    {"name", l.name},
+                    {"meshPath", l.meshPath},
+                    {"densityMultiplier", l.densityMultiplier},
+                    {"maxPerCell", l.maxPerCell},
+                    {"densityThreshold", l.densityThreshold},
+                    {"splatChannel", l.splatChannel},
+                    {"minAltitudeNorm", l.minAltitudeNorm},
+                    {"maxAltitudeNorm", l.maxAltitudeNorm},
+                    {"maxSlopeDegrees", l.maxSlopeDegrees},
+                    {"sizeScale", l.sizeScale},
+                    {"sizeVariance", l.sizeVariance},
+                    {"colorBottom", { l.colorBottom.x, l.colorBottom.y, l.colorBottom.z }},
+                    {"colorTop",    { l.colorTop.x,    l.colorTop.y,    l.colorTop.z }},
+                    {"tintVariance",{ l.tintVariance.x,l.tintVariance.y,l.tintVariance.z }},
+                    {"useWind", l.useWind},
+                    {"windStrength", l.windStrength},
+                    {"windSpeed", l.windSpeed},
+                    {"seed", l.seed},
+                });
+            }
+            writeComponent("GrassComponent", json{
+                {"enabled", grass->enabled},
+                {"windDirection", { grass->windDirection.x, grass->windDirection.y, grass->windDirection.z }},
+                {"drawDistance", grass->drawDistance},
+                {"showInEditor", grass->showInEditor},
+                {"layers", layersJson},
+            });
         }
 
         // Gizmo 表示設定を JSON へ保存します。
@@ -998,6 +1075,76 @@ namespace
             SetOptional(node.components, component);
         }
 
+        // TerrainComponent: assetPath is relative to the scene/prefab file;
+        // the actual heightData/splatData arrive from the sidecar .terrain
+        // file. We stash the path on the asset's first layer's albedoPath
+        // temporarily? No -- pass it via a sentinel-named pointer slot.
+        // Simpler: create a fresh asset, mark needsRebuild, and stash the
+        // sidecar path on a static side-channel keyed by node.localID...
+        // For minimum complexity we just create the placeholder TerrainComponent
+        // here and let the load post-process (which has the scene dir) populate
+        // the asset from the sidecar binary file.
+        if (components.contains("TerrainComponent")) {
+            TerrainComponent component;
+            const json& value = components["TerrainComponent"];
+            component.asset = std::make_shared<TerrainAsset>();
+            component.showInEditor = value.value("showInEditor", component.showInEditor);
+            component.needsRebuild = true;
+            // The relative asset path is read by the post-load step (which has
+            // the scene directory) using the same JSON node, so we don't need
+            // to store it on the component itself.
+            SetOptional(node.components, component);
+        }
+
+        // GrassComponent: inline read.
+        if (components.contains("GrassComponent")) {
+            GrassComponent component;
+            const json& value = components["GrassComponent"];
+            component.enabled = value.value("enabled", component.enabled);
+            component.drawDistance = value.value("drawDistance", component.drawDistance);
+            component.showInEditor = value.value("showInEditor", component.showInEditor);
+            if (value.contains("windDirection") && value["windDirection"].is_array() &&
+                value["windDirection"].size() == 3) {
+                component.windDirection.x = value["windDirection"][0].get<float>();
+                component.windDirection.y = value["windDirection"][1].get<float>();
+                component.windDirection.z = value["windDirection"][2].get<float>();
+            }
+            if (value.contains("layers") && value["layers"].is_array()) {
+                for (const auto& lj : value["layers"]) {
+                    FoliageLayer l;
+                    l.enabled = lj.value("enabled", l.enabled);
+                    l.name = lj.value("name", l.name);
+                    l.meshPath = lj.value("meshPath", l.meshPath);
+                    l.densityMultiplier = lj.value("densityMultiplier", l.densityMultiplier);
+                    l.maxPerCell = lj.value("maxPerCell", l.maxPerCell);
+                    l.densityThreshold = lj.value("densityThreshold", l.densityThreshold);
+                    l.splatChannel = lj.value("splatChannel", l.splatChannel);
+                    l.minAltitudeNorm = lj.value("minAltitudeNorm", l.minAltitudeNorm);
+                    l.maxAltitudeNorm = lj.value("maxAltitudeNorm", l.maxAltitudeNorm);
+                    l.maxSlopeDegrees = lj.value("maxSlopeDegrees", l.maxSlopeDegrees);
+                    l.sizeScale = lj.value("sizeScale", l.sizeScale);
+                    l.sizeVariance = lj.value("sizeVariance", l.sizeVariance);
+                    auto readVec3 = [](const json& src, const char* key, DirectX::XMFLOAT3& dst) {
+                        if (src.contains(key) && src[key].is_array() && src[key].size() == 3) {
+                            dst.x = src[key][0].get<float>();
+                            dst.y = src[key][1].get<float>();
+                            dst.z = src[key][2].get<float>();
+                        }
+                    };
+                    readVec3(lj, "colorBottom", l.colorBottom);
+                    readVec3(lj, "colorTop",    l.colorTop);
+                    readVec3(lj, "tintVariance",l.tintVariance);
+                    l.useWind = lj.value("useWind", l.useWind);
+                    l.windStrength = lj.value("windStrength", l.windStrength);
+                    l.windSpeed = lj.value("windSpeed", l.windSpeed);
+                    l.seed = lj.value("seed", l.seed);
+                    component.layers.push_back(l);
+                }
+            }
+            component.needsRebuild = true;
+            SetOptional(node.components, component);
+        }
+
         // Gizmo 表示設定を JSON から読み込みます。
         if (components.contains("GizmoComponent")) {
             GizmoComponent component;
@@ -1610,6 +1757,8 @@ bool PrefabSystem::SaveEntityToPrefabPath(EntityID root,
         document["nodes"].push_back(SerializeHierarchyNode(node, sourceToLocal));
     }
 
+    WriteTerrainSidecars(prefabPath.parent_path(), prefabPath.stem().string(), snapshot, document);
+
     std::ofstream ofs(prefabPath);
     if (!ofs.is_open()) {
         return false;
@@ -1687,6 +1836,8 @@ bool PrefabSystem::SaveRegistryAsScene(Registry& registry,
         document["nodes"].push_back(SerializeHierarchyNode(node, sourceToLocal));
     }
 
+    WriteTerrainSidecars(scenePath.parent_path(), scenePath.stem().string(), mergedSnapshot, document);
+
     std::ofstream ofs(scenePath, std::ios::binary | std::ios::trunc);
     if (!ofs.is_open()) {
         return false;
@@ -1737,6 +1888,24 @@ bool PrefabSystem::LoadSceneIntoRegistry(const std::filesystem::path& scenePath,
     if (snapshot.nodes.empty()) {
         LOG_WARN("[Scene] Scene '%s' has no nodes", scenePath.string().c_str());
         return false;
+    }
+
+    // Load TerrainComponent sidecar (.terrain) files into their corresponding
+    // snapshot nodes before restoration so the asset data is in-place.
+    const std::filesystem::path sceneDir = scenePath.parent_path();
+    for (size_t i = 0; i < nodes.size() && i < snapshot.nodes.size(); ++i) {
+        const auto& nodeJson = nodes[i];
+        if (!nodeJson.contains("components")) continue;
+        const auto& comps = nodeJson["components"];
+        if (!comps.contains("TerrainComponent")) continue;
+        const std::string assetPath = comps["TerrainComponent"].value("assetPath", std::string());
+        if (assetPath.empty()) continue;
+        auto& tcOpt = std::get<std::optional<TerrainComponent>>(snapshot.nodes[i].components);
+        if (!tcOpt.has_value() || !tcOpt->asset) continue;
+        const std::filesystem::path fullPath = sceneDir / assetPath;
+        if (!TerrainAssetIO::LoadFromFile(*tcOpt->asset, fullPath)) {
+            LOG_WARN("[Scene] Failed to load terrain sidecar '%s'", fullPath.string().c_str());
+        }
     }
 
     if (document.contains("rootLocalIds") && document["rootLocalIds"].is_array() && !document["rootLocalIds"].empty()) {

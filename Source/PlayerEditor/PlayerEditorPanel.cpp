@@ -13,6 +13,11 @@
 #define NOMINMAX
 #endif
 
+#include <DirectXMath.h>
+
+#include <algorithm>
+#include <cmath>
+
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -21,7 +26,10 @@
 #include "PlayerEditorSession.h"
 #include "Component/ColliderComponent.h"
 #include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
 
@@ -61,6 +69,21 @@ bool PlayerEditorPanel::ConsumePendingCameraFit(
     }
     if (outDistance) {
         *outDistance = m_pendingCameraFitDistance;
+    }
+    if (m_pendingCameraFitDistance > 0.0f) {
+        m_vpCameraDist = m_pendingCameraFitDistance;
+    }
+    const float forwardLenSq =
+        m_pendingCameraFitForward.x * m_pendingCameraFitForward.x +
+        m_pendingCameraFitForward.y * m_pendingCameraFitForward.y +
+        m_pendingCameraFitForward.z * m_pendingCameraFitForward.z;
+    if (forwardLenSq > 0.0001f) {
+        const float invLen = 1.0f / std::sqrt(forwardLenSq);
+        const float fx = m_pendingCameraFitForward.x * invLen;
+        const float fy = std::clamp(m_pendingCameraFitForward.y * invLen, -0.98f, 0.98f);
+        const float fz = m_pendingCameraFitForward.z * invLen;
+        m_vpCameraYaw = std::atan2(fx, fz);
+        m_vpCameraPitch = std::asin(fy);
     }
     m_hasPendingCameraFit = false;
     return true;
@@ -188,6 +211,7 @@ void PlayerEditorPanel::SyncPreviewTimelinePlayback(bool syncPreviewState)
         if (TimelineComponent* timeline = m_registry->GetComponent<TimelineComponent>(m_previewEntity)) {
             timeline->frameMin = frameMin;
             timeline->frameMax = frameMax;
+            timeline->previousFrame = timeline->currentFrame;
             timeline->currentFrame = m_playheadFrame;
             timeline->playing = m_isPlaying;
             if (clipLength > 0.0f) {
@@ -227,26 +251,22 @@ void PlayerEditorPanel::SetModel(const Model* model)
 // ツールバー / 空状態プレースホルダー
 void PlayerEditorPanel::DrawToolbar()
 {
-    // v2.0 ActorEditor: モード選択ドロップダウン。
-    {
-        const char* modeLabels[] = { "Player", "Enemy", "NPC" };
-        int modeIdx = static_cast<int>(m_actorEditorMode);
-        ImGui::PushItemWidth(110.0f);
-        if (ImGui::Combo("Mode", &modeIdx, modeLabels, IM_ARRAYSIZE(modeLabels))) {
-            const auto newMode = static_cast<ActorEditorMode>(modeIdx);
-            if (newMode != m_actorEditorMode) {
-                if (HasAnyDirtyDocument()) {
-                    // 破壊的な切り替えは後で警告できるようにする。今は適用だけ行う（Save/Discard
-                    // ダイアログは後で接続可能。v2.0 の最小実装はログ出力 + 続行）。
-                }
-                m_actorEditorMode = newMode;
-                m_inlineBtExpanded = false;
-                m_inlineBtLoaded   = false;
-            }
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Player");
+    ImGui::SameLine();
+
+    const char* modeLabels[] = { "Player", "Enemy", "NPC" };
+    int modeIdx = static_cast<int>(m_actorEditorMode);
+    ImGui::SetNextItemWidth(92.0f);
+    if (ImGui::Combo("##ActorMode", &modeIdx, modeLabels, IM_ARRAYSIZE(modeLabels))) {
+        const auto newMode = static_cast<ActorEditorMode>(modeIdx);
+        if (newMode != m_actorEditorMode) {
+            m_actorEditorMode = newMode;
+            m_inlineBtExpanded = false;
+            m_inlineBtLoaded = false;
         }
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
     }
+    ImGui::SameLine();
 
     if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open")) {
         char pathBuffer[MAX_PATH] = {};
@@ -263,21 +283,49 @@ void PlayerEditorPanel::DrawToolbar()
         SavePrefabDocument(false);
     }
 
-    // 永続コライダー追加ショートカット。Open / Save の隣に置き、
-    // 作業時に Skeleton パネルまで移動しなくても済むようにする。
-    // モデルが読み込まれ、プレビューエンティティが利用可能になるまでは無効。
-    // Skeleton パネル内と同じ有効条件に合わせている。
-    const bool canAddCollider = HasOpenModel() && CanUsePreviewEntity();
     ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_PLUS " Body", canAddCollider)) {
-        AddPersistentCollider(ColliderAttribute::Body);
+    if (DrawToolbarButton("Setup Full Player", m_actorEditorMode == ActorEditorMode::Player && CanUsePreviewEntity())) {
+        ApplyFullPlayerPreset();
     }
     ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_PLUS " Attack", canAddCollider)) {
-        AddPersistentCollider(ColliderAttribute::Attack);
+    if (DrawToolbarButton(ICON_FA_CAMERA " Fit", HasOpenModel())) {
+        RequestCameraFit();
+    }
+    ImGui::SameLine();
+    if (DrawToolbarButton(ICON_FA_ROTATE_LEFT " Reset", CanUsePreviewEntity())) {
+        ResetPreviewRuntime();
     }
 
-    // v2.0 ActorEditor: モード別の Setup / Repair ボタン。
+    ImGui::SameLine();
+    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    ImGui::SameLine();
+
+    const bool editMode = m_viewMode == PlayerEditorViewMode::Edit;
+    if (!editMode) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    }
+    if (ImGui::Button("Test")) {
+        m_viewMode = PlayerEditorViewMode::Test;
+        m_toolPopoverOpen = false;
+    }
+    if (!editMode) {
+        ImGui::PopStyleColor();
+    }
+    ImGui::SameLine();
+    if (editMode) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+    }
+    if (ImGui::Button("Edit")) {
+        m_viewMode = PlayerEditorViewMode::Edit;
+        m_toolPopoverOpen = false;
+    }
+    if (editMode) {
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SameLine();
+    ImGui::TextDisabled("Tool: %s", m_toolPopoverOpen ? GetActiveToolLabel() : "Viewport");
+
     if (m_actorEditorMode == ActorEditorMode::Enemy && m_registry && CanUsePreviewEntity()) {
         ImGui::SameLine();
         if (DrawToolbarButton("Setup Full Enemy")) {
@@ -298,6 +346,217 @@ void PlayerEditorPanel::DrawToolbar()
             m_stateMachineDirty = true;
         }
     }
+}
+
+void PlayerEditorPanel::DrawMainWorkspace()
+{
+    DrawToolbar();
+    ImGui::Separator();
+    DrawViewportSurface();
+    DrawToolPopover();
+}
+
+const char* PlayerEditorPanel::GetActiveToolLabel() const
+{
+    switch (m_activeTool) {
+    case PlayerEditorTool::State: return "State";
+    case PlayerEditorTool::Timeline: return "Timeline";
+    case PlayerEditorTool::Hitbox: return "Hitbox";
+    case PlayerEditorTool::Body: return "Body";
+    case PlayerEditorTool::Input: return "Input";
+    case PlayerEditorTool::Bone: return "Bone";
+    default: return "Tool";
+    }
+}
+
+void PlayerEditorPanel::RequestCameraFit()
+{
+    if (!m_model) {
+        return;
+    }
+
+    const auto bounds = m_model->GetWorldBounds();
+    const DirectX::XMFLOAT3 ex = bounds.Extents;
+    const float radius = (std::max)(std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z), 1.0f);
+    const float pitch = DirectX::XMConvertToRadians(-12.0f);
+    const float yaw = 0.0f;
+    const float halfFov = 0.785398f * 0.5f;
+    const float distance = (std::max)((radius / (std::max)(std::sin(halfFov), 0.001f)) * 1.25f, 2.5f);
+
+    m_vpCameraYaw = yaw;
+    m_vpCameraPitch = pitch;
+    m_vpCameraDist = distance;
+
+    m_pendingCameraFitTarget = bounds.Center;
+    m_pendingCameraFitRadius = radius;
+    m_pendingCameraFitForward = {
+        std::sin(yaw) * std::cos(pitch),
+        std::sin(pitch),
+        std::cos(yaw) * std::cos(pitch)
+    };
+    m_pendingCameraFitDistance = distance;
+    m_hasPendingCameraFit = true;
+}
+
+void PlayerEditorPanel::ResetPreviewRuntime()
+{
+    m_playheadFrame = 0;
+    m_isPlaying = false;
+    if (m_previewState.IsActive()) {
+        m_previewState.ExitPreview();
+    }
+    if (CanUsePreviewEntity()) {
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
+    }
+    SyncPreviewTimelinePlayback();
+    RequestCameraFit();
+}
+
+void PlayerEditorPanel::DrawStateTool()
+{
+    DrawStateMachineRuntimeStatus();
+    ImGui::Separator();
+    DrawStateMachineParameterList();
+    ImGui::Separator();
+    DrawStateNodeInspector();
+}
+
+void PlayerEditorPanel::DrawTimelineTool()
+{
+    DrawTimelinePlaybackToolbar();
+    ImGui::Separator();
+    const float headerHeight = 86.0f;
+    DrawTimelineTrackHeaders(headerHeight);
+    ImGui::SameLine();
+    DrawTimelineGrid(headerHeight);
+    ImGui::Separator();
+    DrawTimelineItemInspector();
+}
+
+void PlayerEditorPanel::DrawHitboxTool()
+{
+    if (ImGui::Button(ICON_FA_PLUS " Attack", ImVec2(-1.0f, 0.0f)) && HasOpenModel() && CanUsePreviewEntity()) {
+        AddPersistentCollider(ColliderAttribute::Attack);
+    }
+    ImGui::Checkbox("Show hitboxes", &m_overlayHitboxes);
+    ImGui::Separator();
+    DrawPersistentColliderSection();
+    DrawPersistentColliderInspector();
+}
+
+void PlayerEditorPanel::DrawBodyTool()
+{
+    if (ImGui::Button(ICON_FA_PLUS " Body", ImVec2(-1.0f, 0.0f)) && HasOpenModel() && CanUsePreviewEntity()) {
+        AddPersistentCollider(ColliderAttribute::Body);
+    }
+    ImGui::Checkbox("Show runtime", &m_overlayRuntime);
+    ImGui::Separator();
+    DrawPersistentColliderSection();
+    DrawPersistentColliderInspector();
+}
+
+void PlayerEditorPanel::DrawInputTool()
+{
+    if (m_inputMappingTab.Draw(m_registry)) {
+        ApplyEditorBindingsToPreviewEntity();
+    }
+}
+
+void PlayerEditorPanel::DrawBoneTool()
+{
+    ImGui::SetNextItemWidth(-1.0f);
+    ImGui::InputTextWithHint("##BoneSearch", "Search bones...", m_boneSearchFilter, sizeof(m_boneSearchFilter));
+    ImGui::Separator();
+    if (m_model) {
+        ImGui::BeginChild("##BoneTreeCompact", ImVec2(0.0f, 220.0f), true);
+        const auto& nodes = m_model->GetNodes();
+        if (m_boneSearchFilter[0] == '\0') {
+            for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
+                if (nodes[i].parentIndex < 0) {
+                    DrawBoneTreeNode(i);
+                }
+            }
+        }
+        else {
+            const std::string filter(m_boneSearchFilter);
+            for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
+                if (nodes[i].name.find(filter) == std::string::npos) {
+                    continue;
+                }
+                const bool selected = (m_selectedBoneIndex == i);
+                if (ImGui::Selectable(("[" + std::to_string(i) + "] " + nodes[i].name).c_str(), selected)) {
+                    m_selectedBoneIndex = i;
+                    m_selectedBoneName = nodes[i].name;
+                    if (!TryAssignSelectedBoneToTimelineItem(i) && !TryAssignSelectedBoneToPersistentCollider(i)) {
+                        m_selectionCtx = SelectionContext::Bone;
+                    }
+                }
+            }
+        }
+        ImGui::EndChild();
+    }
+    else {
+        ImGui::TextDisabled("No model.");
+    }
+    ImGui::Separator();
+    DrawSocketList(120.0f);
+}
+
+void PlayerEditorPanel::DrawToolPopover()
+{
+    if (!m_toolPopoverOpen || m_viewMode == PlayerEditorViewMode::Test || m_activeTool == PlayerEditorTool::None) {
+        return;
+    }
+
+    const float viewportX = m_viewportRect.x;
+    const float viewportY = m_viewportRect.y;
+    const float viewportW = m_viewportRect.z;
+    const float viewportH = m_viewportRect.w;
+    const ImVec2 pos(viewportX + (std::max)(12.0f, viewportW - 430.0f), viewportY + 12.0f);
+    const float popoverW = (std::min)(420.0f, (std::max)(280.0f, viewportW - 24.0f));
+    const float popoverH = (std::max)(180.0f, (std::min)(viewportH - 24.0f, 560.0f));
+    const ImVec2 size(popoverW, popoverH);
+
+    ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings;
+
+    bool open = true;
+    std::string title = std::string(GetActiveToolLabel()) + "##PlayerEditorToolPopover";
+    if (!ImGui::Begin(title.c_str(), &open, flags)) {
+        ImGui::End();
+        m_toolPopoverOpen = open;
+        return;
+    }
+
+    switch (m_activeTool) {
+    case PlayerEditorTool::State:
+        DrawStateTool();
+        break;
+    case PlayerEditorTool::Timeline:
+        DrawTimelineTool();
+        break;
+    case PlayerEditorTool::Hitbox:
+        DrawHitboxTool();
+        break;
+    case PlayerEditorTool::Body:
+        DrawBodyTool();
+        break;
+    case PlayerEditorTool::Input:
+        DrawInputTool();
+        break;
+    case PlayerEditorTool::Bone:
+        DrawBoneTool();
+        break;
+    default:
+        break;
+    }
+
+    ImGui::End();
+    m_toolPopoverOpen = open;
 }
 
 // 上位 Draw 入口と DockSpace の外枠
@@ -371,29 +630,9 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
             return;
         }
 
-        DrawToolbar();
-        ImGui::Separator();
-
-        const char* dockName = (hostMode == HostMode::Detached)
-            ? "PlayerEditorDetachedDock"
-            : "PlayerEditorWorkspaceDock";
-        ImGuiID dockId = ImGui::GetID(dockName);
-        ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-
-        if (m_needsLayoutRebuild) {
-            BuildDockLayout(dockId);
-            m_needsLayoutRebuild = false;
-        }
+        DrawMainWorkspace();
 
         ImGui::End();
-
-        DrawSkeletonPanel();
-        DrawViewportPanel();
-        DrawStateMachinePanel();
-        DrawTimelinePanel();
-        DrawPropertiesPanel();
-        DrawAnimatorPanel();
-        DrawInputPanel();
         return;
     }
 
@@ -407,28 +646,9 @@ void PlayerEditorPanel::DrawInternal(Registry* registry, bool* p_open, bool* out
     }
 
     if (outFocused) *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
-    DrawToolbar();
-    ImGui::Separator();
-
-    // 内部 DockSpace を作成
-    ImGuiID dockId = ImGui::GetID("PlayerEditorDock_v2");
-    ImGui::DockSpace(dockId, ImVec2(0, 0), ImGuiDockNodeFlags_None);
-
-    if (m_needsLayoutRebuild) {
-        BuildDockLayout(dockId);
-        m_needsLayoutRebuild = false;
-    }
+    DrawMainWorkspace();
 
     ImGui::End(); // ホストウィンドウ
-
-    // 各サブウィンドウを描画する（ホストの DockSpace にドッキングする）
-    DrawSkeletonPanel();
-    DrawViewportPanel();
-    DrawStateMachinePanel();
-    DrawTimelinePanel();
-    DrawPropertiesPanel();
-    DrawAnimatorPanel();
-    DrawInputPanel();
 }
 // DockSpace レイアウト構築（UE Animation Editor 風）
 void PlayerEditorPanel::BuildDockLayout(unsigned int dockspaceId)

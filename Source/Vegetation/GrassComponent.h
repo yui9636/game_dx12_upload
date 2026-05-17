@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <cereal/cereal.hpp>
+#include <cereal/types/vector.hpp>
+#include <cereal/types/string.hpp>
 
 // One foliage layer (= one model type with its own placement rules).
 // A terrain entity holds N layers (grass, weeds, rocks, ...) inside its GrassComponent.
@@ -45,6 +48,27 @@ struct FoliageLayer {
 
     // Debug / status (populated by build system).
     uint32_t lastInstanceCount = 0;
+
+    template<class Archive>
+    void serialize(Archive& ar) {
+        ar( CEREAL_NVP(enabled), CEREAL_NVP(name), CEREAL_NVP(meshPath),
+            CEREAL_NVP(densityMultiplier), CEREAL_NVP(maxPerCell),
+            CEREAL_NVP(densityThreshold), CEREAL_NVP(splatChannel),
+            CEREAL_NVP(minAltitudeNorm), CEREAL_NVP(maxAltitudeNorm),
+            CEREAL_NVP(maxSlopeDegrees),
+            CEREAL_NVP(sizeScale), CEREAL_NVP(sizeVariance),
+            cereal::make_nvp("cbR", colorBottom.x),
+            cereal::make_nvp("cbG", colorBottom.y),
+            cereal::make_nvp("cbB", colorBottom.z),
+            cereal::make_nvp("ctR", colorTop.x),
+            cereal::make_nvp("ctG", colorTop.y),
+            cereal::make_nvp("ctB", colorTop.z),
+            cereal::make_nvp("tvR", tintVariance.x),
+            cereal::make_nvp("tvG", tintVariance.y),
+            cereal::make_nvp("tvB", tintVariance.z),
+            CEREAL_NVP(useWind), CEREAL_NVP(windStrength), CEREAL_NVP(windSpeed),
+            CEREAL_NVP(seed) );
+    }
 };
 
 // Per-terrain foliage container. The component itself just holds the layer list
@@ -65,4 +89,13 @@ struct GrassComponent {
 
     // Convenience helper: populate three default layers covering grass/weeds/rocks.
     void EnsureDefaultLayers();
+
+    template<class Archive>
+    void serialize(Archive& ar) {
+        ar( CEREAL_NVP(enabled), CEREAL_NVP(layers),
+            cereal::make_nvp("windX", windDirection.x),
+            cereal::make_nvp("windY", windDirection.y),
+            cereal::make_nvp("windZ", windDirection.z),
+            CEREAL_NVP(drawDistance), CEREAL_NVP(showInEditor) );
+    }
 };

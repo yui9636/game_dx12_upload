@@ -43,7 +43,10 @@ public:
     // FrameBuffer ラッパーを使わず、外部テクスチャへ直接描画する。
     void ClearExternalRT(ITexture* color, ITexture* depth,
                          float r, float g, float b, float a);
+    void ClearExternalDepth(ITexture* depth);
     void SetExternalRenderTarget(ITexture* color, ITexture* depth);
+    void RenderQueuedDirect(ITexture* color, ITexture* depth);
+    void FinishDirect(ITexture* color);
     void SubmitDirect(ITexture* color);
 
     bool IsGpuIdle() const;

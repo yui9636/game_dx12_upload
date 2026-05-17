@@ -1,0 +1,481 @@
+{
+  "editor": {
+    "sceneViewMode": "3D"
+  },
+  "nodes": [
+    {
+      "components": {
+        "GrassComponent": {
+          "drawDistance": 388.0,
+          "enabled": true,
+          "layers": [
+            {
+              "colorBottom": [
+                0.1599999964237213,
+                0.2800000011920929,
+                0.10000000149011612
+              ],
+              "colorTop": [
+                0.550000011920929,
+                0.7799999713897705,
+                0.30000001192092896
+              ],
+              "densityMultiplier": 1.0700000524520874,
+              "densityThreshold": 0.10000000149011612,
+              "enabled": true,
+              "maxAltitudeNorm": 1.0,
+              "maxPerCell": 3,
+              "maxSlopeDegrees": 60.0,
+              "meshPath": "Data/Model/terrain/grass/zassou2.gltf",
+              "minAltitudeNorm": 0.0,
+              "name": "Grass",
+              "seed": 1111,
+              "sizeScale": 1.0,
+              "sizeVariance": 0.3499999940395355,
+              "splatChannel": 0,
+              "tintVariance": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.05000000074505806
+              ],
+              "useWind": true,
+              "windSpeed": 1.399999976158142,
+              "windStrength": 0.3499999940395355
+            },
+            {
+              "colorBottom": [
+                0.20000000298023224,
+                0.30000001192092896,
+                0.10000000149011612
+              ],
+              "colorTop": [
+                0.6000000238418579,
+                0.75,
+                0.30000001192092896
+              ],
+              "densityMultiplier": 0.5,
+              "densityThreshold": 0.3499999940395355,
+              "enabled": true,
+              "maxAltitudeNorm": 0.699999988079071,
+              "maxPerCell": 1,
+              "maxSlopeDegrees": 50.0,
+              "meshPath": "Data/Model/terrain/grass/zassou1.gltf",
+              "minAltitudeNorm": 0.0,
+              "name": "Weeds",
+              "seed": 2222,
+              "sizeScale": 0.800000011920929,
+              "sizeVariance": 0.3499999940395355,
+              "splatChannel": 0,
+              "tintVariance": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.05000000074505806
+              ],
+              "useWind": true,
+              "windSpeed": 1.100000023841858,
+              "windStrength": 0.25
+            },
+            {
+              "colorBottom": [
+                0.14000000059604645,
+                0.23999999463558197,
+                0.07999999821186066
+              ],
+              "colorTop": [
+                0.5,
+                0.800000011920929,
+                0.2800000011920929
+              ],
+              "densityMultiplier": 0.30000001192092896,
+              "densityThreshold": 0.550000011920929,
+              "enabled": true,
+              "maxAltitudeNorm": 1.0,
+              "maxPerCell": 1,
+              "maxSlopeDegrees": 45.0,
+              "meshPath": "Data/Model/terrain/grass/zassou3.gltf",
+              "minAltitudeNorm": 0.0,
+              "name": "Tall",
+              "seed": 3333,
+              "sizeScale": 1.399999976158142,
+              "sizeVariance": 0.3499999940395355,
+              "splatChannel": 0,
+              "tintVariance": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.05000000074505806
+              ],
+              "useWind": true,
+              "windSpeed": 1.600000023841858,
+              "windStrength": 0.44999998807907104
+            },
+            {
+              "colorBottom": [
+                0.1599999964237213,
+                0.2800000011920929,
+                0.10000000149011612
+              ],
+              "colorTop": [
+                0.550000011920929,
+                0.7799999713897705,
+                0.30000001192092896
+              ],
+              "densityMultiplier": 1.0,
+              "densityThreshold": 0.10000000149011612,
+              "enabled": true,
+              "maxAltitudeNorm": 1.0,
+              "maxPerCell": 4,
+              "maxSlopeDegrees": 90.0,
+              "meshPath": "Data/Model/terrain/grass/zassou2.gltf",
+              "minAltitudeNorm": 0.0,
+              "name": "Layer",
+              "seed": 1234,
+              "sizeScale": 1.2000000476837158,
+              "sizeVariance": 0.3499999940395355,
+              "splatChannel": 0,
+              "tintVariance": [
+                0.10000000149011612,
+                0.10000000149011612,
+                0.05000000074505806
+              ],
+              "useWind": true,
+              "windSpeed": 1.399999976158142,
+              "windStrength": 0.3499999940395355
+            }
+          ],
+          "showInEditor": true,
+          "windDirection": [
+            1.0,
+            0.0,
+            0.6000000238418579
+          ]
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Terrain"
+        },
+        "TerrainComponent": {
+          "assetPath": "terrain_terrain_0.terrain",
+          "showInEditor": true
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
+        },
+        "CameraFreeControlComponent": {
+          "moveSpeed": 20.0,
+          "pitch": 0.8700000047683716,
+          "rotateSpeed": 0.004999999888241291,
+          "yaw": 0.06499999761581421
+        },
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Main Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -17.099035263061523,
+            "y": 110.81863403320313,
+            "z": -291.9535827636719
+          },
+          "localRotation": {
+            "w": 0.9063911437988281,
+            "x": 0.4211878776550293,
+            "y": 0.02946808747947216,
+            "z": -0.013693426735699177
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 1
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "intensity": 1.0,
+          "range": 10.0,
+          "type": 0
+        },
+        "NameComponent": {
+          "name": "Directional Light"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 0.8535533547401428,
+            "x": 0.3535533845424652,
+            "y": 0.3535533845424652,
+            "z": -0.1464466005563736
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 2
+    },
+    {
+      "components": {
+        "NameComponent": {
+          "name": "Reflection Probe"
+        },
+        "ReflectionProbeComponent": {
+          "position": {
+            "x": 0.0,
+            "y": 1.5,
+            "z": 0.0
+          },
+          "radius": 20.0
+        }
+      },
+      "id": 3
+    },
+    {
+      "components": {
+        "InputActionMapComponent": {
+          "actions": [
+            {
+              "actionName": "Save",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 22,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Undo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 29,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Redo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 28,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Delete",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 76,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Duplicate",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 7,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Copy",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 6,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Paste",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 25,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Play",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 62,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Rename",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 59,
+              "trigger": "Pressed"
+            }
+          ],
+          "axes": [],
+          "contextCategory": "EditorGlobal",
+          "doubleTapGapFrames": 15,
+          "holdThresholdFrames": 30,
+          "name": "EditorGlobal"
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "InputUserComponent": {
+          "deviceMask": 4294967295,
+          "isEditorUser": true,
+          "isPrimary": true,
+          "profileName": "Editor",
+          "userId": 0
+        }
+      },
+      "id": 4
+    },
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 5
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 6
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 0,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 7
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 1,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 8
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": true,
+          "enabled": false,
+          "pointerEnabled": true,
+          "priority": 5,
+          "textInputEnabled": true,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 9
+    }
+  ],
+  "rootLocalIds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "type": "scene",
+  "version": 1
+}

@@ -24,6 +24,7 @@
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/CameraComponent.h"
 #include "Component/HierarchyComponent.h"
+#include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
 #include "Component/TransformComponent.h"
 #include "Gameplay/ActionDatabaseComponent.h"
@@ -32,6 +33,7 @@
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/StateMachineParamsComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
 #include "Model/Model.h"
 #include "System/Query.h"
 #include "Registry/Registry.h"
@@ -49,6 +51,52 @@ namespace
 
         registry.AddComponent(entity, T{});
         return registry.GetComponent<T>(entity);
+    }
+
+    EntityID FindMeshEntityRecursive(Registry& registry, EntityID entity)
+    {
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            return Entity::NULL_ID;
+        }
+        if (registry.GetComponent<MeshComponent>(entity)) {
+            return entity;
+        }
+        const HierarchyComponent* hierarchy = registry.GetComponent<HierarchyComponent>(entity);
+        if (!hierarchy) {
+            return Entity::NULL_ID;
+        }
+        EntityID child = hierarchy->firstChild;
+        while (!Entity::IsNull(child)) {
+            EntityID found = FindMeshEntityRecursive(registry, child);
+            if (!Entity::IsNull(found)) {
+                return found;
+            }
+            const HierarchyComponent* childHierarchy = registry.GetComponent<HierarchyComponent>(child);
+            child = childHierarchy ? childHierarchy->nextSibling : Entity::NULL_ID;
+        }
+        return Entity::NULL_ID;
+    }
+
+    void ResolveThirdPersonPresetFromModel(Registry& registry, EntityID playerEntity, float& distance, float& heightOffset, float& lookAtHeight)
+    {
+        distance = 5.5f;
+        heightOffset = 2.2f;
+        lookAtHeight = 1.2f;
+
+        const EntityID meshEntity = FindMeshEntityRecursive(registry, playerEntity);
+        const MeshComponent* mesh = !Entity::IsNull(meshEntity) ? registry.GetComponent<MeshComponent>(meshEntity) : nullptr;
+        if (!mesh || !mesh->model) {
+            return;
+        }
+
+        const auto bounds = mesh->model->GetWorldBounds();
+        const DirectX::XMFLOAT3 ex = bounds.Extents;
+        const float height = (std::max)(ex.y * 2.0f, 1.0f);
+        const float radius = (std::max)(std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z), 1.0f);
+
+        distance = (std::max)(radius * 1.9f, 3.0f);
+        heightOffset = (std::max)(height * 0.55f, 1.2f);
+        lookAtHeight = (std::max)(height * 0.48f, 0.9f);
     }
 
     EntityID FindPlayerEditorCameraEntity(Registry& registry)
@@ -134,9 +182,47 @@ namespace
         cameraTransform.isDirty = true;
     }
 
-    void EnsureThirdPersonCameraForPlayer(Registry& registry, EntityID playerEntity)
+    void EnsureThirdPersonCameraForPlayer(Registry& registry, EntityID playerEntity, bool placeSceneCamera)
     {
         if (Entity::IsNull(playerEntity) || !registry.IsAlive(playerEntity)) {
+            return;
+        }
+
+        const bool hadThirdPersonControl = registry.GetComponent<CameraTPVControlComponent>(playerEntity) != nullptr;
+        CameraTPVControlComponent* tpv = EnsureEditorComponent<CameraTPVControlComponent>(registry, playerEntity);
+        if (!tpv) {
+            return;
+        }
+
+        float presetDistance = 5.5f;
+        float presetHeight = 2.2f;
+        float presetLookAt = 1.2f;
+        ResolveThirdPersonPresetFromModel(registry, playerEntity, presetDistance, presetHeight, presetLookAt);
+
+        if (!hadThirdPersonControl) {
+            *tpv = CameraTPVControlComponent{};
+        }
+        if (!hadThirdPersonControl || tpv->distance <= 0.0f || std::fabs(tpv->distance - 5.0f) <= 0.0001f) {
+            tpv->distance = presetDistance;
+        }
+        if (!hadThirdPersonControl || tpv->heightOffset <= 0.0f || std::fabs(tpv->heightOffset - 1.5f) <= 0.0001f) {
+            tpv->heightOffset = presetHeight;
+        }
+        if (tpv->lookAtHeight <= 0.0f) {
+            tpv->lookAtHeight = presetLookAt;
+        }
+        if (!hadThirdPersonControl || std::fabs(tpv->smoothness - 8.0f) <= 0.0001f) {
+            tpv->smoothness = 0.0f;
+        }
+        if (!hadThirdPersonControl) {
+            tpv->rotationSmoothness = 0.0f;
+        }
+        tpv->followTargetFacing = false;
+        tpv->allowManualOrbit = false;
+        tpv->pitch = 0.0f;
+        tpv->yaw = 0.0f;
+
+        if (!placeSceneCamera) {
             return;
         }
 
@@ -159,38 +245,34 @@ namespace
             registry.RemoveComponent<CameraTPVControlComponent>(cameraEntity);
         }
 
-        const bool hadThirdPersonControl = registry.GetComponent<CameraTPVControlComponent>(playerEntity) != nullptr;
-        CameraTPVControlComponent* tpv = EnsureEditorComponent<CameraTPVControlComponent>(registry, playerEntity);
-        if (!tpv) {
-            return;
-        }
-
-        if (!hadThirdPersonControl) {
-            *tpv = CameraTPVControlComponent{};
-        }
-        if (!hadThirdPersonControl || tpv->distance <= 0.0f || std::fabs(tpv->distance - 5.0f) <= 0.0001f) {
-            tpv->distance = 5.5f;
-        }
-        if (!hadThirdPersonControl || tpv->heightOffset <= 0.0f || std::fabs(tpv->heightOffset - 1.5f) <= 0.0001f) {
-            tpv->heightOffset = 2.2f;
-        }
-        if (tpv->lookAtHeight <= 0.0f) {
-            tpv->lookAtHeight = 1.2f;
-        }
-        if (!hadThirdPersonControl || std::fabs(tpv->smoothness - 8.0f) <= 0.0001f) {
-            tpv->smoothness = 0.0f;
-        }
-        if (!hadThirdPersonControl) {
-            tpv->rotationSmoothness = 0.0f;
-        }
-        tpv->followTargetFacing = false;
-        tpv->allowManualOrbit = false;
-        tpv->pitch = 0.0f;
-        tpv->yaw = 0.0f;
-
         if (cameraTransform) {
             PlaceCameraAtThirdPersonPreset(*cameraTransform, registry.GetComponent<TransformComponent>(playerEntity), *tpv);
         }
+    }
+
+    const TimelineAsset* FindTimelineAssetById(const TimelineLibraryComponent* library, uint32_t timelineId)
+    {
+        if (!library || timelineId == 0) {
+            return nullptr;
+        }
+
+        for (const auto& asset : library->assets) {
+            if (asset.id == timelineId) {
+                return &asset;
+            }
+        }
+        return nullptr;
+    }
+
+    std::string MakeTimelineLabel(const TimelineAsset& asset)
+    {
+        std::string label = "[" + std::to_string(asset.id) + "] ";
+        label += asset.name.empty() ? "Timeline" : asset.name;
+        if (asset.animationIndex >= 0) {
+            label += "  anim ";
+            label += std::to_string(asset.animationIndex);
+        }
+        return label;
     }
 }
 
@@ -852,9 +934,7 @@ void PlayerEditorPanel::ApplyFullPlayerPreset()
 
     if (CanUsePreviewEntity()) {
         ApplyEditorBindingsToPreviewEntity();
-        if (!m_previewEntityOwned) {
-            EnsureThirdPersonCameraForPlayer(*m_registry, m_previewEntity);
-        }
+        EnsureThirdPersonCameraForPlayer(*m_registry, m_previewEntity, !m_previewEntityOwned);
         if (ActionDatabaseComponent* database = m_registry->GetComponent<ActionDatabaseComponent>(m_previewEntity)) {
             struct ResolverCtx { const PlayerEditorPanel* self; };
             ResolverCtx ctx{ this };
@@ -1708,6 +1788,16 @@ void PlayerEditorPanel::PreviewStateNode(uint32_t stateId, bool restartTimeline)
     if (state->animationIndex >= 0) {
         m_selectedAnimIndex = state->animationIndex;
     }
+
+    if (CanUsePreviewEntity()) {
+        if (const auto* library = m_registry->GetComponent<TimelineLibraryComponent>(m_previewEntity)) {
+            if (const TimelineAsset* boundTimeline = FindTimelineAssetById(library, state->timelineId)) {
+                m_timelineAsset = *boundTimeline;
+            } else {
+                PlayerEditorSession::SyncTimelineAssetSelection(*this);
+            }
+        }
+    }
     (void)restartTimeline;
     RebuildPreviewTimelineRuntimeData();
 
@@ -1751,6 +1841,85 @@ void PlayerEditorPanel::DrawStateNodeInspector()
     if (ImGui::Checkbox("Loop", &state->loopAnimation)) m_stateMachineDirty = true;
     if (ImGui::DragFloat("Speed", &state->animSpeed, 0.01f, 0.0f, 5.0f, "%.2f")) m_stateMachineDirty = true;
     if (ImGui::Checkbox("Can Interrupt", &state->canInterrupt)) m_stateMachineDirty = true;
+
+    ImGui::Separator();
+    ImGui::Text("Timeline");
+    TimelineLibraryComponent* timelineLibrary = nullptr;
+    if (CanUsePreviewEntity()) {
+        timelineLibrary = m_registry->GetComponent<TimelineLibraryComponent>(m_previewEntity);
+    }
+
+    const TimelineAsset* selectedTimeline = FindTimelineAssetById(timelineLibrary, state->timelineId);
+    std::string timelinePreview = "Auto by Animation";
+    if (state->timelineId != 0) {
+        timelinePreview = selectedTimeline
+            ? MakeTimelineLabel(*selectedTimeline)
+            : ("[" + std::to_string(state->timelineId) + "] <missing>");
+    }
+
+    if (ImGui::BeginCombo("Timeline", timelinePreview.c_str())) {
+        const bool autoSelected = state->timelineId == 0;
+        if (ImGui::Selectable("Auto by Animation", autoSelected)) {
+            state->timelineId = 0;
+            m_stateMachineDirty = true;
+            PlayerEditorSession::SyncTimelineAssetSelection(*this);
+            RebuildPreviewTimelineRuntimeData();
+            SyncPreviewTimelinePlayback();
+        }
+        if (autoSelected) {
+            ImGui::SetItemDefaultFocus();
+        }
+
+        if (timelineLibrary) {
+            for (const auto& timeline : timelineLibrary->assets) {
+                const bool selected = state->timelineId == timeline.id;
+                const std::string label = MakeTimelineLabel(timeline);
+                if (ImGui::Selectable(label.c_str(), selected)) {
+                    state->timelineId = timeline.id;
+                    m_timelineAsset = timeline;
+                    if (state->animationIndex < 0 && timeline.animationIndex >= 0) {
+                        state->animationIndex = timeline.animationIndex;
+                    }
+                    if (state->animationIndex >= 0) {
+                        m_selectedAnimIndex = state->animationIndex;
+                    } else if (timeline.animationIndex >= 0) {
+                        m_selectedAnimIndex = timeline.animationIndex;
+                    }
+                    m_stateMachineDirty = true;
+                    RebuildPreviewTimelineRuntimeData();
+                    SyncPreviewTimelinePlayback();
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    if (ImGui::Button("Bind Current Timeline")) {
+        PlayerEditorSession::SyncTimelineAssetSelection(*this);
+        if (m_timelineAsset.id != 0) {
+            state->timelineId = m_timelineAsset.id;
+            m_stateMachineDirty = true;
+            RebuildPreviewTimelineRuntimeData();
+            SyncPreviewTimelinePlayback();
+        }
+    }
+    if (selectedTimeline) {
+        ImGui::SameLine();
+        if (ImGui::Button("Open Bound Timeline")) {
+            m_timelineAsset = *selectedTimeline;
+            if (state->animationIndex >= 0) {
+                m_selectedAnimIndex = state->animationIndex;
+            } else if (selectedTimeline->animationIndex >= 0) {
+                m_selectedAnimIndex = selectedTimeline->animationIndex;
+            }
+            RebuildPreviewTimelineRuntimeData();
+            SyncPreviewTimelinePlayback();
+        }
+    }
+
     if (ImGui::Button(ICON_FA_PLAY " Preview State")) {
         PreviewStateNode(state->id, false);
     }

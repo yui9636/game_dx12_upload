@@ -113,9 +113,13 @@ static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, co
     const float shoreDepth = (std::max)(0.75f, asset.heightScale * 0.06f);
     const uint32_t vertsPerSide = kGrid + 1u;
 
+    // First pass: sample terrain at every grid vertex, recording water depth
+    // so we can skip emitting any triangle that lies entirely over dry land.
     std::vector<WaterVertex> vertices;
+    std::vector<float>       cellWaterDepth;
     std::vector<uint32_t> indices;
     vertices.reserve(static_cast<size_t>(vertsPerSide) * vertsPerSide);
+    cellWaterDepth.reserve(vertices.capacity());
     indices.reserve(static_cast<size_t>(kGrid) * kGrid * 6u);
 
     bool hasVisibleWater = false;
@@ -133,6 +137,7 @@ static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, co
                 { u0, v0 },
                 { shore, 0.0f }
             });
+            cellWaterDepth.push_back(waterDepth);
         }
     }
 
@@ -140,12 +145,25 @@ static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, co
         return;
     }
 
+    // Skip any quad where ALL four corners are on dry land. The remaining
+    // shoreline quads still cover land but are masked by the PS discard.
+    // (Cheap conservative cull: better than the previous full-grid emit.)
+    const float kDryLandEps = 0.001f;
     for (uint32_t z = 0; z < kGrid; ++z) {
         for (uint32_t x = 0; x < kGrid; ++x) {
             const uint32_t i0 = z * vertsPerSide + x;
             const uint32_t i1 = i0 + 1u;
             const uint32_t i2 = (z + 1u) * vertsPerSide + x;
             const uint32_t i3 = i2 + 1u;
+
+            const bool dry0 = cellWaterDepth[i0] <= kDryLandEps;
+            const bool dry1 = cellWaterDepth[i1] <= kDryLandEps;
+            const bool dry2 = cellWaterDepth[i2] <= kDryLandEps;
+            const bool dry3 = cellWaterDepth[i3] <= kDryLandEps;
+            if (dry0 && dry1 && dry2 && dry3) {
+                continue;   // entire quad is land - no water here
+            }
+
             indices.push_back(i0);
             indices.push_back(i2);
             indices.push_back(i1);
@@ -153,6 +171,10 @@ static void BuildWaterMesh(IResourceFactory& factory, TerrainRuntimeData& rd, co
             indices.push_back(i2);
             indices.push_back(i3);
         }
+    }
+
+    if (indices.empty()) {
+        return;
     }
 
     rd.waterVertexBuffer = factory.CreateBuffer(
@@ -267,9 +289,80 @@ void TerrainBuildSystem::RebuildEntity(EntityID entity, TerrainAsset& asset)
                 }
             }
 
+            // ---------------------------------------------------------------
+            // Chunk skirts: duplicate perimeter vertices with Y dropped, then
+            // weave triangles between them and the perimeter. Hides T-junction
+            // gaps when adjacent chunks render at different LODs.
+            // ---------------------------------------------------------------
+            const uint32_t skirtStartIdx = static_cast<uint32_t>(verts.size());
+            const float    skirtDrop = (std::max)(asset.heightScale * 0.15f, 2.0f);
+            auto addSkirtVert = [&](uint32_t baseIdx) {
+                TerrainVertex sv = verts[baseIdx];
+                sv.position.y -= skirtDrop;
+                verts.push_back(sv);
+            };
+            // North (lz=0), South (lz=last), West (lx=0), East (lx=last).
+            // Each is a separate strip of duplicates running along its edge.
+            const uint32_t lastZ = vertsPerChunkZ - 1u;
+            const uint32_t lastX = vertsPerChunkX - 1u;
+            // North strip [skirtStartIdx .. +vertsPerChunkX-1]
+            for (uint32_t lx = 0; lx < vertsPerChunkX; ++lx) addSkirtVert(0u * vertsPerChunkX + lx);
+            const uint32_t skirtNorthBase = skirtStartIdx;
+            // South strip
+            const uint32_t skirtSouthBase = static_cast<uint32_t>(verts.size());
+            for (uint32_t lx = 0; lx < vertsPerChunkX; ++lx) addSkirtVert(lastZ * vertsPerChunkX + lx);
+            // West strip
+            const uint32_t skirtWestBase  = static_cast<uint32_t>(verts.size());
+            for (uint32_t lz = 0; lz < vertsPerChunkZ; ++lz) addSkirtVert(lz * vertsPerChunkX + 0u);
+            // East strip
+            const uint32_t skirtEastBase  = static_cast<uint32_t>(verts.size());
+            for (uint32_t lz = 0; lz < vertsPerChunkZ; ++lz) addSkirtVert(lz * vertsPerChunkX + lastX);
+
+            // Helper: append skirt indices for the four edges into an index buffer.
+            // step is LOD step so the skirt vertex spacing matches the LOD.
+            auto appendSkirt = [&](std::vector<uint32_t>& idx, uint32_t step) {
+                // North edge: connect [0, lx] -> skirtNorth, going from x to x+step
+                for (uint32_t lx = 0; lx + step <= lastX; lx += step) {
+                    uint32_t p0 = 0u * vertsPerChunkX + lx;
+                    uint32_t p1 = 0u * vertsPerChunkX + lx + step;
+                    uint32_t s0 = skirtNorthBase + lx;
+                    uint32_t s1 = skirtNorthBase + lx + step;
+                    idx.push_back(p0); idx.push_back(p1); idx.push_back(s0);
+                    idx.push_back(p1); idx.push_back(s1); idx.push_back(s0);
+                }
+                // South edge: reversed winding
+                for (uint32_t lx = 0; lx + step <= lastX; lx += step) {
+                    uint32_t p0 = lastZ * vertsPerChunkX + lx;
+                    uint32_t p1 = lastZ * vertsPerChunkX + lx + step;
+                    uint32_t s0 = skirtSouthBase + lx;
+                    uint32_t s1 = skirtSouthBase + lx + step;
+                    idx.push_back(p0); idx.push_back(s0); idx.push_back(p1);
+                    idx.push_back(p1); idx.push_back(s0); idx.push_back(s1);
+                }
+                // West edge
+                for (uint32_t lz = 0; lz + step <= lastZ; lz += step) {
+                    uint32_t p0 = lz * vertsPerChunkX + 0u;
+                    uint32_t p1 = (lz + step) * vertsPerChunkX + 0u;
+                    uint32_t s0 = skirtWestBase + lz;
+                    uint32_t s1 = skirtWestBase + lz + step;
+                    idx.push_back(p0); idx.push_back(s0); idx.push_back(p1);
+                    idx.push_back(p1); idx.push_back(s0); idx.push_back(s1);
+                }
+                // East edge: reversed winding
+                for (uint32_t lz = 0; lz + step <= lastZ; lz += step) {
+                    uint32_t p0 = lz * vertsPerChunkX + lastX;
+                    uint32_t p1 = (lz + step) * vertsPerChunkX + lastX;
+                    uint32_t s0 = skirtEastBase + lz;
+                    uint32_t s1 = skirtEastBase + lz + step;
+                    idx.push_back(p0); idx.push_back(p1); idx.push_back(s0);
+                    idx.push_back(p1); idx.push_back(s1); idx.push_back(s0);
+                }
+            };
+
             std::vector<uint32_t> lodIndices[5];
             for (uint32_t lod = 0; lod < 5; ++lod) {
                 lodIndices[lod] = BuildLodIndices(vertsPerChunkX, vertsPerChunkZ, 1u << lod);
+                appendSkirt(lodIndices[lod], 1u << lod);
             }
 
             TerrainChunkBuffer chunk;

@@ -77,15 +77,31 @@ namespace
             : 0.0f;
     }
 
+    const TimelineAsset* FindTimelineAssetById(const TimelineLibraryComponent* timelineLibrary, uint32_t timelineId)
+    {
+        if (!timelineLibrary || timelineId == 0) {
+            return nullptr;
+        }
+
+        for (const auto& asset : timelineLibrary->assets) {
+            if (asset.id == timelineId) {
+                return &asset;
+            }
+        }
+        return nullptr;
+    }
+
     const TimelineAsset* FindTimelineAssetForAnimation(const TimelineLibraryComponent* timelineLibrary, int animationIndex)
     {
         if (!timelineLibrary || timelineLibrary->assets.empty()) {
             return nullptr;
         }
 
-        for (const auto& asset : timelineLibrary->assets) {
-            if (asset.animationIndex == animationIndex) {
-                return &asset;
+        if (animationIndex >= 0) {
+            for (const auto& asset : timelineLibrary->assets) {
+                if (asset.animationIndex == animationIndex) {
+                    return &asset;
+                }
             }
         }
 
@@ -94,6 +110,14 @@ namespace
         }
 
         return nullptr;
+    }
+
+    const TimelineAsset* FindTimelineAssetForState(const TimelineLibraryComponent* timelineLibrary, const StateNode& state)
+    {
+        if (const TimelineAsset* asset = FindTimelineAssetById(timelineLibrary, state.timelineId)) {
+            return asset;
+        }
+        return FindTimelineAssetForAnimation(timelineLibrary, state.animationIndex);
     }
 
     void ResetTimelineRuntime(Registry& registry, EntityID entity)
@@ -118,7 +142,7 @@ namespace
             return;
         }
 
-        const TimelineAsset* asset = FindTimelineAssetForAnimation(timelineLibrary, state.animationIndex);
+        const TimelineAsset* asset = FindTimelineAssetForState(timelineLibrary, state);
         if (!asset) {
             ResetTimelineRuntime(registry, entity);
             return;

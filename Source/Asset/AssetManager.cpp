@@ -5,12 +5,7 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include "ThumbnailGenerator.h"
-#include "System/ResourceManager.h"
 #include <fstream>
-#include "Graphics.h"
-#include "RHI/ITexture.h"
-#include "RHI/DX11/DX11Texture.h"
 #include "Console/Logger.h"
 
 // アセット管理を初期化する。
@@ -103,11 +98,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         entry.iconStr = ICON_FA_CUBE;
         entry.iconColor = ImVec4(0.4f, 0.8f, 0.9f, 1.0f);
 
-        // モデルのサムネイル生成を要求する。
-        ThumbnailGenerator::Instance().Request(entry.path.string());
-
-        // 既に生成済みなら取得する。
-        entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
+        entry.thumbnailTexture = nullptr;
     }
 
     // Prefab / バイナリ / JSON 系。
@@ -128,15 +119,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         entry.iconStr = ICON_FA_IMAGE;
         entry.iconColor = ImVec4(0.5f, 0.9f, 0.5f, 1.0f);
 
-        // ResourceManager からテクスチャを取得する。
-        auto tex = ResourceManager::Instance().GetTexture(entry.path.string());
-        entry.thumbnailTexture = tex;
-
-        // DX11 の場合はネイティブ SRV を取り出してサムネイル描画に使う。
-        if (Graphics::Instance().GetAPI() == GraphicsAPI::DX11 && tex) {
-            auto* dx11Texture = dynamic_cast<DX11Texture*>(tex.get());
-            entry.thumbnail = dx11Texture ? dx11Texture->GetNativeSRV() : nullptr;
-        }
+        entry.thumbnailTexture = nullptr;
     }
 
     // フォント系。
@@ -162,11 +145,7 @@ void AssetManager::AssignIconAndType(AssetEntry& entry) {
         entry.iconStr = ICON_FA_PALETTE;
         entry.iconColor = ImVec4(1.0f, 0.5f, 0.8f, 1.0f);
 
-        // マテリアルサムネイル生成を要求する。
-        ThumbnailGenerator::Instance().RequestMaterial(entry.path.string());
-
-        // 既に生成済みなら取得する。
-        entry.thumbnailTexture = ThumbnailGenerator::Instance().Get(entry.path.string());
+        entry.thumbnailTexture = nullptr;
     }
 
     // コード / シェーダ系。

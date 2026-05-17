@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <unordered_set>
 #include <imgui.h>
 
 #include "Asset/ThumbnailGenerator.h"
@@ -240,6 +241,7 @@ void EffectEditorPanel::DrawAssetPickerPopup()
         ImGui::Columns(columns, "##PickerColumns", false);
 
         int visibleCount = 0;
+        std::unordered_set<std::string> visibleThumbnailPaths;
         for (const auto& pathString : assetPaths) {
             const std::filesystem::path path(pathString);
             const std::string filename = path.filename().string();
@@ -249,12 +251,14 @@ void EffectEditorPanel::DrawAssetPickerPopup()
 
             ++visibleCount;
             void* thumbId = nullptr;
-            if (wantModels) {
+            const bool thumbnailVisible = ImGui::IsRectVisible(ImVec2(72.0f, 72.0f));
+            if (wantModels && thumbnailVisible) {
+                visibleThumbnailPaths.insert(pathString);
                 ThumbnailGenerator::Instance().Request(pathString);
                 if (auto thumb = ThumbnailGenerator::Instance().Get(pathString)) {
                     thumbId = ImGuiRenderer::GetTextureID(thumb.get());
                 }
-            } else {
+            } else if (!wantModels && thumbnailVisible) {
                 if (auto texture = ResourceManager::Instance().GetTexture(pathString)) {
                     thumbId = ImGuiRenderer::GetTextureID(texture.get());
                 }
@@ -305,6 +309,9 @@ void EffectEditorPanel::DrawAssetPickerPopup()
         }
 
         ImGui::Columns(1);
+        if (wantModels) {
+            ThumbnailGenerator::Instance().SetVisiblePaths(visibleThumbnailPaths);
+        }
         if (visibleCount == 0) {
             ImGui::TextDisabled("%s", emptyLabel);
         }

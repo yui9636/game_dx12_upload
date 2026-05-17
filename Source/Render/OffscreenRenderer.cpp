@@ -64,7 +64,7 @@ bool OffscreenRenderer::Initialize()
         }
         m_dx12RootSignature = std::make_unique<DX12RootSignature>(device);
         m_commandList = std::make_unique<DX12CommandList>(device, m_dx12RootSignature.get(), false);
-        m_localSceneBuffer = std::make_unique<DX12Buffer>(device, sizeof(CbScene), BufferType::Constant);
+        m_localSceneBuffer = std::make_unique<DX12Buffer>(device, static_cast<uint32_t>(sizeof(CbScene)), BufferType::Constant);
 
         ID3D12Fence* fence = nullptr;
         HRESULT fhr = device->GetDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
@@ -88,7 +88,7 @@ bool OffscreenRenderer::Initialize()
     }
     auto* device11 = graphics.GetDevice();
     m_commandList = std::make_unique<DX11CommandList>(context);
-    m_localSceneBuffer = std::make_unique<DX11Buffer>(device11, sizeof(CbScene), BufferType::Constant);
+    m_localSceneBuffer = std::make_unique<DX11Buffer>(device11, static_cast<uint32_t>(sizeof(CbScene)), BufferType::Constant);
     m_available = true;
     LOG_INFO("[OffscreenRenderer] Initialized (DX11).");
     return true;
@@ -215,24 +215,37 @@ void OffscreenRenderer::ClearExternalRT(ITexture* color, ITexture* depth,
     m_commandList->ClearDepthStencil(depth, 1.0f, 0);
 }
 
+void OffscreenRenderer::ClearExternalDepth(ITexture* depth)
+{
+    m_commandList->TransitionBarrier(depth, ResourceState::DepthWrite);
+    if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
+        dx12Cmd->FlushResourceBarriers();
+    }
+    m_commandList->ClearDepthStencil(depth, 1.0f, 0);
+}
+
 void OffscreenRenderer::SetExternalRenderTarget(ITexture* color, ITexture* depth)
 {
     ITexture* rts[] = { color };
     m_commandList->SetRenderTargets(1, rts, depth);
 }
 
-void OffscreenRenderer::SubmitDirect(ITexture* color)
+void OffscreenRenderer::RenderQueuedDirect(ITexture* color, ITexture* depth)
 {
     RenderContext rc = {};
     rc.commandList = m_commandList.get();
     rc.renderState = Graphics::Instance().GetRenderState();
     rc.shadowMap = nullptr;
     rc.mainRenderTarget = color;
-    rc.mainDepthStencil = nullptr;
+    rc.mainDepthStencil = depth;
 
     RenderQueue emptyQueue;
     m_renderer->Render(rc, emptyQueue);
+}
 
+void OffscreenRenderer::FinishDirect(ITexture* color)
+{
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
         m_commandList->TransitionBarrier(color, ResourceState::ShaderResource);
         auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
@@ -243,6 +256,12 @@ void OffscreenRenderer::SubmitDirect(ITexture* color)
         ++m_fenceValue;
         Graphics::Instance().GetDX12Device()->GetCommandQueue()->Signal(AsFence(m_fencePtr), m_fenceValue);
     }
+}
+
+void OffscreenRenderer::SubmitDirect(ITexture* color)
+{
+    RenderQueuedDirect(color, nullptr);
+    FinishDirect(color);
 }
 
 uint64_t OffscreenRenderer::GetCompletedFenceValue() const

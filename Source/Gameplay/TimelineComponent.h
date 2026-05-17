@@ -4,6 +4,7 @@
 
 struct TimelineComponent {
     float fps = 60.0f;
+    int previousFrame = -1;
     int currentFrame = 0;
     int frameMin = 0;
     int frameMax = 600;

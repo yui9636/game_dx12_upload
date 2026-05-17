@@ -123,7 +123,7 @@
       </AssemblerOutputFile>
     </FxCompile>
     <PreBuildEvent>
-      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/" "$(ProjectDir)Source\AI" "AI/"</Command>
+      <Command>"$(SolutionDir)x64\$(Configuration)\GEHeaderTool.exe" "$(ProjectDir)Source\Component" "$(ProjectDir)Source\Generated\ComponentMeta.generated.h" "$(ProjectDir)Source\Input" "Input/" "$(ProjectDir)Source\Gameplay" "Gameplay/" "$(ProjectDir)Source\AI" "AI/" "$(ProjectDir)Source\Terrain" "Terrain/" "$(ProjectDir)Source\Vegetation" "Vegetation/"</Command>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(ProjectDir)External\SDL-release-3.4.x\build\Release\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
@@ -360,6 +360,8 @@
     <ClInclude Include="Source\Terrain\TerrainLODSystem.h" />
     <ClInclude Include="Source\Terrain\TerrainPhysicsSystem.h" />
     <ClInclude Include="Source\Terrain\TerrainRenderPass.h" />
+    <ClInclude Include="Source\Terrain\TerrainGpuPipeline.h" />
+    <ClInclude Include="Source\Terrain\TerrainAssetIO.h" />
     <ClInclude Include="Source\Terrain\WaterRenderPass.h" />
     <ClInclude Include="Source\Terrain\CreateTerrainDialog.h" />
     <ClInclude Include="Source\Vegetation\GrassComponent.h" />
@@ -701,6 +703,8 @@
     <ClCompile Include="Source\Terrain\TerrainLODSystem.cpp" />
     <ClCompile Include="Source\Terrain\TerrainPhysicsSystem.cpp" />
     <ClCompile Include="Source\Terrain\TerrainRenderPass.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainGpuPipeline.cpp" />
+    <ClCompile Include="Source\Terrain\TerrainAssetIO.cpp" />
     <ClCompile Include="Source\Terrain\WaterRenderPass.cpp" />
     <ClCompile Include="Source\Terrain\CreateTerrainDialog.cpp" />
     <ClCompile Include="Source\Vegetation\GrassBuildSystem.cpp" />
@@ -1276,6 +1280,24 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\TerrainNoiseCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\TerrainErodeCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\TerrainAutoSplatCS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\WaterVS.hlsl">
