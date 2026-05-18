@@ -73,7 +73,8 @@ void PlayerEditorPanel::DrawViewportSurface()
     }
 
     // フリーカメラ: hover 中の右ドラッグ=回転 / middle ドラッグ=パン / ホイール=ズーム
-    if (m_viewportHovered && m_viewMode == PlayerEditorViewMode::Edit) {
+    // Test モードでも操作可能 (TPV component が無ければそのまま、あっても override 可)
+    if (m_viewportHovered) {
         ImGuiIO& io = ImGui::GetIO();
 
         // 右ドラッグ: orbit (yaw + pitch)
@@ -122,6 +123,7 @@ void PlayerEditorPanel::DrawViewportSurface()
 void PlayerEditorPanel::DrawViewportOverlay(const ImVec2& imageMin, const ImVec2& imageSize)
 {
     if (imageSize.x <= 1.0f || imageSize.y <= 1.0f) return;
+    if (m_drawingPipViewport) return;  // PiP 表示時は EDIT/TEST バッジ等を出さない
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImU32 bg     = IM_COL32(10, 10, 10, 200);
@@ -153,6 +155,12 @@ bool PlayerEditorPanel::TryBuildThirdPersonPreviewCamera(
     DirectX::XMFLOAT3& outTarget,
     DirectX::XMFLOAT3& outDirection) const
 {
+    // PlayerEditor では TPV 自動カメラを無効化し、常に手動軌道カメラを使う
+    // (Test/Edit 両モードで Fit + ドラッグ + ホイール操作が一貫して効くため)
+    (void)outPosition; (void)outTarget; (void)outDirection;
+    return false;
+
+    // 旧経路は参考用に下に残す (実行されない)
     if (m_viewMode != PlayerEditorViewMode::Test || !m_registry || Entity::IsNull(m_previewEntity)) {
         return false;
     }

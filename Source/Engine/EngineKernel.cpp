@@ -1287,8 +1287,12 @@ void EngineKernel::Update(float rawDt)
     }
 
     const bool stepThisFrame = m_stepFrameRequested;
+    // PlayerEditor Test モード中も Editor モードのまま時間を進める。
+    // (アニメ / StateMachine / PlaybackSystem を動かすために dt が必要)
+    const bool playerEditorTestActive =
+        m_editorLayer && m_editorLayer->GetPlayerEditorPanel().IsTestModeActive();
 
-    if (mode == EngineMode::Play || stepThisFrame) {
+    if (mode == EngineMode::Play || stepThisFrame || playerEditorTestActive) {
         time.dt = rawDt * time.timeScale;
     }
     else {

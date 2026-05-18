@@ -636,6 +636,12 @@ void PlayerEditorPanel::StartSelectedAnimationPreview()
         m_selectedAnimIndex = 0;
     }
 
+    // Test モード中は PreviewState を起動しない (StateMachine に animator を譲る)。
+    // Edit モードでは従来通り PreviewState がタイムライン経由でアニメを再生する。
+    if (m_viewMode == PlayerEditorViewMode::Test) {
+        return;
+    }
+
     PlayerEditorSession::SyncTimelineAssetSelection(*this);
     AnimatorService::Instance().EnsureAnimator(m_previewEntity);
     if (!m_previewState.IsActive()) {

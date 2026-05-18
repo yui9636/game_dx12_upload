@@ -70,6 +70,7 @@ public:
     const Model* GetPreviewModel() const { return m_model; }
     float GetPreviewModelScale() const { return m_previewModelScale; }
     EntityID GetPreviewEntity() const { return m_previewEntity; }
+    bool IsTestModeActive() const { return m_viewMode == PlayerEditorViewMode::Test; }
 
     // ボーンツリー用モデル（旧外部同期経路）
     void SetModel(const Model* model);
@@ -101,6 +102,7 @@ private:
     bool DrawToolbarButton(const char* label, bool enabled = true);
     void DrawMainWorkspace();
     void DrawLeftSidebar(float w);
+    void DrawWorkspaceTabBar();
     void DrawWorkbench();
     void DrawRightInspector(float w);
     void DrawStatusBar();
@@ -228,6 +230,7 @@ private:
     bool                 m_workbenchOpen      = true;
     bool                 m_leftSidebarOpen    = true;
     int                  m_autoFitCountdown   = 0;   // モデル読込後 N フレーム自動 Fit
+    bool                 m_drawingPipViewport = false; // PiP 描画中フラグ (overlay 抑制用)
     bool                 m_overlayHitboxes = true;
     bool                 m_overlayRuntime = true;
 

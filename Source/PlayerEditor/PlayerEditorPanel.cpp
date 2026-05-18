@@ -30,6 +30,10 @@
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Archetype/Archetype.h"
+#include "Type/TypeInfo.h"
+#include "Component/ComponentSignature.h"
 #include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
@@ -392,12 +396,55 @@ void PlayerEditorPanel::DrawTopBar()
     }
     sep();
 
-    // G4: Play / Edit
+    // G4: Play / Edit (モード切替時は Fit 再トリガー + SceneView コンテキスト切替)
     {
+        auto setSceneViewInputEnabled = [&](bool enabled) {
+            if (!m_registry) return;
+            Signature ctxSig = CreateSignature<InputContextComponent>();
+            for (auto* arch : m_registry->GetAllArchetypes()) {
+                if (!SignatureMatches(arch->GetSignature(), ctxSig)) continue;
+                auto* col = arch->GetColumn(TypeManager::GetComponentTypeID<InputContextComponent>());
+                if (!col) continue;
+                for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                    auto& ctx = *static_cast<InputContextComponent*>(col->Get(i));
+                    if (ctx.priority == InputContextPriority::SceneView) {
+                        ctx.enabled = enabled;
+                    }
+                }
+            }
+        };
+
         const bool isTest = m_viewMode == PlayerEditorViewMode::Test;
-        if (DrawToolbarInlineButton(ICON_FA_PLAY, "Test", "##tbTest", isTest, true, false)) m_viewMode = PlayerEditorViewMode::Test;
+        if (DrawToolbarInlineButton(ICON_FA_PLAY, "Test", "##tbTest", isTest, true, false)) {
+            if (!isTest) {
+                m_viewMode = PlayerEditorViewMode::Test;
+                m_autoFitCountdown = 8;
+                setSceneViewInputEnabled(false);  // RuntimeGameplay へ入力を流す
+                // PreviewState が active だと TimelineDriver が毎フレーム animator を上書きし、
+                // StateMachineSystem の PlayBase が無効化される。Test 中は必ず exit。
+                if (m_previewState.IsActive()) {
+                    m_previewState.ExitPreview();
+                }
+                m_isPlaying = false;
+                // 既定ステートへ即遷移できるよう state machine 状態を初期化
+                if (CanUsePreviewEntity()) {
+                    if (auto* params = m_registry->GetComponent<StateMachineParamsComponent>(m_previewEntity)) {
+                        params->currentStateId = 0;
+                        params->animFinished = false;
+                        params->stateTimer = 0.0f;
+                    }
+                    PlayerRuntimeSetup::ResetPlayerRuntimeState(*m_registry, m_previewEntity);
+                }
+            }
+        }
         ImGui::SameLine(0.0f, kGap);
-        if (DrawToolbarInlineButton(ICON_FA_PEN, "Edit", "##tbEdit", !isTest, true, false)) m_viewMode = PlayerEditorViewMode::Edit;
+        if (DrawToolbarInlineButton(ICON_FA_PEN, "Edit", "##tbEdit", !isTest, true, false)) {
+            if (isTest) {
+                m_viewMode = PlayerEditorViewMode::Edit;
+                m_autoFitCountdown = 8;
+                setSceneViewInputEnabled(true);  // 通常編集用入力に戻す
+            }
+        }
     }
     sep();
 
@@ -445,66 +492,27 @@ void PlayerEditorPanel::DrawLeftSidebar(float w)
 
 void PlayerEditorPanel::DrawWorkbench()
 {
-    static const char* const tabLabels[4] = { "State##wb", "Attack##wb", "Hit##wb", "Input##wb" };
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    // Workspace タブが既に選択 UI を担うため、ここでは内部 TabBar は出さない。
+    // m_workbenchActiveTab で直接ディスパッチ。
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
     ImGui::BeginChild("##PEWorkbench", ImVec2(0.0f, 0.0f), true);
-    ImGui::PopStyleVar();
 
-    if (ImGui::BeginTabBar("##PEWorkbenchTabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
-        for (int i = 0; i < 4; ++i) {
-            ImGuiTabItemFlags flags = ImGuiTabItemFlags_None;
-            if (i == m_workbenchActiveTab) flags |= ImGuiTabItemFlags_SetSelected;
-            if (ImGui::BeginTabItem(tabLabels[i], nullptr, flags)) {
-                if (ImGui::IsItemActive() || ImGui::IsItemActivated()) {
-                    m_workbenchActiveTab = i;
-                }
-                const ImVec2 tabMin = ImGui::GetItemRectMin();
-                const ImVec2 tabMax = ImGui::GetItemRectMax();
-                ImGui::GetWindowDrawList()->AddRectFilled(
-                    ImVec2(tabMin.x, tabMax.y - 2.0f),
-                    ImVec2(tabMax.x, tabMax.y),
-                    IM_COL32(0, 112, 224, 255));
-
-                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
-                ImGui::BeginChild("##wbTabBody", ImVec2(0.0f, 0.0f), false);
-                switch (i) {
-                case 0: DrawStateMachinePanel(); break;
-                case 1: DrawTimelinePanel(); break;
-                case 2:
-                {
-                    // Hit タブ: +Collider 1 ボタン + 一覧 + Inspector (Attack/Body は Inspector で切替)
-                    const bool canAdd = HasOpenModel() && CanUsePreviewEntity();
-                    if (!canAdd) {
-                        ImGui::TextDisabled("Open a model and preview entity to edit colliders.");
-                        break;
-                    }
-                    if (ImGui::Button(ICON_FA_PLUS " Collider")) {
-                        AddPersistentCollider(ColliderAttribute::Body);  // 既定は Body、Inspector で切替
-                    }
-                    ImGui::Separator();
-
-                    const float availY = ImGui::GetContentRegionAvail().y;
-                    const float listH = (std::max)(120.0f, availY * 0.45f);
-                    ImGui::BeginChild("##HitList", ImVec2(0.0f, listH), true);
-                    DrawPersistentColliderSection();
-                    ImGui::EndChild();
-                    ImGui::BeginChild("##HitInspector", ImVec2(0.0f, 0.0f), true);
-                    DrawPersistentColliderInspector();
-                    ImGui::EndChild();
-                    break;
-                }
-                case 3: DrawInputPanel(); break;
-                default: break;
-                }
-                ImGui::EndChild();
-                ImGui::PopStyleVar();
-                ImGui::EndTabItem();
-            }
+    switch (m_workbenchActiveTab) {
+    case 0: DrawStateMachinePanel(); break;
+    case 1: DrawTimelinePanel(); break;
+    case 2:
+        if (HasOpenModel() && CanUsePreviewEntity()) {
+            DrawPersistentColliderSection();
+        } else {
+            ImGui::TextDisabled("Open a model to edit colliders.");
         }
-        ImGui::EndTabBar();
+        break;
+    case 3: DrawInputPanel(); break;
+    default: break;
     }
+
     ImGui::EndChild();
+    ImGui::PopStyleVar();
 }
 
 void PlayerEditorPanel::DrawRightInspector(float w)
@@ -513,15 +521,60 @@ void PlayerEditorPanel::DrawRightInspector(float w)
     ImGui::BeginChild("##PERightInspector", ImVec2(w, 0.0f), true);
     ImGui::PopStyleVar();
 
+    const bool physicsActive = m_workbenchOpen && m_workbenchActiveTab == 2;
+    const bool inputActive   = m_workbenchOpen && m_workbenchActiveTab == 3;
+
+    // アクティブタブで右パネル内容を切替: Viewport/State→Details、Physics→Colliders、Input→InputMap
+    const char* tabIcon = ICON_FA_SLIDERS;
+    const char* tabLabel = "Details";
+    if (physicsActive) { tabIcon = ICON_FA_SHIELD; tabLabel = "Physics"; }
+    else if (inputActive) { tabIcon = ICON_FA_GAMEPAD; tabLabel = "Input"; }
+
+    char tabTitle[64];
+    snprintf(tabTitle, sizeof(tabTitle), "%s %s", tabIcon, tabLabel);
+
     if (ImGui::BeginTabBar("##RITabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
-        if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Details")) {
+        if (ImGui::BeginTabItem(tabTitle)) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
-            ImGui::BeginChild("##RIDetails", ImVec2(0.0f, 0.0f), false);
-            if (m_selectionCtx == SelectionContext::None) {
-                ImGui::TextDisabled("Select an item to view details.");
+            ImGui::BeginChild("##RIContent", ImVec2(0.0f, 0.0f), false);
+
+            if (physicsActive) {
+                // Physics UI: + Collider + 一覧 + 選択時の Inspector を縦に積む
+                if (!HasOpenModel() || !CanUsePreviewEntity()) {
+                    ImGui::TextDisabled("Open a model to edit colliders.");
+                } else {
+                    if (ImGui::Button(ICON_FA_PLUS " Collider", ImVec2(-1.0f, 0.0f))) {
+                        AddPersistentCollider(ColliderAttribute::Body);
+                    }
+                    ImGui::Separator();
+                    const float availY = ImGui::GetContentRegionAvail().y;
+                    const float listH = (std::max)(80.0f, availY * 0.35f);
+                    ImGui::BeginChild("##RIPhysList", ImVec2(0.0f, listH), true);
+                    DrawPersistentColliderSection();
+                    ImGui::EndChild();
+                    ImGui::Separator();
+                    ImGui::BeginChild("##RIPhysInsp", ImVec2(0.0f, 0.0f), false);
+                    if (m_selectionCtx == SelectionContext::PersistentCollider) {
+                        DrawPersistentColliderInspector();
+                    } else {
+                        ImGui::TextDisabled("Select a collider above to edit.");
+                    }
+                    ImGui::EndChild();
+                }
+            } else if (inputActive) {
+                // Input UI: InputMappingTab をそのままここで描画
+                if (m_inputMappingTab.Draw(m_registry)) {
+                    ApplyEditorBindingsToPreviewEntity();
+                }
             } else {
-                DrawPropertiesPanel();
+                // Viewport / State Machine: 選択依存の Details
+                if (m_selectionCtx == SelectionContext::None) {
+                    ImGui::TextDisabled("Select an item to view details.");
+                } else {
+                    DrawPropertiesPanel();
+                }
             }
+
             ImGui::EndChild();
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
@@ -590,9 +643,6 @@ void PlayerEditorPanel::DrawMainWorkspace()
     constexpr float kRightW  = 300.0f;
     constexpr float kStatusH = 22.0f;
     constexpr float kGap     = 1.0f;
-    const float availH = ImGui::GetContentRegionAvail().y - kStatusH - kGap;
-    const float workbenchH = m_workbenchOpen ? (std::max)(180.0f, availH * 0.30f) : 0.0f;
-    const float viewportH  = (std::max)(120.0f, availH - workbenchH - (m_workbenchOpen ? kGap : 0.0f));
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kGap, kGap));
 
@@ -601,22 +651,50 @@ void PlayerEditorPanel::DrawMainWorkspace()
     ImGui::SameLine(0.0f, kGap);
 
     const float centerW = ImGui::GetContentRegionAvail().x - kRightW - kGap;
-    ImGui::BeginChild("##PECenter", ImVec2(centerW, 0.0f), false,
+
+    // 中央列の絶対座標を記録 (PiP オーバーレイ用)
+    const ImVec2 centerOrigin = ImGui::GetCursorScreenPos();
+    const float centerH = ImGui::GetContentRegionAvail().y - kStatusH - kGap;
+
+    ImGui::BeginChild("##PECenter", ImVec2(centerW, centerH), false,
         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.059f, 0.059f, 0.059f, 1.0f));
-    ImGui::BeginChild("##PEViewportHost", ImVec2(0.0f, viewportH), true);
-    DrawViewportSurface();
+    // UE Persona 風: 中央列の上にタブ列
+    DrawWorkspaceTabBar();
+
+    // 下部に Timeline ストリップを常時固定
+    constexpr float kTimelineStripH = 200.0f;
+    const float centerInnerH = ImGui::GetContentRegionAvail().y;
+    const float upperH = (std::max)(120.0f, centerInnerH - kTimelineStripH - kGap);
+
+    // 中央 = State Machine タブの時だけグラフ、それ以外は viewport
+    const bool stateMachineActive = m_workbenchOpen && m_workbenchActiveTab == 0;
+
+    if (stateMachineActive) {
+        // ステートマシン: グラフがフル占有、PiP viewport は後で重ねる
+        ImGui::BeginChild("##PEToolHost", ImVec2(0.0f, upperH), false);
+        DrawWorkbench();
+        ImGui::EndChild();
+    } else {
+        // Viewport / Physics / Input タブ: 中央は viewport
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.059f, 0.059f, 0.059f, 1.0f));
+        ImGui::BeginChild("##PEViewportHost", ImVec2(0.0f, upperH), true);
+        DrawViewportSurface();
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar();
+    }
+
+    // 下半分: Timeline ストリップ (常時固定)
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.082f, 1.0f));
+    ImGui::BeginChild("##PETimelineStrip", ImVec2(0.0f, kTimelineStripH), true);
+    DrawTimelinePanel();
     ImGui::EndChild();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
 
-    if (m_workbenchOpen) {
-        DrawWorkbench();
-    } else {
-        if (ImGui::Button(ICON_FA_CHEVRON_UP " State / Attack / Hit / Input", ImVec2(0.0f, 22.0f))) m_workbenchOpen = true;
-    }
     ImGui::EndChild();
 
     ImGui::SameLine(0.0f, kGap);
@@ -625,9 +703,97 @@ void PlayerEditorPanel::DrawMainWorkspace()
 
     DrawStatusBar();
 
+    // State Machine タブは PiP viewport を出さない (グラフ編集に専念)。
+    // 必要なら Viewport タブに切り替えてモデルを確認する。
+    (void)centerOrigin; (void)centerW;  // 旧 PiP 用に取っていた変数
+
     ImGui::PopStyleVar();
     PopPlayerEditorPanelSizeStyle();
     PopPlayerEditorPanelStyle();
+}
+
+// 中央列上部のタブ列 (Viewport / State Machine / Hit / Input)
+// Timeline はタブから除外し、常時下部にドックする (UE Persona の Notify Track 流儀)。
+void PlayerEditorPanel::DrawWorkspaceTabBar()
+{
+    constexpr float kTabBarH = 28.0f;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.082f, 0.082f, 0.082f, 1.0f));
+    ImGui::BeginChild("##PEWorkspaceTabs", ImVec2(0.0f, kTabBarH), false,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor();
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 barOrigin = ImGui::GetCursorScreenPos();
+    const float barWidth = ImGui::GetContentRegionAvail().x;
+
+    // 0=Viewport, 1=State (m_workbenchActiveTab=0), 2=Hit (=2), 3=Input (=3)
+    // (m_workbenchActiveTab=1 は Timeline で旧 tab 用、今は使わない)
+    struct TabDef { const char* label; int tabIdx; bool isViewport; };
+    const TabDef tabs[4] = {
+        { "Viewport",      -1, true  },
+        { "State Machine",  0, false },
+        { "Physics",        2, false },
+        { "Input",          3, false },
+    };
+
+    int activeIdx = 0;
+    if (m_workbenchOpen) {
+        for (int i = 1; i < 4; ++i) if (tabs[i].tabIdx == m_workbenchActiveTab) { activeIdx = i; break; }
+    }
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+    for (int i = 0; i < 4; ++i) {
+        const bool active = (i == activeIdx);
+        const ImVec2 sz = ImGui::CalcTextSize(tabs[i].label);
+        const float btnW = sz.x + 20.0f;
+        const float btnH = kTabBarH - 1.0f;
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+
+        ImGui::PushID(i);
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.173f, 0.173f, 0.173f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.220f, 0.220f, 0.220f, 1.0f));
+        if (ImGui::Button("##t", ImVec2(btnW, btnH))) {
+            if (tabs[i].isViewport) {
+                m_workbenchOpen = false;
+            } else {
+                m_workbenchOpen = true;
+                m_workbenchActiveTab = tabs[i].tabIdx;
+            }
+        }
+        const bool hovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        ImGui::PopID();
+
+        if (active) {
+            dl->AddRectFilled(p, ImVec2(p.x + btnW, p.y + btnH), IM_COL32(36, 36, 36, 255));
+            dl->AddRectFilled(ImVec2(p.x, p.y + btnH - 2.0f),
+                              ImVec2(p.x + btnW, p.y + btnH),
+                              IM_COL32(0, 112, 224, 255));
+        } else if (hovered) {
+            dl->AddRectFilled(p, ImVec2(p.x + btnW, p.y + btnH), IM_COL32(44, 44, 44, 255));
+        }
+        dl->AddText(ImVec2(p.x + 10.0f, p.y + (btnH - sz.y) * 0.5f),
+                    active ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 255),
+                    tabs[i].label);
+        ImGui::SameLine(0.0f, 0.0f);
+    }
+
+    if (activeIdx != 0) {
+        char crumb[96];
+        snprintf(crumb, sizeof(crumb), "  Viewport  >  %s", tabs[activeIdx].label);
+        const ImVec2 sz = ImGui::CalcTextSize(crumb);
+        const float crumbX = barOrigin.x + barWidth - sz.x - 12.0f;
+        dl->AddText(ImVec2(crumbX, barOrigin.y + (kTabBarH - sz.y) * 0.5f),
+                    IM_COL32(140, 140, 140, 255), crumb);
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+
+    dl->AddLine(ImVec2(barOrigin.x, barOrigin.y + kTabBarH - 0.5f),
+                ImVec2(barOrigin.x + barWidth, barOrigin.y + kTabBarH - 0.5f),
+                IM_COL32(13, 13, 13, 255), 1.0f);
 }
 
 void PlayerEditorPanel::RequestCameraFit()
