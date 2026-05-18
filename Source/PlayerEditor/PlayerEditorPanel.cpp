@@ -522,13 +522,11 @@ void PlayerEditorPanel::DrawRightInspector(float w)
     ImGui::PopStyleVar();
 
     const bool physicsActive = m_workbenchOpen && m_workbenchActiveTab == 2;
-    const bool inputActive   = m_workbenchOpen && m_workbenchActiveTab == 3;
 
-    // アクティブタブで右パネル内容を切替: Viewport/State→Details、Physics→Colliders、Input→InputMap
+    // 右パネル内容: Physics タブだけ Colliders UI、他は Details (選択依存)
     const char* tabIcon = ICON_FA_SLIDERS;
     const char* tabLabel = "Details";
     if (physicsActive) { tabIcon = ICON_FA_SHIELD; tabLabel = "Physics"; }
-    else if (inputActive) { tabIcon = ICON_FA_GAMEPAD; tabLabel = "Input"; }
 
     char tabTitle[64];
     snprintf(tabTitle, sizeof(tabTitle), "%s %s", tabIcon, tabLabel);
@@ -539,7 +537,6 @@ void PlayerEditorPanel::DrawRightInspector(float w)
             ImGui::BeginChild("##RIContent", ImVec2(0.0f, 0.0f), false);
 
             if (physicsActive) {
-                // Physics UI: + Collider + 一覧 + 選択時の Inspector を縦に積む
                 if (!HasOpenModel() || !CanUsePreviewEntity()) {
                     ImGui::TextDisabled("Open a model to edit colliders.");
                 } else {
@@ -561,13 +558,8 @@ void PlayerEditorPanel::DrawRightInspector(float w)
                     }
                     ImGui::EndChild();
                 }
-            } else if (inputActive) {
-                // Input UI: InputMappingTab をそのままここで描画
-                if (m_inputMappingTab.Draw(m_registry)) {
-                    ApplyEditorBindingsToPreviewEntity();
-                }
             } else {
-                // Viewport / State Machine: 選択依存の Details
+                // Viewport / State Machine / Input: 選択依存の Details
                 if (m_selectionCtx == SelectionContext::None) {
                     ImGui::TextDisabled("Select an item to view details.");
                 } else {
@@ -667,16 +659,18 @@ void PlayerEditorPanel::DrawMainWorkspace()
     const float centerInnerH = ImGui::GetContentRegionAvail().y;
     const float upperH = (std::max)(120.0f, centerInnerH - kTimelineStripH - kGap);
 
-    // 中央 = State Machine タブの時だけグラフ、それ以外は viewport
+    // 中央 = State Machine / Input タブの時はツール全画面、それ以外は viewport
     const bool stateMachineActive = m_workbenchOpen && m_workbenchActiveTab == 0;
+    const bool inputActive        = m_workbenchOpen && m_workbenchActiveTab == 3;
+    const bool toolFullScreen     = stateMachineActive || inputActive;
 
-    if (stateMachineActive) {
-        // ステートマシン: グラフがフル占有、PiP viewport は後で重ねる
+    if (toolFullScreen) {
+        // ステートマシン / Input: 中央をツールがフル占有 (viewport 非表示)
         ImGui::BeginChild("##PEToolHost", ImVec2(0.0f, upperH), false);
         DrawWorkbench();
         ImGui::EndChild();
     } else {
-        // Viewport / Physics / Input タブ: 中央は viewport
+        // Viewport / Physics タブ: 中央は viewport
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
         ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.059f, 0.059f, 0.059f, 1.0f));
         ImGui::BeginChild("##PEViewportHost", ImVec2(0.0f, upperH), true);
