@@ -1057,6 +1057,9 @@ void EngineKernel::RenderPlayerPreviewOffscreen()
     const float width = (std::max)(renderSize.x, 1.0f);
     const float height = (std::max)(renderSize.y, 1.0f);
 
+    Registry* registry = m_gameLayer ? &m_gameLayer->GetRegistry() : nullptr;
+    const EntityID previewEntity = m_editorLayer->GetPlayerEditorPanel().GetPreviewEntity();
+
     previewStudio.RenderPreview(
         previewModel,
         m_editorLayer->GetPlayerPreviewCameraPosition(),
@@ -1066,7 +1069,9 @@ void EngineKernel::RenderPlayerPreviewOffscreen()
         m_editorLayer->GetPlayerPreviewNearZ(),
         m_editorLayer->GetPlayerPreviewFarZ(),
         m_editorLayer->GetPlayerPreviewClearColor(),
-        m_editorLayer->GetPlayerEditorPanel().GetPreviewModelScale());
+        m_editorLayer->GetPlayerEditorPanel().GetPreviewModelScale(),
+        registry,
+        static_cast<uint64_t>(previewEntity));
 
     m_editorLayer->SetPlayerPreviewTexture(previewStudio.GetPreviewTexture());
 }

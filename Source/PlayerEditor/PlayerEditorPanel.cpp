@@ -24,6 +24,7 @@
 #include "Icon/IconsFontAwesome7.h"
 #include "PlayerEditorPanelInternal.h"
 #include "PlayerEditorSession.h"
+#include "EditorTheme.h"
 #include "Component/ColliderComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
@@ -32,6 +33,7 @@
 #include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
+#include "System/UndoSystem.h"
 
 using namespace PlayerEditorInternal;
 // ライフサイクル / プレビューエンティティ / 外部選択（セッション補助へ委譲）
@@ -73,6 +75,11 @@ bool PlayerEditorPanel::ConsumePendingCameraFit(
     if (m_pendingCameraFitDistance > 0.0f) {
         m_vpCameraDist = m_pendingCameraFitDistance;
     }
+    // 自動 Fit でパンオフセットを必ずリセット
+    m_vpCameraPanOffset = { 0.0f, 0.0f, 0.0f };
+    // 軌道中心も pending から確定
+    m_orbitCenter = m_pendingCameraFitTarget;
+    m_orbitCenterValid = true;
     const float forwardLenSq =
         m_pendingCameraFitForward.x * m_pendingCameraFitForward.x +
         m_pendingCameraFitForward.y * m_pendingCameraFitForward.y +
@@ -247,126 +254,380 @@ void PlayerEditorPanel::SetModel(const Model* model)
     m_ownedModel.reset();
     m_model = model;
     ResetSelectionState();
+    m_orbitCenterValid = false;  // モデル変更で軌道中心リセット
+    if (m_model) {
+        // 読込直後はバウンドが未確定なことがあるので数フレーム再 Fit
+        m_autoFitCountdown = 8;
+    }
 }
-// ツールバー / 空状態プレースホルダー
-void PlayerEditorPanel::DrawToolbar()
+// コンパクトな縦スタックボタン (アイコン 14px + 8pt ラベル、30px 高)
+bool PlayerEditorPanel::DrawToolbarInlineButton(const char* icon, const char* label, const char* id,
+                                                  bool active, bool enabled, bool dirtyDot)
 {
+    constexpr float kIconSize = 14.0f;
+    constexpr float kBtnH     = 30.0f;
+    constexpr float kPadX     = 5.0f;
+    constexpr float kMinW     = 30.0f;
+
+    if (!enabled) ImGui::BeginDisabled();
+    ImGui::PushID(id);
+
+    const ImVec2 lblSize  = (label && label[0]) ? ImGui::CalcTextSize(label) : ImVec2(0, 0);
+    const float btnW = (std::max)(kMinW, kPadX * 2.0f + lblSize.x);
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.173f, 0.173f, 0.173f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.000f, 0.439f, 0.878f, 1.0f));
+    const bool pressed = ImGui::Button("##b", ImVec2(btnW, kBtnH));
+    const bool hovered = ImGui::IsItemHovered();
+    ImGui::PopStyleColor(3);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    if (active) {
+        dl->AddRectFilled(cursor, ImVec2(cursor.x + btnW, cursor.y + kBtnH),
+                          IM_COL32(0, 112, 224, 255));
+    } else if (hovered) {
+        dl->AddRectFilled(cursor, ImVec2(cursor.x + btnW, cursor.y + kBtnH),
+                          IM_COL32(44, 44, 44, 255));
+    }
+    const ImU32 textColor = active ? IM_COL32(255, 255, 255, 255) : IM_COL32(200, 200, 200, 255);
+    if (icon && icon[0]) {
+        ImFont* font = ImGui::GetFont();
+        const ImVec2 iconDim = font->CalcTextSizeA(kIconSize, FLT_MAX, 0.0f, icon);
+        dl->AddText(font, kIconSize,
+            ImVec2(cursor.x + (btnW - iconDim.x) * 0.5f, cursor.y + 2.0f),
+            textColor, icon);
+    }
+    if (label && label[0]) {
+        dl->AddText(ImVec2(cursor.x + (btnW - lblSize.x) * 0.5f, cursor.y + kBtnH - lblSize.y - 2.0f),
+                    textColor, label);
+    }
+    if (dirtyDot) {
+        dl->AddCircleFilled(ImVec2(cursor.x + btnW - 4.0f, cursor.y + 4.0f),
+                            2.5f, IM_COL32(255, 165, 50, 255), 8);
+    }
+
+    ImGui::PopID();
+    if (!enabled) ImGui::EndDisabled();
+    return enabled && pressed;
+}
+
+void PlayerEditorPanel::DrawTopBar()
+{
+    constexpr float kBarH = 34.0f;
+    constexpr float kGap  = 2.0f;
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.122f, 0.122f, 0.122f, 1.0f));
+    ImGui::BeginChild("##PETopBar", ImVec2(0.0f, kBarH), false,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor();
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 barOrigin = ImGui::GetCursorScreenPos();
+    const float barWidth = ImGui::GetContentRegionAvail().x;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kGap, 0.0f));
+
+    const auto sep = [&]() {
+        ImGui::SameLine(0.0f, 4.0f);
+        const ImVec2 sp = ImGui::GetCursorScreenPos();
+        dl->AddLine(ImVec2(sp.x, sp.y + 4.0f),
+                    ImVec2(sp.x, sp.y + kBarH - 8.0f),
+                    IM_COL32(56, 56, 56, 255), 1.0f);
+        ImGui::Dummy(ImVec2(1.0f, kBarH - 6.0f));
+        ImGui::SameLine(0.0f, 4.0f);
+    };
+
+    // G1: Menu (☰)
+    if (DrawToolbarInlineButton(ICON_FA_BARS, nullptr, "##tbMenu", false, true, false)) {
+        ImGui::OpenPopup("##PEMenuPopup");
+    }
+    if (ImGui::BeginPopup("##PEMenuPopup")) {
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open...", "Ctrl+O")) {
+            char pathBuffer[MAX_PATH] = {};
+            if (!m_currentModelPath.empty()) strcpy_s(pathBuffer, m_currentModelPath.c_str());
+            if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
+                OpenModelFromPath(pathBuffer);
+            }
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save", "Ctrl+S", false, CanUsePreviewEntity())) SavePrefabDocument(false);
+        if (ImGui::MenuItem(ICON_FA_FILE_EXPORT " Save As...", "Ctrl+Shift+S", false, CanUsePreviewEntity())) SavePrefabDocument(true);
+        ImGui::EndPopup();
+    }
+    sep();
+
+    // G2: Open のみ (Save は ☰ メニューへ集約)
+    {
+        if (DrawToolbarInlineButton(ICON_FA_FOLDER_OPEN, "Open", "##tbOpen", false, true, false)) {
+            char pathBuffer[MAX_PATH] = {};
+            if (!m_currentModelPath.empty()) strcpy_s(pathBuffer, m_currentModelPath.c_str());
+            if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
+                OpenModelFromPath(pathBuffer);
+            }
+        }
+    }
+    sep();
+
+    // G3: Mode (Player / Enemy / NPC) — 単一ボタンで dropdown
+    {
+        const char* modeLabels[] = { "Player", "Enemy", "NPC" };
+        const char* curLabel = modeLabels[(int)m_actorEditorMode];
+        if (DrawToolbarInlineButton(ICON_FA_USER, curLabel, "##tbMode", false, true, false)) {
+            ImGui::OpenPopup("##PEModePopup");
+        }
+        if (ImGui::BeginPopup("##PEModePopup")) {
+            for (int i = 0; i < 3; ++i) {
+                if (ImGui::MenuItem(modeLabels[i], nullptr, (int)m_actorEditorMode == i)) {
+                    if (m_actorEditorMode != (ActorEditorMode)i) {
+                        m_actorEditorMode = (ActorEditorMode)i;
+                        m_inlineBtExpanded = false;
+                        m_inlineBtLoaded = false;
+                    }
+                }
+            }
+            ImGui::EndPopup();
+        }
+    }
+    sep();
+
+    // G4: Play / Edit
+    {
+        const bool isTest = m_viewMode == PlayerEditorViewMode::Test;
+        if (DrawToolbarInlineButton(ICON_FA_PLAY, "Test", "##tbTest", isTest, true, false)) m_viewMode = PlayerEditorViewMode::Test;
+        ImGui::SameLine(0.0f, kGap);
+        if (DrawToolbarInlineButton(ICON_FA_PEN, "Edit", "##tbEdit", !isTest, true, false)) m_viewMode = PlayerEditorViewMode::Edit;
+    }
+    sep();
+
+    // G5: Full Player (Fit は自動化、ボタン廃止)
+    {
+        const bool canFull = (m_actorEditorMode == ActorEditorMode::Player) && CanUsePreviewEntity();
+        if (DrawToolbarInlineButton(ICON_FA_BOLT, "Full", "##tbFull", false, canFull, false)) ApplyFullPlayerPreset();
+    }
+
+    ImGui::PopStyleVar();
+    ImGui::EndChild();
+
+    dl->AddLine(ImVec2(barOrigin.x, barOrigin.y + kBarH - 0.5f),
+                ImVec2(barOrigin.x + barWidth, barOrigin.y + kBarH - 0.5f),
+                IM_COL32(13, 13, 13, 255), 1.0f);
+}
+
+void PlayerEditorPanel::DrawLeftSidebar(float w)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::BeginChild("##PELeftSidebar", ImVec2(w, 0.0f), true);
+    ImGui::PopStyleVar();
+
+    if (ImGui::BeginTabBar("##LSTabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+        if (ImGui::BeginTabItem(ICON_FA_BONE " Skeleton Tree")) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+            ImGui::BeginChild("##LSBoneInner", ImVec2(0.0f, 0.0f), false);
+            DrawSkeletonPanel();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+        if (ImGui::BeginTabItem(ICON_FA_FOLDER_TREE " Asset Browser")) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 4.0f));
+            ImGui::BeginChild("##LSAnimInner", ImVec2(0.0f, 0.0f), false);
+            DrawAnimatorPanel();
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    ImGui::EndChild();
+}
+
+void PlayerEditorPanel::DrawWorkbench()
+{
+    static const char* const tabLabels[4] = { "State##wb", "Attack##wb", "Hit##wb", "Input##wb" };
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::BeginChild("##PEWorkbench", ImVec2(0.0f, 0.0f), true);
+    ImGui::PopStyleVar();
+
+    if (ImGui::BeginTabBar("##PEWorkbenchTabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+        for (int i = 0; i < 4; ++i) {
+            ImGuiTabItemFlags flags = ImGuiTabItemFlags_None;
+            if (i == m_workbenchActiveTab) flags |= ImGuiTabItemFlags_SetSelected;
+            if (ImGui::BeginTabItem(tabLabels[i], nullptr, flags)) {
+                if (ImGui::IsItemActive() || ImGui::IsItemActivated()) {
+                    m_workbenchActiveTab = i;
+                }
+                const ImVec2 tabMin = ImGui::GetItemRectMin();
+                const ImVec2 tabMax = ImGui::GetItemRectMax();
+                ImGui::GetWindowDrawList()->AddRectFilled(
+                    ImVec2(tabMin.x, tabMax.y - 2.0f),
+                    ImVec2(tabMax.x, tabMax.y),
+                    IM_COL32(0, 112, 224, 255));
+
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
+                ImGui::BeginChild("##wbTabBody", ImVec2(0.0f, 0.0f), false);
+                switch (i) {
+                case 0: DrawStateMachinePanel(); break;
+                case 1: DrawTimelinePanel(); break;
+                case 2:
+                {
+                    // Hit タブ: +Collider 1 ボタン + 一覧 + Inspector (Attack/Body は Inspector で切替)
+                    const bool canAdd = HasOpenModel() && CanUsePreviewEntity();
+                    if (!canAdd) {
+                        ImGui::TextDisabled("Open a model and preview entity to edit colliders.");
+                        break;
+                    }
+                    if (ImGui::Button(ICON_FA_PLUS " Collider")) {
+                        AddPersistentCollider(ColliderAttribute::Body);  // 既定は Body、Inspector で切替
+                    }
+                    ImGui::Separator();
+
+                    const float availY = ImGui::GetContentRegionAvail().y;
+                    const float listH = (std::max)(120.0f, availY * 0.45f);
+                    ImGui::BeginChild("##HitList", ImVec2(0.0f, listH), true);
+                    DrawPersistentColliderSection();
+                    ImGui::EndChild();
+                    ImGui::BeginChild("##HitInspector", ImVec2(0.0f, 0.0f), true);
+                    DrawPersistentColliderInspector();
+                    ImGui::EndChild();
+                    break;
+                }
+                case 3: DrawInputPanel(); break;
+                default: break;
+                }
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::EndTabItem();
+            }
+        }
+        ImGui::EndTabBar();
+    }
+    ImGui::EndChild();
+}
+
+void PlayerEditorPanel::DrawRightInspector(float w)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::BeginChild("##PERightInspector", ImVec2(w, 0.0f), true);
+    ImGui::PopStyleVar();
+
+    if (ImGui::BeginTabBar("##RITabs", ImGuiTabBarFlags_NoCloseWithMiddleMouseButton)) {
+        if (ImGui::BeginTabItem(ICON_FA_SLIDERS " Details")) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 6.0f));
+            ImGui::BeginChild("##RIDetails", ImVec2(0.0f, 0.0f), false);
+            if (m_selectionCtx == SelectionContext::None) {
+                ImGui::TextDisabled("Select an item to view details.");
+            } else {
+                DrawPropertiesPanel();
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
+    ImGui::EndChild();
+}
+
+void PlayerEditorPanel::DrawStatusBar()
+{
+    constexpr float kStatusH = 22.0f;
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.122f, 0.122f, 0.122f, 1.0f));
+    ImGui::BeginChild("##PEStatus", ImVec2(0.0f, kStatusH), false,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleColor();
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float w = ImGui::GetContentRegionAvail().x;
+    dl->AddLine(p, ImVec2(p.x + w, p.y), IM_COL32(13, 13, 13, 255), 1.0f);
+
     ImGui::AlignTextToFramePadding();
-    ImGui::TextUnformatted("Player");
-    ImGui::SameLine();
+    if (HasAnyDirtyDocument()) {
+        ImGui::TextColored(ImVec4(0.040f, 0.450f, 0.900f, 1.0f), ICON_FA_CIRCLE_DOT " Modified");
+    } else {
+        ImGui::TextDisabled(ICON_FA_CHECK " Clean");
+    }
+    ImGui::SameLine(0.0f, 16.0f);
+    if (!m_currentModelPath.empty()) ImGui::TextDisabled("%s", m_currentModelPath.c_str());
+    ImGui::EndChild();
+}
 
-    const char* modeLabels[] = { "Player", "Enemy", "NPC" };
-    int modeIdx = static_cast<int>(m_actorEditorMode);
-    ImGui::SetNextItemWidth(92.0f);
-    if (ImGui::Combo("##ActorMode", &modeIdx, modeLabels, IM_ARRAYSIZE(modeLabels))) {
-        const auto newMode = static_cast<ActorEditorMode>(modeIdx);
-        if (newMode != m_actorEditorMode) {
-            m_actorEditorMode = newMode;
-            m_inlineBtExpanded = false;
-            m_inlineBtLoaded = false;
-        }
+void PlayerEditorPanel::HandleGlobalShortcuts()
+{
+    if (!ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) return;
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.KeyCtrl) return;
+    if (ImGui::IsKeyPressed(ImGuiKey_S, false)) {
+        if (CanUsePreviewEntity()) SavePrefabDocument(io.KeyShift);
     }
-    ImGui::SameLine();
-
-    if (DrawToolbarButton(ICON_FA_FOLDER_OPEN " Open")) {
-        char pathBuffer[MAX_PATH] = {};
-        if (!m_currentModelPath.empty()) {
-            strcpy_s(pathBuffer, m_currentModelPath.c_str());
-        }
-        if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
-            OpenModelFromPath(pathBuffer);
-        }
+    if (ImGui::IsKeyPressed(ImGuiKey_Z, false) && m_registry) {
+        if (io.KeyShift) UndoSystem::Instance().Redo(*m_registry);
+        else UndoSystem::Instance().Undo(*m_registry);
     }
-    ImGui::SameLine();
-    const bool canSaveWorkspace = CanUsePreviewEntity();
-    if (DrawToolbarButton(ICON_FA_FLOPPY_DISK " Save", canSaveWorkspace)) {
-        SavePrefabDocument(false);
-    }
-
-    ImGui::SameLine();
-    if (DrawToolbarButton("Setup Full Player", m_actorEditorMode == ActorEditorMode::Player && CanUsePreviewEntity())) {
-        ApplyFullPlayerPreset();
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_CAMERA " Fit", HasOpenModel())) {
-        RequestCameraFit();
-    }
-    ImGui::SameLine();
-    if (DrawToolbarButton(ICON_FA_ROTATE_LEFT " Reset", CanUsePreviewEntity())) {
-        ResetPreviewRuntime();
-    }
-
-    ImGui::SameLine();
-    ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-    ImGui::SameLine();
-
-    const bool editMode = m_viewMode == PlayerEditorViewMode::Edit;
-    if (!editMode) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    }
-    if (ImGui::Button("Test")) {
-        m_viewMode = PlayerEditorViewMode::Test;
-        m_toolPopoverOpen = false;
-    }
-    if (!editMode) {
-        ImGui::PopStyleColor();
-    }
-    ImGui::SameLine();
-    if (editMode) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-    }
-    if (ImGui::Button("Edit")) {
-        m_viewMode = PlayerEditorViewMode::Edit;
-        m_toolPopoverOpen = false;
-    }
-    if (editMode) {
-        ImGui::PopStyleColor();
-    }
-
-    ImGui::SameLine();
-    ImGui::TextDisabled("Tool: %s", m_toolPopoverOpen ? GetActiveToolLabel() : "Viewport");
-
-    if (m_actorEditorMode == ActorEditorMode::Enemy && m_registry && CanUsePreviewEntity()) {
-        ImGui::SameLine();
-        if (DrawToolbarButton("Setup Full Enemy")) {
-            extern void EnemyEditorSetupFullEnemy(class Registry&, EntityID, StateMachineAsset&);
-            EnemyEditorSetupFullEnemy(*m_registry, m_previewEntity, m_stateMachineAsset);
-            m_stateMachineDirty = true;
-        }
-        ImGui::SameLine();
-        if (DrawToolbarButton("Repair Runtime")) {
-            extern void EnemyEditorRepairRuntime(class Registry&, EntityID);
-            EnemyEditorRepairRuntime(*m_registry, m_previewEntity);
-        }
-    } else if (m_actorEditorMode == ActorEditorMode::NPC && m_registry && CanUsePreviewEntity()) {
-        ImGui::SameLine();
-        if (DrawToolbarButton("Setup Full NPC")) {
-            extern void EnemyEditorSetupFullNPC(class Registry&, EntityID, StateMachineAsset&);
-            EnemyEditorSetupFullNPC(*m_registry, m_previewEntity, m_stateMachineAsset);
-            m_stateMachineDirty = true;
-        }
+    if (ImGui::IsKeyPressed(ImGuiKey_Y, false) && m_registry) {
+        UndoSystem::Instance().Redo(*m_registry);
     }
 }
 
 void PlayerEditorPanel::DrawMainWorkspace()
 {
-    DrawToolbar();
-    ImGui::Separator();
-    DrawViewportSurface();
-    DrawToolPopover();
-}
+    PushPlayerEditorPanelStyle();
+    PushPlayerEditorPanelSizeStyle();
 
-const char* PlayerEditorPanel::GetActiveToolLabel() const
-{
-    switch (m_activeTool) {
-    case PlayerEditorTool::State: return "State";
-    case PlayerEditorTool::Timeline: return "Timeline";
-    case PlayerEditorTool::Hitbox: return "Hitbox";
-    case PlayerEditorTool::Body: return "Body";
-    case PlayerEditorTool::Input: return "Input";
-    case PlayerEditorTool::Bone: return "Bone";
-    default: return "Tool";
+    DrawTopBar();
+    HandleGlobalShortcuts();
+
+    // 読込直後のバウンド未確定を吸収する自動 Fit
+    if (m_autoFitCountdown > 0 && m_model) {
+        RequestCameraFit();
+        --m_autoFitCountdown;
     }
+
+    constexpr float kLeftW   = 240.0f;
+    constexpr float kRightW  = 300.0f;
+    constexpr float kStatusH = 22.0f;
+    constexpr float kGap     = 1.0f;
+    const float availH = ImGui::GetContentRegionAvail().y - kStatusH - kGap;
+    const float workbenchH = m_workbenchOpen ? (std::max)(180.0f, availH * 0.30f) : 0.0f;
+    const float viewportH  = (std::max)(120.0f, availH - workbenchH - (m_workbenchOpen ? kGap : 0.0f));
+
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(kGap, kGap));
+
+    ImGui::BeginGroup();
+    DrawLeftSidebar(kLeftW);
+    ImGui::SameLine(0.0f, kGap);
+
+    const float centerW = ImGui::GetContentRegionAvail().x - kRightW - kGap;
+    ImGui::BeginChild("##PECenter", ImVec2(centerW, 0.0f), false,
+        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.059f, 0.059f, 0.059f, 1.0f));
+    ImGui::BeginChild("##PEViewportHost", ImVec2(0.0f, viewportH), true);
+    DrawViewportSurface();
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
+
+    if (m_workbenchOpen) {
+        DrawWorkbench();
+    } else {
+        if (ImGui::Button(ICON_FA_CHEVRON_UP " State / Attack / Hit / Input", ImVec2(0.0f, 22.0f))) m_workbenchOpen = true;
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine(0.0f, kGap);
+    DrawRightInspector(kRightW);
+    ImGui::EndGroup();
+
+    DrawStatusBar();
+
+    ImGui::PopStyleVar();
+    PopPlayerEditorPanelSizeStyle();
+    PopPlayerEditorPanelStyle();
 }
 
 void PlayerEditorPanel::RequestCameraFit()
@@ -377,11 +638,13 @@ void PlayerEditorPanel::RequestCameraFit()
 
     const auto bounds = m_model->GetWorldBounds();
     const DirectX::XMFLOAT3 ex = bounds.Extents;
-    const float radius = (std::max)(std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z), 1.0f);
-    const float pitch = DirectX::XMConvertToRadians(-12.0f);
+    // バウンディング球半径。1.0 にクランプせず実寸を尊重 (小型モデル対応)
+    const float radius = (std::max)(std::sqrt(ex.x * ex.x + ex.y * ex.y + ex.z * ex.z), 0.05f);
+    // 水平視 + 1.2 倍マージン、min distance 0.8 (近接クリップ回避)
+    const float pitch = 0.0f;
     const float yaw = 0.0f;
     const float halfFov = 0.785398f * 0.5f;
-    const float distance = (std::max)((radius / (std::max)(std::sin(halfFov), 0.001f)) * 1.25f, 2.5f);
+    const float distance = (std::max)((radius / (std::max)(std::sin(halfFov), 0.001f)) * 1.2f, 0.8f);
 
     m_vpCameraYaw = yaw;
     m_vpCameraPitch = pitch;
@@ -396,6 +659,10 @@ void PlayerEditorPanel::RequestCameraFit()
     };
     m_pendingCameraFitDistance = distance;
     m_hasPendingCameraFit = true;
+
+    // 軌道中心をスナップショット (アニメ中は固定)
+    m_orbitCenter = bounds.Center;
+    m_orbitCenterValid = true;
 }
 
 void PlayerEditorPanel::ResetPreviewRuntime()
@@ -410,153 +677,6 @@ void PlayerEditorPanel::ResetPreviewRuntime()
     }
     SyncPreviewTimelinePlayback();
     RequestCameraFit();
-}
-
-void PlayerEditorPanel::DrawStateTool()
-{
-    DrawStateMachineRuntimeStatus();
-    ImGui::Separator();
-    DrawStateMachineParameterList();
-    ImGui::Separator();
-    DrawStateNodeInspector();
-}
-
-void PlayerEditorPanel::DrawTimelineTool()
-{
-    DrawTimelinePlaybackToolbar();
-    ImGui::Separator();
-    const float headerHeight = 86.0f;
-    DrawTimelineTrackHeaders(headerHeight);
-    ImGui::SameLine();
-    DrawTimelineGrid(headerHeight);
-    ImGui::Separator();
-    DrawTimelineItemInspector();
-}
-
-void PlayerEditorPanel::DrawHitboxTool()
-{
-    if (ImGui::Button(ICON_FA_PLUS " Attack", ImVec2(-1.0f, 0.0f)) && HasOpenModel() && CanUsePreviewEntity()) {
-        AddPersistentCollider(ColliderAttribute::Attack);
-    }
-    ImGui::Checkbox("Show hitboxes", &m_overlayHitboxes);
-    ImGui::Separator();
-    DrawPersistentColliderSection();
-    DrawPersistentColliderInspector();
-}
-
-void PlayerEditorPanel::DrawBodyTool()
-{
-    if (ImGui::Button(ICON_FA_PLUS " Body", ImVec2(-1.0f, 0.0f)) && HasOpenModel() && CanUsePreviewEntity()) {
-        AddPersistentCollider(ColliderAttribute::Body);
-    }
-    ImGui::Checkbox("Show runtime", &m_overlayRuntime);
-    ImGui::Separator();
-    DrawPersistentColliderSection();
-    DrawPersistentColliderInspector();
-}
-
-void PlayerEditorPanel::DrawInputTool()
-{
-    if (m_inputMappingTab.Draw(m_registry)) {
-        ApplyEditorBindingsToPreviewEntity();
-    }
-}
-
-void PlayerEditorPanel::DrawBoneTool()
-{
-    ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint("##BoneSearch", "Search bones...", m_boneSearchFilter, sizeof(m_boneSearchFilter));
-    ImGui::Separator();
-    if (m_model) {
-        ImGui::BeginChild("##BoneTreeCompact", ImVec2(0.0f, 220.0f), true);
-        const auto& nodes = m_model->GetNodes();
-        if (m_boneSearchFilter[0] == '\0') {
-            for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
-                if (nodes[i].parentIndex < 0) {
-                    DrawBoneTreeNode(i);
-                }
-            }
-        }
-        else {
-            const std::string filter(m_boneSearchFilter);
-            for (int i = 0; i < static_cast<int>(nodes.size()); ++i) {
-                if (nodes[i].name.find(filter) == std::string::npos) {
-                    continue;
-                }
-                const bool selected = (m_selectedBoneIndex == i);
-                if (ImGui::Selectable(("[" + std::to_string(i) + "] " + nodes[i].name).c_str(), selected)) {
-                    m_selectedBoneIndex = i;
-                    m_selectedBoneName = nodes[i].name;
-                    if (!TryAssignSelectedBoneToTimelineItem(i) && !TryAssignSelectedBoneToPersistentCollider(i)) {
-                        m_selectionCtx = SelectionContext::Bone;
-                    }
-                }
-            }
-        }
-        ImGui::EndChild();
-    }
-    else {
-        ImGui::TextDisabled("No model.");
-    }
-    ImGui::Separator();
-    DrawSocketList(120.0f);
-}
-
-void PlayerEditorPanel::DrawToolPopover()
-{
-    if (!m_toolPopoverOpen || m_viewMode == PlayerEditorViewMode::Test || m_activeTool == PlayerEditorTool::None) {
-        return;
-    }
-
-    const float viewportX = m_viewportRect.x;
-    const float viewportY = m_viewportRect.y;
-    const float viewportW = m_viewportRect.z;
-    const float viewportH = m_viewportRect.w;
-    const ImVec2 pos(viewportX + (std::max)(12.0f, viewportW - 430.0f), viewportY + 12.0f);
-    const float popoverW = (std::min)(420.0f, (std::max)(280.0f, viewportW - 24.0f));
-    const float popoverH = (std::max)(180.0f, (std::min)(viewportH - 24.0f, 560.0f));
-    const ImVec2 size(popoverW, popoverH);
-
-    ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-    ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-    ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoDocking |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoSavedSettings;
-
-    bool open = true;
-    std::string title = std::string(GetActiveToolLabel()) + "##PlayerEditorToolPopover";
-    if (!ImGui::Begin(title.c_str(), &open, flags)) {
-        ImGui::End();
-        m_toolPopoverOpen = open;
-        return;
-    }
-
-    switch (m_activeTool) {
-    case PlayerEditorTool::State:
-        DrawStateTool();
-        break;
-    case PlayerEditorTool::Timeline:
-        DrawTimelineTool();
-        break;
-    case PlayerEditorTool::Hitbox:
-        DrawHitboxTool();
-        break;
-    case PlayerEditorTool::Body:
-        DrawBodyTool();
-        break;
-    case PlayerEditorTool::Input:
-        DrawInputTool();
-        break;
-    case PlayerEditorTool::Bone:
-        DrawBoneTool();
-        break;
-    default:
-        break;
-    }
-
-    ImGui::End();
-    m_toolPopoverOpen = open;
 }
 
 // 上位 Draw 入口と DockSpace の外枠

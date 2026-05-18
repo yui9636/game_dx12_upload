@@ -143,13 +143,10 @@ void PlayerEditorPanel::ExportSocketsToPreviewEntity()
 // スケルトンパネル — ボーンツリー + ソケット一覧
 void PlayerEditorPanel::DrawSkeletonPanel()
 {
-    if (!ImGui::Begin(kPESkeletonTitle)) { ImGui::End(); return; }
-
     m_hoveredBoneIndex = -1;
 
     if (!m_model) {
-        ImGui::TextDisabled("No model assigned.");
-        ImGui::End();
+        ImGui::TextDisabled("No model.");
         return;
     }
 
@@ -196,8 +193,6 @@ void PlayerEditorPanel::DrawSkeletonPanel()
 
     ImGui::Dummy(ImVec2(0, ImGui::GetStyle().ItemSpacing.y * 0.1f));
     DrawSocketList(socketPaneHeight);
-
-    ImGui::End();
 }
 
 void PlayerEditorPanel::DrawBoneTreeNode(int nodeIndex)

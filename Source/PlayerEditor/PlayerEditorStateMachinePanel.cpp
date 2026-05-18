@@ -1051,11 +1051,9 @@ void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
         ImGui::TextDisabled("Gait: %u  InputStrength: %.3f", static_cast<unsigned>(locomotion->gaitIndex), locomotion->inputStrength);
     }
 }
-// ステートマシンパネルとノードグラフ
+// ステートマシンパネルとノードグラフ (content only)
 void PlayerEditorPanel::DrawStateMachinePanel()
 {
-    if (!ImGui::Begin(kPEStateMachineTitle)) { ImGui::End(); return; }
-
     const float panelWidth = ImGui::GetContentRegionAvail().x;
     static float stateListWidth = 320.0f;
     float minListWidth = 280.0f;
@@ -1300,8 +1298,6 @@ void PlayerEditorPanel::DrawStateMachinePanel()
     ImVec2 canvasSize = ImGui::GetContentRegionAvail();
     DrawNodeGraph(canvasSize);
     ImGui::EndChild();
-
-    ImGui::End();
 }
 
 void PlayerEditorPanel::FitGraphToContent(const ImVec2& canvasSize)

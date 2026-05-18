@@ -2,12 +2,22 @@
 
 #include "Render/OffscreenRenderer.h"
 #include "Graphics.h"
+#include "Gizmos.h"
 #include "Model/Model.h"
 #include "RHI/ITexture.h"
 #include "RHI/IResourceFactory.h"
+#include "RHI/ICommandList.h"
 #include "RenderGraph/FrameGraphTypes.h"
+#include "RenderContext/RenderContext.h"
 #include "Console/Logger.h"
 #include "System/ResourceManager.h"
+#include "Registry/Registry.h"
+#include "Entity/Entity.h"
+#include "Collision/CollisionManager.h"
+#include "Component/ColliderComponent.h"
+#include "Component/TransformComponent.h"
+#include "Component/MeshComponent.h"
+#include "Transform/NodeAttachmentUtils.h"
 
 using namespace DirectX;
 // PlayerModelPreviewStudio::Instance はこのモジュールの実行時処理を構成する補助処理を行う。
@@ -45,6 +55,87 @@ namespace
             XMMatrixLookAtLH(XMLoadFloat3(&eye), XMLoadFloat3(&target), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)) *
             XMMatrixPerspectiveFovLH(fovY, aspect, nearZ, farZ));
         return viewProj;
+    }
+
+    // プレビューエンティティのコライダ要素を Gizmos キューへ enqueue する。
+    // DebugRenderSystem::Render と同じ経路 (registeredId 経由で CollisionManager
+    // のランタイムコライダーを参照する、無ければ authoring データへフォールバック)。
+    void EnqueuePreviewColliderGizmos(
+        Gizmos* gizmos,
+        Registry& registry,
+        EntityID previewEntity)
+    {
+        using namespace DirectX;
+
+        if (!gizmos) return;
+        if (Entity::IsNull(previewEntity) || !registry.IsAlive(previewEntity)) return;
+
+        auto* collider = registry.GetComponent<ColliderComponent>(previewEntity);
+        auto* transform = registry.GetComponent<TransformComponent>(previewEntity);
+        if (!collider || !transform || !collider->enabled) return;
+
+        auto& cm = CollisionManager::Instance();
+
+        for (auto& e : collider->elements) {
+            if (!e.enabled) continue;
+            const XMFLOAT4 color{ e.color.x, e.color.y, e.color.z, e.color.w };
+
+            // 既登録ランタイムコライダがあればそれを使う (本物のコリジョン形状)
+            if (e.registeredId != 0) {
+                const Collider* rt = cm.Get(e.registeredId);
+                if (rt && rt->enabled) {
+                    if (rt->shape == ColliderShape::Sphere) {
+                        gizmos->DrawSphere(rt->sphere.center, rt->sphere.radius, color);
+                        continue;
+                    }
+                    if (rt->shape == ColliderShape::Box) {
+                        gizmos->DrawBox(rt->box.center, { 0,0,0 }, rt->box.size, color);
+                        continue;
+                    }
+                    if (rt->shape == ColliderShape::Capsule) {
+                        gizmos->DrawCapsule(rt->capsule.base, { 0,0,0 },
+                                            rt->capsule.radius, rt->capsule.height, color);
+                        continue;
+                    }
+                }
+            }
+
+            // 未登録 / 取得不能時のフォールバック (authoring データ + bone)
+            XMVECTOR vWorldPos;
+            XMMATRIX matWorld = XMLoadFloat4x4(&transform->worldMatrix);
+            if (e.nodeIndex >= 0) {
+                MeshComponent* mesh = registry.GetComponent<MeshComponent>(previewEntity);
+                if (mesh && mesh->model) {
+                    XMFLOAT3 offset{ e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z };
+                    XMFLOAT3 posModelSpace = NodeAttachmentUtils::GetWorldPositionNodeLocal(
+                        mesh->model.get(), e.nodeIndex, offset);
+                    vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&posModelSpace), matWorld);
+                } else {
+                    XMFLOAT3 offset{ e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z };
+                    vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&offset), matWorld);
+                }
+            } else {
+                XMFLOAT3 offset{ e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z };
+                vWorldPos = XMVector3TransformCoord(XMLoadFloat3(&offset), matWorld);
+            }
+            XMFLOAT3 worldPos;
+            XMStoreFloat3(&worldPos, vWorldPos);
+
+            const float sx = std::fabs(transform->worldScale.x);
+            const float sy = std::fabs(transform->worldScale.y);
+            const float sz = std::fabs(transform->worldScale.z);
+            float maxScale = sx; if (sy > maxScale) maxScale = sy; if (sz > maxScale) maxScale = sz;
+            if (maxScale <= 0.0001f) maxScale = 1.0f;
+
+            if (e.type == ColliderShape::Sphere) {
+                gizmos->DrawSphere(worldPos, e.radius * maxScale, color);
+            } else if (e.type == ColliderShape::Capsule) {
+                gizmos->DrawCapsule(worldPos, { 0,0,0 }, e.radius * maxScale, e.height * sy, color);
+            } else if (e.type == ColliderShape::Box) {
+                XMFLOAT3 size{ e.size.x * sx, e.size.y * sy, e.size.z * sz };
+                gizmos->DrawBox(worldPos, { 0,0,0 }, size, color);
+            }
+        }
     }
 
 }
@@ -136,7 +227,9 @@ void PlayerModelPreviewStudio::RenderPreview(
     float nearZ,
     float farZ,
     const DirectX::XMFLOAT4& clearColor,
-    float previewScale)
+    float previewScale,
+    Registry* registry,
+    uint64_t previewEntity)
 {
     if (!IsReady()) {
         return;
@@ -145,11 +238,10 @@ void PlayerModelPreviewStudio::RenderPreview(
         return;
     }
 
+    // ステージモデルは廃止 (背景は単色グレーのみ)
     auto modelResource = model ? model->GetModelResource() : nullptr;
-    Model* trainingStage = EnsureTrainingStageModel();
-    auto stageResource = trainingStage ? trainingStage->GetModelResource() : nullptr;
-    if (!modelResource && !stageResource) {
-        return;
+    if (!modelResource) {
+        // モデル無しでもクリアして RT は更新する
     }
 
     XMFLOAT4X4 identity{};
@@ -175,16 +267,6 @@ void PlayerModelPreviewStudio::RenderPreview(
         safeAspect,
         safeNearZ,
         safeFarZ);
-    const XMFLOAT3 stageCameraPosition = { 0.0f, 110.0f, -360.0f };
-    const XMFLOAT3 stageCameraTarget = { 0.0f, 35.0f, -25.0f };
-    const XMFLOAT4X4 stageViewProj = BuildViewProjection(
-        stageCameraPosition,
-        stageCameraTarget,
-        DirectX::XMConvertToRadians(48.0f),
-        safeAspect,
-        0.1f,
-        1000.0f);
-
     const XMFLOAT3 lightDir = { -0.5f, -0.7f, 0.5f };
     const XMFLOAT3 lightColor = { 3.0f, 3.0f, 3.0f };
     const XMFLOAT4 white = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -200,34 +282,6 @@ void PlayerModelPreviewStudio::RenderPreview(
     m_offscreen->SetExternalRenderTarget(m_previewTexture.get(), m_previewDepth.get());
     m_offscreen->SetViewport(static_cast<float>(PREVIEW_SIZE), static_cast<float>(PREVIEW_SIZE));
     m_offscreen->BindSampler();
-
-    if (stageResource) {
-        const XMFLOAT4X4 stageWorld = BuildTrainingStageWorld();
-        trainingStage->UpdateTransform(identity);
-        m_offscreen->UploadScene(
-            stageViewProj,
-            stageCameraPosition,
-            lightDir,
-            lightColor,
-            static_cast<float>(PREVIEW_SIZE),
-            static_cast<float>(PREVIEW_SIZE));
-        m_offscreen->BindScene();
-        m_offscreen->GetModelRenderer().Draw(
-            ShaderId::PBR,
-            stageResource,
-            stageWorld,
-            stageWorld,
-            white,
-            0.0f,
-            1.0f,
-            0.0f,
-            nullptr,
-            BlendState::Opaque,
-            DepthState::TestAndWrite,
-            RasterizerState::SolidCullNone);
-        m_offscreen->RenderQueuedDirect(m_previewTexture.get(), m_previewDepth.get());
-        m_offscreen->ClearExternalDepth(m_previewDepth.get());
-    }
 
     if (modelResource) {
         m_offscreen->UploadScene(
@@ -252,6 +306,37 @@ void PlayerModelPreviewStudio::RenderPreview(
             DepthState::TestAndWrite,
             RasterizerState::SolidCullNone);
         m_offscreen->RenderQueuedDirect(m_previewTexture.get(), m_previewDepth.get());
+    }
+
+    // コライダ Gizmo を本物の Gizmos 経路で描画 (3D ワイヤメッシュを RT に焼き込む)。
+    // メインシーンと同じ手順: RT/Depth barrier + 再バインド + viewport 設定 → render。
+    if (registry && previewEntity != Entity::NULL_ID) {
+        Gizmos* gizmos = Graphics::Instance().GetGizmos();
+        RenderState* renderState = Graphics::Instance().GetRenderState();
+        ICommandList* cmdList = m_offscreen->GetCommandList();
+        if (gizmos && renderState && cmdList) {
+            EnqueuePreviewColliderGizmos(gizmos, *registry, previewEntity);
+
+            // depth を DepthRead に遷移し、RT を明示再バインド (gizmos は depth read-only test)
+            cmdList->TransitionBarrier(m_previewTexture.get(), ResourceState::RenderTarget);
+            cmdList->TransitionBarrier(m_previewDepth.get(), ResourceState::DepthRead);
+            ITexture* rts[] = { m_previewTexture.get() };
+            cmdList->SetRenderTargets(1, rts, m_previewDepth.get());
+            cmdList->SetViewport(RhiViewport(0.0f, 0.0f,
+                static_cast<float>(PREVIEW_SIZE), static_cast<float>(PREVIEW_SIZE)));
+
+            RenderContext gizmoRc{};
+            gizmoRc.commandList = cmdList;
+            gizmoRc.renderState = renderState;
+            XMStoreFloat4x4(&gizmoRc.viewMatrix,
+                XMMatrixLookAtLH(XMLoadFloat3(&cameraPosition),
+                                 XMLoadFloat3(&cameraTarget),
+                                 XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f)));
+            XMStoreFloat4x4(&gizmoRc.projectionMatrix,
+                XMMatrixPerspectiveFovLH(safeFovY, safeAspect, safeNearZ, safeFarZ));
+
+            gizmos->Render(gizmoRc);
+        }
     }
 
     m_offscreen->FinishDirect(m_previewTexture.get());

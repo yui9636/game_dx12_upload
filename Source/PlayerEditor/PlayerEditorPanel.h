@@ -38,17 +38,6 @@ enum class PlayerEditorViewMode : uint8_t
     Test = 1,
 };
 
-enum class PlayerEditorTool : uint8_t
-{
-    None = 0,
-    State,
-    Timeline,
-    Hitbox,
-    Body,
-    Input,
-    Bone,
-};
-
 class PlayerEditorPanel
 {
 public:
@@ -73,12 +62,14 @@ public:
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const;
     DirectX::XMFLOAT3 GetPreviewCameraDirection() const;
     float GetPreviewCameraFovY() const;
-    float GetPreviewNearZ() const { return 0.03f; }
-    float GetPreviewFarZ() const { return 500.0f; }
-    DirectX::XMFLOAT4 GetPreviewClearColor() const { return { 0.12f, 0.12f, 0.12f, 1.0f }; }
+    float GetPreviewNearZ() const { return 0.01f; }
+    float GetPreviewFarZ() const { return 5000.0f; }
+    // 背景は単色グレー。UE5 Persona の Header 色 (#1F1F1F) 寄り。
+    DirectX::XMFLOAT4 GetPreviewClearColor() const { return { 0.122f, 0.122f, 0.122f, 1.0f }; }
     bool ShouldPreviewUseSkybox() const { return false; }
     const Model* GetPreviewModel() const { return m_model; }
     float GetPreviewModelScale() const { return m_previewModelScale; }
+    EntityID GetPreviewEntity() const { return m_previewEntity; }
 
     // ボーンツリー用モデル（旧外部同期経路）
     void SetModel(const Model* model);
@@ -104,21 +95,20 @@ private:
     };
 
     void DrawInternal(Registry* registry, bool* p_open, bool* outFocused, HostMode hostMode);
-    void DrawToolbar();
+    void DrawTopBar();
+    bool DrawToolbarInlineButton(const char* icon, const char* label, const char* id,
+                                  bool active, bool enabled, bool dirtyDot);
     bool DrawToolbarButton(const char* label, bool enabled = true);
     void DrawMainWorkspace();
+    void DrawLeftSidebar(float w);
+    void DrawWorkbench();
+    void DrawRightInspector(float w);
+    void DrawStatusBar();
+    void HandleGlobalShortcuts();
     void DrawViewportSurface();
     void DrawViewportOverlay(const ImVec2& imageMin, const ImVec2& imageSize);
-    void DrawToolPopover();
-    void DrawStateTool();
-    void DrawTimelineTool();
-    void DrawHitboxTool();
-    void DrawBodyTool();
-    void DrawInputTool();
-    void DrawBoneTool();
     void RequestCameraFit();
     void ResetPreviewRuntime();
-    const char* GetActiveToolLabel() const;
     bool TryBuildThirdPersonPreviewCamera(
         DirectX::XMFLOAT3& outPosition,
         DirectX::XMFLOAT3& outTarget,
@@ -232,10 +222,12 @@ private:
     // StateMachinePanel の AI セクション表示に影響する。
     ActorEditorMode     m_actorEditorMode = ActorEditorMode::Player;
 
-    // 小窓の常時表示を避け、中央プレビューと必要な道具だけで編集する。
+    // UE5 Persona 風 5 領域構成 (TopBar + LeftSidebar + Center{Viewport+Workbench} + RightInspector + StatusBar)
     PlayerEditorViewMode m_viewMode = PlayerEditorViewMode::Edit;
-    PlayerEditorTool     m_activeTool = PlayerEditorTool::State;
-    bool                 m_toolPopoverOpen = false;
+    int                  m_workbenchActiveTab = 0;  // 0=State 1=Attack 2=Hit 3=Input
+    bool                 m_workbenchOpen      = true;
+    bool                 m_leftSidebarOpen    = true;
+    int                  m_autoFitCountdown   = 0;   // モデル読込後 N フレーム自動 Fit
     bool                 m_overlayHitboxes = true;
     bool                 m_overlayRuntime = true;
 
@@ -309,6 +301,10 @@ private:
     float m_vpCameraYaw   = 0.0f;
     float m_vpCameraPitch = 0.05f;
     float m_vpCameraDist  = 5.0f;
+    DirectX::XMFLOAT3 m_vpCameraPanOffset = { 0.0f, 0.0f, 0.0f };  // フリーカメラパン用オフセット
+    // Fit 時にスナップショットされる軌道中心。アニメ中も追従しない固定ターゲット。
+    DirectX::XMFLOAT3 m_orbitCenter       = { 0.0f, 1.0f, 0.0f };
+    bool              m_orbitCenterValid  = false;
     float m_previewModelScale = 1.0f;
     bool m_hasPendingCameraFit = false;
     DirectX::XMFLOAT3 m_pendingCameraFitTarget = { 0.0f, 0.0f, 0.0f };

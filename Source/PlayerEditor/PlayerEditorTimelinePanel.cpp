@@ -28,8 +28,7 @@ using namespace PlayerEditorInternal;
 
 void PlayerEditorPanel::DrawTimelinePanel()
 {
-    if (!ImGui::Begin(kPETimelineTitle)) { ImGui::End(); return; }
-
+    // content only — Workbench Attack タブから呼ばれる
     DrawTimelinePlaybackToolbar();
 
     float availH = ImGui::GetContentRegionAvail().y;
@@ -47,8 +46,6 @@ void PlayerEditorPanel::DrawTimelinePanel()
         ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
     DrawTimelineGrid(availH);
     ImGui::EndChild();
-
-    ImGui::End();
 }
 
 void PlayerEditorPanel::DrawTimelinePlaybackToolbar()

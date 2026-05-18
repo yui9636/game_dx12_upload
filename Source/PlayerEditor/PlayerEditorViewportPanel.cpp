@@ -72,28 +72,70 @@ void PlayerEditorPanel::DrawViewportSurface()
         ImGui::EndDragDropTarget();
     }
 
+    // フリーカメラ: hover 中の右ドラッグ=回転 / middle ドラッグ=パン / ホイール=ズーム
+    if (m_viewportHovered && m_viewMode == PlayerEditorViewMode::Edit) {
+        ImGuiIO& io = ImGui::GetIO();
+
+        // 右ドラッグ: orbit (yaw + pitch)
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+            const ImVec2 delta = io.MouseDelta;
+            constexpr float kSensitivity = 0.008f;
+            m_vpCameraYaw   -= delta.x * kSensitivity;
+            m_vpCameraPitch -= delta.y * kSensitivity;
+            m_vpCameraPitch = std::clamp(m_vpCameraPitch, -1.45f, 1.45f);
+        }
+
+        // middle ドラッグ: pan (target offset)
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f)) {
+            const ImVec2 delta = io.MouseDelta;
+            const float panScale = m_vpCameraDist * 0.0018f;
+            // camera right / up を計算
+            const float cy = std::cos(m_vpCameraYaw);
+            const float sy = std::sin(m_vpCameraYaw);
+            const float cp = std::cos(m_vpCameraPitch);
+            const float sp = std::sin(m_vpCameraPitch);
+            // forward = (sin yaw cos pitch, sin pitch, cos yaw cos pitch)
+            // right   = cross(up, forward) = (cos yaw, 0, -sin yaw)
+            // up_cam  = cross(forward, right) = (-sin yaw sin pitch, cos pitch, -cos yaw sin pitch)
+            const DirectX::XMFLOAT3 right{ cy, 0.0f, -sy };
+            const DirectX::XMFLOAT3 upCam{ -sy * sp, cp, -cy * sp };
+            m_vpCameraPanOffset.x -= (right.x * delta.x - upCam.x * delta.y) * panScale;
+            m_vpCameraPanOffset.y -= (right.y * delta.x - upCam.y * delta.y) * panScale;
+            m_vpCameraPanOffset.z -= (right.z * delta.x - upCam.z * delta.y) * panScale;
+        }
+
+        // ホイール: zoom (引きの上限は FarZ 近くまで、感度も上げる)
+        if (io.MouseWheel != 0.0f) {
+            const float zoomFactor = std::exp(-io.MouseWheel * 0.22f);
+            m_vpCameraDist = std::clamp(m_vpCameraDist * zoomFactor, 0.05f, 2000.0f);
+        }
+    }
+
     DrawViewportOverlay(ImVec2(m_viewportRect.x, m_viewportRect.y), ImVec2(m_viewportRect.z, m_viewportRect.w));
 
     ImGui::PopStyleVar(2);
 }
 
+// コライダ Gizmo は PlayerModelPreviewStudio が DebugRenderSystem + Gizmos
+// 経路で 3D ワイヤメッシュとして RT に焼き込む。ImGui 側での偽実装は廃止。
+
 void PlayerEditorPanel::DrawViewportOverlay(const ImVec2& imageMin, const ImVec2& imageSize)
 {
-    if (imageSize.x <= 1.0f || imageSize.y <= 1.0f) {
-        return;
-    }
+    if (imageSize.x <= 1.0f || imageSize.y <= 1.0f) return;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImU32 bg = IM_COL32(18, 20, 23, 190);
-    const ImU32 fg = IM_COL32(230, 234, 240, 255);
+    const ImU32 bg     = IM_COL32(10, 10, 10, 200);
+    const ImU32 fg     = IM_COL32(255, 255, 255, 230);
+    const ImU32 border = IM_COL32(56, 56, 56, 220);
 
     const char* modeText = m_viewMode == PlayerEditorViewMode::Test ? "TEST" : "EDIT";
-    const std::string title = std::string(modeText) + "  " + (HasOpenModel() ? GetActiveToolLabel() : "No Model");
+    const std::string title = HasOpenModel() ? modeText : std::string(modeText) + "  No Model";
     const ImVec2 textSize = ImGui::CalcTextSize(title.c_str());
-    const ImVec2 badgeMin(imageMin.x + 12.0f, imageMin.y + 12.0f);
-    const ImVec2 badgeMax(badgeMin.x + textSize.x + 20.0f, badgeMin.y + 28.0f);
-    dl->AddRectFilled(badgeMin, badgeMax, bg, 4.0f);
-    dl->AddText(ImVec2(badgeMin.x + 10.0f, badgeMin.y + 7.0f), fg, title.c_str());
+    const ImVec2 badgeMin(imageMin.x + 8.0f, imageMin.y + 8.0f);
+    const ImVec2 badgeMax(badgeMin.x + textSize.x + 16.0f, badgeMin.y + 22.0f);
+    dl->AddRectFilled(badgeMin, badgeMax, bg, 2.0f);
+    dl->AddRect(badgeMin, badgeMax, border, 2.0f);
+    dl->AddText(ImVec2(badgeMin.x + 8.0f, badgeMin.y + 4.0f), fg, title.c_str());
 
     if (!HasOpenModel()) {
         const char* hint = "Drop a model or prefab here";
@@ -101,74 +143,9 @@ void PlayerEditorPanel::DrawViewportOverlay(const ImVec2& imageMin, const ImVec2
         dl->AddText(
             ImVec2(imageMin.x + imageSize.x * 0.5f - hintSize.x * 0.5f,
                    imageMin.y + imageSize.y * 0.5f - hintSize.y * 0.5f),
-            IM_COL32(190, 198, 210, 255),
+            IM_COL32(255, 255, 255, 110),
             hint);
-        return;
     }
-
-    if (m_viewMode == PlayerEditorViewMode::Test) {
-        const char* testHint = "Live combat preview";
-        const ImVec2 testSize = ImGui::CalcTextSize(testHint);
-        dl->AddRectFilled(
-            ImVec2(imageMin.x + 12.0f, imageMin.y + imageSize.y - 44.0f),
-            ImVec2(imageMin.x + 12.0f + testSize.x + 20.0f, imageMin.y + imageSize.y - 14.0f),
-            bg,
-            4.0f);
-        dl->AddText(
-            ImVec2(imageMin.x + 22.0f, imageMin.y + imageSize.y - 36.0f),
-            fg,
-            testHint);
-        return;
-    }
-
-    const float buttonW = 128.0f;
-    const float buttonH = 34.0f;
-    const float gap = 8.0f;
-    ImVec2 cursor(imageMin.x + 16.0f, imageMin.y + 58.0f);
-    const ImVec2 backup = ImGui::GetCursorScreenPos();
-
-    const auto toolButton = [&](const char* label, PlayerEditorTool tool, const char* id) {
-        ImGui::SetCursorScreenPos(cursor);
-        const bool selected = m_activeTool == tool && m_toolPopoverOpen;
-        const ImVec2 min = cursor;
-        const ImVec2 rectMax(cursor.x + buttonW, cursor.y + buttonH);
-        const std::string buttonId = std::string("##PlayerEditorRail") + id;
-        ImGui::InvisibleButton(buttonId.c_str(), ImVec2(buttonW, buttonH));
-        const bool hovered = ImGui::IsItemHovered();
-        if (ImGui::IsItemClicked()) {
-            m_activeTool = tool;
-            m_toolPopoverOpen = selected ? !m_toolPopoverOpen : true;
-        }
-
-        const ImU32 fill = selected
-            ? IM_COL32(33, 96, 128, 218)
-            : hovered
-                ? IM_COL32(35, 42, 50, 220)
-                : IM_COL32(18, 22, 28, 178);
-        const ImU32 border = selected
-            ? IM_COL32(78, 205, 255, 255)
-            : hovered
-                ? IM_COL32(115, 135, 150, 230)
-                : IM_COL32(60, 70, 78, 180);
-        dl->AddRectFilled(min, rectMax, fill, 8.0f);
-        dl->AddRect(min, rectMax, border, 8.0f, 0, selected ? 2.0f : 1.0f);
-        dl->AddRectFilled(
-            ImVec2(min.x + 6.0f, min.y + 7.0f),
-            ImVec2(min.x + 9.0f, rectMax.y - 7.0f),
-            selected ? IM_COL32(78, 205, 255, 255) : IM_COL32(130, 145, 155, 180),
-            2.0f);
-        dl->AddText(ImVec2(min.x + 18.0f, min.y + 9.0f), fg, label);
-
-        cursor.y += buttonH + gap;
-    };
-
-    toolButton("State", PlayerEditorTool::State, "State");
-    toolButton("Timeline", PlayerEditorTool::Timeline, "Timeline");
-    toolButton("Attack", PlayerEditorTool::Hitbox, "Hitbox");
-    toolButton("Body", PlayerEditorTool::Body, "Body");
-    toolButton("Input", PlayerEditorTool::Input, "Input");
-    toolButton("Bones", PlayerEditorTool::Bone, "Bone");
-    ImGui::SetCursorScreenPos(backup);
 }
 
 bool PlayerEditorPanel::TryBuildThirdPersonPreviewCamera(
@@ -238,6 +215,15 @@ DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraTarget() const
         return target;
     }
 
+    // Fit でスナップショットされた軌道中心を優先使用 (アニメで動かない)
+    if (m_orbitCenterValid) {
+        return {
+            m_orbitCenter.x + m_vpCameraPanOffset.x,
+            m_orbitCenter.y + m_vpCameraPanOffset.y,
+            m_orbitCenter.z + m_vpCameraPanOffset.z,
+        };
+    }
+
     if (m_model) {
         const auto bounds = m_model->GetWorldBounds();
         DirectX::XMFLOAT3 target = bounds.Center;
@@ -249,16 +235,27 @@ DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraTarget() const
             }
         }
         target.y += bounds.Extents.y * 0.12f;
+        target.x += m_vpCameraPanOffset.x;
+        target.y += m_vpCameraPanOffset.y;
+        target.z += m_vpCameraPanOffset.z;
         return target;
     }
 
     if (m_registry && !Entity::IsNull(m_previewEntity)) {
         if (const auto* transform = m_registry->GetComponent<TransformComponent>(m_previewEntity)) {
-            return transform->worldPosition;
+            DirectX::XMFLOAT3 t = transform->worldPosition;
+            t.x += m_vpCameraPanOffset.x;
+            t.y += m_vpCameraPanOffset.y;
+            t.z += m_vpCameraPanOffset.z;
+            return t;
         }
     }
 
-    return { 0.0f, 1.0f, 0.0f };
+    return {
+        m_vpCameraPanOffset.x,
+        1.0f + m_vpCameraPanOffset.y,
+        m_vpCameraPanOffset.z
+    };
 }
 
 DirectX::XMFLOAT3 PlayerEditorPanel::GetPreviewCameraDirection() const

@@ -41,8 +41,7 @@ namespace
 
 void PlayerEditorPanel::DrawPropertiesPanel()
 {
-    if (!ImGui::Begin(kPEPropertiesTitle)) { ImGui::End(); return; }
-
+    // content only
     switch (m_selectionCtx) {
     case SelectionContext::StateNode:
         DrawStateNodeInspector();
@@ -172,8 +171,6 @@ void PlayerEditorPanel::DrawPropertiesPanel()
         }
         break;
     }
-
-    ImGui::End();
 }
 
 void PlayerEditorPanel::DrawTimelineItemInspector()
@@ -308,8 +305,7 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
 
 void PlayerEditorPanel::DrawAnimatorPanel()
 {
-    if (!ImGui::Begin(kPEAnimatorTitle)) { ImGui::End(); return; }
-
+    // content only
     const bool hasPreviewTarget = m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity);
 
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(3.0f, 1.0f));
@@ -343,14 +339,12 @@ void PlayerEditorPanel::DrawAnimatorPanel()
     }
 
     ImGui::PopStyleVar(2);
-    ImGui::End();
 }
 
 void PlayerEditorPanel::DrawInputPanel()
 {
-    if (!ImGui::Begin(kPEInputTitle)) { ImGui::End(); return; }
+    // content only
     if (m_inputMappingTab.Draw(m_registry)) {
         ApplyEditorBindingsToPreviewEntity();
     }
-    ImGui::End();
 }
