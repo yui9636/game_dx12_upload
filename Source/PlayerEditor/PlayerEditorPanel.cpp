@@ -44,6 +44,7 @@
 #include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
+#include "System/PathResolver.h"
 #include "System/ResourceManager.h"
 #include "System/UndoSystem.h"
 
@@ -51,6 +52,9 @@ using namespace PlayerEditorInternal;
 
 namespace
 {
+    constexpr const char* kDefaultMixamoReferenceTPosePath =
+        "Data/Model/Actor/MixamoReference/MixamoCharacter_TPose.fbx";
+
     std::string BuildUniqueRetargetedAnimationName(const Model& model, const std::string& sourcePath, const Model::Animation& animation)
     {
         const std::string fileStem = std::filesystem::path(sourcePath).stem().string();
@@ -72,6 +76,30 @@ namespace
         for (const std::string& warning : warnings) {
             LOG_WARN("[PlayerEditor][Retarget] %s", warning.c_str());
         }
+    }
+
+    std::shared_ptr<Model> LoadMixamoReferenceTPose()
+    {
+        const std::string resolvedReferencePath = PathResolver::Resolve(kDefaultMixamoReferenceTPosePath);
+        if (!std::filesystem::exists(resolvedReferencePath)) {
+            LOG_WARN("[PlayerEditor][Retarget] Reference T-pose model not found: %s", kDefaultMixamoReferenceTPosePath);
+            return nullptr;
+        }
+
+        std::shared_ptr<Model> reference =
+            ResourceManager::Instance().CreateModelInstance(kDefaultMixamoReferenceTPosePath, 1.0f, true);
+        if (!reference || reference->GetNodes().empty()) {
+            LOG_WARN("[PlayerEditor][Retarget] Failed to load reference T-pose model: %s", kDefaultMixamoReferenceTPosePath);
+            return nullptr;
+        }
+
+        const HumanoidRetarget::HumanoidProfile profile = HumanoidRetarget::AnalyzeSkeleton(*reference);
+        if (!profile.valid) {
+            LOG_WARN("[PlayerEditor][Retarget] Reference T-pose model is not a supported humanoid: %s", kDefaultMixamoReferenceTPosePath);
+            LogRetargetWarnings(profile.warnings);
+            return nullptr;
+        }
+        return reference;
     }
 
     std::string NormalizeAnimationNodeName(const std::string& name)
@@ -188,6 +216,194 @@ namespace
         if (anim.scaleKeyframes.size() == 1) {
             anim.scaleKeyframes.push_back(Model::VectorKeyframe{ endTime, anim.scaleKeyframes.front().value });
         }
+    }
+
+    // Returns 0..1 indicating how much of the source skeleton (by normalized node name)
+    // exists in the target skeleton. >= 0.7 means the rigs are effectively the same
+    // family (Mixamo->Mixamo, same VRM, etc.) and direct local-rotation copy is the
+    // safest and most accurate transfer.
+    float ComputeSkeletonNameOverlapRatio(const Model& source, const Model& target)
+    {
+        const auto& srcNodes = source.GetNodes();
+        const auto& tgtNodes = target.GetNodes();
+        if (srcNodes.empty() || tgtNodes.empty()) {
+            return 0.0f;
+        }
+
+        std::unordered_map<std::string, bool> targetNames;
+        targetNames.reserve(tgtNodes.size());
+        for (const auto& n : tgtNodes) {
+            std::string norm = NormalizeAnimationNodeName(n.name);
+            if (!norm.empty()) {
+                targetNames.emplace(std::move(norm), true);
+            }
+        }
+
+        int matched = 0;
+        int sourceCounted = 0;
+        for (const auto& n : srcNodes) {
+            std::string norm = NormalizeAnimationNodeName(n.name);
+            if (norm.empty()) {
+                continue;
+            }
+            ++sourceCounted;
+            if (targetNames.find(norm) != targetNames.end()) {
+                ++matched;
+            }
+        }
+        if (sourceCounted <= 0) {
+            return 0.0f;
+        }
+        return static_cast<float>(matched) / static_cast<float>(sourceCounted);
+    }
+
+    // For same-skeleton retargeting we copy local rotations verbatim, but Hips position
+    // keyframes describe absolute root motion. If the rigs differ in height, the motion
+    // path will be off. Scale Hips position keyframes around the bind position so that
+    // movement deltas are proportional to the target's height.
+    void ScaleHipsRootMotion(
+        const Model& source,
+        const Model& target,
+        Model::Animation& animation)
+    {
+        const HumanoidRetarget::HumanoidProfile srcProfile = HumanoidRetarget::AnalyzeSkeleton(source);
+        const HumanoidRetarget::HumanoidProfile tgtProfile = HumanoidRetarget::AnalyzeSkeleton(target);
+        if (!tgtProfile.valid || srcProfile.height <= 0.001f) {
+            return;
+        }
+
+        const int targetHipsNode = tgtProfile.Get(HumanoidRetarget::BoneSlot::Hips);
+        if (targetHipsNode < 0 || targetHipsNode >= static_cast<int>(animation.nodeAnims.size())) {
+            return;
+        }
+
+        const auto& targetNodes = target.GetNodes();
+        if (targetHipsNode >= static_cast<int>(targetNodes.size())) {
+            return;
+        }
+
+        const int sourceHipsNode = srcProfile.Get(HumanoidRetarget::BoneSlot::Hips);
+        const auto& sourceNodes = source.GetNodes();
+        if (sourceHipsNode < 0 || sourceHipsNode >= static_cast<int>(sourceNodes.size())) {
+            return;
+        }
+
+        const float scale = tgtProfile.height / srcProfile.height;
+        const DirectX::XMFLOAT3 tgtBindPos = targetNodes[static_cast<size_t>(targetHipsNode)].position;
+        const DirectX::XMFLOAT3 srcBindPos = sourceNodes[static_cast<size_t>(sourceHipsNode)].position;
+        auto& hipsAnim = animation.nodeAnims[static_cast<size_t>(targetHipsNode)];
+        for (auto& kf : hipsAnim.positionKeyframes) {
+            kf.value.x = tgtBindPos.x + (kf.value.x - srcBindPos.x) * scale;
+            kf.value.y = tgtBindPos.y + (kf.value.y - srcBindPos.y) * scale;
+            kf.value.z = tgtBindPos.z + (kf.value.z - srcBindPos.z) * scale;
+        }
+    }
+
+    // Bind-relative LOCAL rotation transfer (Mecanim Humanoid-style).
+    // For each target bone matched to a source bone by normalized name, we treat the
+    // source's local rotation as a bind-relative DELTA applied in parent's frame:
+    //     delta = inv(R_src_bind_local) * R_src_anim_local
+    //     R_tgt_anim_local = R_tgt_bind_local * delta
+    // This preserves target's natural rest pose orientation while transferring exactly
+    // the rotation the source bone applied, which works correctly even when the two
+    // skeletons have slightly different bind orientations / bone roll for the same bone.
+    bool TryBakeBindRelativeLocalRetarget(
+        const Model& source,
+        int sourceAnimationIndex,
+        const Model& target,
+        Model::Animation& outAnimation,
+        int* outMatchedNodeCount)
+    {
+        using namespace DirectX;
+
+        const auto& sourceAnimations = source.GetAnimations();
+        const auto& sourceNodes = source.GetNodes();
+        const auto& targetNodes = target.GetNodes();
+        if (sourceAnimationIndex < 0 ||
+            sourceAnimationIndex >= static_cast<int>(sourceAnimations.size()) ||
+            sourceNodes.empty() ||
+            targetNodes.empty()) {
+            return false;
+        }
+
+        const Model::Animation& sourceAnimation = sourceAnimations[sourceAnimationIndex];
+        std::unordered_map<std::string, int> sourceNodeByName;
+        sourceNodeByName.reserve(sourceNodes.size());
+        for (int nodeIndex = 0; nodeIndex < static_cast<int>(sourceNodes.size()); ++nodeIndex) {
+            std::string normalized = NormalizeAnimationNodeName(sourceNodes[nodeIndex].name);
+            if (!normalized.empty()) {
+                sourceNodeByName.emplace(std::move(normalized), nodeIndex);
+            }
+        }
+
+        outAnimation = Model::Animation{};
+        outAnimation.name = sourceAnimation.name;
+        outAnimation.secondsLength = (std::max)(sourceAnimation.secondsLength, 1.0f / 60.0f);
+        outAnimation.nodeAnims.resize(targetNodes.size());
+
+        const auto quatMul = [](XMVECTOR a, XMVECTOR b) {
+            // Row-vector convention: applying (a*b) to v means first a then b.
+            return XMQuaternionMultiply(a, b);
+        };
+
+        const HumanoidRetarget::HumanoidProfile targetProfile = HumanoidRetarget::AnalyzeSkeleton(target);
+        const int targetHipsNode = targetProfile.valid ? targetProfile.Get(HumanoidRetarget::BoneSlot::Hips) : -1;
+
+        int matchedNodeCount = 0;
+        for (int targetNodeIndex = 0; targetNodeIndex < static_cast<int>(targetNodes.size()); ++targetNodeIndex) {
+            Model::NodeAnim& targetAnim = outAnimation.nodeAnims[targetNodeIndex];
+            FillBindNodeAnimation(targetNodes[targetNodeIndex], outAnimation.secondsLength, targetAnim);
+
+            const std::string normalizedTargetName = NormalizeAnimationNodeName(targetNodes[targetNodeIndex].name);
+            const auto it = sourceNodeByName.find(normalizedTargetName);
+            if (it == sourceNodeByName.end()) {
+                continue;
+            }
+            const int sourceNodeIndex = it->second;
+            if (sourceNodeIndex < 0 || sourceNodeIndex >= static_cast<int>(sourceAnimation.nodeAnims.size())) {
+                continue;
+            }
+
+            const Model::NodeAnim& srcAnim = sourceAnimation.nodeAnims[sourceNodeIndex];
+            const Model::Node& srcNode = sourceNodes[static_cast<size_t>(sourceNodeIndex)];
+            const Model::Node& tgtNode = targetNodes[static_cast<size_t>(targetNodeIndex)];
+            const XMVECTOR srcBindLocal = XMQuaternionNormalize(XMLoadFloat4(&srcNode.rotation));
+            const XMVECTOR srcBindInv = XMQuaternionInverse(srcBindLocal);
+            const XMVECTOR tgtBindLocal = XMQuaternionNormalize(XMLoadFloat4(&tgtNode.rotation));
+
+            // Rotation: bind-relative delta application.
+            if (!srcAnim.rotationKeyframes.empty()) {
+                targetAnim.rotationKeyframes.clear();
+                targetAnim.rotationKeyframes.reserve(srcAnim.rotationKeyframes.size());
+                for (const auto& kf : srcAnim.rotationKeyframes) {
+                    const XMVECTOR srcAnimLocal = XMQuaternionNormalize(XMLoadFloat4(&kf.value));
+                    const XMVECTOR delta = quatMul(srcBindInv, srcAnimLocal);
+                    const XMVECTOR tgtAnimLocal = XMQuaternionNormalize(quatMul(tgtBindLocal, delta));
+                    Model::QuaternionKeyframe outKf{};
+                    outKf.seconds = kf.seconds;
+                    XMStoreFloat4(&outKf.value, tgtAnimLocal);
+                    targetAnim.rotationKeyframes.push_back(outKf);
+                }
+            }
+
+            // Position: only transfer for Hips (root motion). Other bones keep bind.
+            // We rebase by source bind + scale by height ratio in ScaleHipsRootMotion later.
+            const bool isHips = (targetHipsNode == targetNodeIndex);
+            if (isHips && !srcAnim.positionKeyframes.empty()) {
+                targetAnim.positionKeyframes = srcAnim.positionKeyframes;
+            }
+            // Scale: leave at target bind.
+
+            EnsureNodeAnimationHasKeys(tgtNode, outAnimation.secondsLength, targetAnim);
+            ++matchedNodeCount;
+        }
+
+        if (outMatchedNodeCount) {
+            *outMatchedNodeCount = matchedNodeCount;
+        }
+
+        // Validate: require at least 8 matched nodes (Hips + spine + 4 limb roots minimum).
+        return matchedNodeCount >= 8;
     }
 
     bool TryBakeAnimationByMatchingNodeNames(
@@ -451,21 +667,99 @@ bool PlayerEditorPanel::OpenAnimationFromPath(const std::string& path)
     options.transferRootMotion = true;
     options.keepTargetScale = true;
 
+    // Path priority:
+    //   1. Name overlap >= 70%: name-based bind-relative LOCAL transfer. Preserves
+    //      finger/twist bones and other non-humanoid bones via direct name matching.
+    //      Best path for same-rig retargets (Mixamo->Mixamo with different proportions).
+    //   2. Reference T-pose limb calibration. The neutral Mixamo skeleton is used only
+    //      to correct arm rest-pose direction before local bind-relative transfer.
+    //   3. Slot-based bind-relative LOCAL transfer (HumanoidRetarget::
+    //      BakeAnimationLocalBindRelative). Pairs bones via humanoid slot identity, not
+    //      by name. Works across naming conventions and across T-pose vs A-pose targets
+    //      because target's own bind orientation is preserved.
+    //   4. World-delta retarget fallback (HumanoidRetarget::BakeAnimation) - accumulates
+    //      global rotations; useful when bind orientations are mismatched in ways the
+    //      local-bind-relative path can't capture.
+    //   5. Last-resort direct local-rotation copy.
+    const float nameOverlap = ComputeSkeletonNameOverlapRatio(*sourceModel, *targetModel);
+    const HumanoidRetarget::HumanoidProfile sourceProfile = HumanoidRetarget::AnalyzeSkeleton(*sourceModel);
+    std::shared_ptr<Model> referenceTPoseModel = LoadMixamoReferenceTPose();
+    const float referenceOverlap = referenceTPoseModel
+        ? ComputeSkeletonNameOverlapRatio(*sourceModel, *referenceTPoseModel)
+        : 0.0f;
+    const bool useNameBindRelative = nameOverlap >= 0.7f;
+    const bool useReferenceTPose =
+        !useNameBindRelative &&
+        referenceTPoseModel &&
+        sourceProfile.valid &&
+        targetProfile.valid &&
+        referenceOverlap >= 0.55f;
+    const bool useSlotBindRelative = sourceProfile.valid && targetProfile.valid;
+    const char* pathName =
+        useNameBindRelative ? "name bind-relative local"
+        : useReferenceTPose ? "reference T-pose limb calibration"
+        : useSlotBindRelative ? "slot bind-relative local"
+        : "world-delta slot-matched";
+    LOG_INFO("[PlayerEditor][Retarget] Source bones: %zu, target bones: %zu, name overlap %.0f%%, reference overlap %.0f%%, path: %s",
+        sourceModel->GetNodes().size(),
+        targetModel->GetNodes().size(),
+        nameOverlap * 100.0f,
+        referenceOverlap * 100.0f,
+        pathName);
+
     int importedCount = 0;
     int lastImportedIndex = -1;
     std::vector<Model::Animation> importedAnimations;
     for (int animationIndex = 0; animationIndex < static_cast<int>(sourceAnimations.size()); ++animationIndex) {
-        HumanoidRetarget::RetargetResult result =
-            HumanoidRetarget::BakeAnimation(*sourceModel, animationIndex, *targetModel, options);
-
+        HumanoidRetarget::RetargetResult result{};
         Model::Animation importedAnimation{};
         bool accepted = false;
-        if (result.success) {
-            importedAnimation = std::move(result.animation);
-            accepted = true;
+
+        if (useNameBindRelative) {
+            int matched = 0;
+            if (TryBakeBindRelativeLocalRetarget(*sourceModel, animationIndex, *targetModel, importedAnimation, &matched)) {
+                ScaleHipsRootMotion(*sourceModel, *targetModel, importedAnimation);
+                if (animationIndex == 0) {
+                    LOG_INFO("[PlayerEditor][Retarget] Name bind-relative matched %d/%zu target bones.",
+                        matched, targetModel->GetNodes().size());
+                }
+                accepted = true;
+            }
         }
-        else if (TryBakeAnimationByMatchingNodeNames(*sourceModel, animationIndex, *targetModel, importedAnimation)) {
-            accepted = true;
+
+        if (!accepted && useReferenceTPose) {
+            result = HumanoidRetarget::BakeAnimationWithReferenceTPose(
+                *sourceModel,
+                animationIndex,
+                *targetModel,
+                *referenceTPoseModel,
+                options);
+            if (result.success) {
+                importedAnimation = std::move(result.animation);
+                if (animationIndex == 0) {
+                    LOG_INFO("[PlayerEditor][Retarget] Reference T-pose model: %s", kDefaultMixamoReferenceTPosePath);
+                }
+                accepted = true;
+            }
+        }
+
+        if (!accepted && useSlotBindRelative) {
+            result = HumanoidRetarget::BakeAnimationLocalBindRelative(*sourceModel, animationIndex, *targetModel, options);
+            if (result.success) {
+                importedAnimation = std::move(result.animation);
+                accepted = true;
+            }
+        }
+
+        if (!accepted) {
+            result = HumanoidRetarget::BakeAnimation(*sourceModel, animationIndex, *targetModel, options);
+            if (result.success) {
+                importedAnimation = std::move(result.animation);
+                accepted = true;
+            }
+            else if (TryBakeAnimationByMatchingNodeNames(*sourceModel, animationIndex, *targetModel, importedAnimation)) {
+                accepted = true;
+            }
         }
 
         if (!accepted) {
