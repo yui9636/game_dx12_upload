@@ -1670,6 +1670,61 @@ void DrawMaterialEditor(MaterialAsset* material) {
         const char* alphaModes[] = { "Opaque", "Mask", "Blend" };
         changed |= ImGui::Combo("Alpha Mode", &material->alphaMode, alphaModes, IM_ARRAYSIZE(alphaModes));
 
+        // Toon 専用設定 (shaderId == 2)
+        if (material->shaderId == 2) {
+            ImGui::Spacing();
+            if (ImGui::CollapsingHeader("Toon Shading", ImGuiTreeNodeFlags_DefaultOpen)) {
+                const char* shadingModes[] = { "Bands (quantized)", "Three-Tier (lit/mid/deep)", "Ramp Texture" };
+                changed |= ImGui::Combo("Mode", &material->toonShadingMode, shadingModes, IM_ARRAYSIZE(shadingModes));
+
+                if (material->toonShadingMode == 0) {
+                    changed |= ImGui::SliderInt("Band Levels", &material->toonBandLevels, 2, 5);
+                    changed |= ImGui::ColorEdit3("Shadow Tint", &material->toonShadowTint.x);
+                } else if (material->toonShadingMode == 1) {
+                    changed |= ImGui::ColorEdit3("Mid Shadow",  &material->toonShadowTint.x);
+                    changed |= ImGui::ColorEdit3("Deep Shadow", &material->toonShadowDeep.x);
+                    changed |= ImGui::SliderFloat("Mid Threshold",  &material->toonShadowMidThreshold,  0.0f, 1.0f);
+                    changed |= ImGui::SliderFloat("Deep Threshold", &material->toonShadowDeepThreshold, 0.0f, 1.0f);
+                } else {
+                    changed |= DrawTextureSlot("Ramp", material->toonRampTexturePath);
+                }
+
+                ImGui::Spacing();
+                changed |= ImGui::ColorEdit3("Rim Color",     &material->toonRimColor.x);
+                changed |= ImGui::SliderFloat("Rim Power",    &material->toonRimPower,    0.5f, 16.0f);
+                changed |= ImGui::SliderFloat("Rim Strength", &material->toonRimStrength, 0.0f, 2.0f);
+            }
+
+            if (ImGui::CollapsingHeader("Specular (Anime Highlight)")) {
+                changed |= ImGui::ColorEdit3("Spec Color",    &material->toonSpecColor.x);
+                changed |= ImGui::SliderFloat("Spec Strength", &material->toonSpecStrength, 0.0f, 2.0f);
+                changed |= ImGui::SliderFloat("Spec Sharpness", &material->toonSpecSharpness, 0.0f, 1.0f);
+                changed |= ImGui::SliderFloat("Spec Threshold", &material->toonSpecThreshold, 0.0f, 1.0f);
+
+                ImGui::Spacing();
+                changed |= ImGui::Checkbox("Anisotropic Hair", &material->toonUseAnisotropic);
+                if (material->toonUseAnisotropic) {
+                    changed |= ImGui::SliderFloat("Aniso Sharpness", &material->toonAnisoSharpness, 0.0f, 1.0f);
+                    changed |= ImGui::SliderFloat("Aniso Offset",    &material->toonAnisoOffset,   -1.0f, 1.0f);
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Fixed Light (Anime Lighting)")) {
+                changed |= ImGui::Checkbox("Enable Fixed Light", &material->toonUseFixedLight);
+                if (material->toonUseFixedLight) {
+                    changed |= ImGui::SliderFloat3("Direction", &material->toonFixedLightDir.x, -1.0f, 1.0f);
+                    ImGui::TextDisabled("Tip: (0, -0.5, -0.7) = front-up");
+                }
+            }
+
+            if (ImGui::CollapsingHeader("Outline", ImGuiTreeNodeFlags_DefaultOpen)) {
+                changed |= ImGui::Checkbox("Enabled",        &material->toonOutlineEnabled);
+                changed |= ImGui::ColorEdit3("Color",        &material->toonOutlineColor.x);
+                changed |= ImGui::SliderFloat("Width",       &material->toonOutlineWidth, 0.0f, 0.1f, "%.4f");
+                changed |= ImGui::SliderFloat("Distance Scale", &material->toonOutlineDistanceScale, 0.0f, 1.0f);
+            }
+        }
+
         ImGui::Spacing();
 
         // 変更があればプレビュー再生成要求を出す。

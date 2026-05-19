@@ -153,6 +153,7 @@
     <ClInclude Include="Source\Animator\AnimatorRuntime.h" />
     <ClInclude Include="Source\Animator\AnimatorService.h" />
     <ClInclude Include="Source\Animator\AnimatorSystem.h" />
+    <ClInclude Include="Source\Animator\HumanoidRetargeter.h" />
     <ClInclude Include="Source\Animator\RootMotionSystem.h" />
     <ClInclude Include="Source\Archetype\Archetype.h" />
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
@@ -319,6 +320,7 @@
     <ClInclude Include="Source\Gameplay\PlaybackSystem.h" />
     <ClInclude Include="Source\Gameplay\TimelineSystem.h" />
     <ClInclude Include="Source\Gameplay\TimelineHitboxSystem.h" />
+    <ClInclude Include="Source\Gameplay\RetargetedAnimationComponent.h" />
     <ClInclude Include="Source\Gameplay\TimelineVFXSystem.h" />
     <ClInclude Include="Source\Gameplay\TimelineAudioSystem.h" />
     <ClInclude Include="Source\Gameplay\TimelineShakeSystem.h" />
@@ -472,6 +474,7 @@
     <ClInclude Include="Source\ShaderClass\EffectMeshShader.h" />
     <ClInclude Include="Source\ShaderClass\PBRShader.h" />
     <ClInclude Include="Source\ShaderClass\PhongShader.h" />
+    <ClInclude Include="Source\ShaderClass\ToonShader.h" />
     <ClInclude Include="Source\ShaderClass\Shader.h" />
     <ClInclude Include="Source\ShaderClass\ShaderCompiler.h" />
     <ClInclude Include="Source\ShadowMap.h" />
@@ -571,6 +574,7 @@
     <ClCompile Include="Source\Animator\AnimatorRuntime.cpp" />
     <ClCompile Include="Source\Animator\AnimatorService.cpp" />
     <ClCompile Include="Source\Animator\AnimatorSystem.cpp" />
+    <ClCompile Include="Source\Animator\HumanoidRetargeter.cpp" />
     <ClCompile Include="Source\Animator\RootMotionSystem.cpp" />
     <ClCompile Include="Source\Archetype\Archetype.cpp" />
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
@@ -800,6 +804,7 @@
     <ClCompile Include="Source\ShaderClass\EffectMeshShader.cpp" />
     <ClCompile Include="Source\ShaderClass\PBRShader.cpp" />
     <ClCompile Include="Source\ShaderClass\PhongShader.cpp" />
+    <ClCompile Include="Source\ShaderClass\ToonShader.cpp" />
     <ClCompile Include="Source\ShaderClass\ShaderCompiler.cpp" />
     <ClCompile Include="Source\ShadowMap.cpp" />
     <ClCompile Include="Source\Shadow\ShadowExtractSystem.cpp" />
@@ -1162,6 +1167,30 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\ToonVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\ToonPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\ToonOutlineVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\ToonOutlinePS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\PhongInstancedVS.hlsl">

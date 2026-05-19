@@ -42,6 +42,7 @@ RenderState::RenderState(DX12Device*)
 
 	rasterizerStates[static_cast<int>(RasterizerState::SolidCullNone)] = std::make_unique<DX12RasterizerState>(mkR(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_NONE));
 	rasterizerStates[static_cast<int>(RasterizerState::SolidCullBack)] = std::make_unique<DX12RasterizerState>(mkR(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_BACK));
+	rasterizerStates[static_cast<int>(RasterizerState::SolidCullFront)] = std::make_unique<DX12RasterizerState>(mkR(D3D12_FILL_MODE_SOLID, D3D12_CULL_MODE_FRONT));
 	rasterizerStates[static_cast<int>(RasterizerState::WireCullNone)]  = std::make_unique<DX12RasterizerState>(mkR(D3D12_FILL_MODE_WIREFRAME, D3D12_CULL_MODE_NONE, true));
 	rasterizerStates[static_cast<int>(RasterizerState::WireCullBack)]  = std::make_unique<DX12RasterizerState>(mkR(D3D12_FILL_MODE_WIREFRAME, D3D12_CULL_MODE_BACK, true));
 }
@@ -117,6 +118,7 @@ RenderState::RenderState(ID3D11Device* device)
 
     { D3D11_RASTERIZER_DESC d{}; d.DepthClipEnable = true; d.MultisampleEnable = true; d.FillMode = D3D11_FILL_SOLID; d.CullMode = D3D11_CULL_NONE; createRasterizer(d, RasterizerState::SolidCullNone); }
     { D3D11_RASTERIZER_DESC d{}; d.DepthClipEnable = true; d.MultisampleEnable = true; d.FillMode = D3D11_FILL_SOLID; d.CullMode = D3D11_CULL_BACK; createRasterizer(d, RasterizerState::SolidCullBack); }
+    { D3D11_RASTERIZER_DESC d{}; d.DepthClipEnable = true; d.MultisampleEnable = true; d.FillMode = D3D11_FILL_SOLID; d.CullMode = D3D11_CULL_FRONT; createRasterizer(d, RasterizerState::SolidCullFront); }
     { D3D11_RASTERIZER_DESC d{}; d.DepthClipEnable = true; d.MultisampleEnable = true; d.FillMode = D3D11_FILL_WIREFRAME; d.CullMode = D3D11_CULL_NONE; d.AntialiasedLineEnable = true; createRasterizer(d, RasterizerState::WireCullNone); }
     { D3D11_RASTERIZER_DESC d{}; d.DepthClipEnable = true; d.MultisampleEnable = true; d.FillMode = D3D11_FILL_WIREFRAME; d.CullMode = D3D11_CULL_BACK; d.AntialiasedLineEnable = true; createRasterizer(d, RasterizerState::WireCullBack); }
 }

@@ -1,0 +1,12 @@
+{
+  "baseColor": [1.0, 1.0, 1.0, 1.0],
+  "metallic": 0.0,
+  "roughness": 0.5,
+  "emissive": 0.0,
+  "diffuseTexturePath": "",
+  "normalTexturePath": "",
+  "metallicRoughnessTexturePath": "",
+  "emissiveTexturePath": "",
+  "shaderId": 1,
+  "alphaMode": 0
+}

@@ -47,6 +47,7 @@ enum class RasterizerState
 {
 	SolidCullNone,
 	SolidCullBack,
+	SolidCullFront,   // Toon アウトライン (背面のみ描画) 用
 	WireCullNone,
 	WireCullBack,
 

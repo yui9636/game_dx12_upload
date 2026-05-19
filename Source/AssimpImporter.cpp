@@ -322,7 +322,15 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 		Model::Animation& animation = animations.emplace_back();
 
 		animation.name = aAnimation->mName.C_Str();
-		animation.secondsLength = static_cast<float>(aAnimation->mDuration / aAnimation->mTicksPerSecond);
+		if (animation.name.empty()) {
+			animation.name = filepath.stem().string();
+		}
+
+		const double ticksPerSecond = aAnimation->mTicksPerSecond > 0.0
+			? aAnimation->mTicksPerSecond
+			: 30.0;
+		animation.secondsLength = static_cast<float>(aAnimation->mDuration / ticksPerSecond);
+		float maxKeySeconds = 0.0f;
 
 		animation.nodeAnims.resize(nodes.size());
 		for (uint32_t aChannelIndex = 0; aChannelIndex < aAnimation->mNumChannels; ++aChannelIndex)
@@ -337,29 +345,30 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 			for (uint32_t aPositionIndex = 0; aPositionIndex < aNodeAnim->mNumPositionKeys; ++aPositionIndex)
 			{
 				const aiVectorKey& aKey = aNodeAnim->mPositionKeys[aPositionIndex];
-				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::VectorKeyframe& keyframe = nodeAnim.positionKeyframes.emplace_back();
-				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
+				keyframe.seconds = static_cast<float>(aKey.mTime / ticksPerSecond);
 				keyframe.value = aiVector3DToXMFLOAT3(aKey.mValue);
+				maxKeySeconds = (std::max)(maxKeySeconds, keyframe.seconds);
 			}
 			for (uint32_t aRotationIndex = 0; aRotationIndex < aNodeAnim->mNumRotationKeys; ++aRotationIndex)
 			{
 				const aiQuatKey& aKey = aNodeAnim->mRotationKeys[aRotationIndex];
-				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::QuaternionKeyframe& keyframe = nodeAnim.rotationKeyframes.emplace_back();
-				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
+				keyframe.seconds = static_cast<float>(aKey.mTime / ticksPerSecond);
 				keyframe.value = aiQuaternionToXMFLOAT4(aKey.mValue);
+				maxKeySeconds = (std::max)(maxKeySeconds, keyframe.seconds);
 			}
 			for (uint32_t aScalingIndex = 0; aScalingIndex < aNodeAnim->mNumScalingKeys; ++aScalingIndex)
 			{
 				const aiVectorKey& aKey = aNodeAnim->mScalingKeys[aScalingIndex];
-				if (fabs(std::round(aKey.mTime) - aKey.mTime) > 0.001) continue;
 				Model::VectorKeyframe& keyframe = nodeAnim.scaleKeyframes.emplace_back();
-				keyframe.seconds = static_cast<float>(aKey.mTime / aAnimation->mTicksPerSecond);
+				keyframe.seconds = static_cast<float>(aKey.mTime / ticksPerSecond);
 				keyframe.value = aiVector3DToXMFLOAT3(aKey.mValue);
+				maxKeySeconds = (std::max)(maxKeySeconds, keyframe.seconds);
 			}
 
 			DirectX::XMVECTOR Epsilon = DirectX::XMVectorReplicate(0.00001f);
+			if (!nodeAnim.positionKeyframes.empty())
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat3(&nodeAnim.positionKeyframes.at(0).value);
@@ -377,6 +386,7 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 					nodeAnim.positionKeyframes.resize(1);
 				}
 			}
+			if (!nodeAnim.rotationKeyframes.empty())
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat4(&nodeAnim.rotationKeyframes.at(0).value);
@@ -394,6 +404,7 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 					nodeAnim.rotationKeyframes.resize(1);
 				}
 			}
+			if (!nodeAnim.scaleKeyframes.empty())
 			{
 				bool result = true;
 				DirectX::XMVECTOR A = DirectX::XMLoadFloat3(&nodeAnim.scaleKeyframes.at(0).value);
@@ -411,6 +422,12 @@ void AssimpImporter::LoadAnimations(AnimationList& animations, const NodeList& n
 					nodeAnim.scaleKeyframes.resize(1);
 				}
 			}
+		}
+		if (animation.secondsLength <= 0.0f || !std::isfinite(animation.secondsLength)) {
+			animation.secondsLength = maxKeySeconds;
+		}
+		if (animation.secondsLength <= 0.0f) {
+			animation.secondsLength = 1.0f / 60.0f;
 		}
 		for (size_t nodeIndex = 0; nodeIndex < animation.nodeAnims.size(); ++nodeIndex)
 		{

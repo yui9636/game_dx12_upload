@@ -7,6 +7,7 @@
 #include "ShaderClass/PhongShader.h"
 #include "ShaderClass/PBRShader.h"
 #include "ShaderClass/GBufferPBRShader.h"
+#include "ShaderClass/ToonShader.h"
 #include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "ShadowMap.h"
@@ -27,6 +28,7 @@ ModelRenderer::ModelRenderer(IResourceFactory* factory)
     skeletonConstantBuffer = factory->CreateBuffer(sizeof(CbSkeleton), BufferType::Constant);
     shaders[static_cast<int>(ShaderId::Phong)] = std::make_unique<PhongShader>(factory);
     shaders[static_cast<int>(ShaderId::PBR)] = std::make_unique<PBRShader>(factory);
+    shaders[static_cast<int>(ShaderId::Toon)] = std::make_unique<ToonShader>(factory);
     shaders[static_cast<int>(ShaderId::GBufferPBR)] = std::make_unique<GBufferPBRShader>(factory);
 }
 
@@ -118,6 +120,9 @@ void ModelRenderer::ApplyMaterialOverrides(ShaderId shaderId, Shader* shader,
     } else if (shaderId == ShaderId::Phong) {
         auto* phongShader = static_cast<PhongShader*>(shader);
         phongShader->SetMaterialAssetOverride(materialAsset);
+    } else if (shaderId == ShaderId::Toon) {
+        auto* toonShader = static_cast<ToonShader*>(shader);
+        toonShader->SetMaterialAssetOverride(materialAsset);
     }
 }
 

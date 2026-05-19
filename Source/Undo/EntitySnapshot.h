@@ -20,6 +20,8 @@
 #include "Entity/Entity.h"
 #include "Generated/ComponentMeta.generated.h"
 #include "Hierarchy/HierarchySystem.h"
+#include "Gameplay/RetargetedAnimationComponent.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/ResourceManager.h"
 
@@ -243,6 +245,15 @@ namespace EntitySnapshot
             if (!mesh->modelFilePath.empty()) {
                 // 各 ECS entity は transform / animation 更新用に個別の変更可能な model state を持つ必要がある。
                 mesh->model = ResourceManager::Instance().CreateModelInstance(mesh->modelFilePath);
+                if (mesh->model) {
+                    if (auto* retargeted = registry.GetComponent<RetargetedAnimationComponent>(entity)) {
+                        for (const Model::Animation& animation : retargeted->animations) {
+                            if (mesh->model->GetAnimationIndex(animation.name.c_str()) < 0) {
+                                mesh->model->AddAnimation(animation);
+                            }
+                        }
+                    }
+                }
             }
         }
 

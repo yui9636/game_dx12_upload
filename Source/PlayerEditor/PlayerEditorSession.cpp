@@ -24,6 +24,7 @@
 #include "Component/TransformComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/PlaybackComponent.h"
+#include "Gameplay/RetargetedAnimationComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StateMachineSystem.h"
@@ -88,6 +89,19 @@ namespace
         }
 
         return false;
+    }
+
+    void AppendRetargetedAnimationsToModel(const RetargetedAnimationComponent* component, const std::shared_ptr<Model>& model)
+    {
+        if (!component || !model) {
+            return;
+        }
+
+        for (const Model::Animation& animation : component->animations) {
+            if (model->GetAnimationIndex(animation.name.c_str()) < 0) {
+                model->AddAnimation(animation);
+            }
+        }
     }
 
     DirectX::XMFLOAT3 ResolveAuthoringScaleFromEntity(Registry* registry, EntityID entity)
@@ -465,6 +479,10 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
             mesh->model = model;
         }
 
+        AppendRetargetedAnimationsToModel(
+            panel.m_registry->GetComponent<RetargetedAnimationComponent>(restore.root),
+            model);
+
         panel.m_previewEntity = restore.root;
         panel.m_previewEntityOwned = true;
         panel.m_ownedPreviewAuthoringScale = ResolveAuthoringScaleFromEntity(panel.m_registry, restore.root);
@@ -475,6 +493,7 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
         panel.m_currentModelPath = mesh->modelFilePath;
         panel.ResetSelectionState();
         panel.m_selectedAnimIndex = 0;
+        panel.m_modelAnimationDirty = false;
         panel.m_previewRenderSize = { 0.0f, 0.0f };
         panel.m_previewModelScale = 1.0f;
         panel.m_sockets.clear();
@@ -526,6 +545,7 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
     panel.m_currentModelPath = path;
     panel.ResetSelectionState();
     panel.m_selectedAnimIndex = 0;
+    panel.m_modelAnimationDirty = false;
     panel.m_previewModelScale = 1.0f;
     panel.m_previewRenderSize = { 0.0f, 0.0f };
     panel.m_sockets.clear();
@@ -617,6 +637,7 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
 
     panel.m_timelineDirty = false;
     panel.m_stateMachineDirty = false;
+    panel.m_modelAnimationDirty = false;
     panel.m_socketDirty = false;
     panel.m_colliderDirty = false;
     panel.m_inputMappingTab.SetEditingMap(panel.m_inputMappingTab.GetEditingMap());

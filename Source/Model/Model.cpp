@@ -1459,6 +1459,17 @@ int Model::GetAnimationIndex(const char* name) const
 
 }
 
+// 外部で生成したアニメーションを追加し、その番号を返します。
+int Model::AddAnimation(const Animation& animation)
+
+{
+
+	animations.push_back(animation);
+
+	return static_cast<int>(animations.size()) - 1;
+
+}
+
 // 外部で計算したノード姿勢をモデルへ反映します。
 void Model::SetNodePoses(const std::vector<NodePose>& nodePoses)
 

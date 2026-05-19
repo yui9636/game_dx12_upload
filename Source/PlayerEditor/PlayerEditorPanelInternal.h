@@ -37,6 +37,8 @@ namespace PlayerEditorInternal
 
     inline constexpr const char* kModelFileFilter =
         "Player Source (*.prefab;*.fbx;*.gltf;*.glb;*.obj)\0*.prefab;*.fbx;*.gltf;*.glb;*.obj\0Prefab (*.prefab)\0*.prefab\0Model Files (*.fbx;*.gltf;*.glb;*.obj)\0*.fbx;*.gltf;*.glb;*.obj\0All Files (*.*)\0*.*\0";
+    inline constexpr const char* kAnimationFileFilter =
+        "Animation Source (*.fbx;*.gltf;*.glb)\0*.fbx;*.gltf;*.glb\0All Files (*.*)\0*.*\0";
     inline constexpr const char* kAudioFileFilter =
         "Audio Files (*.wav;*.ogg;*.mp3;*.flac)\0*.wav;*.ogg;*.mp3;*.flac\0WAV (*.wav)\0*.wav\0OGG (*.ogg)\0*.ogg\0MP3 (*.mp3)\0*.mp3\0FLAC (*.flac)\0*.flac\0All Files (*.*)\0*.*\0";
     inline constexpr const char* kVfxFileFilter =

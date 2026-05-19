@@ -46,6 +46,7 @@
 #include "Gameplay/HealthComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
 #include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/RetargetedAnimationComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/StaminaComponent.h"
@@ -87,6 +88,155 @@ namespace
         }
         value = in.at(key).get<T>();
         return true;
+    }
+
+    json Float3ToJson(const DirectX::XMFLOAT3& value)
+    {
+        return json::array({ value.x, value.y, value.z });
+    }
+
+    json Float4ToJson(const DirectX::XMFLOAT4& value)
+    {
+        return json::array({ value.x, value.y, value.z, value.w });
+    }
+
+    bool Float3FromJson(const json& value, DirectX::XMFLOAT3& out)
+    {
+        if (!value.is_array() || value.size() < 3) {
+            return false;
+        }
+        out.x = value[0].get<float>();
+        out.y = value[1].get<float>();
+        out.z = value[2].get<float>();
+        return true;
+    }
+
+    bool Float4FromJson(const json& value, DirectX::XMFLOAT4& out)
+    {
+        if (!value.is_array() || value.size() < 4) {
+            return false;
+        }
+        out.x = value[0].get<float>();
+        out.y = value[1].get<float>();
+        out.z = value[2].get<float>();
+        out.w = value[3].get<float>();
+        return true;
+    }
+
+    json VectorKeyframeToJson(const Model::VectorKeyframe& keyframe)
+    {
+        return json{
+            { "seconds", keyframe.seconds },
+            { "value", Float3ToJson(keyframe.value) }
+        };
+    }
+
+    json QuaternionKeyframeToJson(const Model::QuaternionKeyframe& keyframe)
+    {
+        return json{
+            { "seconds", keyframe.seconds },
+            { "value", Float4ToJson(keyframe.value) }
+        };
+    }
+
+    bool VectorKeyframeFromJson(const json& value, Model::VectorKeyframe& out)
+    {
+        if (!value.is_object() || !value.contains("value")) {
+            return false;
+        }
+        out.seconds = value.value("seconds", 0.0f);
+        return Float3FromJson(value["value"], out.value);
+    }
+
+    bool QuaternionKeyframeFromJson(const json& value, Model::QuaternionKeyframe& out)
+    {
+        if (!value.is_object() || !value.contains("value")) {
+            return false;
+        }
+        out.seconds = value.value("seconds", 0.0f);
+        return Float4FromJson(value["value"], out.value);
+    }
+
+    json NodeAnimToJson(const Model::NodeAnim& nodeAnim)
+    {
+        json value;
+        value["positionKeys"] = json::array();
+        value["rotationKeys"] = json::array();
+        value["scaleKeys"] = json::array();
+        for (const Model::VectorKeyframe& keyframe : nodeAnim.positionKeyframes) {
+            value["positionKeys"].push_back(VectorKeyframeToJson(keyframe));
+        }
+        for (const Model::QuaternionKeyframe& keyframe : nodeAnim.rotationKeyframes) {
+            value["rotationKeys"].push_back(QuaternionKeyframeToJson(keyframe));
+        }
+        for (const Model::VectorKeyframe& keyframe : nodeAnim.scaleKeyframes) {
+            value["scaleKeys"].push_back(VectorKeyframeToJson(keyframe));
+        }
+        return value;
+    }
+
+    bool NodeAnimFromJson(const json& value, Model::NodeAnim& out)
+    {
+        if (!value.is_object()) {
+            return false;
+        }
+
+        out = Model::NodeAnim{};
+        if (value.contains("positionKeys") && value["positionKeys"].is_array()) {
+            for (const json& keyJson : value["positionKeys"]) {
+                Model::VectorKeyframe keyframe{};
+                if (VectorKeyframeFromJson(keyJson, keyframe)) {
+                    out.positionKeyframes.push_back(keyframe);
+                }
+            }
+        }
+        if (value.contains("rotationKeys") && value["rotationKeys"].is_array()) {
+            for (const json& keyJson : value["rotationKeys"]) {
+                Model::QuaternionKeyframe keyframe{};
+                if (QuaternionKeyframeFromJson(keyJson, keyframe)) {
+                    out.rotationKeyframes.push_back(keyframe);
+                }
+            }
+        }
+        if (value.contains("scaleKeys") && value["scaleKeys"].is_array()) {
+            for (const json& keyJson : value["scaleKeys"]) {
+                Model::VectorKeyframe keyframe{};
+                if (VectorKeyframeFromJson(keyJson, keyframe)) {
+                    out.scaleKeyframes.push_back(keyframe);
+                }
+            }
+        }
+        return true;
+    }
+
+    json AnimationToJson(const Model::Animation& animation)
+    {
+        json value;
+        value["name"] = animation.name;
+        value["secondsLength"] = animation.secondsLength;
+        value["nodeAnims"] = json::array();
+        for (const Model::NodeAnim& nodeAnim : animation.nodeAnims) {
+            value["nodeAnims"].push_back(NodeAnimToJson(nodeAnim));
+        }
+        return value;
+    }
+
+    bool AnimationFromJson(const json& value, Model::Animation& out)
+    {
+        if (!value.is_object() || !value.contains("nodeAnims") || !value["nodeAnims"].is_array()) {
+            return false;
+        }
+
+        out = Model::Animation{};
+        out.name = value.value("name", std::string{});
+        out.secondsLength = value.value("secondsLength", 0.0f);
+        for (const json& nodeAnimJson : value["nodeAnims"]) {
+            Model::NodeAnim nodeAnim{};
+            if (NodeAnimFromJson(nodeAnimJson, nodeAnim)) {
+                out.nodeAnims.push_back(std::move(nodeAnim));
+            }
+        }
+        return !out.nodeAnims.empty();
     }
 
     // Write every TerrainComponent's asset to a sidecar .terrain file in the
@@ -739,6 +889,17 @@ namespace
                 value["assets"].push_back(TimelineAssetSerializer::ToJson(asset));
             }
             writeComponent("TimelineLibraryComponent", value);
+        }
+
+        // リターゲット済みアニメーションを Prefab 内へ保存します。
+        if (const auto& retargetedAnimations = std::get<std::optional<RetargetedAnimationComponent>>(node.components);
+            retargetedAnimations.has_value()) {
+            json value;
+            value["animations"] = json::array();
+            for (const Model::Animation& animation : retargetedAnimations->animations) {
+                value["animations"].push_back(AnimationToJson(animation));
+            }
+            writeComponent("RetargetedAnimationComponent", value);
         }
 
         // 集めた component 群を node JSON に格納します。
@@ -1522,6 +1683,24 @@ namespace
             }
 
             SetOptional(node.components, component);
+        }
+
+        // Prefab に保存されたリターゲット済みアニメーションを復元します。
+        if (components.contains("RetargetedAnimationComponent")) {
+            RetargetedAnimationComponent component;
+            const json& value = components["RetargetedAnimationComponent"];
+            if (value.contains("animations") && value["animations"].is_array()) {
+                for (const json& animationJson : value["animations"]) {
+                    Model::Animation animation{};
+                    if (AnimationFromJson(animationJson, animation)) {
+                        component.animations.push_back(std::move(animation));
+                    }
+                }
+            }
+
+            if (!component.animations.empty()) {
+                SetOptional(node.components, std::move(component));
+            }
         }
     }
 

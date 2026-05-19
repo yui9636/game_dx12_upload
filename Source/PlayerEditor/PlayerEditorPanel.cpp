@@ -16,11 +16,17 @@
 #include <DirectXMath.h>
 
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
+#include <filesystem>
+#include <unordered_map>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include "Animator/HumanoidRetargeter.h"
+#include "Console/Logger.h"
 #include "Icon/IconsFontAwesome7.h"
 #include "PlayerEditorPanelInternal.h"
 #include "PlayerEditorSession.h"
@@ -28,6 +34,7 @@
 #include "Component/ColliderComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/RetargetedAnimationComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Input/InputContextComponent.h"
@@ -37,9 +44,244 @@
 #include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
+#include "System/ResourceManager.h"
 #include "System/UndoSystem.h"
 
 using namespace PlayerEditorInternal;
+
+namespace
+{
+    std::string BuildUniqueRetargetedAnimationName(const Model& model, const std::string& sourcePath, const Model::Animation& animation)
+    {
+        const std::string fileStem = std::filesystem::path(sourcePath).stem().string();
+        std::string baseName = animation.name.empty() ? fileStem : animation.name;
+        if (!fileStem.empty() && baseName.find(fileStem) == std::string::npos) {
+            baseName = fileStem + "_" + baseName;
+        }
+
+        std::string uniqueName = baseName;
+        int suffix = 1;
+        while (model.GetAnimationIndex(uniqueName.c_str()) >= 0) {
+            uniqueName = baseName + "_" + std::to_string(suffix++);
+        }
+        return uniqueName;
+    }
+
+    void LogRetargetWarnings(const std::vector<std::string>& warnings)
+    {
+        for (const std::string& warning : warnings) {
+            LOG_WARN("[PlayerEditor][Retarget] %s", warning.c_str());
+        }
+    }
+
+    std::string NormalizeAnimationNodeName(const std::string& name)
+    {
+        std::string lowered;
+        lowered.reserve(name.size());
+        for (char c : name) {
+            lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+        }
+
+        const auto hasSidePrefix = [&](char side) {
+            return lowered.size() >= 2 &&
+                lowered[0] == side &&
+                !std::isalnum(static_cast<unsigned char>(lowered[1]));
+        };
+        const auto hasSideSuffix = [&](char side) {
+            return lowered.size() >= 2 &&
+                lowered.back() == side &&
+                !std::isalnum(static_cast<unsigned char>(lowered[lowered.size() - 2]));
+        };
+
+        const bool leftPrefix = hasSidePrefix('l');
+        const bool leftSuffix = hasSideSuffix('l');
+        const bool rightPrefix = hasSidePrefix('r');
+        const bool rightSuffix = hasSideSuffix('r');
+        const bool leftSeparated = leftPrefix || leftSuffix;
+        const bool rightSeparated = rightPrefix || rightSuffix;
+
+        std::string normalized;
+        normalized.reserve(lowered.size());
+        for (char c : lowered) {
+            const unsigned char uc = static_cast<unsigned char>(c);
+            if (std::isalnum(uc)) {
+                normalized.push_back(static_cast<char>(uc));
+            }
+        }
+
+        const auto replaceAll = [&](const char* from, const char* to) {
+            std::string::size_type pos = 0;
+            const size_t fromLen = std::char_traits<char>::length(from);
+            const size_t toLen = std::char_traits<char>::length(to);
+            while ((pos = normalized.find(from, pos)) != std::string::npos) {
+                normalized.replace(pos, fromLen, to);
+                pos += toLen;
+            }
+        };
+
+        replaceAll("mixamorig", "");
+        replaceAll("bip001", "");
+        replaceAll("upperleg", "upleg");
+        replaceAll("lowerleg", "leg");
+
+        if (leftSeparated && normalized.size() > 1) {
+            if (leftPrefix && normalized.front() == 'l') {
+                normalized.erase(normalized.begin());
+            }
+            if (leftSuffix && !normalized.empty() && normalized.back() == 'l') {
+                normalized.pop_back();
+            }
+            if (normalized.find("left") == std::string::npos) {
+                normalized = "left" + normalized;
+            }
+        }
+        else if (rightSeparated && normalized.size() > 1) {
+            if (rightPrefix && normalized.front() == 'r') {
+                normalized.erase(normalized.begin());
+            }
+            if (rightSuffix && !normalized.empty() && normalized.back() == 'r') {
+                normalized.pop_back();
+            }
+            if (normalized.find("right") == std::string::npos) {
+                normalized = "right" + normalized;
+            }
+        }
+
+        return normalized;
+    }
+
+    void FillBindNodeAnimation(const Model::Node& node, float length, Model::NodeAnim& out)
+    {
+        const float endTime = (std::max)(length, 1.0f / 60.0f);
+        out.positionKeyframes = {
+            Model::VectorKeyframe{ 0.0f, node.position },
+            Model::VectorKeyframe{ endTime, node.position }
+        };
+        out.rotationKeyframes = {
+            Model::QuaternionKeyframe{ 0.0f, node.rotation },
+            Model::QuaternionKeyframe{ endTime, node.rotation }
+        };
+        out.scaleKeyframes = {
+            Model::VectorKeyframe{ 0.0f, node.scale },
+            Model::VectorKeyframe{ endTime, node.scale }
+        };
+    }
+
+    void EnsureNodeAnimationHasKeys(const Model::Node& node, float length, Model::NodeAnim& anim)
+    {
+        const float endTime = (std::max)(length, 1.0f / 60.0f);
+        if (anim.positionKeyframes.empty()) {
+            anim.positionKeyframes.push_back(Model::VectorKeyframe{ 0.0f, node.position });
+        }
+        if (anim.positionKeyframes.size() == 1) {
+            anim.positionKeyframes.push_back(Model::VectorKeyframe{ endTime, anim.positionKeyframes.front().value });
+        }
+        if (anim.rotationKeyframes.empty()) {
+            anim.rotationKeyframes.push_back(Model::QuaternionKeyframe{ 0.0f, node.rotation });
+        }
+        if (anim.rotationKeyframes.size() == 1) {
+            anim.rotationKeyframes.push_back(Model::QuaternionKeyframe{ endTime, anim.rotationKeyframes.front().value });
+        }
+        if (anim.scaleKeyframes.empty()) {
+            anim.scaleKeyframes.push_back(Model::VectorKeyframe{ 0.0f, node.scale });
+        }
+        if (anim.scaleKeyframes.size() == 1) {
+            anim.scaleKeyframes.push_back(Model::VectorKeyframe{ endTime, anim.scaleKeyframes.front().value });
+        }
+    }
+
+    bool TryBakeAnimationByMatchingNodeNames(
+        const Model& source,
+        int sourceAnimationIndex,
+        const Model& target,
+        Model::Animation& outAnimation)
+    {
+        const auto& sourceAnimations = source.GetAnimations();
+        const auto& sourceNodes = source.GetNodes();
+        const auto& targetNodes = target.GetNodes();
+        if (sourceAnimationIndex < 0 ||
+            sourceAnimationIndex >= static_cast<int>(sourceAnimations.size()) ||
+            sourceNodes.empty() ||
+            targetNodes.empty()) {
+            return false;
+        }
+
+        const Model::Animation& sourceAnimation = sourceAnimations[sourceAnimationIndex];
+        std::unordered_map<std::string, int> sourceNodeByName;
+        sourceNodeByName.reserve(sourceNodes.size());
+        for (int nodeIndex = 0; nodeIndex < static_cast<int>(sourceNodes.size()); ++nodeIndex) {
+            std::string normalized = NormalizeAnimationNodeName(sourceNodes[nodeIndex].name);
+            if (!normalized.empty()) {
+                sourceNodeByName.emplace(std::move(normalized), nodeIndex);
+            }
+        }
+
+        outAnimation = Model::Animation{};
+        outAnimation.name = sourceAnimation.name;
+        outAnimation.secondsLength = (std::max)(sourceAnimation.secondsLength, 1.0f / 60.0f);
+        outAnimation.nodeAnims.resize(targetNodes.size());
+
+        int matchedNodeCount = 0;
+        std::array<bool, HumanoidRetarget::kBoneSlotCount> matchedSlots{};
+        const HumanoidRetarget::HumanoidProfile targetProfile = HumanoidRetarget::AnalyzeSkeleton(target);
+
+        for (int targetNodeIndex = 0; targetNodeIndex < static_cast<int>(targetNodes.size()); ++targetNodeIndex) {
+            Model::NodeAnim& targetAnim = outAnimation.nodeAnims[targetNodeIndex];
+            FillBindNodeAnimation(targetNodes[targetNodeIndex], outAnimation.secondsLength, targetAnim);
+
+            const std::string normalizedTargetName = NormalizeAnimationNodeName(targetNodes[targetNodeIndex].name);
+            const auto sourceIt = sourceNodeByName.find(normalizedTargetName);
+            if (sourceIt == sourceNodeByName.end()) {
+                continue;
+            }
+
+            const int sourceNodeIndex = sourceIt->second;
+            if (sourceNodeIndex < 0 || sourceNodeIndex >= static_cast<int>(sourceAnimation.nodeAnims.size())) {
+                continue;
+            }
+
+            targetAnim = sourceAnimation.nodeAnims[sourceNodeIndex];
+            EnsureNodeAnimationHasKeys(targetNodes[targetNodeIndex], outAnimation.secondsLength, targetAnim);
+            ++matchedNodeCount;
+
+            if (targetProfile.valid) {
+                for (size_t slotIndex = 0; slotIndex < HumanoidRetarget::kBoneSlotCount; ++slotIndex) {
+                    if (targetProfile.slots[slotIndex].nodeIndex == targetNodeIndex) {
+                        matchedSlots[slotIndex] = true;
+                    }
+                }
+            }
+        }
+
+        int matchedRequiredSlots = 0;
+        constexpr HumanoidRetarget::BoneSlot kRequiredSlots[] = {
+            HumanoidRetarget::BoneSlot::Hips,
+            HumanoidRetarget::BoneSlot::Spine,
+            HumanoidRetarget::BoneSlot::Head,
+            HumanoidRetarget::BoneSlot::LeftUpperArm,
+            HumanoidRetarget::BoneSlot::LeftLowerArm,
+            HumanoidRetarget::BoneSlot::LeftHand,
+            HumanoidRetarget::BoneSlot::RightUpperArm,
+            HumanoidRetarget::BoneSlot::RightLowerArm,
+            HumanoidRetarget::BoneSlot::RightHand,
+            HumanoidRetarget::BoneSlot::LeftUpperLeg,
+            HumanoidRetarget::BoneSlot::LeftLowerLeg,
+            HumanoidRetarget::BoneSlot::LeftFoot,
+            HumanoidRetarget::BoneSlot::RightUpperLeg,
+            HumanoidRetarget::BoneSlot::RightLowerLeg,
+            HumanoidRetarget::BoneSlot::RightFoot
+        };
+        for (HumanoidRetarget::BoneSlot slot : kRequiredSlots) {
+            if (matchedSlots[static_cast<size_t>(slot)]) {
+                ++matchedRequiredSlots;
+            }
+        }
+
+        const int minNodeMatches = (std::max)(8, static_cast<int>(targetNodes.size() / 5));
+        return matchedRequiredSlots >= 10 || matchedNodeCount >= minNodeMatches;
+    }
+}
+
 // ライフサイクル / プレビューエンティティ / 外部選択（セッション補助へ委譲）
 void PlayerEditorPanel::Suspend()
 {
@@ -150,7 +392,7 @@ bool PlayerEditorPanel::HasOpenModel() const
 
 bool PlayerEditorPanel::HasAnyDirtyDocument() const
 {
-    return m_timelineDirty || m_stateMachineDirty || m_socketDirty || m_colliderDirty || m_inputMappingTab.IsDirty();
+    return m_modelAnimationDirty || m_timelineDirty || m_stateMachineDirty || m_socketDirty || m_colliderDirty || m_inputMappingTab.IsDirty();
 }
 
 bool PlayerEditorPanel::HasSelectedEntityContext() const
@@ -166,6 +408,107 @@ bool PlayerEditorPanel::CanUsePreviewEntity() const
 bool PlayerEditorPanel::OpenModelFromPath(const std::string& path)
 {
     return PlayerEditorSession::OpenModelFromPath(*this, path);
+}
+
+bool PlayerEditorPanel::OpenAnimationFromPath(const std::string& path)
+{
+    if (path.empty()) {
+        return false;
+    }
+
+    if (!m_model) {
+        LOG_WARN("[PlayerEditor][Retarget] Target player model is not loaded.");
+        return false;
+    }
+
+    Model* targetModel = m_ownedModel ? m_ownedModel.get() : const_cast<Model*>(m_model);
+    if (!targetModel) {
+        LOG_WARN("[PlayerEditor][Retarget] Target player model is not editable.");
+        return false;
+    }
+
+    std::shared_ptr<Model> sourceModel = ResourceManager::Instance().CreateModelInstance(path, 1.0f, true);
+    if (!sourceModel) {
+        LOG_ERROR("[PlayerEditor][Retarget] Failed to load animation source: %s", path.c_str());
+        return false;
+    }
+
+    const auto& sourceAnimations = sourceModel->GetAnimations();
+    if (sourceAnimations.empty()) {
+        LOG_WARN("[PlayerEditor][Retarget] Animation source has no clips: %s", path.c_str());
+        return false;
+    }
+
+    const HumanoidRetarget::HumanoidProfile targetProfile = HumanoidRetarget::AnalyzeSkeleton(*targetModel);
+    if (!targetProfile.valid) {
+        LOG_ERROR("[PlayerEditor][Retarget] Target model is not a supported humanoid.");
+        LogRetargetWarnings(targetProfile.warnings);
+        return false;
+    }
+
+    HumanoidRetarget::RetargetOptions options{};
+    options.sampleRate = 60.0f;
+    options.transferRootMotion = true;
+    options.keepTargetScale = true;
+
+    int importedCount = 0;
+    int lastImportedIndex = -1;
+    std::vector<Model::Animation> importedAnimations;
+    for (int animationIndex = 0; animationIndex < static_cast<int>(sourceAnimations.size()); ++animationIndex) {
+        HumanoidRetarget::RetargetResult result =
+            HumanoidRetarget::BakeAnimation(*sourceModel, animationIndex, *targetModel, options);
+
+        Model::Animation importedAnimation{};
+        bool accepted = false;
+        if (result.success) {
+            importedAnimation = std::move(result.animation);
+            accepted = true;
+        }
+        else if (TryBakeAnimationByMatchingNodeNames(*sourceModel, animationIndex, *targetModel, importedAnimation)) {
+            accepted = true;
+        }
+
+        if (!accepted) {
+            LOG_WARN("[PlayerEditor][Retarget] Rejected clip [%d] %s", animationIndex, sourceAnimations[animationIndex].name.c_str());
+            LogRetargetWarnings(result.warnings);
+            continue;
+        }
+
+        importedAnimation.name = BuildUniqueRetargetedAnimationName(*targetModel, path, importedAnimation);
+        lastImportedIndex = targetModel->AddAnimation(importedAnimation);
+        importedAnimations.push_back(importedAnimation);
+        ++importedCount;
+    }
+
+    if (importedCount <= 0) {
+        LOG_ERROR("[PlayerEditor][Retarget] No compatible humanoid animation was imported: %s", path.c_str());
+        return false;
+    }
+
+    EnsureOwnedPreviewEntity();
+    if (CanUsePreviewEntity()) {
+        if (auto* retargeted = m_registry->GetComponent<RetargetedAnimationComponent>(m_previewEntity)) {
+            retargeted->animations.insert(retargeted->animations.end(), importedAnimations.begin(), importedAnimations.end());
+        }
+        else {
+            RetargetedAnimationComponent component{};
+            component.animations = importedAnimations;
+            m_registry->AddComponent(m_previewEntity, std::move(component));
+        }
+    }
+    else {
+        LOG_WARN("[PlayerEditor][Retarget] Imported animations cannot be saved until a preview entity exists.");
+    }
+
+    m_selectedAnimIndex = lastImportedIndex;
+    m_modelAnimationDirty = true;
+    m_playheadFrame = 0;
+    m_isPlaying = false;
+    PlayerEditorSession::SyncTimelineAssetSelection(*this);
+    RebuildPreviewTimelineRuntimeData();
+    StartSelectedAnimationPreview();
+
+    return true;
 }
 
 void PlayerEditorPanel::ApplyEditorBindingsToPreviewEntity()
@@ -257,6 +600,7 @@ void PlayerEditorPanel::SetModel(const Model* model)
     Suspend();
     m_ownedModel.reset();
     m_model = model;
+    m_modelAnimationDirty = false;
     ResetSelectionState();
     m_orbitCenterValid = false;  // モデル変更で軌道中心リセット
     if (m_model) {
@@ -355,6 +699,12 @@ void PlayerEditorPanel::DrawTopBar()
                 OpenModelFromPath(pathBuffer);
             }
         }
+        if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN " Open Animation...", nullptr, false, HasOpenModel())) {
+            char pathBuffer[MAX_PATH] = {};
+            if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kAnimationFileFilter, "Open Animation Source") == DialogResult::OK) {
+                OpenAnimationFromPath(pathBuffer);
+            }
+        }
         ImGui::Separator();
         if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK " Save", "Ctrl+S", false, CanUsePreviewEntity())) SavePrefabDocument(false);
         if (ImGui::MenuItem(ICON_FA_FILE_EXPORT " Save As...", "Ctrl+Shift+S", false, CanUsePreviewEntity())) SavePrefabDocument(true);
@@ -369,6 +719,13 @@ void PlayerEditorPanel::DrawTopBar()
             if (!m_currentModelPath.empty()) strcpy_s(pathBuffer, m_currentModelPath.c_str());
             if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kModelFileFilter, "Open Player Source") == DialogResult::OK) {
                 OpenModelFromPath(pathBuffer);
+            }
+        }
+        ImGui::SameLine(0.0f, kGap);
+        if (DrawToolbarInlineButton(ICON_FA_FOLDER_OPEN, "Open Animation", "##tbOpenAnim", false, HasOpenModel(), false)) {
+            char pathBuffer[MAX_PATH] = {};
+            if (Dialog::OpenFileName(pathBuffer, MAX_PATH, kAnimationFileFilter, "Open Animation Source") == DialogResult::OK) {
+                OpenAnimationFromPath(pathBuffer);
             }
         }
     }

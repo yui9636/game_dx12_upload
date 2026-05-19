@@ -151,6 +151,9 @@
     <ClInclude Include="Source\Animator\AnimatorSystem.h">
       <Filter>Source\Animator</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Animator\HumanoidRetargeter.h">
+      <Filter>Source\Animator</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Animator\RootMotionSystem.h">
       <Filter>Source\Animator</Filter>
     </ClInclude>
@@ -485,6 +488,9 @@
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="Source\Gameplay\TimelineHitboxSystem.h">
+      <Filter>Source\Gameplay</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Gameplay\RetargetedAnimationComponent.h">
       <Filter>Source\Gameplay</Filter>
     </ClInclude>
     <ClInclude Include="Source\Gameplay\TimelineItemBuffer.h">
@@ -1305,6 +1311,9 @@
       <Filter>Source\Animator</Filter>
     </ClCompile>
     <ClCompile Include="Source\Animator\AnimatorSystem.cpp">
+      <Filter>Source\Animator</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Animator\HumanoidRetargeter.cpp">
       <Filter>Source\Animator</Filter>
     </ClCompile>
     <ClCompile Include="Source\Animator\RootMotionSystem.cpp">

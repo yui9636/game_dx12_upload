@@ -121,6 +121,7 @@ private:
     bool HasSelectedEntityContext() const;
     bool CanUsePreviewEntity() const;
     bool OpenModelFromPath(const std::string& path);
+    bool OpenAnimationFromPath(const std::string& path);
     bool SavePrefabDocument(bool saveAs);
     void ApplyEditorBindingsToPreviewEntity();
     void EnsureOwnedPreviewEntity();
@@ -215,6 +216,7 @@ private:
     // アセット
     TimelineAsset       m_timelineAsset;
     StateMachineAsset   m_stateMachineAsset;
+    bool                m_modelAnimationDirty = false;
     bool                m_timelineDirty = false;
     bool                m_stateMachineDirty = false;
     bool                m_socketDirty = false;

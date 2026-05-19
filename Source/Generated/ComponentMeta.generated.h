@@ -90,6 +90,7 @@ struct ComponentMeta;
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlaybackRangeComponent.h"
 #include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/RetargetedAnimationComponent.h"
 #include "Gameplay/SpeedCurveComponent.h"
 #include "Gameplay/StageBoundsComponent.h"
 #include "Gameplay/StaminaComponent.h"
@@ -1014,6 +1015,14 @@ struct ComponentMeta<PlayerTagComponent> {
 };
 
 template <>
+struct ComponentMeta<RetargetedAnimationComponent> {
+    static constexpr std::string_view Name = "RetargetedAnimationComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("animations", &RetargetedAnimationComponent::animations)
+    );
+};
+
+template <>
 struct ComponentMeta<SpeedCurveComponent> {
     static constexpr std::string_view Name = "SpeedCurveComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -1077,6 +1086,7 @@ struct ComponentMeta<TimelineComponent> {
     static constexpr std::string_view Name = "TimelineComponent";
     static constexpr auto Fields = std::make_tuple(
         MakeField("fps", &TimelineComponent::fps),
+        MakeField("previousFrame", &TimelineComponent::previousFrame),
         MakeField("currentFrame", &TimelineComponent::currentFrame),
         MakeField("frameMin", &TimelineComponent::frameMin),
         MakeField("frameMax", &TimelineComponent::frameMax),
@@ -1250,6 +1260,7 @@ using AllComponentTypes = std::tuple<
     PlaybackComponent,
     PlaybackRangeComponent,
     PlayerTagComponent,
+    RetargetedAnimationComponent,
     SpeedCurveComponent,
     StageBoundsComponent,
     StaminaComponent,

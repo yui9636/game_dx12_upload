@@ -265,6 +265,9 @@ public:
 	// 読み取り専用のアニメーション配列を取得します。
 	const std::vector<Animation>& GetAnimations()const { return animations; }
 
+	// 生成済みアニメーションクリップを追加します。
+	int AddAnimation(const Animation& animation);
+
 	// 名前からアニメーション番号を取得します。
 	int GetAnimationIndex(const char* name) const;
 
