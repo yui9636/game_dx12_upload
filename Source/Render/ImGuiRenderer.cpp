@@ -230,6 +230,11 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
 
 void ImGuiRenderer::DeferUnregisterTexture(ITexture* texture, uint64_t fenceValue)
 {
+    DeferUnregisterTexture(texture, nullptr, fenceValue);
+}
+
+void ImGuiRenderer::DeferUnregisterTexture(ITexture* texture, ID3D12Fence* fence, uint64_t fenceValue)
+{
     if (!texture || !s_isDX12) {
         return;
     }
@@ -239,7 +244,7 @@ void ImGuiRenderer::DeferUnregisterTexture(ITexture* texture, uint64_t fenceValu
         return;
     }
 
-    s_deferredUnregisters.push_back({ it->first, it->second, fenceValue });
+    s_deferredUnregisters.push_back({ it->first, it->second, fence, fenceValue });
     s_textureSlots.erase(it);
 }
 
@@ -247,7 +252,10 @@ void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
 {
     auto it = s_deferredUnregisters.begin();
     while (it != s_deferredUnregisters.end()) {
-        if (it->fenceValue <= completedFenceValue) {
+        const bool completed = it->fence
+            ? (it->fence->GetCompletedValue() >= it->fenceValue)
+            : (it->fenceValue <= completedFenceValue);
+        if (completed) {
             s_freeSlots.push_back(it->slot);
             it = s_deferredUnregisters.erase(it);
         } else {

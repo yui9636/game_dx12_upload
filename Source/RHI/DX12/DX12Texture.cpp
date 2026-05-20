@@ -1,7 +1,9 @@
 ﻿#include "DX12Texture.h"
 #include "Render/Graphics.h"
+#include "Render/ImGuiRenderer.h"
 #include "Console/Logger.h"
 #include <cassert>
+#include <utility>
 
 DXGI_FORMAT DX12Texture::ToDXGIFormat(TextureFormat format) {
     switch (format) {
@@ -134,8 +136,11 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         rtvDesc.Format = dxgiFormat;
         rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
         m_rtvHandle = device->AllocateRTVDescriptor();
-        d3dDevice->CreateRenderTargetView(m_resource.Get(), &rtvDesc, m_rtvHandle);
-        m_hasRTV = true;
+        if (m_rtvHandle.ptr) {
+            d3dDevice->CreateRenderTargetView(m_resource.Get(), &rtvDesc, m_rtvHandle);
+            m_hasRTV = true;
+            m_ownsRTVDescriptor = true;
+        }
     }
 
     // DSV を作成する。
@@ -144,8 +149,11 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         dsvDesc.Format = dsvFormat;
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
         m_dsvHandle = device->AllocateDSVDescriptor();
-        d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
-        m_hasDSV = true;
+        if (m_dsvHandle.ptr) {
+            d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
+            m_hasDSV = true;
+            m_ownsDSVDescriptor = true;
+        }
     }
 
     // SRV を作成する。
@@ -159,8 +167,11 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         else         srvDesc.Format = dxgiFormat;
 
         m_srvHandle = device->AllocateSRVDescriptor();
-        d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
-        m_hasSRV = true;
+        if (m_srvHandle.ptr) {
+            d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
+            m_hasSRV = true;
+            m_ownsSRVDescriptor = true;
+        }
     }
 }
 
@@ -170,6 +181,7 @@ DX12Texture::DX12Texture(DX12Device* device, ID3D12Resource* backBuffer, uint32_
     , m_device(device)
 {
     m_resource = backBuffer; // ComPtr 代入で AddRef する。
+    m_deferResourceRelease = false;
 
     auto desc = backBuffer->GetDesc();
     m_width = static_cast<uint32_t>(desc.Width);
@@ -219,8 +231,11 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> resource,
     }
 
     m_srvHandle = device->AllocateSRVDescriptor();
-    d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
-    m_hasSRV = true;
+    if (m_srvHandle.ptr) {
+        d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
+        m_hasSRV = true;
+        m_ownsSRVDescriptor = true;
+    }
 }
 // text 用色。ure array (full resource + SRV)
 DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
@@ -296,8 +311,11 @@ DX12Texture::DX12Texture(DX12Device* device, uint32_t width, uint32_t height,
         srvDesc.Texture2DArray.FirstArraySlice = 0;
 
         m_srvHandle = device->AllocateSRVDescriptor();
-        d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
-        m_hasSRV = true;
+        if (m_srvHandle.ptr) {
+            d3dDevice->CreateShaderResourceView(m_resource.Get(), &srvDesc, m_srvHandle);
+            m_hasSRV = true;
+            m_ownsSRVDescriptor = true;
+        }
     }
 
     // ここでは DSV を作らない。各 slice が専用 DSV を持つ。array slice constructor を参照。
@@ -321,8 +339,11 @@ DX12Texture::DX12Texture(DX12Device* device, ComPtr<ID3D12Resource> sharedResour
     dsvDesc.Texture2DArray.MipSlice = 0;
 
     m_dsvHandle = device->AllocateDSVDescriptor();
-    d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
-    m_hasDSV = true;
+    if (m_dsvHandle.ptr) {
+        d3dDevice->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
+        m_hasDSV = true;
+        m_ownsDSVDescriptor = true;
+    }
 }
 
 DX12Texture::~DX12Texture()
@@ -331,23 +352,37 @@ DX12Texture::~DX12Texture()
         return;
     }
 
-    if (!m_device || !m_retireFence || m_retireFenceValue == 0) {
+    if (!m_device) {
         return;
     }
 
-    if (m_hasSRV && m_srvHandle.ptr) {
-        m_device->DeferFreeDescriptor(m_srvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::SRV);
+    ID3D12Fence* fence = m_retireFence;
+    uint64_t fenceValue = m_retireFenceValue;
+    if (!fence || fenceValue == 0) {
+        fence = m_device->GetMainFence();
+        fenceValue = m_device->GetMainFenceCurrentValue();
+    }
+
+    if (m_hasSRV) {
+        ImGuiRenderer::DeferUnregisterTexture(this, fence, fenceValue);
+    }
+
+    if (m_hasSRV && m_ownsSRVDescriptor && m_srvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_srvHandle, fence, fenceValue, DX12Device::DescriptorType::SRV);
         m_srvHandle.ptr = 0;
         m_hasSRV = false;
     }
-    if (m_hasRTV && m_rtvHandle.ptr) {
-        m_device->DeferFreeDescriptor(m_rtvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::RTV);
+    if (m_hasRTV && m_ownsRTVDescriptor && m_rtvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_rtvHandle, fence, fenceValue, DX12Device::DescriptorType::RTV);
         m_rtvHandle.ptr = 0;
         m_hasRTV = false;
     }
-    if (m_hasDSV && m_dsvHandle.ptr) {
-        m_device->DeferFreeDescriptor(m_dsvHandle, m_retireFence, m_retireFenceValue, DX12Device::DescriptorType::DSV);
+    if (m_hasDSV && m_ownsDSVDescriptor && m_dsvHandle.ptr) {
+        m_device->DeferFreeDescriptor(m_dsvHandle, fence, fenceValue, DX12Device::DescriptorType::DSV);
         m_dsvHandle.ptr = 0;
         m_hasDSV = false;
+    }
+    if (m_deferResourceRelease && m_resource) {
+        m_device->DeferReleaseResource(std::move(m_resource), fence, fenceValue);
     }
 }

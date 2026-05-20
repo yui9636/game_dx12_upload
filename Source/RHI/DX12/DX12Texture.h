@@ -61,6 +61,10 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_dsvHandle = {};
     D3D12_CPU_DESCRIPTOR_HANDLE m_srvHandle = {};
     bool m_hasRTV = false, m_hasDSV = false, m_hasSRV = false;
+    bool m_ownsRTVDescriptor = false;
+    bool m_ownsDSVDescriptor = false;
+    bool m_ownsSRVDescriptor = false;
+    bool m_deferResourceRelease = true;
     DX12Device* m_device = nullptr;
     ID3D12Fence* m_retireFence = nullptr;
     uint64_t m_retireFenceValue = 0;

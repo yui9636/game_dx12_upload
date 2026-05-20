@@ -1439,10 +1439,9 @@ void EngineKernel::Render()
         }
     }
 
-    // shared offscreen に紐づく deferred unregister を処理する。
-    if (m_sharedOffscreen) {
-        ImGuiRenderer::ProcessDeferredUnregisters(m_sharedOffscreen->GetCompletedFenceValue());
-    }
+    // shared offscreen と main graphics fence に紐づく deferred unregister を処理する。
+    ImGuiRenderer::ProcessDeferredUnregisters(
+        m_sharedOffscreen ? m_sharedOffscreen->GetCompletedFenceValue() : 0);
 
     // shared offscreen は 1 フレーム 1 ジョブだけ進める。
     // 優先度は MaterialPreview > Thumbnail。

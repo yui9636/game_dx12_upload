@@ -42,6 +42,7 @@ public:
     // ITexture を ImGui::Image 用の ImTextureID に変換する。
     static void* GetTextureID(ITexture* texture);
     static void DeferUnregisterTexture(ITexture* texture, uint64_t fenceValue);
+    static void DeferUnregisterTexture(ITexture* texture, ID3D12Fence* fence, uint64_t fenceValue);
     static void ProcessDeferredUnregisters(uint64_t completedFenceValue);
     static bool RebuildFontAtlas();
 
@@ -55,6 +56,7 @@ private:
     struct DeferredTextureSlot {
         const ITexture* texture = nullptr;
         uint32_t slot = 0;
+        ID3D12Fence* fence = nullptr;
         uint64_t fenceValue = 0;
     };
 

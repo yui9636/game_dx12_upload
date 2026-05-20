@@ -44,6 +44,8 @@ public:
     enum class DescriptorType { SRV, RTV, DSV };
     void DeferFreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle, ID3D12Fence* fence,
                              uint64_t fenceValue, DescriptorType type);
+    void DeferReleaseResource(ComPtr<ID3D12Resource> resource, ID3D12Fence* fence,
+                              uint64_t fenceValue);
     void ProcessDeferredFrees();
 
     // 明示的な retire fence を持たない texture 用に main fence へアクセスする。
@@ -58,6 +60,10 @@ public:
     static constexpr uint32_t FRAME_COUNT = 2;
 
 private:
+    static constexpr uint32_t RTV_DESCRIPTOR_COUNT = FRAME_COUNT + 4096;
+    static constexpr uint32_t DSV_DESCRIPTOR_COUNT = 2048;
+    static constexpr uint32_t SRV_DESCRIPTOR_COUNT = 16384;
+
     void CreateDevice();
     void CreateCommandQueue();
     void CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height);
@@ -105,7 +111,13 @@ private:
         uint64_t fenceValue;
         DescriptorType type;
     };
+    struct DeferredResourceRelease {
+        ComPtr<ID3D12Resource> resource;
+        ID3D12Fence* fence;
+        uint64_t fenceValue;
+    };
     std::vector<DeferredDescriptorFree> m_deferredFrees;
+    std::vector<DeferredResourceRelease> m_deferredResources;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeSRVList;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeRTVList;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_freeDSVList;

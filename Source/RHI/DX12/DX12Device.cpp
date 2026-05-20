@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <vector>
 #include <cstdio>
+#include <utility>
 
 #ifdef _DEBUG
 #include <d3d12sdklayers.h>
@@ -145,7 +146,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // RTV を作成する。 heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = FRAME_COUNT + 4096; // back buffer、render target、editor / history buffer 用。
+        desc.NumDescriptors = RTV_DESCRIPTOR_COUNT; // back buffer、render target、editor / history buffer 用。
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
@@ -154,7 +155,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // DSV を作成する。 heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 2048;
+        desc.NumDescriptors = DSV_DESCRIPTOR_COUNT;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
@@ -163,7 +164,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // CBV/SRV/UAV heap (shader visible) - 将来のバインドレス用に予約
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 16384;
+        desc.NumDescriptors = SRV_DESCRIPTOR_COUNT;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavHeap));
@@ -175,7 +176,7 @@ void DX12Device::CreateDescriptorHeaps() {
     // SRV を作成する。 は必ずこの Non-Shader-Visible ヒープに作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-        desc.NumDescriptors = 16384;
+        desc.NumDescriptors = SRV_DESCRIPTOR_COUNT;
         desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavStagingHeap));
@@ -271,6 +272,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateRTVDescriptor() {
         m_freeRTVList.pop_back();
         return handle;
     }
+    if (m_nextRtvDescriptor >= RTV_DESCRIPTOR_COUNT) {
+        LOG_ERROR("[DX12Device] RTV descriptor heap exhausted. capacity=%u", RTV_DESCRIPTOR_COUNT);
+        return {};
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextRtvDescriptor++) * m_rtvDescriptorSize;
     return handle;
@@ -281,6 +286,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateDSVDescriptor() {
         auto handle = m_freeDSVList.back();
         m_freeDSVList.pop_back();
         return handle;
+    }
+    if (m_nextDsvDescriptor >= DSV_DESCRIPTOR_COUNT) {
+        LOG_ERROR("[DX12Device] DSV descriptor heap exhausted. capacity=%u", DSV_DESCRIPTOR_COUNT);
+        return {};
     }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextDsvDescriptor++) * m_dsvDescriptorSize;
@@ -293,6 +302,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateSRVDescriptor() {
         m_freeSRVList.pop_back();
         return handle;
     }
+    if (m_nextStagingSrvDescriptor >= SRV_DESCRIPTOR_COUNT) {
+        LOG_ERROR("[DX12Device] SRV descriptor heap exhausted. capacity=%u", SRV_DESCRIPTOR_COUNT);
+        return {};
+    }
     D3D12_CPU_DESCRIPTOR_HANDLE handle = m_cbvSrvUavStagingHeap->GetCPUDescriptorHandleForHeapStart();
     handle.ptr += static_cast<SIZE_T>(m_nextStagingSrvDescriptor++) * m_cbvSrvUavDescriptorSize;
     return handle;
@@ -304,7 +317,22 @@ void DX12Device::DeferFreeDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE handle, ID3D12F
     m_deferredFrees.push_back({ handle, fence, fenceValue, type });
 }
 
+void DX12Device::DeferReleaseResource(ComPtr<ID3D12Resource> resource, ID3D12Fence* fence,
+                                      uint64_t fenceValue) {
+    if (!resource) return;
+    m_deferredResources.push_back({ std::move(resource), fence, fenceValue });
+}
+
 void DX12Device::ProcessDeferredFrees() {
+    auto resourceIt = m_deferredResources.begin();
+    while (resourceIt != m_deferredResources.end()) {
+        if (!resourceIt->fence || resourceIt->fence->GetCompletedValue() >= resourceIt->fenceValue) {
+            resourceIt = m_deferredResources.erase(resourceIt);
+        } else {
+            ++resourceIt;
+        }
+    }
+
     auto it = m_deferredFrees.begin();
     while (it != m_deferredFrees.end()) {
         if (!it->fence || it->fence->GetCompletedValue() >= it->fenceValue) {
