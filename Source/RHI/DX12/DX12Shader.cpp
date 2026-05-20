@@ -6,6 +6,7 @@
 DX12Shader::DX12Shader(ShaderType type, const std::string& fileName)
     : m_type(type)
 {
+    // 事前コンパイル済み .cso をそのまま読み、PSO 作成時の bytecode として保持する。
     std::ifstream file(fileName, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         assert(false && "Failed to open shader file");

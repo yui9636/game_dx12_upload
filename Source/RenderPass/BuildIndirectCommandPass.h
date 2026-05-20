@@ -3,6 +3,7 @@
 #include "RenderPass/IRenderPass.h"
 #include <vector>
 
+// prepared instance から ExecuteIndirect 用 DrawArgs と command metadata を作る pass。
 class BuildIndirectCommandPass : public IRenderPass {
 public:
     std::string GetName() const override { return "BuildIndirectCommandPass"; }
@@ -12,6 +13,7 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
+    // batch 単位に並列構築した結果。最後に main thread で連結する。
     struct BatchCommandBuildResult
     {
         std::vector<IndirectDrawCommand> drawCommands;

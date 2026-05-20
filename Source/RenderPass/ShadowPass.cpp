@@ -12,6 +12,7 @@
 
 void ShadowPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // Graphics 側で import された shadow texture を書き込み対象として宣言する。
     m_hShadowMap = builder.GetHandle("ShadowMap");
 
     if (m_hShadowMap.IsValid()) {
@@ -21,6 +22,7 @@ void ShadowPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 
 void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) {
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12 && rc.pendingAsyncComputeFenceValue != 0) {
+        // GPU culling を async compute で投げた frame では、shadow が draw args を読む前に wait する。
         if (auto* dx12Device = Graphics::Instance().GetDX12Device()) {
             dx12Device->QueueGraphicsWaitForCompute(rc.pendingAsyncComputeFenceValue);
             rc.prepMetrics.asyncComputeWaitCount++;
@@ -31,6 +33,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
     auto shadowMap = const_cast<ShadowMap*>(rc.shadowMap);
     if (!shadowMap) return;
 
+    // cascade 更新中に RenderContext の camera 行列が変わるため、pass 終了時に戻す。
     auto mainView = rc.viewMatrix;
     auto mainProj = rc.projectionMatrix;
     auto mainCamPos = rc.cameraPosition;
@@ -44,6 +47,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
     uint32_t fallbackBatchDraws = 0;
 
     {
+        // lighting shader と shadow shader が使う cascade 行列を共通 buffer に更新する。
         CbShadowMap shadow = {};
         for (int i = 0; i < ShadowMap::CASCADE_COUNT; ++i) {
             shadow.lightViewProjections[i] = shadowMap->GetLightViewProjection(i);
@@ -66,6 +70,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         shadowMap->BeginCascade(rc, i);
 
         if (!rc.activeDrawCommands.empty() || !rc.activeSkinnedCommands.empty()) {
+            // 前段で準備された indirect/instance command があればそれを使って shadow を描く。
             if (rc.activeInstanceBuffer && rc.activeDrawArgsBuffer && !rc.gpuDrivenDispatchGroups.empty()) {
                 for (const auto& group : rc.gpuDrivenDispatchGroups) {
                     if (!group.modelResource || !group.key.castShadow || !group.supportsInstancing) {
@@ -116,6 +121,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
                 }
             }
         } else {
+            // 前処理 command が無い場合は RenderQueue の batch を直接描く fallback。
             for (const auto& batch : queue.opaqueInstanceBatches) {
                 if (!batch.modelResource || !batch.key.castShadow) {
                     continue;
@@ -129,6 +135,7 @@ void ShadowPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
     }
     shadowMap->End(rc);
     if (shadowMap->GetTexture()) {
+        // 後段の DeferredLighting が shadow map を SRV として読める状態へ戻す。
         rc.commandList->TransitionBarrier(shadowMap->GetTexture(), ResourceState::ShaderResource);
     }
 

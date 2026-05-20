@@ -13,6 +13,7 @@
 
 FinalBlitPass::FinalBlitPass(IResourceFactory* factory)
 {
+    // DisplayColor の実フォーマットに合わせて final blit 用 PSO を作る。
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/FullScreenQuadVS.cso");
     m_ps = factory->CreateShader(ShaderType::Pixel, "Data/Shader/FinalBlitPS.cso");
 
@@ -37,6 +38,7 @@ FinalBlitPass::FinalBlitPass(IResourceFactory* factory)
 
 void FinalBlitPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // SceneColor を読み、DisplayColor を最終出力として更新する。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDisplayColor = builder.GetHandle("DisplayColor");
 
@@ -57,6 +59,7 @@ void FinalBlitPass::Execute(FrameGraphResources& resources, const RenderQueue& q
         return;
     }
 
+    // full-screen quad で SceneColor を DisplayColor へコピーする。
     rc.commandList->TransitionBarrier(sceneColor, ResourceState::ShaderResource);
     rc.commandList->TransitionBarrier(displayColor, ResourceState::RenderTarget);
     rc.commandList->SetPipelineState(m_pso.get());

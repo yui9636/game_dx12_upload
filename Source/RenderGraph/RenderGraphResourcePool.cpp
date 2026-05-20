@@ -36,6 +36,7 @@ void RenderGraphResourcePool::ReleaseTexture(const TextureDesc& desc, std::uniqu
     }
 }
 
+// Tick は transient pool のメモリ肥大を防ぐため、10 frame 以上再利用されていない texture を捨てる。
 void RenderGraphResourcePool::Tick(uint64_t currentFrame) {
     m_pool.erase(
         std::remove_if(m_pool.begin(), m_pool.end(),

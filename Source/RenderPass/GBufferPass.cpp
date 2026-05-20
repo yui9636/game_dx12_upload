@@ -10,6 +10,7 @@
 
 void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // render size が未設定なら Graphics の画面サイズと renderScale から決める。
     uint32_t w = rc.renderWidth;
     uint32_t h = rc.renderHeight;
     if (w == 0 || h == 0) {
@@ -19,7 +20,7 @@ void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     }
 
 
-    // 1. シェーダーの要求するフォーマットで内部テクスチャを作成
+    // GBuffer shader が出力する semantic に合わせて内部 texture を作成する。
     TextureDesc desc0{}; // Slot 0 は Albedo / Metallic。
     desc0.width = w; desc0.height = h;
     desc0.format = TextureFormat::R16G16B16A16_FLOAT;
@@ -50,8 +51,7 @@ void GBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
     depthDesc.bindFlags = TextureBindFlags::DepthStencil | TextureBindFlags::ShaderResource;
     m_hDepth = builder.CreateTexture("GBufferDepth", depthDesc);
 
-    // 2. 書き込み宣言と掲示板（Blackboard）への登録
-    // これをしないと DeferredLightingPass が GetHandle できません。
+    // 書き込み宣言と Blackboard 登録。後段 pass は名前でこれらの handle を取得する。
     m_hGBuffer0 = builder.Write(m_hGBuffer0);
     m_hGBuffer1 = builder.Write(m_hGBuffer1);
     m_hGBuffer2 = builder.Write(m_hGBuffer2);
@@ -74,7 +74,7 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
         rc.pendingAsyncComputeFenceValue = 0;
     }
 
-    // グラフから実体を取得
+    // FrameGraph が確保した実体 texture を取得する。
     ITexture* rtvs[] = {
         resources.GetTexture(m_hGBuffer0),
         resources.GetTexture(m_hGBuffer1),
@@ -92,14 +92,14 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
         return;
     }
 
-    // クリアとターゲット設定
+    // MRT と depth をクリアして GBuffer 書き込み先に設定する。
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     for (int i = 0; i < 4; ++i) rc.commandList->ClearColor(rtvs[i], clearColor);
     rc.commandList->ClearDepthStencil(dsv, 1.0f, 0);
 
     rc.commandList->SetRenderTargets(4, rtvs, dsv);
 
-    // RenderContext の同期
+    // debug 表示や後段 pass が使う RenderContext の参照も同期する。
     rc.mainRenderTarget = rtvs[0];
     rc.mainDepthStencil = dsv;
     rc.sceneColorTexture = rtvs[0];
@@ -111,7 +111,7 @@ void GBufferPass::Execute(FrameGraphResources& resources, const RenderQueue& que
     rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)rtvs[0]->GetWidth(), (float)rtvs[0]->GetHeight());
     rc.commandList->SetViewport(rc.mainViewport);
 
-    // モデル描画
+    // 前処理済み command があれば indirect/instancing 経路、無ければ RenderQueue を直接描く。
     auto renderer = rc.modelRendererOverride ? rc.modelRendererOverride : Graphics::Instance().GetModelRenderer();
     if (!renderer) {
         LOG_ERROR("[GBufferPass] ModelRenderer is null");

@@ -14,6 +14,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
     : m_device(device), m_rootSignature(rootSig)
     , m_useDeviceFrameAllocator(useDeviceFrameAllocator)
 {
+    // main frame 用なら device の allocator、単独用途なら自前 allocator を使う。
     ID3D12CommandAllocator* initialAllocator = nullptr;
     if (m_useDeviceFrameAllocator) {
         initialAllocator = device->GetCurrentAllocator();
@@ -40,6 +41,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
         65536, true);
 
+    // draw ごとの小さな定数バッファを積む frame-local upload ring。
     m_dynamicCbRingSize = 4u * 1024u * 1024u;
     D3D12_HEAP_PROPERTIES uploadHeap = {};
     uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -64,6 +66,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
         assert(SUCCEEDED(hr));
     }
 
+    // DrawIndexedInstanced 用 indirect command signature。
     D3D12_INDIRECT_ARGUMENT_DESC drawIndexedArg = {};
     drawIndexedArg.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
@@ -78,6 +81,7 @@ DX12CommandList::DX12CommandList(DX12Device* device, DX12RootSignature* rootSig,
         IID_PPV_ARGS(&m_drawIndexedInstancedSignature));
     assert(SUCCEEDED(hr));
 
+    // 未設定 texture slot へ安全な null SRV を入れるための CPU heap。
     D3D12_DESCRIPTOR_HEAP_DESC nullHeapDesc = {};
     nullHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     nullHeapDesc.NumDescriptors = 3;
@@ -145,11 +149,13 @@ void DX12CommandList::Begin() {
 }
 
 void DX12CommandList::End() {
+    // Close 前に溜めた barrier を必ず吐き出す。
     FlushPendingBarriers();
     m_commandList->Close();
 }
 
 void DX12CommandList::Submit() {
+    // direct queue にこの command list を投入する。fence signal は device 側の frame 管理で行う。
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_device->GetCommandQueue()->ExecuteCommandLists(1, lists);
 }
@@ -256,6 +262,7 @@ void DX12CommandList::PSSetDynamicConstantBuffer(uint32_t slot, const void* data
 // Draw 系処理。
 
 void DX12CommandList::FlushPSO() {
+    // Set* 系で蓄積した PipelineStateDesc から必要になったタイミングで native PSO を作る。
     if (!m_psoDirty) return;
     auto* pso = m_psoCache->GetOrCreate(m_pendingDesc);
     if (pso) {
@@ -295,6 +302,7 @@ void DX12CommandList::DrawIndexedInstanced(uint32_t indexCountPerInstance, uint3
 void DX12CommandList::ExecuteIndexedIndirect(IBuffer* argumentBuffer, uint32_t argumentOffsetBytes) {
     if (!argumentBuffer || !m_drawIndexedInstancedSignature) return;
 
+    // argumentBuffer は D3D12_DRAW_INDEXED_ARGUMENTS を含む GPU buffer。
     auto* dx12Buffer = static_cast<DX12Buffer*>(argumentBuffer);
     if (!dx12Buffer || !dx12Buffer->GetNativeResource()) return;
 
@@ -322,6 +330,7 @@ void DX12CommandList::ExecuteIndexedIndirectMulti(
     FlushPSO();
     FlushPendingBarriers();
 
+    // countBuffer がある場合は GPU culling 後の実行数を ExecuteIndirect に渡す。
     ID3D12Resource* countRes = nullptr;
     if (countBuffer) {
         auto* dx12Count = static_cast<DX12Buffer*>(countBuffer);
@@ -436,7 +445,7 @@ void DX12CommandList::EnsureSrvBlock() {
     // SetGraphicsRootSignature を再呼出しすると全ルートパラメータ（CBV等）が無効化される。
 
     if (!m_srvBlockAllocated) {
-        // 64スロット分の連続ディスクリプタブロックを確保
+        // 64 スロット分の連続ディスクリプタブロックを確保し、まず null SRV で埋める。
         m_srvBlockCpuBase = m_frameSrvAllocator->AllocateBlock(kSrvSlotCount);
         m_srvBlockGpuBase = m_frameSrvAllocator->GetGPUHandle(m_srvBlockCpuBase);
         m_srvBlockAllocated = true;
@@ -473,7 +482,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12CommandList::GetNullSrvHandle(NullSrvKind kind) 
 
 void DX12CommandList::BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count) {
     if (!bindings || count == 0) return;
-    // Draw後の最初のテクスチャバインドで新ブロック確保
+    // Draw 後の最初の texture bind では新しい descriptor block を確保する。
     if (m_srvDirtyAfterDraw) {
         m_srvBlockAllocated = false;
         m_srvDirtyAfterDraw = false;
@@ -507,7 +516,7 @@ void DX12CommandList::PSSetTexture(uint32_t slot, ITexture* texture) {
 
 void DX12CommandList::PSSetTextures(uint32_t startSlot, uint32_t numTextures, ITexture* const* ppTextures) {
     if (numTextures == 0 || !ppTextures) return;
-    // Draw後の最初のテクスチャバインドで新ブロック確保
+    // Draw 後の descriptor 上書きを避けるため、新しい block に差し替える。
     if (m_srvDirtyAfterDraw) {
         m_srvBlockAllocated = false;
         m_srvDirtyAfterDraw = false;
@@ -644,6 +653,7 @@ void DX12CommandList::SetRenderTarget(ITexture* rt, ITexture* depthStencil) {
 }
 
 void DX12CommandList::SetRenderTargets(uint32_t numRTs, ITexture* const* rts, ITexture* depthStencil) {
+    // OMSetRenderTargets 用の CPU descriptor handle を RHI texture から取り出す。
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandles[8] = {};
     uint32_t rtvCount = 0;
 
@@ -707,6 +717,7 @@ void DX12CommandList::TransitionBarrier(ITexture* texture, ResourceState newStat
 
     auto* dx12Tex = static_cast<DX12Texture*>(texture);
 
+    // まだ flush していない barrier が同じ resource を触っていれば、差分を畳み込む。
     for (auto& pending : m_pendingBarriers) {
         if (pending.Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION) continue;
         if (pending.Transition.pResource != dx12Tex->GetNativeResource()) continue;
@@ -744,6 +755,7 @@ void DX12CommandList::TransitionBarrier(ITexture* texture, ResourceState newStat
 
 void DX12CommandList::FlushPendingBarriers() {
     if (!m_pendingBarriers.empty()) {
+        // no-op / null resource barrier を除外してからまとめて発行する。
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
         barriers.reserve(m_pendingBarriers.size());
         for (const auto& barrier : m_pendingBarriers) {

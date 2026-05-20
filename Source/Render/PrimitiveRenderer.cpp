@@ -4,6 +4,7 @@
 
 PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 {
+	// DX11 専用の簡易 primitive renderer。position/color の dynamic vertex buffer を使う。
 	D3D11_INPUT_ELEMENT_DESC inputElementDesc[]
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -40,6 +41,7 @@ PrimitiveRenderer::PrimitiveRenderer(ID3D11Device* device)
 
 void PrimitiveRenderer::AddVertex(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT4& color)
 {
+	// Render() まで CPU 側 vector に積み、まとめて dynamic buffer へ転送する。
 	Vertex& v = vertices.emplace_back();
 	v.position = position;
 	v.color = color;
@@ -47,6 +49,7 @@ void PrimitiveRenderer::AddVertex(const DirectX::XMFLOAT3& position, const Direc
 
 void PrimitiveRenderer::DrawAxis(const DirectX::XMFLOAT4X4& transform, const DirectX::XMFLOAT4& color)
 {
+	// transform の basis vector を RGB の 3 軸線として追加する。
 	DirectX::XMMATRIX W = DirectX::XMLoadFloat4x4(&transform);
 	DirectX::XMFLOAT3 p, x, y, z;
 	DirectX::XMStoreFloat3(&p, W.r[3]);
@@ -63,6 +66,7 @@ void PrimitiveRenderer::DrawAxis(const DirectX::XMFLOAT4X4& transform, const Dir
 
 void PrimitiveRenderer::DrawGrid(int subdivisions, float scale)
 {
+	// 単位 grid を subdivisions * scale で拡大し、XZ 平面に line を追加する。
 	int numLines = (subdivisions + 1) * 2;
 	int vertexCount = numLines * 2;
 
@@ -157,6 +161,7 @@ void PrimitiveRenderer::Render(
 	const DirectX::XMFLOAT4X4& projection,
 	D3D11_PRIMITIVE_TOPOLOGY primitiveTopology)
 {
+	// 蓄積された頂点を VertexCapacity ごとに分割して描画する。
 	dc->VSSetShader(vertexShader.Get(), nullptr, 0);
 	dc->PSSetShader(pixelShader.Get(), nullptr, 0);
 	dc->IASetInputLayout(inputLayout.Get());
@@ -183,6 +188,7 @@ void PrimitiveRenderer::Render(
 
 	while (start < totalVertexCount)
 	{
+		// WRITE_DISCARD で一時頂点を流し込み、描画後に次 chunk へ進む。
 		D3D11_MAPPED_SUBRESOURCE mappedSubresource;
 		HRESULT hr = dc->Map(vertexBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
 		_ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));

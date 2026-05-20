@@ -13,6 +13,7 @@ VolumetricFogPass::~VolumetricFogPass() = default;
 
 VolumetricFogPass::VolumetricFogPass(IResourceFactory* factory)
 {
+    // raymarch と blur は同じ render target format の full-screen PSO を共有して作る。
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/DeferredLightingVS.cso");
     m_psRaymarch = factory->CreateShader(ShaderType::Pixel, "Data/Shader/VolumetricFogPS.cso");
     m_psBlur = factory->CreateShader(ShaderType::Pixel, "Data/Shader/VolumetricFogBlurPS.cso");
@@ -39,7 +40,7 @@ VolumetricFogPass::VolumetricFogPass(IResourceFactory* factory)
 
 void VolumetricFogPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
-    // 1. 入力の要求
+    // GBuffer2 の world position/depth を fog raymarch の入力として読む。
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
     if (m_hGBuffer2.IsValid()) builder.Read(m_hGBuffer2);
 
@@ -48,8 +49,8 @@ void VolumetricFogPass::Setup(FrameGraphBuilder& builder, const RenderContext& r
         m_hVolumetricFogBlur = {};
         return;
     }
-// ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
-uint32_t renderW = rc.renderWidth;
+    // 実 render 解像度から half-resolution buffer のサイズを決める。
+    uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
         float renderScale = Graphics::Instance().GetRenderScale();
@@ -57,18 +58,18 @@ uint32_t renderW = rc.renderWidth;
         renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
     }
 
-    // 2. ハーフ解像度のテクスチャ設計図
+    // half-resolution の raw fog / blur fog を同じ desc で用意する。
     TextureDesc fogDesc{};
     fogDesc.width = renderW / 2;
     fogDesc.height = renderH / 2;
     fogDesc.format = TextureFormat::R16G16B16A16_FLOAT;
     fogDesc.bindFlags = TextureBindFlags::RenderTarget | TextureBindFlags::ShaderResource;
 
-    // 3. パス1の出力
+    // pass 1 の出力。
     m_hVolumetricFog = builder.CreateTexture("VolumetricFog", fogDesc);
     m_hVolumetricFog = builder.Write(m_hVolumetricFog);
 
-    // 4. パス2の出力（最終結果）
+    // pass 2 の出力。DeferredLighting はこの blur 済み texture を読む。
     m_hVolumetricFogBlur = builder.CreateTexture("VolumetricFogBlur", fogDesc);
     m_hVolumetricFogBlur = builder.Write(m_hVolumetricFogBlur);
 
@@ -91,11 +92,11 @@ void VolumetricFogPass::Execute(FrameGraphResources& resources, const RenderQueu
     rc.commandList->SetIndexBuffer(nullptr, IndexFormat::Uint32, 0);
 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-// ★ 修正：実際のテクスチャ解像度(428x241相当)をビューポートに使用する
-float halfWidth = (float)fogTex->GetWidth();
+    // viewport は実際に確保された half-resolution texture に合わせる。
+    float halfWidth = (float)fogTex->GetWidth();
     float halfHeight = (float)fogTex->GetHeight();
-// パス1: レイマーチング (生フォグ生成)
-rc.commandList->ClearColor(fogTex, clearColor);
+    // pass 1: GBuffer2 から距離を復元し、生フォグを生成する。
+    rc.commandList->ClearColor(fogTex, clearColor);
     rc.commandList->SetRenderTargets(1, &fogTex, nullptr);
 
     rc.mainRenderTarget = fogTex;
@@ -119,8 +120,8 @@ rc.commandList->ClearColor(fogTex, clearColor);
         rc.commandList->PSSetTexture(0, gbuffer2);
     }
     rc.commandList->Draw(3, 0);
-// パス2: 空間ブラー (バンディングノイズ除去)
-rc.commandList->ClearColor(blurTex, clearColor);
+    // pass 2: 空間ブラーでバンディングノイズを抑える。
+    rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTargets(1, &blurTex, nullptr);
 
     rc.mainRenderTarget = blurTex;
@@ -144,7 +145,7 @@ rc.commandList->ClearColor(blurTex, clearColor);
 
     rc.commandList->Draw(3, 0);
 
-    // お片付け
+    // DX11 経路では shader resource / sampler を明示的に外して次 pass への漏れを防ぐ。
     if (Graphics::Instance().GetAPI() != GraphicsAPI::DX12) {
         ITexture* null2[2] = { nullptr, nullptr };
         rc.commandList->PSSetTextures(0, 2, null2);

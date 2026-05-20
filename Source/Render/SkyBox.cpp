@@ -25,6 +25,7 @@ Skybox* Skybox::Get(IResourceFactory* factory, const std::string& filename)
 {
     if (filename.empty()) return nullptr;
 
+    // 同じ cubemap path は shared cache から返す。
     auto it = s_cache.find(filename);
     if (it != s_cache.end()) return it->second.get();
 
@@ -36,18 +37,21 @@ Skybox* Skybox::Get(IResourceFactory* factory, const std::string& filename)
 
 Skybox::Skybox(IResourceFactory* factory, const char* filename)
 {
+    // まず ResourceManager 経由の通常 cubemap SRV を取得する。
     m_cubeTexture = ResourceManager::Instance().GetTexture(filename);
     LOG_INFO("[Skybox] load path=%s texture=%p", filename, m_cubeTexture.get());
 
     std::string resolvedPath = PathResolver::Resolve(filename);
     std::wstring widePath(resolvedPath.begin(), resolvedPath.end());
 
+    // DX12 では一部環境で cubemap SRV の扱いが不安定だったため、6 面 texture へ展開する fallback を用意する。
     DirectX::TexMetadata metadata = {};
     DirectX::ScratchImage image;
     HRESULT loadHr = DirectX::LoadFromDDSFile(widePath.c_str(), DirectX::DDS_FLAGS_NONE, &metadata, image);
     if (SUCCEEDED(loadHr) && metadata.arraySize >= 6) {
         bool allFacesReady = true;
         for (size_t face = 0; face < 6; ++face) {
+            // cubemap の各 face/mip を 2D ScratchImage にコピーする。
             DirectX::ScratchImage faceImage;
             HRESULT initHr = faceImage.Initialize2D(metadata.format, metadata.width, metadata.height, 1, metadata.mipLevels);
             if (FAILED(initHr)) {
@@ -74,6 +78,7 @@ Skybox::Skybox(IResourceFactory* factory, const char* filename)
                 break;
             }
 
+            // skybox shader の fallback path では 2D face texture として sampling するため、必要なら扱いやすい UNORM へ変換する。
             const DirectX::ScratchImage* uploadImage = &faceImage;
             DirectX::ScratchImage convertedFace;
             if (metadata.format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
@@ -87,6 +92,7 @@ Skybox::Skybox(IResourceFactory* factory, const char* filename)
                 }
             }
 
+            // face ごとに RHI texture を作り、PSSetTextures(0..5) で bind できるようにする。
             auto faceTexture = factory->CreateTextureFromMemory(*uploadImage, uploadImage->GetMetadata());
             if (!faceTexture) {
                 allFacesReady = false;
@@ -100,6 +106,7 @@ Skybox::Skybox(IResourceFactory* factory, const char* filename)
         LOG_INFO("[Skybox] face-texture path=%s enabled=%d", filename, m_hasFaceTextures ? 1 : 0);
 
         if (m_hasFaceTextures && Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+            // 旧 dedicated heap path の名残。現在の Draw では標準 PSSetTextures 経路を使う。
             auto* dx12Device = Graphics::Instance().GetDX12Device();
             auto* d3dDevice = dx12Device ? dx12Device->GetDevice() : nullptr;
             if (d3dDevice) {
@@ -143,6 +150,7 @@ Skybox::Skybox(IResourceFactory* factory, const char* filename)
         LOG_WARN("[Skybox] failed to load cubemap faces path=%s hr=0x%08X", filename, static_cast<unsigned>(loadHr));
     }
 
+    // screen quad 相当の triangle strip で skybox を描く。
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/SkyBoxVS.cso");
     m_ps = factory->CreateShader(ShaderType::Pixel, "Data/Shader/SkyBoxPS.cso");
     m_cb = factory->CreateBuffer(sizeof(Constants), BufferType::Constant);
@@ -169,11 +177,13 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
 {
     rc.commandList->SetPipelineState(m_pso.get());
 
+    // pixel shader 側で view ray を復元するため、VP の逆行列を渡す。
     Constants data;
     DirectX::XMMATRIX vp = DirectX::XMLoadFloat4x4(&viewProjection);
     DirectX::XMStoreFloat4x4(&data.inverseViewProjection, DirectX::XMMatrixInverse(nullptr, vp));
 
     if (auto* dx12Cmd = dynamic_cast<DX12CommandList*>(rc.commandList)) {
+        // DX12 は draw ごとに dynamic CB を割り当てて constant buffer 上書きを避ける。
         dx12Cmd->VSSetDynamicConstantBuffer(0, &data, sizeof(data));
         dx12Cmd->PSSetDynamicConstantBuffer(0, &data, sizeof(data));
     } else {
@@ -185,6 +195,7 @@ void Skybox::Draw(const RenderContext& rc, const DirectX::XMFLOAT4X4& viewProjec
     // すべての API で標準の PSSetTextures 経路を使う。
     // SetDescriptorHeaps の過剰な切り替えでルートディスクリプタテーブルが無効化されるのを避ける。
     if (m_hasFaceTextures) {
+        // fallback path は t0-t5 に 6 面 texture を bind する。
         ITexture* faces[6] = {
             m_faceTextures[0].get(), m_faceTextures[1].get(), m_faceTextures[2].get(),
             m_faceTextures[3].get(), m_faceTextures[4].get(), m_faceTextures[5].get()

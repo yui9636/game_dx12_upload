@@ -35,6 +35,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
+    // GPU particle は page 単位の shared arena で複数 emitter をまとめて管理する。
     constexpr uint32_t kEffectParticleRibbonHistoryLength = 8u;
     constexpr uint32_t kEffectParticlePageSize = 8192u;
     constexpr uint32_t kEffectParticleArenaGrowthPages = 64u;
@@ -47,6 +48,7 @@ namespace
     // readback 間引き: emitter ごとに N フレームおきにだけ readback する。
     constexpr uint32_t kReadbackThrottleInterval = 2u;
 
+    // shared arena の各 page がどの段階にあるかを CPU 側で追跡する。
     enum class ParticlePageState : uint32_t
     {
         Free = 0,
@@ -63,6 +65,7 @@ namespace
         float pad[3] = {};
     };
 
+    // GPU 側 SoA/旧 AoS 変換で使う particle 初期値。HLSL の layout と 16 byte alignment を合わせる。
     struct EffectParticleGpuData
     {
         DirectX::XMFLOAT4 parameter = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -91,6 +94,7 @@ namespace
         uint32_t dummy = 0;
     };
 
+    // emit/update compute shader に渡す emitter 単位の simulation parameter。
     struct EffectParticleSimulationConstants
     {
         DirectX::XMFLOAT4 originCurrentTime = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -203,6 +207,7 @@ namespace
         uint64_t submittedFrame = 0;
     };
 
+    // CPU が保持する page table。GPU buffer 内の page と owner emitter の対応を表す。
     struct ParticlePageMetadata
     {
         uint32_t pageHandle = 0;
@@ -219,6 +224,7 @@ namespace
         uint32_t flags = 0;
     };
 
+    // emitter(runtimeInstanceId) ごとの arena 割り当てと、その emitter 専用 counter/indirect buffer。
     struct ParticleArenaAllocation
     {
         uint32_t basePage = 0;
@@ -249,6 +255,7 @@ namespace
     constexpr uint32_t kBillboardHeaderStride = 8u;
     constexpr uint32_t kMeshAttribHotStride = 64u;
 
+    // 全 emitter が共有する大きな GPU buffer 群。particle data を SoA 形式で保持する。
     struct ParticleSharedArenaBuffers
     {
         // SoA stream（単一 particleDataBuffer を置き換える）
@@ -335,6 +342,7 @@ namespace
         EffectParticleBlendMode blendMode = EffectParticleBlendMode::PremultipliedAlpha;
     };
 
+    // EffectParticlePass が DX12 backend で使う永続 resource 一式。
     struct EffectParticleDx12Resources
     {
         ComPtr<ID3D12RootSignature> simulationRootSignature;
@@ -2307,6 +2315,7 @@ namespace
 
 void EffectParticlePass::Setup(FrameGraphBuilder& builder, const RenderContext&)
 {
+    // particle は SceneColor に合成し、Depth は depth test / depth binning に使う。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
 
@@ -2360,6 +2369,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     const D3D12_GPU_DESCRIPTOR_HANDLE curlNoiseGpuHandle =
         OffsetGpuHandle(particleResources.textureHeapGpu, particleResources.textureHeapDescriptorSize, 2u);
 
+    // queue から有効な packet だけを取り出し、後で sort mode に応じて描画順を整える。
     std::vector<const EffectParticlePacket*> sortedPackets;
     sortedPackets.reserve(queue.effectParticlePackets.size());
     for (const auto& packet : queue.effectParticlePackets) {
@@ -2382,6 +2392,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         return;
     }
 
+    // 既存 allocation と今 frame の packet から、shared arena に必要な page 数を見積もる。
     std::unordered_map<uint32_t, uint32_t> requiredPagesPerRuntime;
     requiredPagesPerRuntime.reserve(particleResources.runtimeAllocations.size() + sortedPackets.size());
     for (const auto& [runtimeInstanceId, allocation] : particleResources.runtimeAllocations) {
@@ -2425,6 +2436,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         return;
     }
 
+    // translucent particle の見た目が破綻しないよう、sort mode と camera 距離で安定 sort する。
     std::stable_sort(sortedPackets.begin(), sortedPackets.end(),
         [&rc](const EffectParticlePacket* a, const EffectParticlePacket* b) {
             const uint32_t priorityA = GetParticleSortPriority(a->sortMode);
@@ -2444,6 +2456,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             return false;
         });
 
+    // simulation 後に draw mode ごとへ分け、各 pipeline の ExecuteIndirect 入力にする。
     std::vector<BillboardDrawEntry> billboardDrawEntries;
     std::vector<RibbonDrawEntry> ribbonDrawEntries;
     std::vector<MeshDrawEntry> meshDrawEntries;
@@ -2451,6 +2464,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     ribbonDrawEntries.reserve(sortedPackets.size());
     meshDrawEntries.reserve(sortedPackets.size());
 
+    // EffectGraph の packet 値を HLSL 用 constant buffer layout に詰める。
     auto makeSimulationConstants = [&](const EffectParticlePacket& packet, const ParticleArenaAllocation& runtimeBuffers, float deltaTime, float particleLifetime, uint32_t dispatchCount)
     {
         EffectParticleSimulationConstants constants{};
@@ -2623,6 +2637,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         nativeCommandList->SetComputeRootDescriptorTable(11, curlNoiseGpuHandle);
     };
 
+    // emitter ごとに必要なら初期化、emit、update、alive list 構築、indirect args 作成まで行う。
     for (const EffectParticlePacket* packet : sortedPackets) {
         ParticleArenaAllocation* runtimeBuffers = EnsureRuntimeAllocation(particleResources, factory, packet->runtimeInstanceId, packet->maxParticles, packet->drawMode);
         if (!runtimeBuffers) {
@@ -2742,6 +2757,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
         }
 
         if (needsSimulation) {
+            // simulation 系 compute shader が書く buffer を UAV 状態へ集める。
             TransitionBuffer(nativeCommandList, sharedHotBuffer->GetNativeResource(), particleResources.sharedArena.billboardHotState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedWarmBuffer->GetNativeResource(), particleResources.sharedArena.billboardWarmState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             TransitionBuffer(nativeCommandList, sharedColdBuffer->GetNativeResource(), particleResources.sharedArena.billboardColdState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -2942,6 +2958,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             TransitionBuffer(nativeCommandList, sharedDepthBinIndexBuffer->GetNativeResource(), particleResources.sharedArena.depthBinIndexState, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
 
+        // draw mode ごとに後段の graphics pipeline へ渡す entry を作る。
         if (packet->drawMode == EffectParticleDrawMode::Mesh) {
             meshDrawEntries.push_back({ packet, aliveListGpuVa, hotGpuVa, warmGpuVa, headerGpuVa, meshAttribHotGpuVa, indirectArgsBuffer, drawCount });
         } else if (packet->drawMode == EffectParticleDrawMode::Ribbon) {
@@ -2981,6 +2998,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     const D3D12_CPU_DESCRIPTOR_HANDLE depthSrvHandle = hasDepthSrv ? depthTexture->GetSRV() : D3D12_CPU_DESCRIPTOR_HANDLE{};
 
     if (!billboardDrawEntries.empty()) {
+        // billboard は texture と blend mode ごとに state を切り替えつつ ExecuteIndirect で描く。
         nativeCommandList->SetGraphicsRootSignature(particleResources.billboardRootSignature.Get());
         nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
@@ -3066,6 +3084,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     }
 
     if (!ribbonDrawEntries.empty()) {
+        // ribbon は history buffer を参照して帯状 geometry を shader 側で生成する。
         nativeCommandList->SetGraphicsRootSignature(particleResources.ribbonRootSignature.Get());
         nativeCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
@@ -3119,6 +3138,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     }
 
     if (!meshDrawEntries.empty()) {
+        // mesh particle は model mesh を通常の index buffer で描き、instance 情報だけ GPU particle buffer から読む。
         nativeCommandList->SetGraphicsRootSignature(particleResources.meshRootSignature.Get());
         nativeCommandList->SetPipelineState(particleResources.meshPipelineState.Get());
         nativeCommandList->SetGraphicsRootConstantBufferView(0, sceneAllocation.gpuVA);
@@ -3206,6 +3226,7 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
     dx12CommandList->RestoreDescriptorHeap();
     rc.commandList->SetRenderTarget(nullptr, nullptr);
 
+    // 今 frame 見えなくなった emitter の arena page と予算を回収する。
     for (auto it = particleResources.runtimeAllocations.begin(); it != particleResources.runtimeAllocations.end(); ) {
         if (particleResources.frameCounter > it->second.lastSeenFrame &&
             (particleResources.frameCounter - it->second.lastSeenFrame) > 240u) {

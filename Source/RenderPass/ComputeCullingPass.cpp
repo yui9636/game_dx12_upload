@@ -23,6 +23,7 @@ using namespace DirectX;
 
 namespace
 {
+    // FrustumCullCS.cso に渡す定数。plane は view-projection から world/view 一貫の形式で抽出する。
     struct CullingParams {
         XMFLOAT4 frustumPlanes[6];
         uint32_t commandCount;
@@ -30,6 +31,7 @@ namespace
         uint32_t pad[2];
     };
 
+    // DX12Buffer 側の抽象 state と別に、この pass 内で明示的に before/after を指定する helper。
     void TransitionBuffer(
         ID3D12GraphicsCommandList* commandList,
         ID3D12Resource* resource,
@@ -49,6 +51,7 @@ namespace
         commandList->ResourceBarrier(1, &barrier);
     }
 
+    // staging から DrawArgs/count を初期化し、compute shader で instance compaction を行う。
     void RecordCullingDispatch(
         ID3D12GraphicsCommandList* commandList,
         ID3D12QueryHeap* timestampHeap,
@@ -76,6 +79,7 @@ namespace
             commandList->EndQuery(timestampHeap, D3D12_QUERY_TYPE_TIMESTAMP, beginQuery);
         }
 
+        // draw args は前 frame の INDIRECT 状態から COPY_DEST へ戻して初期値を書き直す。
         TransitionBuffer(
             commandList,
             gpuDrawArgs->GetNativeResource(),
@@ -107,6 +111,7 @@ namespace
             D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
         countInIndirectState = true;
 
+        // root: b0=culling params, t0=instance input, t1=metadata, u0=culled instance, u1=draw args。
         commandList->SetComputeRootSignature(rootSig);
         commandList->SetPipelineState(pso);
         commandList->SetComputeRootConstantBufferView(0, paramsBuf->GetGPUVirtualAddress());
@@ -159,6 +164,7 @@ void ComputeCullingPass::InitGpuResources(DX12Device* device)
 
     auto* d3dDevice = device->GetDevice();
 
+    // descriptor heap を使わず root descriptor だけで bind し、graphics 側の heap 状態を壊しにくくする。
     D3D12_ROOT_PARAMETER1 params[5] = {};
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor = { 0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE };
@@ -231,6 +237,7 @@ void ComputeCullingPass::InitTimingResources(DX12Device* device)
         return;
     }
 
+    // async compute の GPU 時間を軽量に見るため、固定 slot の timestamp query を使う。
     D3D12_QUERY_HEAP_DESC queryDesc = {};
     queryDesc.Count = kTimingSlotCount * 2u;
     queryDesc.NodeMask = 0;
@@ -269,6 +276,7 @@ void ComputeCullingPass::InitTimingResources(DX12Device* device)
 
 uint32_t ComputeCullingPass::AcquireTimingSlot() const
 {
+    // in-flight submission が使っていない query slot を探す。
     for (uint32_t slot = 0; slot < kTimingSlotCount; ++slot) {
         const bool inUse = std::any_of(
             m_inFlightSubmissions.begin(),
@@ -294,6 +302,7 @@ void ComputeCullingPass::RetireCompletedSubmissions(DX12Device* device)
         return;
     }
 
+    // compute fence が完了した submission だけ command allocator と query slot を解放する。
     const uint64_t completedValue = computeFence->GetCompletedValue();
     auto it = m_inFlightSubmissions.begin();
     while (it != m_inFlightSubmissions.end()) {
@@ -329,6 +338,7 @@ void ComputeCullingPass::RetireCompletedSubmissions(DX12Device* device)
 
 void ComputeCullingPass::ExtractFrustumPlanes(const XMFLOAT4X4& vp, XMFLOAT4 planesOut[6])
 {
+    // 行優先で格納された view-projection から left/right/bottom/top/near/far plane を取り出す。
     const float* m = reinterpret_cast<const float*>(&vp);
     planesOut[0] = { m[3] + m[0], m[7] + m[4], m[11] + m[8],  m[15] + m[12] };
     planesOut[1] = { m[3] - m[0], m[7] - m[4], m[11] - m[8],  m[15] - m[12] };
@@ -349,6 +359,7 @@ void ComputeCullingPass::ExtractFrustumPlanes(const XMFLOAT4X4& vp, XMFLOAT4 pla
 
 void ComputeCullingPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // 前段の BuildIndirectCommandPass が RenderContext に入れた buffer を直接使う副作用 pass。
     (void)builder;
 }
 
@@ -387,6 +398,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         return;
     }
 
+    // compute shader は draw args を上書きするため、初期値を staging に作ってから GPU へコピーする。
     std::vector<DrawArgs> initialDrawArgs;
     std::vector<size_t> commandIndices;
 
@@ -425,6 +437,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     const bool needGrowInstance = m_culledInstanceBuffer && m_instanceCapacity < totalOutputSlots;
     const bool needGrowDrawArgs = m_culledDrawArgsBuffer && m_drawArgsCapacity < commandCount;
     if (needGrowInstance || needGrowDrawArgs) {
+        // すでに GPU が参照している可能性があるため、この frame では拡張要求だけ記録して次回確保する。
         m_needsGrow = true;
         return;
     }
@@ -526,6 +539,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     const uint32_t groupsY = commandCount;
 
     if (useAsyncQueue) {
+        // compute queue に投げ、後段の graphics pass が必要なタイミングで fence wait する。
         ComPtr<ID3D12CommandAllocator> allocator;
         HRESULT hr = dx12Device->GetDevice()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&allocator));
         if (FAILED(hr)) {
@@ -587,6 +601,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
         rc.pendingAsyncComputeFenceValue = computeFenceValue;
         rc.prepMetrics.asyncComputeDispatchCount++;
     } else {
+        // compute queue が使えない場合は graphics command list 上で同期実行する。
         rc.prepMetrics.asyncComputeGpuMs = 0.0;
         auto* dx12GraphicsCmd = static_cast<DX12CommandList*>(rc.commandList);
 
@@ -625,6 +640,7 @@ void ComputeCullingPass::Execute(FrameGraphResources& resources, const RenderQue
     rc.prepMetrics.asyncComputeSubmitMs +=
         std::chrono::duration<double, std::milli>(Clock::now() - submitStart).count();
 
+    // 後段 renderer からは culling 後 buffer が通常の active buffer に見える。
     rc.activeInstanceBuffer = m_culledInstanceBuffer.get();
     rc.activeDrawArgsBuffer = m_culledDrawArgsBuffer.get();
     rc.activeCountBuffer = m_countBuffer.get();

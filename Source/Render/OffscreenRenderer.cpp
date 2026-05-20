@@ -18,11 +18,13 @@
 #include "RenderContext/RenderQueue.h"
 #include "Console/Logger.h"
 
+// header 側の DX12 型依存を抑えるため void* で保持した handle をここで戻す。
 static ID3D12Fence* AsFence(void* p) { return static_cast<ID3D12Fence*>(p); }
 static HANDLE AsHandle(void* p) { return static_cast<HANDLE>(p); }
 
 OffscreenRenderer::OffscreenRenderer() = default;
 OffscreenRenderer::~OffscreenRenderer() {
+    // preview 用 command list が投入済みなら完了を待ってから fence/event を破棄する。
     if (m_fenceEvent) {
         auto* fence = AsFence(m_fencePtr);
         HANDLE hEvent = AsHandle(m_fenceEvent);
@@ -41,6 +43,7 @@ OffscreenRenderer::~OffscreenRenderer() {
 
 bool OffscreenRenderer::Initialize()
 {
+    // 再初期化に備えて、先に所有 resource を空に戻す。
     m_available = false;
     m_commandList.reset();
     m_dx12RootSignature.reset();
@@ -54,6 +57,7 @@ bool OffscreenRenderer::Initialize()
         return false;
     }
 
+    // main renderer とは別に、thumbnail / preview 専用の ModelRenderer を持つ。
     m_renderer = std::make_unique<ModelRenderer>(factory);
 
     if (graphics.GetAPI() == GraphicsAPI::DX12) {
@@ -62,10 +66,12 @@ bool OffscreenRenderer::Initialize()
             LOG_ERROR("[OffscreenRenderer] DX12 device unavailable.");
             return false;
         }
+        // preview command list は main frame allocator と独立して動かす。
         m_dx12RootSignature = std::make_unique<DX12RootSignature>(device);
         m_commandList = std::make_unique<DX12CommandList>(device, m_dx12RootSignature.get(), false);
         m_localSceneBuffer = std::make_unique<DX12Buffer>(device, static_cast<uint32_t>(sizeof(CbScene)), BufferType::Constant);
 
+        // preview 描画完了を texture pool 側から確認できるよう fence を持つ。
         ID3D12Fence* fence = nullptr;
         HRESULT fhr = device->GetDevice()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
         if (FAILED(fhr)) {
@@ -81,6 +87,7 @@ bool OffscreenRenderer::Initialize()
         return true;
     }
 
+    // DX11 path は immediate context を包む command list を使う。
     auto* context = graphics.GetDeviceContext();
     if (!context) {
         LOG_ERROR("[OffscreenRenderer] DX11 device context unavailable.");
@@ -99,6 +106,7 @@ std::shared_ptr<FrameBuffer> OffscreenRenderer::CreateFrameBuffer(int w, int h,
 {
     auto* factory = Graphics::Instance().GetResourceFactory();
     if (!factory) return nullptr;
+    // preview は HDR color + depth の単純な FrameBuffer を使う。
     float clearColor[4] = { clearR, clearG, clearB, clearA };
     return std::make_shared<FrameBuffer>(
         factory, w, h,
@@ -118,6 +126,7 @@ void OffscreenRenderer::BeginJob()
 void OffscreenRenderer::Begin()
 {
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        // 前回 preview command list が終わるまで allocator を再利用しない。
         auto* fence = AsFence(m_fencePtr);
         if (fence && fence->GetCompletedValue() < m_fenceValue) {
             fence->SetEventOnCompletion(m_fenceValue, AsHandle(m_fenceEvent));
@@ -150,6 +159,7 @@ void OffscreenRenderer::UploadScene(
     const DirectX::XMFLOAT3& lightColor,
     float renderW, float renderH)
 {
+    // preview 描画では camera / light の最低限の scene 定数だけを埋める。
     CbScene scene{};
     scene.viewProjection = viewProj;
     scene.viewProjectionUnjittered = viewProj;
@@ -166,6 +176,7 @@ void OffscreenRenderer::UploadScene(
 
 void OffscreenRenderer::BindScene()
 {
+    // GlobalRootSignature と同じ b7 slot に preview 用 CbScene を入れる。
     m_commandList->VSSetConstantBuffer(7, m_localSceneBuffer.get());
     m_commandList->PSSetConstantBuffer(7, m_localSceneBuffer.get());
 }
@@ -180,6 +191,7 @@ void OffscreenRenderer::BindSampler()
 
 void OffscreenRenderer::Submit(FrameBuffer* fb)
 {
+    // queue が空でも ModelRenderer の通常 render path を通して状態を揃える。
     RenderContext rc = {};
     rc.commandList = m_commandList.get();
     rc.renderState = Graphics::Instance().GetRenderState();
@@ -191,6 +203,7 @@ void OffscreenRenderer::Submit(FrameBuffer* fb)
     m_renderer->Render(rc, emptyQueue);
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        // ImGui preview で読めるよう、color を shader resource state に戻してから submit する。
         m_commandList->TransitionBarrier(fb->GetColorTexture(0), ResourceState::ShaderResource);
         auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
         dx12Cmd->FlushResourceBarriers();
@@ -204,6 +217,7 @@ void OffscreenRenderer::Submit(FrameBuffer* fb)
 void OffscreenRenderer::ClearExternalRT(ITexture* color, ITexture* depth,
                                          float r, float g, float b, float a)
 {
+    // FrameBuffer wrapper なしで外部 texture を直接 clear する。
     float clearColor[4] = { r, g, b, a };
     m_commandList->TransitionBarrier(color, ResourceState::RenderTarget);
     m_commandList->TransitionBarrier(depth, ResourceState::DepthWrite);
@@ -227,12 +241,14 @@ void OffscreenRenderer::ClearExternalDepth(ITexture* depth)
 
 void OffscreenRenderer::SetExternalRenderTarget(ITexture* color, ITexture* depth)
 {
+    // editor panel などが持つ texture を直接 render target として使う。
     ITexture* rts[] = { color };
     m_commandList->SetRenderTargets(1, rts, depth);
 }
 
 void OffscreenRenderer::RenderQueuedDirect(ITexture* color, ITexture* depth)
 {
+    // caller が既に render target / viewport を設定済みの前提で queued models を描く。
     RenderContext rc = {};
     rc.commandList = m_commandList.get();
     rc.renderState = Graphics::Instance().GetRenderState();
@@ -247,6 +263,7 @@ void OffscreenRenderer::RenderQueuedDirect(ITexture* color, ITexture* depth)
 void OffscreenRenderer::FinishDirect(ITexture* color)
 {
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        // 外部 texture への直接描画でも、最後は shader resource に戻して fence を signal する。
         m_commandList->TransitionBarrier(color, ResourceState::ShaderResource);
         auto* dx12Cmd = static_cast<DX12CommandList*>(m_commandList.get());
         dx12Cmd->FlushResourceBarriers();
@@ -266,6 +283,7 @@ void OffscreenRenderer::SubmitDirect(ITexture* color)
 
 uint64_t OffscreenRenderer::GetCompletedFenceValue() const
 {
+    // DX11 では fence が無いので「完了済み」とみなす。
     auto* fence = AsFence(m_fencePtr);
     return fence ? fence->GetCompletedValue() : m_fenceValue;
 }

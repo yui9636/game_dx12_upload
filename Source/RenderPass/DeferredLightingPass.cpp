@@ -14,11 +14,13 @@
 #include "Console/Logger.h"
 
 namespace {
+    // shader-visible heap 内の slot index から CPU handle を作る。
     D3D12_CPU_DESCRIPTOR_HANDLE OffsetHandle(D3D12_CPU_DESCRIPTOR_HANDLE base, UINT stride, UINT index) {
         base.ptr += static_cast<SIZE_T>(stride) * index;
         return base;
     }
 
+    // optional texture が無い slot へ、shader が期待する次元に合った null SRV を入れる。
     D3D12_CPU_DESCRIPTOR_HANDLE GetDeferredNullHandle(
         uint32_t slot,
         D3D12_CPU_DESCRIPTOR_HANDLE null2D,
@@ -57,6 +59,7 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
     m_pso = factory->CreatePipelineState(desc);
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        // DX12 は未使用 slot にも正しい SRV 次元の null descriptor を置いて validation を通す。
         auto* dx12Device = Graphics::Instance().GetDX12Device();
         auto* d3dDevice = dx12Device ? dx12Device->GetDevice() : nullptr;
         if (d3dDevice) {
@@ -109,6 +112,7 @@ DeferredLightingPass::DeferredLightingPass(IResourceFactory* factory)
 
 void DeferredLightingPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // GBuffer と optional effect を読み、SceneColor を lighting 結果として更新する。
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -158,7 +162,7 @@ void DeferredLightingPass::Execute(FrameGraphResources& resources, const RenderQ
     }
     rc.commandList->SetRenderTarget(rtScene, nullptr);
 
-    // ★ Context同期：これをしないと後の SkyboxPass 等が「空の深度」を使ってキャラを消します
+    // 後段の SkyboxPass などが同じ SceneColor/Depth を参照できるよう Context を同期する。
     rc.mainRenderTarget = rtScene;
     rc.mainDepthStencil = dsReal;
     rc.sceneColorTexture = rtScene;

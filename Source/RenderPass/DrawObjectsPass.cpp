@@ -29,8 +29,7 @@ void DrawObjectsPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 
 
 {
-
-
+    // forward 経路では既存の SceneColor/Depth を読み、pass 内で直接 render target として使う。
     m_hSceneColor = builder.GetHandle("SceneColor");
 
 
@@ -82,7 +81,7 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
 
 
-    // レンダーターゲットをバインド
+    // 既存の SceneColor/Depth を forward 描画先として bind する。
 
 
     rc.commandList->TransitionBarrier(rtScene, ResourceState::RenderTarget);
@@ -127,7 +126,7 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
 
 
-    // 不透明オブジェクト
+    // 不透明オブジェクト。準備済み command があればそちらを優先する。
 
 
     if (rc.HasPreparedOpaqueCommands()) {
@@ -179,7 +178,7 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
 
 
-    // 半透明オブジェクト
+    // 半透明オブジェクトは queue の packet を直接 draw 登録する。
 
 
     for (const auto& packet : queue.transparentPackets) {
@@ -223,5 +222,4 @@ void DrawObjectsPass::Execute(FrameGraphResources& resources, const RenderQueue&
 
 
 }
-
 

@@ -18,6 +18,7 @@
 
 namespace
 {
+	// stb_image で通常画像を RGBA8 ScratchImage に読み込む。
 	HRESULT LoadImageWithStb(
 		const char* filename,
 		DirectX::ScratchImage& outImage,
@@ -121,6 +122,7 @@ HRESULT GpuResourceUtils::LoadVertexShader(
 	ID3D11InputLayout** inputLayout,
 	ID3D11VertexShader** vertexShader)
 {
+	// .cso を丸ごと読み込み、同じ bytecode から VS と input layout を作成する。
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Vertex Shader File not found");
@@ -150,6 +152,7 @@ HRESULT GpuResourceUtils::LoadPixelShader(
 	const char* filename,
 	ID3D11PixelShader** pixelShader)
 {
+	// .cso を丸ごと読み込み、DX11 pixel shader を作成する。
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Pixel Shader File not found");
@@ -173,6 +176,7 @@ HRESULT GpuResourceUtils::LoadGeometryShader(
 	const char* filename, 
 	ID3D11GeometryShader** geometryShader)
 {
+	// .cso を丸ごと読み込み、DX11 geometry shader を作成する。
 	FILE* fp = nullptr;
 	fopen_s(&fp, filename, "rb");
 	_ASSERT_EXPR_A(fp, "Geometr Shader File not found");
@@ -197,6 +201,7 @@ HRESULT GpuResourceUtils::LoadComputeShader(
 	const char* filename,
 	ID3D11ComputeShader** computeShader)
 {
+	// .cso を丸ごと読み込み、DX11 compute shader を作成する。
 	FILE* filePointer = nullptr;
 	fopen_s(&filePointer, filename, "rb");
 	_ASSERT_EXPR_A(filePointer, "Compute Shader File not found");
@@ -219,6 +224,7 @@ HRESULT GpuResourceUtils::LoadImageFromFile(
 	DirectX::ScratchImage& outImage,
 	DirectX::TexMetadata& outMetadata)
 {
+	// 拡張子ごとに最適な loader を選び、ScratchImage に統一する。
 	std::filesystem::path filepath(filename);
 	std::string extension = filepath.extension().string();
 	std::transform(extension.begin(), extension.end(), extension.begin(), tolower);
@@ -266,6 +272,7 @@ HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11ShaderResourceView** shaderResourceView,
 	D3D11_TEXTURE2D_DESC* texture2dDesc)
 {
+	// ファイルから読み込んだ ScratchImage をそのまま DX11 SRV に変換する。
 	DirectX::TexMetadata metadata;
 	DirectX::ScratchImage scratch_image;
 	HRESULT hr = LoadImageFromFile(filename, scratch_image, metadata);
@@ -294,6 +301,7 @@ HRESULT GpuResourceUtils::LoadTexture(
 	ID3D11ShaderResourceView** shaderResourceView,
 	D3D11_TEXTURE2D_DESC* texture2dDesc)
 {
+	// メモリ上の画像形式を順番に判定し、成功した loader の結果から SRV を作る。
 	HRESULT hr = E_FAIL;
 	DirectX::TexMetadata metadata;
 	DirectX::ScratchImage scratch_image;
@@ -360,6 +368,7 @@ HRESULT GpuResourceUtils::CreateDummyTexture(
 	ID3D11ShaderResourceView** shaderResourceView,
 	D3D11_TEXTURE2D_DESC* texture2dDesc)
 {
+	// 1 pixel の immutable texture。missing texture や default white/black 用。
 	D3D11_TEXTURE2D_DESC desc = { 0 };
 	desc.Width = 1;
 	desc.Height = 1;
@@ -402,6 +411,7 @@ HRESULT GpuResourceUtils::CreateConstantBuffer(
 	UINT bufferSize,
 	ID3D11Buffer** constantBuffer)
 {
+	// caller 側で 16 byte alignment 済みのサイズを渡す前提の DX11 constant buffer。
 	D3D11_BUFFER_DESC desc{};
 	desc.Usage = D3D11_USAGE_DEFAULT;
 	desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;

@@ -10,6 +10,7 @@
 #include <cstring>
 
 namespace {
+    // R16_FLOAT などの half precision 値をログ用に float へ戻す。
     float HalfToFloatLocal(uint16_t value) {
         const uint32_t sign = static_cast<uint32_t>(value & 0x8000u) << 16;
         uint32_t exponent = (value >> 10) & 0x1Fu;
@@ -43,6 +44,7 @@ namespace {
         return result;
     }
 
+    // cubemap 読み込みのデバッグ用。face0 を readback して平均色をログへ出す。
     void LogCubemapFace0Snapshot(DX12Device* device, ID3D12Resource* textureResource, DXGI_FORMAT format) {
         if (!device || !textureResource || format != DXGI_FORMAT_R16G16B16A16_FLOAT) {
             return;
@@ -173,7 +175,7 @@ namespace {
 
 std::unique_ptr<ITexture> DX12ResourceFactory::CreateTexture(const std::string& name, const TextureDesc& desc) {
     if (!m_device) return nullptr;
-    // text 用色。ureDesc の clearColor を DX12 optimizedClearValue として渡す
+    // TextureDesc の clearColor を DX12 optimized clear value として渡す。
     const float* clearColor = (desc.bindFlags & TextureBindFlags::RenderTarget) ? desc.clearColor : nullptr;
     return std::make_unique<DX12Texture>(
         m_device,
@@ -200,6 +202,7 @@ std::unique_ptr<IBuffer> DX12ResourceFactory::CreateStructuredBuffer(uint32_t el
 }
 
 static DXGI_FORMAT ToDXGIFormat(TextureFormat format) {
+    // InputLayout 用。PSO cache 側の変換と同じ RHI format を DXGI format へ落とす。
     switch (format) {
     case TextureFormat::R32G32B32A32_FLOAT: return DXGI_FORMAT_R32G32B32A32_FLOAT;
     case TextureFormat::R32G32B32A32_UINT:  return DXGI_FORMAT_R32G32B32A32_UINT;
@@ -214,6 +217,7 @@ static DXGI_FORMAT ToDXGIFormat(TextureFormat format) {
 }
 
 std::unique_ptr<IInputLayout> DX12ResourceFactory::CreateInputLayout(const InputLayoutDesc& desc, const IShader* vs) {
+    // RHI の InputElementDesc は呼び出し側所有なので、DX12InputLayout 内に vector としてコピーする。
     std::vector<D3D12_INPUT_ELEMENT_DESC> elements(desc.count);
     for (uint32_t i = 0; i < desc.count; ++i) {
         elements[i].SemanticName = desc.elements[i].semanticName;
@@ -230,7 +234,7 @@ std::unique_ptr<IInputLayout> DX12ResourceFactory::CreateInputLayout(const Input
 std::unique_ptr<IPipelineState> DX12ResourceFactory::CreatePipelineState(const PipelineStateDesc& desc) {
     return std::make_unique<DX12PipelineState>(desc);
 }
-// DX12 テクスチャファイル読み込み（アップロードヒープ経由）
+// DirectXTex の ScratchImage を DEFAULT heap texture へアップロードする。
 std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     const DirectX::ScratchImage& image,
     const DirectX::TexMetadata& metadata)
@@ -240,7 +244,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     auto* d3dDevice = m_device->GetDevice();
     auto* cmdQueue = m_device->GetCommandQueue();
 
-    // 1. デフォルトヒープにテクスチャリソース作成
+    // 1. 実際に sampling される texture は DEFAULT heap に作成する。
     D3D12_RESOURCE_DESC texDesc = {};
     const bool isVolumeTexture = metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D;
     texDesc.Dimension = isVolumeTexture ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -267,7 +271,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         IID_PPV_ARGS(&textureResource));
     if (FAILED(hr)) return nullptr;
 
-    // 2. サブリソース数の計算とフットプリント取得
+    // 2. mip / array slice / volume slice を upload buffer 上のどこへ置くか計算する。
     const UINT numSubresources = static_cast<UINT>(metadata.mipLevels * (isVolumeTexture ? 1 : metadata.arraySize));
     std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts(numSubresources);
     std::vector<UINT> numRows(numSubresources);
@@ -278,7 +282,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         &texDesc, 0, numSubresources, 0,
         layouts.data(), numRows.data(), rowSizeInBytes.data(), &totalBytes);
 
-    // 3. アップロードバッファ作成
+    // 3. CPU から書き込める upload buffer を一時的に作成する。
     D3D12_HEAP_PROPERTIES uploadHeap = {};
     uploadHeap.Type = D3D12_HEAP_TYPE_UPLOAD;
 
@@ -299,13 +303,13 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         IID_PPV_ARGS(&uploadBuffer));
     if (FAILED(hr)) return nullptr;
 
-    // 4. アップロードバッファにデータコピー
+    // 4. DirectXTex の各 subresource を upload buffer の配置済み footprint へコピーする。
     BYTE* mappedData = nullptr;
     hr = uploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedData));
     if (FAILED(hr)) return nullptr;
 
     for (UINT i = 0; i < numSubresources; ++i) {
-        // サブリソースインデックスからMipLevelとArraySliceを取得
+        // subresource index から mip level と array slice を復元する。
         const D3D12_PLACED_SUBRESOURCE_FOOTPRINT& layout = layouts[i];
         BYTE* dstSubresource = mappedData + layout.Offset;
 
@@ -342,7 +346,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     }
     uploadBuffer->Unmap(0, nullptr);
 
-    // 5. 一時コマンドリストでコピー実行
+    // 5. 一時コマンドリストで DEFAULT heap texture へコピーする。
     ComPtr<ID3D12CommandAllocator> cmdAllocator;
     hr = d3dDevice->CreateCommandAllocator(
         D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAllocator));
@@ -354,7 +358,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         IID_PPV_ARGS(&cmdList));
     if (FAILED(hr)) return nullptr;
 
-    // サブリソースごとに CopyTextureRegion
+    // subresource ごとに CopyTextureRegion を発行する。
     for (UINT i = 0; i < numSubresources; ++i) {
         D3D12_TEXTURE_COPY_LOCATION dst = {};
         dst.pResource = textureResource.Get();
@@ -369,7 +373,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
         cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
     }
 
-    // バリア: COPY_DEST → ShaderResource
+    // COPY_DEST から shader resource へ遷移し、以後の描画で読める状態にする。
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition.pResource = textureResource.Get();
@@ -380,11 +384,11 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
 
     cmdList->Close();
 
-    // 実行 + フェンス待ち
+    // 一時 upload buffer を破棄できるよう、この場でコピー完了まで待つ。
     ID3D12CommandList* ppCmdLists[] = { cmdList.Get() };
     cmdQueue->ExecuteCommandLists(1, ppCmdLists);
 
-    // フェンスで完了待ち
+    // fence でコピー完了待ち。
     ComPtr<ID3D12Fence> fence;
     hr = d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
     if (FAILED(hr)) return nullptr;
@@ -397,7 +401,7 @@ std::unique_ptr<ITexture> DX12ResourceFactory::CreateTextureFromMemory(
     }
     CloseHandle(fenceEvent);
 
-    // 6. DX12Texture にラップして返す
+    // 6. texture resource を DX12Texture にラップし、SRV を作って返す。
     bool isCubemap = metadata.IsCubemap();
     if (metadata.arraySize >= 6) {
         LOG_INFO("[DX12ResourceFactory] width=%u height=%u array=%u mip=%u format=%d cube=%d",

@@ -3,7 +3,6 @@
 #include <cstring>
 
 #include "RHI/IResourceFactory.h"
-// PreviewTexturePool::Initialize は依存オブジェクトと初期値を受け取り、後続処理に必要な内部状態を整える。
 
 void PreviewTexturePool::Initialize(IResourceFactory* factory,
                                     uint32_t w, uint32_t h,
@@ -12,6 +11,7 @@ void PreviewTexturePool::Initialize(IResourceFactory* factory,
                                     const float* clearColor,
                                     uint32_t maxCount)
 {
+    // 解像度や format が変わった場合も同じ関数で pool を作り直せるよう状態を初期化する。
     m_factory = factory;
     m_width = w;
     m_height = h;
@@ -32,6 +32,7 @@ void PreviewTexturePool::Initialize(IResourceFactory* factory,
         return;
     }
 
+    // depth は preview texture 間で共有する。color だけ pool から貸し出す。
     TextureDesc depthDesc{};
     depthDesc.width = m_width;
     depthDesc.height = m_height;
@@ -43,6 +44,7 @@ void PreviewTexturePool::Initialize(IResourceFactory* factory,
 
 std::shared_ptr<ITexture> PreviewTexturePool::Acquire()
 {
+    // fence 完了済みで free list に戻った texture があればそれを優先する。
     if (!m_free.empty()) {
         auto texture = std::move(m_free.back());
         m_free.pop_back();
@@ -53,6 +55,7 @@ std::shared_ptr<ITexture> PreviewTexturePool::Acquire()
         return nullptr;
     }
 
+    // 上限に達していなければ新しい color render target を作成する。
     TextureDesc desc{};
     desc.width = m_width;
     desc.height = m_height;
@@ -70,11 +73,13 @@ void PreviewTexturePool::DeferRelease(std::shared_ptr<ITexture> tex, uint64_t fe
     if (!tex) {
         return;
     }
+    // GPU がまだ SRV/RTV として参照している可能性があるため、すぐ free list へ戻さない。
     m_deferredReturns.push_back({ std::move(tex), fenceValue });
 }
 
 void PreviewTexturePool::ProcessDeferred(uint64_t completedFenceValue)
 {
+    // OffscreenRenderer の completed fence に到達した texture だけ再利用可能にする。
     auto it = m_deferredReturns.begin();
     while (it != m_deferredReturns.end()) {
         if (it->fenceValue <= completedFenceValue) {

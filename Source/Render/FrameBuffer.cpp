@@ -7,6 +7,7 @@
 
 
 static TextureFormat ConvertDXGIToTextureFormat(DXGI_FORMAT format) {
+    // DX11 旧 API の DXGI_FORMAT を RHI の TextureFormat へ寄せる。
     switch (format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM:     return TextureFormat::RGBA8_UNORM;
     case DXGI_FORMAT_R16G16B16A16_FLOAT: return TextureFormat::R16G16B16A16_FLOAT;
@@ -26,6 +27,7 @@ FrameBuffer::FrameBuffer(IResourceFactory* factory, uint32_t width, uint32_t hei
     const float* optimizedClearColor)
     : m_width((float)width), m_height((float)height)
 {
+    // RHI path。DX11/DX12 の違いは factory 側へ隠し、FrameBuffer は ITexture だけを持つ。
     TextureDesc desc;
     desc.width = width;
     desc.height = height;
@@ -49,6 +51,7 @@ FrameBuffer::FrameBuffer(IResourceFactory* factory, uint32_t width, uint32_t hei
 
 FrameBuffer::FrameBuffer(ID3D11Device* device, IDXGISwapChain* swapchain)
 {
+    // swapchain back buffer を color attachment として包む DX11 専用 path。
     auto tex = std::make_unique<DX11Texture>(device, swapchain);
     m_width = (float)tex->GetWidth();
     m_height = (float)tex->GetHeight();
@@ -69,6 +72,7 @@ FrameBuffer::FrameBuffer(ID3D11Device* device, uint32_t width, uint32_t height,
     TextureFormat depthFormat)
     : m_width((float)width), m_height((float)height)
 {
+    // DX11 path。旧 render pass が DXGI_FORMAT 指定で FrameBuffer を作るため変換して保持する。
     for (DXGI_FORMAT dxgiFmt : formats)
     {
         TextureFormat fmt = ConvertDXGIToTextureFormat(dxgiFmt);
@@ -83,6 +87,7 @@ FrameBuffer::FrameBuffer(ID3D11Device* device, uint32_t width, uint32_t height,
 
 
 ID3D11ShaderResourceView* FrameBuffer::GetColorMap(size_t index) const {
+    // DX12 texture では native DX11 SRV を持たないため nullptr になる。
     if (index >= m_colorTextures.size()) return nullptr;
     auto* dx11 = dynamic_cast<DX11Texture*>(m_colorTextures[index].get());
     return dx11 ? dx11->GetNativeSRV() : nullptr;
@@ -107,12 +112,14 @@ ID3D11DepthStencilView* FrameBuffer::GetDepthStencilView() const {
 }
 
 void* FrameBuffer::GetImGuiTextureID(size_t index) const {
+    // backend ごとの ImTextureID 変換は ImGuiRenderer に集約する。
     if (index >= m_colorTextures.size()) return nullptr;
     return ImGuiRenderer::GetTextureID(m_colorTextures[index].get());
 }
 
 void FrameBuffer::Clear(ICommandList* commandList, float r, float g, float b, float a)
 {
+    // clear 前に各 attachment を適切な write state へ遷移する。
     float color[4]{ r, g, b, a };
     for (const auto& tex : m_colorTextures) {
         commandList->TransitionBarrier(tex.get(), ResourceState::RenderTarget);
@@ -126,6 +133,7 @@ void FrameBuffer::Clear(ICommandList* commandList, float r, float g, float b, fl
 
 void FrameBuffer::SetRenderTargets(ICommandList* commandList)
 {
+    // FrameBuffer サイズに viewport を合わせ、内部 depth を使う。
     commandList->SetViewport(RhiViewport(0.0f, 0.0f, m_width, m_height));
 
     std::vector<ITexture*> rtvs;
@@ -136,6 +144,7 @@ void FrameBuffer::SetRenderTargets(ICommandList* commandList)
 
 void FrameBuffer::SetRenderTarget(ICommandList* commandList, ITexture* depthStencil)
 {
+    // shadow pass 後など、外部 depth を使う場合の render target 設定。
     commandList->SetViewport(RhiViewport(0.0f, 0.0f, m_width, m_height));
 
     std::vector<ITexture*> rtvs;

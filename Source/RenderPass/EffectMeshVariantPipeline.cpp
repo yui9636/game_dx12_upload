@@ -13,6 +13,7 @@ using Microsoft::WRL::ComPtr;
 
 namespace
 {
+    // 事前コンパイル済み shader variant blob を読む。
     bool LoadVariantBlob(const wchar_t* path, ComPtr<ID3DBlob>& out)
     {
         out.Reset();
@@ -24,6 +25,7 @@ namespace
         return true;
     }
 
+    // EffectMeshVariant shader が期待する root signature を共有生成する。
     bool CreateVariantRootSignature(ID3D12Device* device, ID3D12RootSignature** ppRS)
     {
         D3D12_DESCRIPTOR_RANGE1 texRange = {};
@@ -103,6 +105,7 @@ namespace
 
 ID3D12PipelineState* MeshVariantPipelineCache::GetOrCreate(DX12Device* dxDev, uint32_t variantKey)
 {
+    // 既に作った variant は PSO を再利用する。
     for (auto& e : entries) {
         if (e.variantKey == variantKey) return e.pso.Get();
     }
@@ -114,6 +117,7 @@ ID3D12PipelineState* MeshVariantPipelineCache::GetOrCreate(DX12Device* dxDev, ui
         if (!CreateVariantRootSignature(device, rootSignature.GetAddressOf())) return nullptr;
     }
 
+    // variantKey に対応する pixel shader が無い場合は基本 variant へ fallback する。
     wchar_t psPath[256];
     swprintf_s(psPath, L"Data/Shader/EffectMeshVariantPS_0x%08x.cso", variantKey);
 
@@ -174,6 +178,7 @@ ID3D12PipelineState* MeshVariantPipelineCache::GetOrCreate(DX12Device* dxDev, ui
 
 void MeshVariantPipelineCache::Reset()
 {
+    // device lost / shader reload 時に root signature ごと破棄する。
     entries.clear();
     rootSignature.Reset();
 }

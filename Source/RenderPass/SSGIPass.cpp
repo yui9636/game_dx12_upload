@@ -13,6 +13,7 @@ SSGIPass::~SSGIPass() = default;
 
 SSGIPass::SSGIPass(IResourceFactory* factory)
 {
+    // raymarch と blur は同じ render target format の full-screen PSO を共有して作る。
     m_vs = factory->CreateShader(ShaderType::Vertex, "Data/Shader/DeferredLightingVS.cso");
     m_psRaymarch = factory->CreateShader(ShaderType::Pixel, "Data/Shader/SSGIPS.cso");
     m_psBlur = factory->CreateShader(ShaderType::Pixel, "Data/Shader/SSGIBlurPS.cso");
@@ -38,6 +39,7 @@ SSGIPass::SSGIPass(IResourceFactory* factory)
 
 void SSGIPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // GBuffer と previous scene を読み、half-resolution の raw/blur texture を作る。
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
     m_hPrevScene = builder.GetHandle("PrevScene");
@@ -51,8 +53,8 @@ void SSGIPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
         m_hSSGIBlur = {};
         return;
     }
-// ★ 修正：真のレンダリング解像度(857x482相当)から半分を計算する
-uint32_t renderW = rc.renderWidth;
+    // 実 render 解像度から half-resolution buffer のサイズを決める。
+    uint32_t renderW = rc.renderWidth;
     uint32_t renderH = rc.renderHeight;
     if (renderW == 0 || renderH == 0) {
         float renderScale = Graphics::Instance().GetRenderScale();
@@ -89,11 +91,11 @@ void SSGIPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     rc.commandList->SetIndexBuffer(nullptr, IndexFormat::Uint32, 0);
 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-// ★ 修正：ビューポートも 857x482 の半分(428x241)に合わせる
-float halfWidth = (float)ssgiTex->GetWidth();
+    // viewport は実際に確保された half-resolution texture に合わせる。
+    float halfWidth = (float)ssgiTex->GetWidth();
     float halfHeight = (float)ssgiTex->GetHeight();
 
-    // パス1: レイマーチング
+    // pass 1: GBuffer と history から間接光をレイマーチする。
     rc.commandList->ClearColor(ssgiTex, clearColor);
     rc.commandList->SetRenderTarget(ssgiTex, nullptr);
 
@@ -126,7 +128,7 @@ float halfWidth = (float)ssgiTex->GetWidth();
 
     rc.commandList->Draw(3, 0);
 
-    // パス2: 空間ブラー
+    // pass 2: raw SSGI を空間ブラーし、DeferredLighting が読む最終結果にする。
     rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTarget(blurTex, nullptr);
 

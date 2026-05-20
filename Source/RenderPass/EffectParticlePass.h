@@ -4,6 +4,7 @@
 #include "IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
+// GPU particle の simulation / sort / indirect draw をまとめて行う DX12 専用 pass。
 class EffectParticlePass : public IRenderPass
 {
 public:
@@ -15,6 +16,6 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
-    ResourceHandle m_hSceneColor;
-    ResourceHandle m_hDepth;
+    ResourceHandle m_hSceneColor; // particle を合成する HDR scene color。
+    ResourceHandle m_hDepth;      // depth test / depth binning 用。
 };

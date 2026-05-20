@@ -17,7 +17,7 @@
 #include <DirectXMath.h>
 
 namespace {
-    // Must match the CbDecal layout in DecalVS.hlsl / DecalPS.hlsl (176 bytes).
+    // DecalVS.hlsl / DecalPS.hlsl の CbDecal と同じ 176 bytes layout に合わせる。
     struct CbDecal {
         DirectX::XMFLOAT4X4 decalWorldViewProj;
         DirectX::XMFLOAT4X4 worldToDecal;
@@ -39,19 +39,20 @@ DeferredDecalPass::DeferredDecalPass(IResourceFactory* factory)
     PipelineStateDesc desc{};
     desc.vertexShader      = m_vs.get();
     desc.pixelShader       = m_ps.get();
-    desc.inputLayout       = nullptr; // Cube generated from SV_VertexID.
+    desc.inputLayout       = nullptr; // cube は SV_VertexID から shader 側で生成する。
     desc.depthStencilState = rs->GetDepthStencilState(DepthState::NoTestNoWrite);
     desc.rasterizerState   = rs->GetRasterizerState(RasterizerState::SolidCullNone);
     desc.blendState        = rs->GetBlendState(BlendState::Transparency);
     desc.primitiveTopology = PrimitiveTopology::TriangleList;
     desc.numRenderTargets  = 1;
-    desc.rtvFormats[0]     = TextureFormat::R16G16B16A16_FLOAT; // GBuffer0 format.
+    desc.rtvFormats[0]     = TextureFormat::R16G16B16A16_FLOAT; // GBuffer0 と同じ形式。
     desc.dsvFormat         = TextureFormat::Unknown;
     m_pso = factory->CreatePipelineState(desc);
 }
 
 void DeferredDecalPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // Albedo だけを書き換え、normal/world position は投影判定のために読む。
     m_hGBuffer0 = builder.GetHandle("GBuffer0");
     m_hGBuffer1 = builder.GetHandle("GBuffer1");
     m_hGBuffer2 = builder.GetHandle("GBuffer2");
@@ -105,6 +106,7 @@ void DeferredDecalPass::Execute(FrameGraphResources& resources, const RenderQueu
 
     const bool isDX12 = Graphics::Instance().GetAPI() == GraphicsAPI::DX12;
 
+    // decal ごとに box volume を描き、pixel shader 側で GBuffer 座標へ投影する。
     for (const DecalInstance& decal : rc.decals) {
         if (!decal.texture) {
             continue;

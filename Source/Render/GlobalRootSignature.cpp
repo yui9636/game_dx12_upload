@@ -21,21 +21,24 @@ GlobalRootSignature::~GlobalRootSignature() = default;
 
 void GlobalRootSignature::Initialize(ID3D11Device* device)
 {
-    m_cbScene = std::make_unique<DX11Buffer>(device, sizeof(CbScene), BufferType::Constant);
-    m_cbShadow = std::make_unique<DX11Buffer>(device, sizeof(CbShadowMap), BufferType::Constant);
+    // DX11 は通常の constant buffer として確保し、VS/PS/CS に同じ buffer を bind する。
+    m_cbScene = std::make_unique<DX11Buffer>(device, static_cast<uint32_t>(sizeof(CbScene)), BufferType::Constant);
+    m_cbShadow = std::make_unique<DX11Buffer>(device, static_cast<uint32_t>(sizeof(CbShadowMap)), BufferType::Constant);
     m_isDX12 = false;
 }
 
 void GlobalRootSignature::Initialize(DX12Device* device)
 {
-    m_cbScene = std::make_unique<DX12Buffer>(device, sizeof(CbScene), BufferType::Constant);
-    m_cbShadow = std::make_unique<DX12Buffer>(device, sizeof(CbShadowMap), BufferType::Constant);
+    // DX12 は root CBV に直接 GPU VA を渡すため、RHI buffer の種類だけ揃えておく。
+    m_cbScene = std::make_unique<DX12Buffer>(device, static_cast<uint32_t>(sizeof(CbScene)), BufferType::Constant);
+    m_cbShadow = std::make_unique<DX12Buffer>(device, static_cast<uint32_t>(sizeof(CbShadowMap)), BufferType::Constant);
     m_isDX12 = true;
 }
 
 void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* renderState, const ShadowMap* shadowMap,
     IBuffer* sceneBufferOverride, IBuffer* shadowBufferOverride)
 {
+    // override があれば offscreen preview などの一時 buffer を優先して使う。
     IBuffer* sceneBuffer = sceneBufferOverride ? sceneBufferOverride : m_cbScene.get();
     IBuffer* shadowBuffer = shadowBufferOverride ? shadowBufferOverride : m_cbShadow.get();
 
@@ -51,7 +54,7 @@ void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* 
 
     if (m_isDX12) return;
 
-    // 2. IBL テクスチャのバインド。DX11 では t33=DiffIBL、t34=SpecIBL を使う。
+    // IBL テクスチャのバインド。DX11 では t33=DiffIBL、t34=SpecIBL を使う。
     ITexture* ibls[] = { m_diffIBL, m_specIBL };
     commandList->PSSetTextures(33, 2, ibls);
 
@@ -68,4 +71,3 @@ void GlobalRootSignature::BindAll(ICommandList* commandList, const RenderState* 
     if (!pointSampler) pointSampler = linearSampler;
     commandList->PSSetSampler(2, pointSampler);
 }
-

@@ -10,6 +10,7 @@
 
 namespace
 {
+    // DX12Buffer 作成失敗時の詳細を残すログファイルパスを作る。
     std::string ResolveDx12BufferLogPath()
     {
         const std::filesystem::path logDir(PathResolver::Resolve("Saved/Logs"));
@@ -42,14 +43,9 @@ DX12Buffer::DX12Buffer(
         alignedSize = (size + 255) & ~255;
         m_size = alignedSize;
     }
-// ヒープ設定
-    // UAVStorage 用。 用設定。
-    //   GPU専用(DEFAULT heap)
-    //   CPUから直接Mapできない
-    // それ以外:
-    //   CPUアップロード用(UPLOAD heap)
-    //   MapしてCPUから書き込める
-D3D12_HEAP_PROPERTIES heapProps = {};
+    // ヒープ設定。
+    // UAVStorage は GPU 専用の DEFAULT heap、それ以外は CPU から書き込める UPLOAD heap を使う。
+    D3D12_HEAP_PROPERTIES heapProps = {};
     heapProps.Type = (type == BufferType::UAVStorage)
         ? D3D12_HEAP_TYPE_DEFAULT
         : D3D12_HEAP_TYPE_UPLOAD;
@@ -57,10 +53,8 @@ D3D12_HEAP_PROPERTIES heapProps = {};
     heapProps.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
     heapProps.CreationNodeMask = 1;
     heapProps.VisibleNodeMask = 1;
-// バッファリソースの説明
-    // BUFFERなので Dimension は BUFFER 固定
-    // Width にバイト数を入れる
-D3D12_RESOURCE_DESC bufferDesc = {};
+    // バッファリソースの説明。BUFFER なので Dimension は固定で、Width に総バイト数を入れる。
+    D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     bufferDesc.Alignment = 0;
     bufferDesc.Width = alignedSize;
@@ -76,14 +70,8 @@ D3D12_RESOURCE_DESC bufferDesc = {};
     bufferDesc.Flags = (type == BufferType::UAVStorage)
         ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
         : D3D12_RESOURCE_FLAG_NONE;
-// 初期状態
-    // UAVStorage 用。 用設定。
-    //   バッファは COMMON で作成し、実使用時に明示的に遷移する。
-    //   CreateCommittedResource で UAV 初期状態を指定しても
-    //   debug layer では COMMON 扱いになるため、ここでは COMMON を使う。
-    // それ以外:
-    //   UPLOAD heap なので GENERIC_READ
-D3D12_RESOURCE_STATES initialState =
+    // 初期状態。UAVStorage は実使用時に明示遷移するため COMMON、UPLOAD heap は GENERIC_READ。
+    D3D12_RESOURCE_STATES initialState =
         (type == BufferType::UAVStorage)
         ? D3D12_RESOURCE_STATE_COMMON
         : D3D12_RESOURCE_STATE_GENERIC_READ;
@@ -128,13 +116,13 @@ D3D12_RESOURCE_STATES initialState =
         if (f) { fprintf(f, "%s", buf); fclose(f); }
         return;
     }
-// 初期データを書き込む
+    // 初期データを書き込む。
     // 注意:
-    // UAVStorage 用。 は DEFAULT heap なので Map() できない。
+    // UAVStorage は DEFAULT heap なので Map() できない。
     // そのため initialData を入れたい場合は
     // 本来は UploadBuffer 経由のコピーが必要。
     // 今の Map() は UAVStorage のとき nullptr を返す。
-if (initialData && m_resource) {
+    if (initialData && m_resource) {
         void* mapped = Map();
         if (mapped) {
             memcpy(mapped, initialData, size);

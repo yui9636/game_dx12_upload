@@ -9,6 +9,7 @@
 
 namespace
 {
+    // projection matrix から view frustum を作り、camera view を外した world 空間 frustum に変換する。
     DirectX::BoundingFrustum BuildWorldFrustum(const RenderContext& rc)
     {
         using namespace DirectX;
@@ -23,6 +24,7 @@ namespace
         return worldFrustum;
     }
 
+    // model の local bounds を instance world へ変換し、frustum と交差するか判定する。
     bool IsInstanceVisible(const DirectX::BoundingFrustum& worldFrustum, const ModelResource& modelResource, const InstanceData& instance)
     {
         using namespace DirectX;
@@ -37,6 +39,7 @@ namespace
 
 void ExtractVisibleInstancesPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // CPU 側の可視リスト作成のみを行う副作用 pass。FrameGraph resource は持たない。
     (void)builder;
 }
 
@@ -71,6 +74,7 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
     m_candidateBatches.resize(batchCount);
     m_nonEmptyFlags.assign(batchCount, 0);
 
+    // batch ごとに独立して判定できるため worker thread に分散する。
     TaskSystem::Instance().ParallelFor(
         batchCount,
         1,
@@ -85,6 +89,7 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
             visibleBatch.modelResource = batch.modelResource;
             visibleBatch.instances.reserve(batch.instances.size());
 
+            // GPU culling 対象の static mesh は CPU frustum 判定を省略し、ComputeCullingPass に任せる。
             const bool bypassCpuCulling =
                 rc.allowGpuDrivenCompute &&
                 batch.modelResource &&
@@ -111,6 +116,7 @@ void ExtractVisibleInstancesPass::Execute(FrameGraphResources& resources, const 
             }
         });
 
+    // worker が書いた scratch から非空 batch だけを RenderContext へ詰める。
     uint32_t visibleInstanceCount = 0;
     for (size_t batchIndex = 0; batchIndex < m_candidateBatches.size(); ++batchIndex) {
         if (m_nonEmptyFlags[batchIndex] == 0) {

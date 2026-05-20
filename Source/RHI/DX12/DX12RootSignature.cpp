@@ -3,6 +3,7 @@
 #include <cassert>
 
 DX12RootSignature::DX12RootSignature(DX12Device* device) {
+    // CommandList の slot 定義と shader register 配置を一致させる。
     // root parameter は 8 個の CBV(b0-b7) と 1 個の SRV descriptor table(t0-t15)。
     D3D12_ROOT_PARAMETER1 rootParams[Slot::Count] = {};
 

@@ -7,6 +7,7 @@
 
 class EffectMeshShader;
 
+// effect system が生成した mesh packet を DX12 専用 shader で SceneColor へ重ねる pass。
 class EffectMeshPass : public IRenderPass
 {
 public:
@@ -18,7 +19,8 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
-    ResourceHandle m_hSceneColor;
-    ResourceHandle m_hDepth;
+    ResourceHandle m_hSceneColor; // エフェクト mesh の描画先。
+    ResourceHandle m_hDepth;      // depth test 用。
+    // Effect mesh 専用 shader。初回 Execute 時に遅延作成する。
     std::unique_ptr<EffectMeshShader> m_shader;
 };

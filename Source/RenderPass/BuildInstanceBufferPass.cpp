@@ -8,6 +8,8 @@
 
 void BuildInstanceBufferPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // この pass は RenderContext 内の CPU/GPU buffer を更新する副作用 pass。
+    // FrameGraph resource は直接生成しないため builder は使わない。
     (void)builder;
 }
 
@@ -25,7 +27,7 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     rc.preparedVisibleInstanceCount = 0;
     rc.useGpuCulling = false; // 一度 reset し、有効な場合は ComputeCullingPass が設定する。
 
-    // BuildIndirectCommandPass が埋める active フィールドを先に初期化する
+    // BuildIndirectCommandPass が埋める active フィールドを先に初期化する。
     rc.activeInstanceBuffer = nullptr;
     rc.activeDrawArgsBuffer = nullptr;
     rc.activeDrawCommands.clear();
@@ -97,6 +99,8 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     }
 
     if (!rc.preparedInstanceBuffer || rc.preparedInstanceCapacity < requiredBytes) {
+        // Vertex buffer と StructuredBuffer の両方を用意する。
+        // 前者は CPU fallback/通常描画、後者は ComputeCullingPass の SRV 入力に使う。
         constexpr uint32_t kAlignment = 256;
         const uint32_t capacity = (requiredBytes + (kAlignment - 1)) & ~(kAlignment - 1);
         rc.preparedInstanceBuffer = std::shared_ptr<IBuffer>(
@@ -114,6 +118,7 @@ void BuildInstanceBufferPass::Execute(FrameGraphResources& resources, const Rend
     }
 
     if (rc.commandList) {
+        // 同じ instance 配列を 2 種類の GPU buffer へ転送し、後段 pass が用途に応じて参照する。
         if (rc.preparedInstanceBuffer) {
             rc.commandList->UpdateBuffer(
                 rc.preparedInstanceBuffer.get(),

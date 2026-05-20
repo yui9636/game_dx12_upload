@@ -2,7 +2,8 @@
 #include <cstdint>
 #include <string>
 #include "RHI/ITexture.h"
-// FrameGraph 内のリソースを世代付き index で参照する軽量ハンドル。
+// FrameGraph 内の仮想リソースを参照する軽量ハンドル。
+// version は同じ texture を pass が書き換えた世代を表し、依存関係の判定に使う。
 struct ResourceHandle {
     uint16_t index   = 0xFFFF;
     uint16_t version = 0;
@@ -14,7 +15,7 @@ struct ResourceHandle {
     }
     bool operator!=(const ResourceHandle& o) const { return !(*this == o); }
 };
-// FrameGraph が生成するテクスチャの作成条件。
+// FrameGraph が一時テクスチャを生成・再利用するときの作成条件。
 struct TextureDesc {
     uint32_t width  = 0;
     uint32_t height = 0;

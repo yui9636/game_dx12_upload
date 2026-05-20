@@ -24,5 +24,6 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
+    // tone mapping 後の DisplayColor。HUD はここに直接描く。
     ResourceHandle m_hDisplayColor;
 };

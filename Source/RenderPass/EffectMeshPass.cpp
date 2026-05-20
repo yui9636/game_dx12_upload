@@ -14,12 +14,14 @@
 namespace {
     constexpr int kMaxBones = 256;
 
+    // EffectMeshVS が読む skeleton buffer。通常 mesh と fallback mesh の両方を同じ layout で渡す。
     struct CbSkeleton
     {
         DirectX::XMFLOAT4X4 boneTransforms[kMaxBones];
         DirectX::XMFLOAT4X4 prevBoneTransforms[kMaxBones];
     };
 
+    // bone 情報が無い effect mesh は actor の world matrix をそのまま 0 番 bone として扱う。
     void FillSkeletonCb(const ModelResource::MeshResource& mesh,
         const DirectX::XMFLOAT4X4& world,
         const DirectX::XMFLOAT4X4& prevWorld,
@@ -52,6 +54,7 @@ EffectMeshPass::~EffectMeshPass() = default;
 
 void EffectMeshPass::Setup(FrameGraphBuilder& builder, const RenderContext&)
 {
+    // SceneColor へ additive/alpha blend で重ね、Depth は test 用に読む。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth      = builder.GetHandle("GBufferDepth");
 
@@ -82,6 +85,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
     }
 
     if (!m_shader) {
+        // Effect mesh は使われない frame も多いため、shader は初回描画時に作る。
         m_shader = std::make_unique<EffectMeshShader>(Graphics::Instance().GetResourceFactory());
         LOG_INFO("[EffectMeshPass] shader created (PSO=%p)", (void*)m_shader->GetPipelineState());
     }
@@ -129,6 +133,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
         auto modelResource = packet.modelResource;
         if (!modelResource) continue;
 
+        // packet の render state が変わったときだけ pipeline state を差し替える。
         if (lastBlend != packet.blendState) {
             cmd->SetBlendState(rc.renderState->GetBlendState(packet.blendState), blendFactor, 0xFFFFFFFF);
             lastBlend = packet.blendState;
@@ -192,6 +197,7 @@ void EffectMeshPass::Execute(FrameGraphResources& resources, const RenderQueue& 
                 meshCount,
                 packet.worldMatrix._41, packet.worldMatrix._42, packet.worldMatrix._43);
         }
+        // mesh ごとに skeleton cbuffer と vertex/index buffer を bind して描画する。
         for (int meshIndex = 0; meshIndex < meshCount; ++meshIndex) {
             const auto* meshRes = modelResource->GetMeshResource(meshIndex);
             if (!meshRes) continue;

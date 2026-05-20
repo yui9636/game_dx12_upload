@@ -12,6 +12,7 @@ Gizmos::~Gizmos() = default;
 
 Gizmos::Gizmos(IResourceFactory* factory)
 {
+	// Gizmo は position のみの line mesh を、instance ごとの constant buffer で配置する。
 	InputLayoutElement layoutElements[] = {
 		{ "POSITION", 0, TextureFormat::R32G32B32_FLOAT, 0, kAppendAlignedElement },
 	};
@@ -32,6 +33,7 @@ Gizmos::Gizmos(IResourceFactory* factory)
 
 void Gizmos::DrawBox(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& angle, const DirectX::XMFLOAT3& size, const DirectX::XMFLOAT4& color)
 {
+	// 共有 box mesh を使い、instance に transform と色だけ積む。
 	Instance& instance = instances.emplace_back();
 	instance.mesh = &boxMesh;
 	instance.color = color;
@@ -44,6 +46,7 @@ void Gizmos::DrawBox(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3&
 
 void Gizmos::DrawSphere(const DirectX::XMFLOAT3& position, float radius, const DirectX::XMFLOAT4& color)
 {
+	// sphere mesh は単位半径で作り、instance transform で拡大する。
 	Instance& instance = instances.emplace_back();
 	instance.mesh = &sphereMesh;
 	instance.color = color;
@@ -55,6 +58,7 @@ void Gizmos::DrawSphere(const DirectX::XMFLOAT3& position, float radius, const D
 
 void Gizmos::DrawCylinder(const DirectX::XMFLOAT3& position, float radius, float height, const DirectX::XMFLOAT4& color)
 {
+	// cylinder mesh は単位形状として作り、radius/height を scale に反映する。
 	Instance& instance = instances.emplace_back();
 	instance.mesh = &cylinderMesh;
 	instance.color = color;
@@ -66,6 +70,7 @@ void Gizmos::DrawCylinder(const DirectX::XMFLOAT3& position, float radius, float
 
 void Gizmos::DrawCapsule(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& angle, float radius, float height, const DirectX::XMFLOAT4& color)
 {
+	// capsule mesh の基準長に対して、radius と height から目標長へ scale する。
 	Instance& instance = instances.emplace_back();
 	instance.mesh = &capsuleMesh;
 	instance.color = color;
@@ -82,6 +87,7 @@ void Gizmos::DrawCapsule(const DirectX::XMFLOAT3& position, const DirectX::XMFLO
 
 void Gizmos::CreateMesh(IResourceFactory* factory, const std::vector<DirectX::XMFLOAT3>& vertices, Mesh& mesh)
 {
+	// CPU で作った line vertex 配列を RHI vertex buffer にアップロードする。
 	uint32_t byteSize = static_cast<uint32_t>(sizeof(DirectX::XMFLOAT3) * vertices.size());
 	mesh.vertexBuffer = factory->CreateBuffer(byteSize, BufferType::Vertex, vertices.data());
 	mesh.vertexCount = static_cast<UINT>(vertices.size());
@@ -89,6 +95,7 @@ void Gizmos::CreateMesh(IResourceFactory* factory, const std::vector<DirectX::XM
 
 void Gizmos::CreateBoxMesh(IResourceFactory* factory, float width, float height, float depth)
 {
+	// 8 corner を edge の line list に展開する。
 	DirectX::XMFLOAT3 position[8] =
 	{
 		{-width,height,-depth}, {width,height,-depth}, {width,height,depth}, {-width,height,depth},
@@ -116,6 +123,7 @@ void Gizmos::CreateBoxMesh(IResourceFactory* factory, float width, float height,
 
 void Gizmos::CreateSphereMesh(IResourceFactory* factory, float radius, int subdivisions)
 {
+	// XY / XZ / YZ の 3 つの大円で wire sphere を表現する。
 	float step = DirectX::XM_2PI / subdivisions;
 	std::vector<DirectX::XMFLOAT3> vertices;
 
@@ -143,6 +151,7 @@ void Gizmos::CreateSphereMesh(IResourceFactory* factory, float radius, int subdi
 
 void Gizmos::CreateCylinderMesh(IResourceFactory* factory, float radius, float height, int subdivision)
 {
+	// 円周方向の line を高さ方向へ積み、wire cylinder を作る。
 	float step = DirectX::XM_2PI / subdivision;
 	std::vector<DirectX::XMFLOAT3> vertices;
 
@@ -164,6 +173,7 @@ void Gizmos::CreateCylinderMesh(IResourceFactory* factory, float radius, float h
 
 void Gizmos::CreateCapsuleMesh(IResourceFactory* factory, float, float, int subdivision)
 {
+	// 上下半球と胴体の縦線・輪を組み合わせて capsule wire mesh を作る。
 	using namespace DirectX;
 	const int ringSides = 64;
 	const int meridians = (subdivision > 0 ? subdivision * 4 : 16);
@@ -236,7 +246,7 @@ void Gizmos::CreateCapsuleMesh(IResourceFactory* factory, float, float, int subd
 
 void Gizmos::Render(const RenderContext& rc)
 {
-
+	// 今 frame に積まれた gizmo instance をまとめて描画する。
 	rc.commandList->VSSetShader(vertexShader.get());
 	rc.commandList->PSSetShader(pixelShader.get());
 	rc.commandList->SetInputLayout(inputLayout.get());
@@ -258,6 +268,7 @@ void Gizmos::Render(const RenderContext& rc)
 
 	for (const Instance& instance : instances)
 	{
+		// instance ごとに WVP と color を更新して line mesh を描く。
 		rc.commandList->SetVertexBuffer(0, instance.mesh->vertexBuffer.get(), stride, offset);
 
 		DirectX::XMMATRIX W = DirectX::XMLoadFloat4x4(&instance.worldTransform);

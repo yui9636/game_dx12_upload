@@ -56,6 +56,7 @@ void GTAOPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
         renderH = (uint32_t)(Graphics::Instance().GetScreenHeight() * renderScale);
     }
 
+    // DeferredLighting から shader resource として読まれる AO texture を登録する。
     TextureDesc desc{};
     desc.width = renderW;
     desc.height = renderH;
@@ -95,6 +96,7 @@ void GTAOPass::Execute(FrameGraphResources& resources, const RenderQueue& queue,
     rc.commandList->SetPipelineState(m_pso.get());
 
     if (Graphics::Instance().GetAPI() == GraphicsAPI::DX12) {
+        // DX12 は NullSrvKind を明示して、無効 input でも安全な descriptor table を作る。
         auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
         DX12CommandList::PixelTextureBinding bindings[] = {
             { 0, gbuffer1, DX12CommandList::NullSrvKind::Texture2D },

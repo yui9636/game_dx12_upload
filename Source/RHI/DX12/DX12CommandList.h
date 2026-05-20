@@ -10,24 +10,29 @@
 
 class DX12CommandList : public ICommandList {
 public:
+    // 一時 constant buffer 用 ring buffer から切り出した領域。
     struct DynamicAllocation {
-        void* cpuPtr = nullptr;
-        D3D12_GPU_VIRTUAL_ADDRESS gpuVA = 0;
-        uint32_t size = 0;
+        void* cpuPtr = nullptr;                  // CPU 書き込み先。
+        D3D12_GPU_VIRTUAL_ADDRESS gpuVA = 0;     // shader へ渡す GPU virtual address。
+        uint32_t size = 0;                       // 256 byte alignment 済みの確保サイズ。
     };
 
+    // null SRV を作るときの view dimension。
     enum class NullSrvKind {
         Texture2D,
         Texture2DArray,
         TextureCube
     };
 
+    // pixel shader の tN slot に貼る texture と fallback null SRV。
     struct PixelTextureBinding {
-        uint32_t slot;
-        ITexture* texture;
-        NullSrvKind nullKind;
+        uint32_t slot;        // shader register tN。
+        ITexture* texture;    // nullptr の場合は nullKind の null SRV を bind する。
+        NullSrvKind nullKind; // texture が無いときに使う null SRV の種類。
     };
 
+    // useDeviceFrameAllocator=true のときは DX12Device の frame allocator を使う。
+    // worker command list など独立 lifetime が必要な場合は owned allocator を持つ。
     DX12CommandList(DX12Device* device, DX12RootSignature* rootSig, bool useDeviceFrameAllocator = true);
     ~DX12CommandList() override;
 
@@ -39,7 +44,9 @@ public:
     void DiscardResourceBarriers();
     void RestoreFrameDescriptorHeap();
     void RestoreDescriptorHeap();  // ImGui 描画後にフレームヒープとルートシグネチャを復元
+    // 複数 texture を 1 つの SRV table にまとめて bind する。
     void BindPixelTextureTable(const PixelTextureBinding* bindings, uint32_t count);
+    // transient constant buffer 領域へ data をコピーして GPU address を返す。
     DynamicAllocation AllocateDynamicConstantBuffer(const void* data, uint32_t size);
     void VSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
     void PSSetDynamicConstantBuffer(uint32_t slot, const void* data, uint32_t size);
@@ -104,47 +111,52 @@ public:
     ID3D12GraphicsCommandList* GetNativeCommandList() const { return m_commandList.Get(); }
 
 private:
+    // 遅延中の PipelineStateDesc から PSO を確定して command list に設定する。
     void FlushPSO();
+    // 溜めた resource barrier をまとめて発行する。
     void FlushPendingBarriers();
+    // RHI の ResourceState を D3D12_RESOURCE_STATES に変換する。
     D3D12_RESOURCE_STATES ToD3D12State(ResourceState state);
+    // slot 番号に応じた 2D null SRV を返す互換用 helper。
     D3D12_CPU_DESCRIPTOR_HANDLE GetNullSrvHandle(uint32_t slot) const;
+    // texture dimension に応じた null SRV を返す。
     D3D12_CPU_DESCRIPTOR_HANDLE GetNullSrvHandle(NullSrvKind kind) const;
 
-    DX12Device* m_device;
-    DX12RootSignature* m_rootSignature;
-    bool m_useDeviceFrameAllocator = true;
-    ComPtr<ID3D12CommandAllocator> m_ownedAllocator;
-    ComPtr<ID3D12GraphicsCommandList> m_commandList;
-    ComPtr<ID3D12DescriptorHeap> m_nullSrvHeap;
-    ComPtr<ID3D12Resource> m_dynamicCbRing;
-    ComPtr<ID3D12CommandSignature> m_drawIndexedInstancedSignature;
-    uint8_t* m_dynamicCbRingCpuBase = nullptr;
-    uint32_t m_dynamicCbRingSize = 0;
-    uint32_t m_dynamicCbRingOffset = 0;
-    std::vector<ComPtr<ID3D12Resource>> m_dynamicCbSpills;
+    DX12Device* m_device;                         // command list が使う DX12Device。非所有。
+    DX12RootSignature* m_rootSignature;           // graphics root signature。非所有。
+    bool m_useDeviceFrameAllocator = true;        // true なら device の frame allocator を Reset に使う。
+    ComPtr<ID3D12CommandAllocator> m_ownedAllocator; // worker 用など自前 allocator。
+    ComPtr<ID3D12GraphicsCommandList> m_commandList; // 実際に録画する DX12 command list。
+    ComPtr<ID3D12DescriptorHeap> m_nullSrvHeap;   // null texture 用 SRV descriptor heap。
+    ComPtr<ID3D12Resource> m_dynamicCbRing;       // dynamic CB 用 upload heap ring buffer。
+    ComPtr<ID3D12CommandSignature> m_drawIndexedInstancedSignature; // ExecuteIndirect 用 signature。
+    uint8_t* m_dynamicCbRingCpuBase = nullptr;    // dynamicCbRing の CPU map 先。
+    uint32_t m_dynamicCbRingSize = 0;             // ring buffer 全体サイズ。
+    uint32_t m_dynamicCbRingOffset = 0;           // 次に確保する ring buffer offset。
+    std::vector<ComPtr<ID3D12Resource>> m_dynamicCbSpills; // ring が足りない frame の一時退避 buffer。
 
     // SRV copy 用の frame-local descriptor allocator。
     std::unique_ptr<DX12DescriptorAllocator> m_frameSrvAllocator;
 
     // 遅延 PSO state 追跡。
-    PipelineStateDesc m_pendingDesc;
-    bool m_psoDirty = true;
+    PipelineStateDesc m_pendingDesc; // 次の draw/dispatch で必要になる PSO 設定。
+    bool m_psoDirty = true;          // pendingDesc が native PSO に未反映なら true。
 
     // PSO cache を保持する。
     std::unique_ptr<DX12PSOCache> m_psoCache;
 
     // batch submit 用に保留する barrier。
-    std::vector<D3D12_RESOURCE_BARRIER> m_pendingBarriers;
+    std::vector<D3D12_RESOURCE_BARRIER> m_pendingBarriers; // batch submit 用 barrier cache。
 
-    // SRV を作成する。 staging block (64 slots matching root signature t0-t63)
+    // SRV staging block。root signature の t0-t63 table に対応する。
     static constexpr uint32_t kSrvSlotCount = 64;
-    D3D12_CPU_DESCRIPTOR_HANDLE m_srvBlockCpuBase = {};
-    D3D12_GPU_DESCRIPTOR_HANDLE m_srvBlockGpuBase = {};
-    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrv2D = {};
-    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrv2DArray = {};
-    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrvCube = {};
-    bool m_srvBlockAllocated = false;
-    bool m_srvDirtyAfterDraw = false;  // Draw後にtrue → 次のテクスチャバインドで新ブロック確保
+    D3D12_CPU_DESCRIPTOR_HANDLE m_srvBlockCpuBase = {}; // 現在の SRV table CPU 先頭。
+    D3D12_GPU_DESCRIPTOR_HANDLE m_srvBlockGpuBase = {}; // 現在の SRV table GPU 先頭。
+    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrv2D = {};       // Texture2D 用 null SRV。
+    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrv2DArray = {};  // Texture2DArray 用 null SRV。
+    D3D12_CPU_DESCRIPTOR_HANDLE m_nullSrvCube = {};     // TextureCube 用 null SRV。
+    bool m_srvBlockAllocated = false;                   // 今 frame の SRV block 確保済みか。
+    bool m_srvDirtyAfterDraw = false;                   // Draw後にtrue。次 bind で新 block を確保する。
     void EnsureSrvBlock();
 };
 

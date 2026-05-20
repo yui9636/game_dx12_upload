@@ -12,6 +12,7 @@
 
 namespace
 {
+    // 同じ mesh/material の連続 draw command は compute dispatch を 1 グループにまとめられる。
     bool CanMergeGpuDrivenGroup(
         const RenderContext::PreparedIndirectCommand& first,
         const RenderContext::PreparedIndirectCommand& next,
@@ -27,6 +28,8 @@ namespace
 
 void BuildIndirectCommandPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // CPU 側 command list と GPU buffer を RenderContext に準備する副作用 pass。
+    // FrameGraph texture は扱わない。
     (void)builder;
 }
 
@@ -48,6 +51,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     rc.prepMetrics.gpuDrivenDispatchGroupCount = 0;
     rc.prepMetrics.gpuDrivenDispatchReduction = 0.0f;
 
+    // batch ごとの mesh 展開は独立しているため並列に command 候補を作る。
     std::vector<BatchCommandBuildResult> batchResults;
     batchResults.resize(rc.preparedOpaqueInstanceBatches.size());
 
@@ -86,6 +90,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
                     continue;
                 }
 
+                // skinning mesh は instance draw できないため、別 command として CPU path に残す。
                 const bool isInstancable = meshResource->bones.empty();
 
                 IndirectDrawCommand cmd{};
@@ -139,6 +144,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
             }
         });
 
+    // 並列結果を 1 本の DrawArgs/metadata 配列へ連結し、GPU culling 用の index を確定する。
     std::vector<DrawArgs> drawArgs;
     std::vector<RenderContext::GpuDrivenCommandMetadata> metadata;
     size_t totalDrawCommands = 0;
@@ -197,6 +203,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
         rc.prepMetrics.gpuDrivenCandidateInstanceCount += cmd.instanceCount;
     }
 
+    // ComputeCullingPass の dispatch 数を減らすため、連続する同種 command をまとめる。
     for (size_t i = 0; i < rc.preparedIndirectCommands.size();) {
         const auto& first = rc.preparedIndirectCommands[i];
         RenderContext::GpuDrivenDispatchGroup group{};
@@ -253,6 +260,7 @@ void BuildIndirectCommandPass::Execute(FrameGraphResources& resources, const Ren
     }
 
     if (!rc.preparedIndirectArgumentBuffer || rc.preparedIndirectArgumentCapacity < requiredArgsBytes) {
+        // ExecuteIndirect の argument buffer は 256B alignment で余裕を持って確保する。
         constexpr uint32_t kAlignment = 256;
         const uint32_t capacity = (requiredArgsBytes + (kAlignment - 1)) & ~(kAlignment - 1);
         rc.preparedIndirectArgumentBuffer = std::shared_ptr<IBuffer>(

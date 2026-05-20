@@ -23,8 +23,10 @@
 using namespace Microsoft::WRL;
 
 namespace {
+	// Graphics 破棄中は texture destructor から renderer singleton へ戻らないようにする。
 	bool g_graphicsShuttingDown = false;
 
+	// DX12 device lost / DRED 用ログを Saved/Logs 配下へ出すための path helper。
 	std::string ResolveDebugLogPath(const char* fileName)
 	{
 		const std::filesystem::path logDir(PathResolver::Resolve("Saved/Logs"));
@@ -45,6 +47,7 @@ bool Graphics::IsShuttingDown()
 
 void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 {
+	// window size を基準に swapchain と render target 群の解像度を決める。
 	m_api = api;
 	m_windowHandle = hWnd;
 	RECT rc;
@@ -54,9 +57,11 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	screenWidth = static_cast<float>(w);
 	screenHeight = static_cast<float>(h);
 	if (api == GraphicsAPI::DX12) {
+		// DX12 backend は RHI factory 経由で texture/buffer/shader を作る。
 		m_dx12Device = std::make_unique<DX12Device>(hWnd, w, h);
 		resourceFactory = std::make_unique<DX12ResourceFactory>(m_dx12Device.get());
 
+		// swapchain back buffer を RHI texture として包み、共通描画コードから扱えるようにする。
 		m_dx12BackBuffers[0] = std::make_shared<DX12Texture>(
 			m_dx12Device.get(), m_dx12Device->GetBackBuffer(0), 0);
 		m_dx12BackBuffers[1] = std::make_shared<DX12Texture>(
@@ -65,12 +70,14 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 
 		renderState = std::make_unique<RenderState>(m_dx12Device.get());
 
+		// 内部描画は renderScale で縮小し、UI 表示先は window 解像度に合わせる。
 		auto* factory = resourceFactory.get();
 		UINT renderW = static_cast<UINT>(w * m_renderScale);
 		UINT renderH = static_cast<UINT>(h * m_renderScale);
 		UINT halfW = renderW / 2;
 		UINT halfH = renderH / 2;
 
+		// DX12 側の FrameBuffer は RHI texture で統一して作る。
 		std::vector<TextureFormat> gBufFmt = {
 			TextureFormat::R16G16B16A16_FLOAT, TextureFormat::R16G16B16A16_FLOAT,
 			TextureFormat::R32G32B32A32_FLOAT, TextureFormat::R32G32_FLOAT };
@@ -107,6 +114,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	HRESULT hr = S_OK;
 
 	{
+		// DX11 device と swapchain を従来経路で作る。
 		UINT createDeviceFlags = 0;
 #if defined(DEBUG) || defined(_DEBUG)
 		createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -132,6 +140,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	}
 
 	{
+		// DX11 back buffer の RTV と RHI wrapper を作成する。
 		ComPtr<ID3D11Texture2D> backBuffer;
 		swapchain->GetBuffer(0, IID_PPV_ARGS(backBuffer.GetAddressOf()));
 		device->CreateRenderTargetView(backBuffer.Get(), nullptr, renderTargetView.GetAddressOf());
@@ -140,6 +149,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	}
 
 	{
+		// main depth は DSV と SRV の両方で使うため typeless resource にする。
 		D3D11_TEXTURE2D_DESC desc{};
 		desc.Width = w;
 		desc.Height = h;
@@ -169,6 +179,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 	}
 
 	{
+		// DX11 immediate context の初期 viewport。
 		D3D11_VIEWPORT vp{};
 		vp.Width = static_cast<float>(w);
 		vp.Height = static_cast<float>(h);
@@ -188,6 +199,7 @@ void Graphics::Initialize(HWND hWnd, GraphicsAPI api)
 
 
 
+	// DX11 側も DX12 と同じ renderScale / pass 構成で FrameBuffer を準備する。
 	UINT renderW = static_cast<UINT>(w * m_renderScale);
 	UINT renderH = static_cast<UINT>(h * m_renderScale);
 
@@ -315,6 +327,7 @@ void Graphics::OnResize(uint32_t width, uint32_t height)
 }
 
 static void DumpDRED(ID3D12Device* device) {
+	// device lost 時の GPU breadcrumb と page fault 情報をファイルへ保存する。
 	ComPtr<ID3D12DeviceRemovedExtendedData> dred;
 	if (FAILED(device->QueryInterface(IID_PPV_ARGS(&dred)))) return;
 
@@ -356,6 +369,7 @@ static void DumpDRED(ID3D12Device* device) {
 void Graphics::Present(UINT syncInterval)
 {
 	if (m_api == GraphicsAPI::DX12) {
+		// tearing 対応時は vsync off present で allow tearing flag を使う。
 		const UINT presentFlags = (syncInterval == 0 && m_dx12Device->IsTearingSupported()) ? DXGI_PRESENT_ALLOW_TEARING : 0;
 		HRESULT hr = m_dx12Device->GetSwapChain()->Present(syncInterval, presentFlags);
 		if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
@@ -370,6 +384,7 @@ void Graphics::Present(UINT syncInterval)
 			if (f) { fprintf(f, "%s", buf); fclose(f); }
 			DumpDRED(m_dx12Device->GetDevice());
 		}
+		// Present 後に frame fence を進め、次の back buffer wrapper を公開する。
 		m_dx12Device->MoveToNextFrame();
 		backBufferTexture = m_dx12BackBuffers[m_dx12Device->GetCurrentBackBufferIndex()];
 		return;
@@ -382,6 +397,7 @@ void Graphics::CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination)
 	if (!source || !destination) return;
 
 	if (m_api == GraphicsAPI::DX12) {
+		// DX12 path は command list copy 未実装。必要になったら RHI copy API へ寄せる。
 		return;
 	}
 
@@ -399,11 +415,11 @@ void Graphics::CopyFrameBuffer(FrameBuffer* source, FrameBuffer* destination)
 
 std::unique_ptr<IPipelineState> Graphics::CreatePipelineState(const PipelineStateDesc& desc)
 {
+	// RHI factory がある場合は backend 側の PSO wrapper を作る。
 	if (resourceFactory) {
 		return resourceFactory->CreatePipelineState(desc);
 	}
 	return std::make_unique<DX11PipelineState>(desc);
 }
-
 
 

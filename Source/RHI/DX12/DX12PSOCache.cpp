@@ -5,6 +5,7 @@
 #include <cassert>
 
 ID3D12PipelineState* DX12PSOCache::GetOrCreate(const PipelineStateDesc& desc) {
+    // 同じ shader / state / render target format の組み合わせは PSO を再利用する。
     size_t h = HashDesc(desc);
     auto it = m_cache.find(h);
     if (it != m_cache.end()) {
@@ -18,6 +19,7 @@ ID3D12PipelineState* DX12PSOCache::GetOrCreate(const PipelineStateDesc& desc) {
 }
 
 size_t DX12PSOCache::HashDesc(const PipelineStateDesc& desc) {
+    // pointer identity と state 値をまとめ、実行時生成 PSO の cache key にする。
     size_t h = 0;
     auto combine = [&h](size_t val) {
         h ^= val + 0x9e3779b9 + (h << 6) + (h >> 2);

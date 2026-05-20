@@ -9,6 +9,7 @@
 
 void ForwardTransparentPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // DeferredLighting 後の SceneColor と GBufferDepth をそのまま使う。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
 
@@ -42,6 +43,7 @@ void ForwardTransparentPass::Execute(FrameGraphResources& resources, const Rende
 
     renderer->SetIBL(rc.environment.diffuseIBLPath, rc.environment.specularIBLPath);
 
+    // material ごとの state は packet に保持されているため、ModelRenderer へ draw 登録する。
     for (const auto& packet : queue.transparentPackets) {
         if (!packet.modelResource) continue;
 

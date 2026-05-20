@@ -19,13 +19,14 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
+    // raymarch と blur の 2 段構成。
     std::unique_ptr<IShader> m_vs;
     std::unique_ptr<IShader> m_psRaymarch;
     std::unique_ptr<IShader> m_psBlur;
 
     std::unique_ptr<IPipelineState> m_psoRaymarch;
     std::unique_ptr<IPipelineState> m_psoBlur;
-    ResourceHandle m_hGBuffer2;
-    ResourceHandle m_hVolumetricFog;
-    ResourceHandle m_hVolumetricFogBlur;
+    ResourceHandle m_hGBuffer2;           // WorldPos/Depth。レイマーチ距離の復元に使う。
+    ResourceHandle m_hVolumetricFog;      // 生フォグ。
+    ResourceHandle m_hVolumetricFogBlur;  // lighting 入力用の blur 済みフォグ。
 };

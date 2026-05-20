@@ -11,6 +11,7 @@
 #endif
 
 DX12Device::DX12Device(HWND hWnd, uint32_t width, uint32_t height) {
+    // device、queue、swapchain、descriptor heap、frame resource の順で初期化する。
     CreateDevice();
     CreateCommandQueue();
     CreateSwapChain(hWnd, width, height);
@@ -20,6 +21,7 @@ DX12Device::DX12Device(HWND hWnd, uint32_t width, uint32_t height) {
 }
 
 DX12Device::~DX12Device() {
+    // GPU が参照中の resource / descriptor を残したまま破棄しないよう最後に同期する。
     WaitForGPU();
     if (m_fenceEvent) {
         CloseHandle(m_fenceEvent);
@@ -99,12 +101,14 @@ void DX12Device::CreateDevice() {
 }
 
 void DX12Device::CreateCommandQueue() {
+    // 通常描画用の direct queue。
     D3D12_COMMAND_QUEUE_DESC queueDesc = {};
     queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
     HRESULT hr = m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue));
     assert(SUCCEEDED(hr));
 
+    // compute pass を graphics queue と分けて走らせるための compute queue。
     D3D12_COMMAND_QUEUE_DESC computeQueueDesc = {};
     computeQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
     computeQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -113,6 +117,7 @@ void DX12Device::CreateCommandQueue() {
 }
 
 void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
+    // tearing 対応環境では present 時に allow tearing を使えるよう swapchain flag を立てる。
     BOOL allowTearing = FALSE;
     ComPtr<IDXGIFactory5> factory5;
     if (SUCCEEDED(m_dxgiFactory.As(&factory5))) {
@@ -143,7 +148,7 @@ void DX12Device::CreateSwapChain(HWND hWnd, uint32_t width, uint32_t height) {
 }
 
 void DX12Device::CreateDescriptorHeaps() {
-    // RTV を作成する。 heap を作成する。
+    // RTV heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = RTV_DESCRIPTOR_COUNT; // back buffer、render target、editor / history buffer 用。
@@ -152,7 +157,7 @@ void DX12Device::CreateDescriptorHeaps() {
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvHeap));
         m_rtvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     }
-    // DSV を作成する。 heap を作成する。
+    // DSV heap を作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = DSV_DESCRIPTOR_COUNT;
@@ -161,7 +166,7 @@ void DX12Device::CreateDescriptorHeaps() {
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_dsvHeap));
         m_dsvDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
     }
-    // CBV/SRV/UAV heap (shader visible) - 将来のバインドレス用に予約
+    // CBV/SRV/UAV heap (shader visible) - 将来のバインドレス用に予約。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = SRV_DESCRIPTOR_COUNT;
@@ -170,10 +175,10 @@ void DX12Device::CreateDescriptorHeaps() {
         m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavHeap));
         m_cbvSrvUavDescriptorSize = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     }
-    // CBV/SRV/UAV staging heap (non-shader-visible) - SRV作成用
+    // CBV/SRV/UAV staging heap (non-shader-visible) - SRV 作成用。
     // CopyDescriptorsSimple のソースとして使用。Shader-Visible ヒープからの
     // CPU 読み出しは Write-Combined メモリ上で不正確になるため、
-    // SRV を作成する。 は必ずこの Non-Shader-Visible ヒープに作成する。
+    // SRV は必ずこの Non-Shader-Visible ヒープに作成する。
     {
         D3D12_DESCRIPTOR_HEAP_DESC desc = {};
         desc.NumDescriptors = SRV_DESCRIPTOR_COUNT;
@@ -184,6 +189,7 @@ void DX12Device::CreateDescriptorHeaps() {
 }
 
 void DX12Device::CreateFrameResources() {
+    // frame ごとの command allocator と swapchain back buffer 参照を準備する。
     for (uint32_t i = 0; i < FRAME_COUNT; ++i) {
         m_device->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -194,6 +200,7 @@ void DX12Device::CreateFrameResources() {
 }
 
 void DX12Device::CreateFence() {
+    // graphics / compute それぞれの完了点を追跡する fence。
     m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
     m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_computeFence));
     m_fenceValues[m_frameIndex] = 1;
@@ -207,6 +214,7 @@ void DX12Device::CreateFence() {
 void DX12Device::ResizeSwapChain(uint32_t width, uint32_t height) {
     if (!m_swapChain || width == 0 || height == 0) return;
 
+    // resize 前に GPU を止め、古い back buffer 参照を完全に外す。
     WaitForGPU();
 
     // back buffer 参照を解放する。
@@ -214,7 +222,7 @@ void DX12Device::ResizeSwapChain(uint32_t width, uint32_t height) {
         m_backBuffers[i].Reset();
     }
 
-    // resize 処理。 swap chain buffers
+    // swapchain buffer を新しい viewport サイズへ resize する。
     DXGI_SWAP_CHAIN_DESC1 desc = {};
     m_swapChain->GetDesc1(&desc);
     HRESULT hr = m_swapChain->ResizeBuffers(FRAME_COUNT, width, height, desc.Format, desc.Flags);
@@ -231,6 +239,7 @@ void DX12Device::ResizeSwapChain(uint32_t width, uint32_t height) {
 void DX12Device::WaitForGPU() {
     if (!m_commandQueue || !m_fence || !m_fenceEvent) return;
 
+    // 現在 frame の fence を signal し、graphics queue の完了を待つ。
     const uint64_t fenceValue = m_fenceValues[m_frameIndex];
     m_commandQueue->Signal(m_fence.Get(), fenceValue);
 
@@ -253,6 +262,7 @@ void DX12Device::WaitForGPU() {
 }
 
 void DX12Device::MoveToNextFrame() {
+    // 現 frame を signal し、次に描画する back buffer の allocator が空くまで待つ。
     const uint64_t currentFenceValue = m_fenceValues[m_frameIndex];
     m_commandQueue->Signal(m_fence.Get(), currentFenceValue);
 
@@ -267,6 +277,7 @@ void DX12Device::MoveToNextFrame() {
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateRTVDescriptor() {
+    // defer free 済みの descriptor を優先して再利用する。
     if (!m_freeRTVList.empty()) {
         auto handle = m_freeRTVList.back();
         m_freeRTVList.pop_back();
@@ -282,6 +293,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateRTVDescriptor() {
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateDSVDescriptor() {
+    // depth target の作り直しが多いため、free list からの再利用を先に見る。
     if (!m_freeDSVList.empty()) {
         auto handle = m_freeDSVList.back();
         m_freeDSVList.pop_back();
@@ -297,6 +309,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateDSVDescriptor() {
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE DX12Device::AllocateSRVDescriptor() {
+    // SRV は staging heap 側に作成し、描画 command list が frame heap へコピーする。
     if (!m_freeSRVList.empty()) {
         auto handle = m_freeSRVList.back();
         m_freeSRVList.pop_back();
@@ -324,6 +337,7 @@ void DX12Device::DeferReleaseResource(ComPtr<ID3D12Resource> resource, ID3D12Fen
 }
 
 void DX12Device::ProcessDeferredFrees() {
+    // fence 完了済みの resource ComPtr を破棄して GPU 参照中の解放を避ける。
     auto resourceIt = m_deferredResources.begin();
     while (resourceIt != m_deferredResources.end()) {
         if (!resourceIt->fence || resourceIt->fence->GetCompletedValue() >= resourceIt->fenceValue) {
@@ -333,6 +347,7 @@ void DX12Device::ProcessDeferredFrees() {
         }
     }
 
+    // descriptor も GPU/ImGui が参照し終えたものだけ free list へ戻す。
     auto it = m_deferredFrees.begin();
     while (it != m_deferredFrees.end()) {
         if (!it->fence || it->fence->GetCompletedValue() >= it->fenceValue) {
@@ -393,6 +408,7 @@ uint64_t DX12Device::ExecuteComputeCommandLists(ID3D12CommandList* const* lists,
         return 0;
     }
 
+    // compute queue に投入し、graphics queue が必要なら待てる fence value を返す。
     m_computeQueue->ExecuteCommandLists(count, lists);
     const uint64_t fenceValue = m_computeFenceValue++;
     m_computeQueue->Signal(m_computeFence.Get(), fenceValue);
@@ -404,5 +420,6 @@ void DX12Device::QueueGraphicsWaitForCompute(uint64_t fenceValue)
     if (!m_commandQueue || !m_computeFence || fenceValue == 0) {
         return;
     }
+    // graphics queue 側に Wait を積み、compute で生成した resource を安全に読む。
     m_commandQueue->Wait(m_computeFence.Get(), fenceValue);
 }

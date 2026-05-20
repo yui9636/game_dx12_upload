@@ -2,6 +2,7 @@
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
+// 不透明モデルを複数 render target へ描き、DeferredLighting の入力 GBuffer を作る pass。
 class GBufferPass : public IRenderPass {
 public:
     std::string GetName() const override { return "GBufferPass"; }

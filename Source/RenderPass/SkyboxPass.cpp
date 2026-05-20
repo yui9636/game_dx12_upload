@@ -8,6 +8,7 @@
 
 void SkyboxPass::Setup(FrameGraphBuilder& builder, const RenderContext& rc)
 {
+    // skybox は SceneColor を更新し、Depth は背景判定のために読む。
     m_hSceneColor = builder.GetHandle("SceneColor");
     m_hDepth = builder.GetHandle("GBufferDepth");
 
@@ -42,6 +43,7 @@ void SkyboxPass::Execute(FrameGraphResources& resources, const RenderQueue& queu
         rc.mainViewport = RhiViewport(0.0f, 0.0f, (float)rtScene->GetWidth(), (float)rtScene->GetHeight());
         rc.commandList->SetViewport(rc.mainViewport);
 
+        // camera の平行移動を消し、skybox が常に無限遠に見えるようにする。
         DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&rc.viewMatrix);
         DirectX::XMMATRIX P = DirectX::XMLoadFloat4x4(&rc.projectionMatrix);
 

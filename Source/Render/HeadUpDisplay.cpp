@@ -10,10 +10,10 @@
 #include	"Sprite/SpriteRenderer.h"
 
 #include <algorithm>
-// HeadUpDisplay::HeadUpDisplay はこのモジュールの実行時処理を構成する補助処理を行う。
 
 HeadUpDisplay::HeadUpDisplay()
 {
+	// lock-on cursor sprite と camera mode change message を登録する。
 	lockonCursol = std::make_shared<Sprite>("Data/Texture/UI/lockoncursor.png");
 
 	CAMERACHANGEFREEMODEKEY		= Messenger::Instance().AddReceiver(MessageData::CAMERACHANGEFREEMODE, [&](void* data){ OnLockOff(data); });
@@ -23,6 +23,7 @@ HeadUpDisplay::HeadUpDisplay()
 
 HeadUpDisplay::~HeadUpDisplay()
 {
+	// Messenger に保持された callback が破棄済み HUD を呼ばないよう解除する。
 	Messenger::Instance().RemoveReceiver(CAMERACHANGEFREEMODEKEY);
 	Messenger::Instance().RemoveReceiver(CAMERACHANGELOCKONMODEKEY);
 	Messenger::Instance().RemoveReceiver(CAMERACHANGEMOTIONMODEKEY);
@@ -31,6 +32,7 @@ HeadUpDisplay::~HeadUpDisplay()
 void HeadUpDisplay::Update(float dt)
 {
 	{
+		// lockonDirection に応じて表示 alpha 用 timer を増減させる。
 		lockonTimer	+= lockonDirection * dt * 60;
 		if( lockonTimer <= 0 )
 			lockonTimer = 0;
@@ -43,6 +45,7 @@ void HeadUpDisplay::Render(const RenderContext& rc)
 {
 	if( lockonTimer > 0 && lockonCursol )
 	{
+		// editor/game viewport のどちらでも使えるよう、RenderContext の表示サイズを優先する。
 		float viewportW = static_cast<float>(rc.displayWidth);
 		float viewportH = static_cast<float>(rc.displayHeight);
 		if (viewportW <= 0.0f) viewportW = rc.mainViewport.width;
@@ -54,6 +57,7 @@ void HeadUpDisplay::Render(const RenderContext& rc)
 
 		const float centerX = viewportW * lockonPosition.x;
 		const float centerY = viewportH * lockonPosition.y;
+		// 左右 2 枚の sprite を向かい合わせに描き、lock-on 収束演出にする。
 		float	cursolWidth		= static_cast<float>(  lockonCursol->GetTextureWidth() ) * 0.25f;
 		float	cursolHeight	= static_cast<float>( lockonCursol->GetTextureHeight() ) * 0.25f;
 		float	halfHeight		= static_cast<float>( lockonCursol->GetTextureHeight() ) * 0.25f;
@@ -77,6 +81,7 @@ void HeadUpDisplay::Render(const RenderContext& rc)
 
 void HeadUpDisplay::OnLockOn(void* data)
 {
+	// target world position を screen 正規化座標へ変換し、cursor 表示を開始する。
 	MessageData::CAMERACHANGELOCKONMODEDATA*	p	= static_cast<MessageData::CAMERACHANGELOCKONMODEDATA*>(data);
 
 	DirectX::XMMATRIX	vm	= DirectX::XMLoadFloat4x4( &Camera::Instance().GetView() );
@@ -92,5 +97,6 @@ void HeadUpDisplay::OnLockOn(void* data)
 
 void HeadUpDisplay::OnLockOff(void* data)
 {
+	// timer を減少方向へ倒し、fade out させる。
 	lockonDirection	= -1;
 }

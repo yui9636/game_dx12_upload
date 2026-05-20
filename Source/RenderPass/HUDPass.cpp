@@ -20,6 +20,7 @@ HUDPass::HUDPass(IResourceFactory*)
 
 void HUDPass::Setup(FrameGraphBuilder& builder, const RenderContext& /*rc*/)
 {
+    // HUD は tone mapping 後の DisplayColor を直接更新する。
     m_hDisplayColor = builder.GetHandle("DisplayColor");
     if (m_hDisplayColor.IsValid()) {
         m_hDisplayColor = builder.Write(m_hDisplayColor);
@@ -40,6 +41,7 @@ void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     const float h = static_cast<float>(displayColor->GetHeight());
     rc.commandList->SetViewport(0.0f, 0.0f, w, h);
 
+    // UI 系は display 解像度でレイアウトしたいので、HUD 用 Context に表示サイズを反映する。
     RenderContext hudRc = rc;
     hudRc.displayWidth = static_cast<uint32_t>(w);
     hudRc.displayHeight = static_cast<uint32_t>(h);

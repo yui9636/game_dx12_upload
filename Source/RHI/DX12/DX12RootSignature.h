@@ -10,9 +10,11 @@
 //   s0~s3: PS 用 Sampler table。
 class DX12RootSignature {
 public:
+    // global slot layout を持つ root signature を生成する。
     DX12RootSignature(DX12Device* device);
     ~DX12RootSignature() = default;
 
+    // command list が SetGraphicsRootSignature に渡す native object。
     ID3D12RootSignature* Get() const { return m_rootSignature.Get(); }
 
     // root parameter index は b0-b7 の CBV と SRV table を並べる。
@@ -24,5 +26,5 @@ public:
     };
 
 private:
-    ComPtr<ID3D12RootSignature> m_rootSignature;
+    ComPtr<ID3D12RootSignature> m_rootSignature; // DX12 backend 共通の root signature。
 };

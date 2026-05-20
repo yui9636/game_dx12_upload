@@ -18,11 +18,13 @@
 
 namespace
 {
+    // 同時 recording できる pass を、resource 競合のない単位にまとめる。
     struct PassExecutionGroup
     {
         std::vector<uint16_t> passes;
     };
 
+    // pass が指定 resource を read/write のどちらかで触るかを調べる。
     bool PassUsesResource(const PassNode& pass, uint16_t resourceIndex)
     {
         for (const auto& read : pass.reads) {
@@ -38,6 +40,7 @@ namespace
         return false;
     }
 
+    // 同じ resource を触る pass 同士は同時 recording しない。
     bool PassesOverlapResources(const PassNode& lhs, const PassNode& rhs)
     {
         for (const auto& read : lhs.reads) {
@@ -53,6 +56,7 @@ namespace
         return false;
     }
 
+    // executionOrder を保ちながら、互いに resource が重ならない小さなグループへ分割する。
     std::vector<PassExecutionGroup> BuildPassExecutionGroups(
         const std::vector<PassNode>& passNodes,
         const std::vector<uint16_t>& executionOrder,
@@ -106,6 +110,7 @@ namespace
         return pass.name == "ShadowPass" || pass.name == "GBufferPass";
     }
 
+    // command list recording の overhead が勝たない規模の scene だけ並列化する。
     bool ShouldUsePhase3ParallelRecording(const RenderQueue& queue, const RenderContext& rc)
     {
         if (!rc.allowParallelRecording) {
@@ -131,6 +136,9 @@ namespace
 ITexture* FrameGraphResources::GetTexture(ResourceHandle handle) {
     return m_graph.GetPhysicalTexture(handle);
 }
+
+// BuilderImpl は pass の Setup 呼び出し中だけ使う内部 builder。
+// pass からの read/write 宣言を PassNode と ResourceNode へ反映する。
 class FrameGraph::BuilderImpl : public FrameGraphBuilder {
 public:
     BuilderImpl(FrameGraph& graph, PassNode& passNode)
@@ -164,6 +172,7 @@ public:
         if (!input.IsValid()) return input;
         if (input.index >= m_graph.m_resourceNodes.size()) return input;
 
+        // 同じ ResourceNode の version を進め、producer pass を記録する。
         ResourceNode& node = m_graph.m_resourceNodes[input.index];
         node.version++;
         node.producerPassIndex = m_passNode.passIndex;
@@ -237,6 +246,7 @@ void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
     rc.prepMetrics.frameGraphExecuteMs =
         std::chrono::duration<double, std::milli>(executeEnd - executeStart).count();
 
+    // imported 以外の一時 texture は次 frame 以降の再利用に回す。
     for (auto& node : m_resourceNodes) {
         if (!node.isImported && node.ownedTexture) {
             m_resourcePool.ReleaseTexture(node.desc, std::move(node.ownedTexture), m_frameCount);
@@ -251,7 +261,7 @@ void FrameGraph::Execute(const RenderQueue& queue, RenderContext& rc) {
     m_adjacency.clear();
     m_inDegree.clear();
 }
-// Phase 1 は setup。
+// Phase 1 は setup。各 pass が必要 resource と Blackboard 公開名を宣言する。
 void FrameGraph::Setup(const RenderContext& rc) {
     m_resourceNodes.reserve(32);
 
@@ -260,7 +270,7 @@ void FrameGraph::Setup(const RenderContext& rc) {
         m_passNodes[i].renderPass->Setup(builder, rc);
     }
 }
-// Phase 2 は compile。
+// Phase 2 は compile。pass 間の依存関係と texture の寿命を確定する。
 void FrameGraph::Compile() {
     BuildDAG();
     CullPasses();
@@ -268,7 +278,7 @@ void FrameGraph::Compile() {
     CalculateLifetimes();
 }
 
-// Step 2a: DAG 構築
+// Step 2a: DAG 構築。read version の producer から consumer へ edge を張る。
 void FrameGraph::BuildDAG() {
     const size_t passCount = m_passNodes.size();
     m_adjacency.resize(passCount);
@@ -324,6 +334,7 @@ void FrameGraph::BuildDAG() {
 void FrameGraph::CullPasses() {
     std::queue<uint16_t> workQueue;
 
+    // 画面出力や Context 更新など副作用を持つ pass から逆向きに辿り、必要な producer を残す。
     for (auto& pass : m_passNodes) {
         if (pass.hasSideEffects) {
             pass.refCount = 1;
@@ -389,6 +400,7 @@ void FrameGraph::CalculateLifetimes() {
         PassNode& pass = m_passNodes[execIdx];
         if (pass.culled) continue;
 
+        // first/last pass は transient texture の acquire timing に使う。
         auto updateLifetime = [&](uint16_t resourceIndex) {
             if (resourceIndex >= m_resourceNodes.size()) return;
             ResourceNode& res = m_resourceNodes[resourceIndex];
@@ -417,6 +429,7 @@ void FrameGraph::TopologicalSort() {
         }
     }
 
+    // Kahn 法で culled されていない pass だけを並べる。
     std::queue<uint16_t> q;
     for (size_t i = 0; i < passCount; ++i) {
         if (!m_passNodes[i].culled && sortInDegree[i] == 0) {
@@ -449,7 +462,7 @@ void FrameGraph::TopologicalSort() {
             m_executionOrder.size(), nonCulledCount);
     }
 }
-// Phase 3 は execute。
+// Phase 3 は execute。resource を実体化し、必要な state transition を張って pass を呼ぶ。
 void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
     IResourceFactory* factory = Graphics::Instance().GetResourceFactory();
     FrameGraphResources resources(*this);
@@ -465,6 +478,7 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
             ResourceNode& res = m_resourceNodes[resourceIndex];
             if (res.isImported) return;
             if (res.ownedTexture) return;
+            // resource が最初に使われる pass でだけ pool から実体を確保する。
             if (res.firstPassIndex == pass.passIndex) {
                 res.ownedTexture = m_resourcePool.AcquireTexture(
                     res.name, res.desc, factory, m_frameCount);
@@ -476,6 +490,7 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
     };
 
     auto transitionPassResources = [&](PassNode& pass, ICommandList* commandList) {
+        // read は SRV、write は RT/DS へ寄せる。細かい UAV などは pass 側で追加制御する。
         for (const auto& r : pass.reads) {
             if (r.index >= m_resourceNodes.size()) continue;
             ITexture* tex = m_resourceNodes[r.index].GetPhysical();
@@ -527,6 +542,7 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
                 acquireForPass(m_passNodes[execIdx]);
             }
 
+            // Shadow/GBuffer のように独立しやすい pass だけ worker command list へ分散する。
             bool canRecordGroupInParallel =
                 group.passes.size() > 1 &&
                 group.passes.size() <= workerCap;
@@ -569,6 +585,7 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
                 }
                 commandList->Begin();
 
+                // worker 用に Context をコピーし、commandList だけ差し替える。
                 RenderContext passRc = rc;
                 passRc.commandList = commandList.get();
                 GlobalRootSignature::Instance().BindAll(
@@ -596,6 +613,7 @@ void FrameGraph::ExecutePasses(const RenderQueue& queue, RenderContext& rc) {
                 recordPass(0);
             }
 
+            // worker が記録した command list をまとめて graphics queue に投入する。
             std::vector<ID3D12CommandList*> nativeLists;
             nativeLists.reserve(recorded.size());
             for (const auto& item : recorded) {

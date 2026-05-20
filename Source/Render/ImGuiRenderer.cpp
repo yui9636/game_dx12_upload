@@ -18,6 +18,7 @@
 #endif
 
 namespace {
+    // ImGui backend と editor preview texture が共有する DX12 SRV heap の最大 slot 数。
     constexpr uint32_t kDx12DescriptorHeapSlots = 1024;
 }
 
@@ -34,6 +35,7 @@ std::vector<uint32_t> ImGuiRenderer::s_freeSlots;
 
 void ImGuiRenderer::Initialize(HWND hWnd, ID3D11Device* device, ID3D11DeviceContext* dc)
 {
+    // DX11 backend では ImTextureID に SRV pointer をそのまま渡す。
     s_isDX12 = false;
     s_dx12Device = nullptr;
     ResetTextureCache();
@@ -60,6 +62,7 @@ void ImGuiRenderer::Initialize(HWND hWnd, ID3D11Device* device, ID3D11DeviceCont
 
 void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
 {
+    // DX12 backend では ImGui 専用の shader-visible SRV heap を持つ。
     s_isDX12 = true;
     s_dx12Device = dx12Device;
     ResetTextureCache();
@@ -77,6 +80,7 @@ void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(hWnd);
 
+    // font atlas と ImGui::Image 用 texture SRV を同じ heap に置く。
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
     heapDesc.NumDescriptors = 1024;
@@ -84,6 +88,7 @@ void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
     dx12Device->GetDevice()->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&s_imguiSrvHeap));
     s_descriptorSize = dx12Device->GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
+    // backend に descriptor allocator callback を渡し、ImGui 側の font SRV 確保も同じ free list へ通す。
     ImGui_ImplDX12_InitInfo initInfo = {};
     initInfo.Device = dx12Device->GetDevice();
     initInfo.CommandQueue = dx12Device->GetCommandQueue();
@@ -115,6 +120,7 @@ void ImGuiRenderer::InitializeDX12(HWND hWnd, DX12Device* dx12Device)
 
 void ImGuiRenderer::Finalize()
 {
+    // cached texture slot を先に捨て、backend shutdown 中の stale handle を避ける。
     ResetTextureCache();
 
     if (s_isDX12) {
@@ -165,6 +171,7 @@ void ImGuiRenderer::End()
 void ImGuiRenderer::RenderDX12(ID3D12GraphicsCommandList* commandList)
 {
     if (s_imguiSrvHeap) {
+        // ImGui draw data は ImGui 専用 SRV heap を参照する。
         ID3D12DescriptorHeap* heaps[] = { s_imguiSrvHeap.Get() };
         commandList->SetDescriptorHeaps(1, heaps);
     }
@@ -184,6 +191,7 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
     }
 
     if (!s_isDX12) {
+        // DX11 の ImTextureID は SRV pointer。
         auto* dx11Texture = dynamic_cast<DX11Texture*>(texture);
         return dx11Texture ? reinterpret_cast<void*>(dx11Texture->GetNativeSRV()) : nullptr;
     }
@@ -193,6 +201,7 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
         return nullptr;
     }
 
+    // DX12 の ImTextureID は GPU descriptor handle。texture ごとに heap slot を cache する。
     auto found = s_textureSlots.find(texture);
     uint32_t slot = 0;
     if (found != s_textureSlots.end()) {
@@ -214,6 +223,7 @@ void* ImGuiRenderer::GetTextureID(ITexture* texture)
         }
         s_textureSlots.emplace(texture, slot);
 
+        // texture が持つ staging SRV を ImGui の shader-visible heap へコピーする。
         D3D12_CPU_DESCRIPTOR_HANDLE dstCpu = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
         dstCpu.ptr += static_cast<SIZE_T>(slot) * s_descriptorSize;
         s_dx12Device->GetDevice()->CopyDescriptorsSimple(
@@ -244,12 +254,14 @@ void ImGuiRenderer::DeferUnregisterTexture(ITexture* texture, ID3D12Fence* fence
         return;
     }
 
+    // GPU がまだ ImGui draw data 経由で参照している可能性があるため、slot 再利用を fence 後に遅らせる。
     s_deferredUnregisters.push_back({ it->first, it->second, fence, fenceValue });
     s_textureSlots.erase(it);
 }
 
 void ImGuiRenderer::ProcessDeferredUnregisters(uint64_t completedFenceValue)
 {
+    // 明示 fence がある texture はその fence、旧 API 経由は completedFenceValue で完了判定する。
     auto it = s_deferredUnregisters.begin();
     while (it != s_deferredUnregisters.end()) {
         const bool completed = it->fence
@@ -273,6 +285,7 @@ bool ImGuiRenderer::RebuildFontAtlas()
 
 void ImGuiRenderer::ResetTextureCache()
 {
+    // renderer 初期化・終了時に descriptor slot の管理状態を空に戻す。
     s_textureSlots.clear();
     s_deferredUnregisters.clear();
     s_freeSlots.clear();
@@ -281,6 +294,7 @@ void ImGuiRenderer::ResetTextureCache()
 
 uint32_t ImGuiRenderer::AllocateDX12DescriptorSlot()
 {
+    // free list を優先し、なければまだ未使用の slot を伸ばす。
     if (!s_freeSlots.empty()) {
         const uint32_t slot = s_freeSlots.back();
         s_freeSlots.pop_back();
@@ -300,6 +314,7 @@ void ImGuiRenderer::FreeDX12DescriptorSlot(D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle
         return;
     }
 
+    // ImGui backend から返された CPU handle を slot index に戻す。
     const D3D12_CPU_DESCRIPTOR_HANDLE base = s_imguiSrvHeap->GetCPUDescriptorHandleForHeapStart();
     if (cpuHandle.ptr < base.ptr) {
         return;

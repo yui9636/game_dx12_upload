@@ -95,6 +95,7 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     float halfWidth = (float)ssrTex->GetWidth();
     float halfHeight = (float)ssrTex->GetHeight();
+    // pass 1: GBuffer と previous scene から反射色をレイマーチする。
     rc.commandList->ClearColor(ssrTex, clearColor);
     rc.commandList->SetRenderTarget(ssrTex, nullptr);
 
@@ -128,6 +129,7 @@ void SSRPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     }
 
     rc.commandList->Draw(3, 0);
+    // pass 2: raw SSR を blur し、DeferredLighting が読む反射入力にする。
     rc.commandList->ClearColor(blurTex, clearColor);
     rc.commandList->SetRenderTarget(blurTex, nullptr);
 

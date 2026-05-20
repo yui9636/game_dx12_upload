@@ -3,6 +3,7 @@
 #include "IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
+// SceneColor / Depth に forward 経路で通常モデルを描画する pass。
 class DrawObjectsPass : public IRenderPass {
 public:
     DrawObjectsPass() = default;
@@ -15,6 +16,6 @@ public:
     void Execute(FrameGraphResources& resources, const RenderQueue& queue, RenderContext& rc) override;
 
 private:
-    ResourceHandle m_hSceneColor;
-    ResourceHandle m_hDepth;
+    ResourceHandle m_hSceneColor; // 描画先 HDR color。
+    ResourceHandle m_hDepth;      // depth test/write に使う GBufferDepth。
 };

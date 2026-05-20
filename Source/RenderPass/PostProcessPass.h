@@ -3,6 +3,7 @@
 #include "RenderPass/IRenderPass.h"
 #include "RenderGraph/FrameGraphTypes.h"
 
+// SceneColor にポストエフェクトをかけ、DisplayColor へ出力する pass。
 class PostProcessPass : public IRenderPass {
 public:
     std::string GetName() const override { return "PostProcessPass"; }
@@ -14,8 +15,8 @@ public:
     bool HasSideEffects() const override { return true; }
 
 private:
-    ResourceHandle m_hSceneColor;
-    ResourceHandle m_hDepth;
-    ResourceHandle m_hVelocity;
-    ResourceHandle m_hDisplayColor;
+    ResourceHandle m_hSceneColor;   // 入力 HDR scene color。
+    ResourceHandle m_hDepth;        // depth-based effect 用。
+    ResourceHandle m_hVelocity;     // TAA / motion blur 系 effect 用 velocity。
+    ResourceHandle m_hDisplayColor; // 出力 display color。
 };

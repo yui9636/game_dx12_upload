@@ -30,7 +30,7 @@ ShadowMap::~ShadowMap() = default;
 
 ShadowMap::ShadowMap(IResourceFactory* factory)
 {
-    // 2. シェーダー & レイアウト生成 (RHI)
+    // shadow pass 用 shader と input layout を RHI 経由で生成する。
     vertexShader = factory->CreateShader(ShaderType::Vertex, "Data/Shader/ShadowMapVS.cso");
     instancedVertexShader = factory->CreateShader(ShaderType::Vertex, "Data/Shader/ShadowMapInstancedVS.cso");
 
@@ -45,7 +45,7 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
     InputLayoutDesc layoutDesc{ layoutElements, _countof(layoutElements) };
     inputLayout = factory->CreateInputLayout(layoutDesc, vertexShader.get());
 
-    // インスタンシング用入力レイアウト (slot1 にインスタンスデータ)
+    // instancing 用入力レイアウト。slot1 に instance world / prev world を読む。
     InputLayoutElement instancedLayoutElements[] = {
         { "POSITION",     0, TextureFormat::R32G32B32_FLOAT,    0, kAppendAlignedElement },
         { "BONE_WEIGHTS", 0, TextureFormat::R32G32B32A32_FLOAT, 0, kAppendAlignedElement },
@@ -65,15 +65,15 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
     InputLayoutDesc instancedLayoutDesc{ instancedLayoutElements, _countof(instancedLayoutElements) };
     instancedInputLayout = factory->CreateInputLayout(instancedLayoutDesc, instancedVertexShader.get());
 
-    // 3. 定数バッファ生成 (RHI)
+    // cascade 行列と skinning 行列を渡す constant buffer。
     sceneConstantBuffer = factory->CreateBuffer(sizeof(CbScene), BufferType::Constant);
     skeletonConstantBuffer = factory->CreateBuffer(sizeof(CbSkeleton), BufferType::Constant);
 
-    // 4. カスケード用テクスチャ配列の生成
+    // cascade 用 texture array を backend ごとの方法で作る。
     const bool isDX12 = (Graphics::Instance().GetAPI() == GraphicsAPI::DX12);
 
     if (isDX12) {
-        // DX12: DX12Texture の配列コンストラクタを使用
+        // DX12 は 1 つの texture array SRV と、各 slice 専用 DSV wrapper を分けて持つ。
         auto* dx12Dev = Graphics::Instance().GetDX12Device();
 
         auto arrayTex = std::make_shared<DX12Texture>(
@@ -88,9 +88,9 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
                 dx12Dev, arrayTex->GetNativeResourceComPtr(),
                 textureSize, textureSize, static_cast<uint32_t>(i));
         }
-        // DX12: サンプラーはスタティックサンプラー s1 (ShadowCompare) で対応済み
+        // DX12: sampler は root signature の static sampler s1 (ShadowCompare) で対応済み。
     } else {
-        // DX11: 既存のネイティブコード
+        // DX11 は native texture array から slice DSV と array SRV を作る。
         ID3D11Device* device = Graphics::Instance().GetDevice();
 
         D3D11_TEXTURE2D_DESC texture2dDesc{};
@@ -135,7 +135,7 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
         _ASSERT_EXPR(SUCCEEDED(hr), HRTrace(hr));
         m_shadowTexture = std::make_shared<DX11Texture>(rawSRV.Get());
 
-        // 5. サンプラー生成 (DX11 のみ)
+        // sampler 生成 (DX11 のみ)。
         D3D11_SAMPLER_DESC samplerDesc{};
         samplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
         samplerDesc.AddressU = samplerDesc.AddressV = samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
@@ -144,7 +144,7 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
         samplerState = std::make_unique<DX11Sampler>(device, samplerDesc);
     }
 
-    // 6. 影描画専用 PSO の構築
+    // 影描画専用 PSO の構築。color target は使わず depth のみ書く。
     PipelineStateDesc psoDesc{};
     psoDesc.vertexShader = vertexShader.get();
     psoDesc.pixelShader = nullptr; // 深度のみ
@@ -169,6 +169,7 @@ ShadowMap::ShadowMap(IResourceFactory* factory)
 
 void ShadowMap::UpdateCascades(const RenderContext& rc)
 {
+    // camera near/far を split 比率で分割し、それぞれの light matrix を作る。
     float camNear = rc.nearZ;
     float camFar = rc.farZ;
     float clipRange = camFar - camNear;
@@ -188,7 +189,7 @@ void ShadowMap::BeginCascade(const RenderContext& rc, int cascadeIndex)
 {
     if (cascadeIndex < 0 || cascadeIndex >= CASCADE_COUNT) return;
 
-    // 1. 影用SRVを解除 (RHI)
+    // 同じ shadow texture を書き込む前に、pixel shader 側の SRV bind を外す。
     rc.commandList->PSSetTexture(4, nullptr);
     if (m_shadowTexture) {
         static bool s_loggedShadowResource = false;
@@ -218,20 +219,20 @@ void ShadowMap::BeginCascade(const RenderContext& rc, int cascadeIndex)
         }
     }
 
-    // 2. 現在の状態を「保存」する
+    // 最初の cascade で元の viewport / render target を保存し、End() で復元する。
     if (cascadeIndex == 0)
     {
         m_cachedViewport = rc.mainViewport;
         m_cachedRT = rc.mainRenderTarget;
         m_cachedDS = rc.mainDepthStencil;
     }
-// ★ 修正：MinDepth(0.0f) と MaxDepth(1.0f) を明示的に指定する！
-rc.commandList->SetViewport(RhiViewport(0.0f, 0.0f, (float)textureSize, (float)textureSize, 0.0f, 1.0f));
+    // depth range を明示した shadow map 専用 viewport。
+    rc.commandList->SetViewport(RhiViewport(0.0f, 0.0f, (float)textureSize, (float)textureSize, 0.0f, 1.0f));
 
     rc.commandList->SetRenderTarget(nullptr, m_cascadeTextures[cascadeIndex].get());
     rc.commandList->ClearDepthStencil(m_cascadeTextures[cascadeIndex].get(), 1.0f, 0);
 
-    // 4. PSO と定数バッファのバインド
+    // PSO と cascade 行列の bind。
     rc.commandList->SetPipelineState(m_pso.get());
 
     CbScene cbScene{};
@@ -247,13 +248,13 @@ rc.commandList->SetViewport(RhiViewport(0.0f, 0.0f, (float)textureSize, (float)t
 
 void ShadowMap::End(const RenderContext& rc)
 {
-    // 保存しておいた RhiViewport 構造体をそのまま渡す
+    // 保存しておいた RhiViewport 構造体をそのまま戻す。
     rc.commandList->SetViewport(m_cachedViewport);
 
-    // 保存しておいたメインのレンダーターゲットと深度バッファを戻す
+    // 保存しておいた main render target と depth buffer を戻す。
     rc.commandList->SetRenderTarget(m_cachedRT, m_cachedDS);
 
-    // キャッシュしたポインタをクリア
+    // cache した pointer は非所有なので、復元後にクリアする。
     m_cachedRT = nullptr;
     m_cachedDS = nullptr;
 
@@ -272,6 +273,7 @@ void ShadowMap::End(const RenderContext& rc)
 void ShadowMap::Draw(const RenderContext& rc, const ModelResource* modelResource, const DirectX::XMFLOAT4X4& worldMatrix)
 {
     if (!modelResource) return;
+    // mesh ごとに bone transform を作り、depth only pass として描画する。
     XMMATRIX actorWorld = XMLoadFloat4x4(&worldMatrix);
     for (int meshIndex = 0; meshIndex < modelResource->GetMeshCount(); ++meshIndex)
     {
@@ -315,6 +317,7 @@ void ShadowMap::DrawInstanced(const RenderContext& rc, const ModelResource* mode
 {
     if (!modelResource || !instanceBuffer || instanceCount == 0) return;
 
+    // skinning mesh は通常 Draw() 側で bone buffer が必要なので instanced path から除外する。
     const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
     if (!mesh || !mesh->bones.empty()) {
         return;
@@ -328,6 +331,7 @@ void ShadowMap::DrawInstanced(const RenderContext& rc, const ModelResource* mode
     rc.commandList->SetVertexBuffer(1, instanceBuffer, instanceStride, 0);
 
     if (argumentBuffer) {
+        // GPU culling 後の indirect argument があればそれを使う。
         rc.commandList->ExecuteIndexedIndirect(argumentBuffer, argumentOffsetBytes);
     } else {
         rc.commandList->DrawIndexedInstanced(modelResource->GetMeshIndexCount(meshIndex), instanceCount, 0, 0, firstInstance);
@@ -342,6 +346,7 @@ void ShadowMap::DrawInstancedMulti(const RenderContext& rc, const ModelResource*
 {
     if (!modelResource || !instanceBuffer || !argumentBuffer || commandCount == 0) return;
 
+    // 複数 draw command を 1 回の ExecuteIndirectMulti で処理する。
     const ModelResource::MeshResource* mesh = modelResource->GetMeshResource(meshIndex);
     if (!mesh || !mesh->bones.empty()) {
         return;
@@ -360,6 +365,7 @@ void ShadowMap::DrawInstancedMulti(const RenderContext& rc, const ModelResource*
 
 std::array<XMVECTOR, 8> ShadowMap::GetFrustumCorners(float fov, float aspect, float nearZ, float farZ, const XMFLOAT4X4& viewMat)
 {
+    // NDC cube の corner を inverse view projection で world space へ戻す。
     std::array<XMVECTOR, 8> corners = {};
     XMMATRIX proj = XMMatrixPerspectiveFovLH(fov, aspect, nearZ, farZ);
     XMMATRIX view = XMLoadFloat4x4(&viewMat);
@@ -378,6 +384,7 @@ std::array<XMVECTOR, 8> ShadowMap::GetFrustumCorners(float fov, float aspect, fl
 
 XMMATRIX ShadowMap::CalcCascadeMatrix(const RenderContext& rc, float nearZ, float farZ)
 {
+    // cascade の frustum を light space AABB に収め、orthographic projection を作る。
     auto corners = GetFrustumCorners(rc.fovY, rc.aspect, nearZ, farZ, rc.viewMatrix);
     XMVECTOR center = XMVectorZero();
     for (const auto& v : corners) center += v;
@@ -403,6 +410,7 @@ XMMATRIX ShadowMap::CalcCascadeMatrix(const RenderContext& rc, float nearZ, floa
 
     float w = XMVectorGetX(maxBox) - XMVectorGetX(minBox);
     float h = XMVectorGetY(maxBox) - XMVectorGetY(minBox);
+    // texel snapping により camera 移動時の shadow shimmering を抑える。
     float worldUnitsPerTexel = (w > h ? w : h) / static_cast<float>(textureSize);
 
     XMVECTOR vWorldUnits = XMVectorSet(worldUnitsPerTexel, worldUnitsPerTexel, worldUnitsPerTexel, 0.0f);
