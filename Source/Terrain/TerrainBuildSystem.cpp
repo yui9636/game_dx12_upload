@@ -4,11 +4,11 @@
 #include "Registry/Registry.h"
 #include "System/Query.h"
 #include "Component/TransformComponent.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IBuffer.h"
 #include "RHI/ITexture.h"
-#include "GpuResourceUtils.h"
+#include "Render/GpuResourceUtils.h"
 #include "Console/Logger.h"
 #include "System/PathResolver.h"
 #include <DirectXMath.h>

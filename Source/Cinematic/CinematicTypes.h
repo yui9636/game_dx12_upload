@@ -1,7 +1,7 @@
 ﻿#pragma once
 // シネマティック機能で共有する型・補間関数を定義するヘッダー。
 #include <DirectXMath.h>
-#include"JSONManager.h"
+#include"Utils/JSONManager.h"
 #include <vector>
 #include <algorithm>
 

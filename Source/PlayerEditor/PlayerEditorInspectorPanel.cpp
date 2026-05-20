@@ -32,6 +32,7 @@ namespace
         case TimelineTrackType::Audio:
         case TimelineTrackType::CameraShake:
         case TimelineTrackType::Event:
+        case TimelineTrackType::Projectile:
             return true;
         default:
             return false;
@@ -287,6 +288,29 @@ void PlayerEditorPanel::DrawTimelineItemInspector()
             if (ImGui::InputText("Event Name", item.eventName, sizeof(item.eventName))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             if (ImGui::InputTextMultiline("Event Data", item.eventData, sizeof(item.eventData), ImVec2(-FLT_MIN, 80.0f))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
             break;
+
+        case TimelineTrackType::Projectile: {
+            ImGui::Text(ICON_FA_BOLT " Projectile Volley");
+            auto& proj = item.projectile;
+            const char* patternItems[] = { "Aimed", "Spread", "Ring" };
+            if (proj.pattern < 0 || proj.pattern > 2) proj.pattern = 0;
+            if (ImGui::Combo("Pattern", &proj.pattern, patternItems, 3)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (proj.pattern != 0) {
+                if (ImGui::DragInt("Bullets / Volley", &proj.bulletsPerVolley, 1, 1, 128)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            }
+            if (proj.pattern == 1) {
+                if (ImGui::DragFloat("Spread Angle", &proj.spreadAngleDeg, 1.0f, 0.0f, 360.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            }
+            if (ImGui::DragFloat("Bullet Speed", &proj.bulletSpeed, 0.1f, 0.1f, 100.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Bullet Lifetime", &proj.bulletLifetime, 0.1f, 0.1f, 30.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragInt("Damage", &proj.bulletDamage, 1, 0, 9999)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Hit Radius", &proj.bulletRadius, 0.01f, 0.05f, 5.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat("Bullet Scale", &proj.bulletScale, 0.01f, 0.01f, 10.0f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::DragFloat3("Muzzle Offset", &proj.offsetLocal.x, 0.05f)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::Checkbox("Targets Player", &proj.targetsPlayer)) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            if (ImGui::InputText("Bullet Model", proj.bulletModelPath, sizeof(proj.bulletModelPath))) { m_timelineDirty = true; timelineRuntimeChanged = true; }
+            break;
+        }
 
         default:
             ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.25f, 1.0f),

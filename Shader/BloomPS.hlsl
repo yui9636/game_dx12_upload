@@ -6,8 +6,34 @@ Texture2D colorMap : register(t0);
 Texture2D luminanceMap : register(t1);
 // text 用色。ure2D depthMap : register(t2); // 深度は今回は未使用
 Texture2D velocityMap : register(t3); // 速度バッファ
+Texture2D lutMap : register(t4); // カラーグレーディング LUT（水平ストリップ）
 
 SamplerState linearSampler : register(s0);
+
+// 水平ストリップ LUT のサンプリング。LUT は N 枚の N x N スライスを横並びにした
+// (N*N) x N テクスチャ。赤=スライス内 X、緑=スライス内 Y、青=スライス番号。
+float3 SampleColorLUT(float3 col, float lutSize)
+{
+    col = saturate(col);
+    float maxIndex = lutSize - 1.0f;
+    float redU = col.r * maxIndex;
+    float greenV = col.g * maxIndex;
+    float blue = col.b * maxIndex;
+
+    float sliceLo = floor(blue);
+    float sliceHi = min(sliceLo + 1.0f, maxIndex);
+    float sliceFrac = blue - sliceLo;
+
+    float invWidth = 1.0f / (lutSize * lutSize);
+    float invHeight = 1.0f / lutSize;
+
+    float2 uvLo = float2((sliceLo * lutSize + redU + 0.5f) * invWidth, (greenV + 0.5f) * invHeight);
+    float2 uvHi = float2((sliceHi * lutSize + redU + 0.5f) * invWidth, (greenV + 0.5f) * invHeight);
+
+    float3 cLo = lutMap.SampleLevel(linearSampler, uvLo, 0).rgb;
+    float3 cHi = lutMap.SampleLevel(linearSampler, uvHi, 0).rgb;
+    return lerp(cLo, cHi, sliceFrac);
+}
 
 // RGB から HSV への変換関数
 float3 RGBtoHSV(float3 c)
@@ -105,6 +131,13 @@ float mono = dot(color.rgb, float3(0.299, 0.587, 0.114));
 // 最終仕上げのガンマ補正
 const float INV_GAMMA = 1.0f / 2.2f;
     color.rgb = pow(color.rgb, INV_GAMMA);
+
+    // カラーグレーディング LUT（表示空間=ガンマ補正後に適用）
+    if (lutAmount > 0.001f && lutSize > 1.5f)
+    {
+        float3 graded = SampleColorLUT(color.rgb, lutSize);
+        color.rgb = lerp(color.rgb, graded, saturate(lutAmount));
+    }
 
     return float4(color.rgb, alpha);
 }

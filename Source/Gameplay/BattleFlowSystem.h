@@ -19,4 +19,9 @@ public:
     static void Start(const std::string& battleId = std::string{});
     static void Reset();
     static void DrainEvents(FlowEventQueue& outEvents);
+
+    // Combat time remaining in seconds while a time limit is active; -1 if none.
+    static float GetRemainingTime();
+    // Current phase as a BattleFlowComponent::Phase value (0=Idle .. 5=Draw).
+    static int GetPhase();
 };

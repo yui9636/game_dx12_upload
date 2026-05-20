@@ -5,6 +5,7 @@
 #include <ffx_fsr2.h>
 #include <cstdint>
 #include <memory>
+#include <string>
 // IBuffer はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class IBuffer;
@@ -74,11 +75,17 @@ private:
         float bokehRadius;
         float motionBlurIntensity;
         float motionBlurSamples;
-        float _pad[1];
+        float lutAmount;
+
+        float lutSize;
+        float _pad2[3];
     };
 
     std::unique_ptr<IBuffer> m_constantBuffer;
     CbPostEffect m_cbPostEffect{};
+
+    std::shared_ptr<ITexture> m_lutTexture;   // currently loaded color-grading LUT
+    std::string m_lutLoadedPath;              // path of the loaded LUT (cache key)
 
     FfxFsr2Context m_fsr2Context{};
     FfxFsr2Interface m_fsr2Interface{};

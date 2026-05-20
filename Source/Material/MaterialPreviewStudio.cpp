@@ -1,7 +1,7 @@
 ﻿#include "MaterialPreviewStudio.h"
 #include "MaterialAsset.h"
 #include "Render/OffscreenRenderer.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "System/ResourceManager.h"
 #include "Model/Model.h"
 #include "RHI/ITexture.h"

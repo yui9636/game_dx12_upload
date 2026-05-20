@@ -1,5 +1,5 @@
 ﻿#include "Sprite3D.h"
-#include "GpuResourceUtils.h" 
+#include "Render/GpuResourceUtils.h" 
 
 using namespace DirectX;
 

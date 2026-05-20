@@ -61,7 +61,7 @@
 #include "Terrain/TerrainAsset.h"
 #include "Terrain/TerrainAssetIO.h"
 #include "Vegetation/GrassComponent.h"
-#include "JSONManager.h"
+#include "Utils/JSONManager.h"
 #include "Registry/Registry.h"
 #include "Undo/EntitySnapshot.h"
 

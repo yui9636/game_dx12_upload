@@ -15,7 +15,8 @@ enum class TimelineTrackType : uint8_t
     CameraShake,
     Camera,
     Event,
-    Custom
+    Custom,
+    Projectile   // 弾幕ボレー（追加は末尾固定: 既存アセットの type 値を壊さない）
 };
 
 // ヒットボックス、VFX、音声など、開始フレームと終了フレームを持つ区間アイテム。
@@ -29,6 +30,7 @@ struct TimelineItem
     GEVfxPayload         vfx{};
     GEAudioPayload       audio{};
     GECameraShakePayload shake{};
+    GEProjectilePayload  projectile{};
 
     // Event トラックで発火するイベント名と任意データ。
     char eventName[64] = {};
@@ -111,6 +113,7 @@ struct TimelineAsset
         case TimelineTrackType::CameraShake: t.color = 0xFFFF8040; break;
         case TimelineTrackType::Camera:      t.color = 0xFFFFFF40; break;
         case TimelineTrackType::Event:       t.color = 0xFFFF40FF; break;
+        case TimelineTrackType::Projectile:  t.color = 0xFF00D0FF; break;
         default:                             t.color = 0xFF808080; break;
         }
 

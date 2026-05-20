@@ -1,5 +1,5 @@
 ﻿#include "DeferredLightingPass.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "System/ResourceManager.h"
 #include "RHI/ITexture.h"
 #include "RHI/IShader.h"

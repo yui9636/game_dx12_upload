@@ -29,6 +29,7 @@ struct ComponentMeta;
 #include "Component/AudioOneShotRequestComponent.h"
 #include "Component/AudioSettingsComponent.h"
 #include "Component/AudioStateComponent.h"
+#include "Component/BattleRulesComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/Camera2DMainTagComponent.h"
 #include "Component/CameraBehaviorComponent.h"
@@ -36,6 +37,8 @@ struct ComponentMeta;
 #include "Component/CameraEffectComponent.h"
 #include "Component/CanvasItemComponent.h"
 #include "Component/ColliderComponent.h"
+#include "Component/ColorGradingComponent.h"
+#include "Component/DecalComponent.h"
 #include "Component/EffectAssetComponent.h"
 #include "Component/EffectAttachmentComponent.h"
 #include "Component/EffectParameterOverrideComponent.h"
@@ -55,6 +58,8 @@ struct ComponentMeta;
 #include "Component/PhysicsComponent.h"
 #include "Component/PostEffectComponent.h"
 #include "Component/PrefabInstanceComponent.h"
+#include "Component/ProjectileComponent.h"
+#include "Component/ProjectileEmitterComponent.h"
 #include "Component/RectTransformComponent.h"
 #include "Component/ReflectionProbeComponent.h"
 #include "Component/SequencerPreviewCameraComponent.h"
@@ -196,6 +201,19 @@ struct ComponentMeta<AudioStateComponent> {
 };
 
 template <>
+struct ComponentMeta<BattleRulesComponent> {
+    static constexpr std::string_view Name = "BattleRulesComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("encounterRadius", &BattleRulesComponent::encounterRadius),
+        MakeField("introDuration", &BattleRulesComponent::introDuration),
+        MakeField("autoStartOnPlayerEnter", &BattleRulesComponent::autoStartOnPlayerEnter),
+        MakeField("enableTimeLimit", &BattleRulesComponent::enableTimeLimit),
+        MakeField("timeLimitSeconds", &BattleRulesComponent::timeLimitSeconds),
+        MakeField("timeUpResult", &BattleRulesComponent::timeUpResult)
+    );
+};
+
+template <>
 struct ComponentMeta<Camera2DComponent> {
     static constexpr std::string_view Name = "Camera2DComponent";
     static constexpr auto Fields = std::make_tuple(
@@ -320,6 +338,27 @@ struct ComponentMeta<ColliderComponent> {
         MakeField("elements", &ColliderComponent::elements),
         MakeField("enabled", &ColliderComponent::enabled),
         MakeField("drawGizmo", &ColliderComponent::drawGizmo)
+    );
+};
+
+template <>
+struct ComponentMeta<ColorGradingComponent> {
+    static constexpr std::string_view Name = "ColorGradingComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("lutTexturePath", &ColorGradingComponent::lutTexturePath),
+        MakeField("intensity", &ColorGradingComponent::intensity)
+    );
+};
+
+template <>
+struct ComponentMeta<DecalComponent> {
+    static constexpr std::string_view Name = "DecalComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("texturePath", &DecalComponent::texturePath),
+        MakeField("size", &DecalComponent::size),
+        MakeField("tint", &DecalComponent::tint),
+        MakeField("opacity", &DecalComponent::opacity),
+        MakeField("angleFade", &DecalComponent::angleFade)
     );
 };
 
@@ -558,6 +597,39 @@ struct ComponentMeta<PrefabInstanceComponent> {
     static constexpr auto Fields = std::make_tuple(
         MakeField("prefabAssetPath", &PrefabInstanceComponent::prefabAssetPath),
         MakeField("hasOverrides", &PrefabInstanceComponent::hasOverrides)
+    );
+};
+
+template <>
+struct ComponentMeta<ProjectileComponent> {
+    static constexpr std::string_view Name = "ProjectileComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("velocity", &ProjectileComponent::velocity),
+        MakeField("lifetime", &ProjectileComponent::lifetime),
+        MakeField("damage", &ProjectileComponent::damage),
+        MakeField("radius", &ProjectileComponent::radius),
+        MakeField("targetsPlayer", &ProjectileComponent::targetsPlayer)
+    );
+};
+
+template <>
+struct ComponentMeta<ProjectileEmitterComponent> {
+    static constexpr std::string_view Name = "ProjectileEmitterComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("active", &ProjectileEmitterComponent::active),
+        MakeField("pattern", &ProjectileEmitterComponent::pattern),
+        MakeField("fireInterval", &ProjectileEmitterComponent::fireInterval),
+        MakeField("bulletsPerVolley", &ProjectileEmitterComponent::bulletsPerVolley),
+        MakeField("spreadAngleDeg", &ProjectileEmitterComponent::spreadAngleDeg),
+        MakeField("bulletSpeed", &ProjectileEmitterComponent::bulletSpeed),
+        MakeField("bulletLifetime", &ProjectileEmitterComponent::bulletLifetime),
+        MakeField("bulletDamage", &ProjectileEmitterComponent::bulletDamage),
+        MakeField("bulletRadius", &ProjectileEmitterComponent::bulletRadius),
+        MakeField("bulletScale", &ProjectileEmitterComponent::bulletScale),
+        MakeField("targetsPlayer", &ProjectileEmitterComponent::targetsPlayer),
+        MakeField("muzzleOffset", &ProjectileEmitterComponent::muzzleOffset),
+        MakeField("bulletModelPath", &ProjectileEmitterComponent::bulletModelPath),
+        MakeField("fireTimer", &ProjectileEmitterComponent::fireTimer)
     );
 };
 
@@ -1193,6 +1265,7 @@ using AllComponentTypes = std::tuple<
     AudioOneShotRequestComponent,
     AudioSettingsComponent,
     AudioStateComponent,
+    BattleRulesComponent,
     Camera2DComponent,
     Camera2DMainTagComponent,
     CameraFreeControlComponent,
@@ -1204,6 +1277,8 @@ using AllComponentTypes = std::tuple<
     CameraShakeComponent,
     CanvasItemComponent,
     ColliderComponent,
+    ColorGradingComponent,
+    DecalComponent,
     EffectAssetComponent,
     EffectAttachmentComponent,
     EffectParameterOverrideComponent,
@@ -1223,6 +1298,8 @@ using AllComponentTypes = std::tuple<
     PhysicsComponent,
     PostEffectComponent,
     PrefabInstanceComponent,
+    ProjectileComponent,
+    ProjectileEmitterComponent,
     RectTransformComponent,
     ReflectionProbeComponent,
     SequencerPreviewCameraComponent,

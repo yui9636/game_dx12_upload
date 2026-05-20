@@ -1,11 +1,11 @@
 ﻿#include "System/Misc.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "ShaderClass/PhongShader.h"
 #include "ShaderClass/PBRShader.h"
 #include <srv.h>
-#include <GpuResourceUtils.h>
+#include "Render/GpuResourceUtils.h"
 #include "Camera/Camera.h"
-#include "PostEffect.h"
+#include "PostEffect/PostEffect.h"
 #include "RHI/PipelineStateDesc.h"
 #include "RHI/IPipelineState.h"
 #include "RHI/DX11/DX11PipelineState.h"

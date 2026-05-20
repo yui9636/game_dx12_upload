@@ -1,7 +1,7 @@
 ﻿#include "EffectMeshPass.h"
 
 #include "Console/Logger.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RHI/DX12/DX12CommandList.h"

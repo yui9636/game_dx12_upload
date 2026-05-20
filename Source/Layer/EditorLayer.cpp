@@ -1,6 +1,6 @@
 ﻿#include "EditorLayerInternal.h"
-#include "EditorTheme.h"
-#include "Graphics.h"
+#include "Layer/EditorTheme.h"
+#include "Render/Graphics.h"
 
 EditorLayer::EditorLayer(GameLayer* gameLayer)
     : m_gameLayer(gameLayer)

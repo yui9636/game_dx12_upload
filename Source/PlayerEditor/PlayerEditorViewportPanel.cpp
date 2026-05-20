@@ -12,7 +12,7 @@
 
 #include <imgui.h>
 
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "PlayerEditorPanelInternal.h"
 #include "Component/CameraBehaviorComponent.h"
 #include "Component/TransformComponent.h"

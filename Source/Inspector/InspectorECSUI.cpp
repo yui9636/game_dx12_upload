@@ -9,8 +9,8 @@
 #include "Asset/ThumbnailGenerator.h"
 #include "Asset/PrefabSystem.h"
 #include "Asset/AssetManager.h"
-#include "ImGuiRenderer.h"
-#include "Graphics.h"
+#include "Render/ImGuiRenderer.h"
+#include "Render/Graphics.h"
 #include "Generated/ComponentMeta.generated.h"
 #include "Icon/IconsFontAwesome7.h"
 #include "Component/NameComponent.h"
@@ -53,6 +53,10 @@
 #include "Component/TransformComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/LightComponent.h"
+#include "Component/DecalComponent.h"
+#include "Component/ColorGradingComponent.h"
+#include "Component/BattleRulesComponent.h"
+#include "Component/ProjectileEmitterComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MaterialComponent.h"
 #include "Component/PrefabInstanceComponent.h"
@@ -693,6 +697,191 @@ bool DrawTextureSlot(const char* label, std::string& texPath, bool allowPicker =
 
         ImGui::PopID();
         return changed;
+    }
+
+    // DecalComponent はテクスチャに Asset Browser からの D&D 対応スロットを使う。
+    void DrawDecalComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<DecalComponent>(entity) : nullptr;
+        if (!component) {
+            return;
+        }
+
+        bool open = true;
+        const bool headerOpen = ImGui::CollapsingHeader("DecalComponent", &open, ImGuiTreeNodeFlags_DefaultOpen);
+        if (!open) {
+            registry->RemoveComponent<DecalComponent>(entity);
+            return;
+        }
+        if (!headerOpen) {
+            return;
+        }
+
+        // テクスチャ: Asset Browser からの D&D / クリックでピッカー / X でクリア。
+        DrawTextureSlot("Texture", component->texturePath);
+
+        ImGui::DragFloat3("Size", &component->size.x, 0.05f, 0.01f, 1000.0f);
+        ImGui::ColorEdit3("Tint", &component->tint.x);
+        ImGui::SliderFloat("Opacity", &component->opacity, 0.0f, 1.0f);
+        ImGui::SliderFloat("Angle Fade", &component->angleFade, 0.0f, 0.99f);
+
+        // Follow Target: drop an entity here to make the decal track its world position.
+        {
+            const char* targetLabel = "(none - stationary)";
+            std::string nameStr;
+            const bool hasTarget =
+                component->followTarget != 0 && component->followTarget != Entity::NULL_ID;
+            if (hasTarget) {
+                if (auto* nameComp = registry->GetComponent<NameComponent>(component->followTarget)) {
+                    nameStr = nameComp->name;
+                }
+                targetLabel = nameStr.empty() ? "<Entity>" : nameStr.c_str();
+            }
+            ImGui::Text("Follow Target");
+            ImGui::SameLine();
+            ImGui::Button(targetLabel, ImVec2(-1.0f, 0.0f));
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ENGINE_ENTITY")) {
+                    component->followTarget = *static_cast<const EntityID*>(p->Data);
+                }
+                ImGui::EndDragDropTarget();
+            }
+            if (hasTarget) {
+                if (ImGui::SmallButton("Clear Follow Target")) {
+                    component->followTarget = 0;
+                }
+                ImGui::TextDisabled("Decal position acts as offset from the target.");
+            }
+        }
+    }
+
+    // ColorGradingComponent も LUT テクスチャに D&D 対応スロットを使う。
+    void DrawColorGradingComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<ColorGradingComponent>(entity) : nullptr;
+        if (!component) {
+            return;
+        }
+
+        bool open = true;
+        const bool headerOpen = ImGui::CollapsingHeader("ColorGradingComponent", &open, ImGuiTreeNodeFlags_DefaultOpen);
+        if (!open) {
+            registry->RemoveComponent<ColorGradingComponent>(entity);
+            return;
+        }
+        if (!headerOpen) {
+            return;
+        }
+
+        // LUT テクスチャ: Asset Browser からの D&D に対応。
+        // 水平ストリップ形式（例: 256x16, 1024x32）。
+        DrawTextureSlot("LUT", component->lutTexturePath);
+        ImGui::SliderFloat("Intensity", &component->intensity, 0.0f, 1.0f);
+        ImGui::TextDisabled("LUT = horizontal-strip (N slices of NxN).");
+    }
+
+    // 1v1 バトルの勝敗条件・時間制限エディタ。
+    void DrawBattleRulesComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<BattleRulesComponent>(entity) : nullptr;
+        if (!component) {
+            return;
+        }
+
+        bool open = true;
+        const bool headerOpen = ImGui::CollapsingHeader("BattleRulesComponent", &open, ImGuiTreeNodeFlags_DefaultOpen);
+        if (!open) {
+            registry->RemoveComponent<BattleRulesComponent>(entity);
+            return;
+        }
+        if (!headerOpen) {
+            return;
+        }
+
+        ImGui::SeparatorText("Encounter");
+        ImGui::DragFloat("Encounter Radius", &component->encounterRadius, 0.5f, 1.0f, 500.0f);
+        ImGui::DragFloat("Intro Duration", &component->introDuration, 0.1f, 0.0f, 10.0f);
+        ImGui::Checkbox("Auto Start On Player Enter", &component->autoStartOnPlayerEnter);
+
+        ImGui::SeparatorText("Time Limit");
+        ImGui::Checkbox("Enable Time Limit", &component->enableTimeLimit);
+        if (component->enableTimeLimit) {
+            ImGui::DragFloat("Time Limit (sec)", &component->timeLimitSeconds, 1.0f, 1.0f, 999.0f);
+            const char* timeUpItems[] = { "Higher HP Wins", "Player Loses", "Draw" };
+            if (component->timeUpResult < 0 || component->timeUpResult > 2) {
+                component->timeUpResult = 0;
+            }
+            ImGui::Combo("On Time Up", &component->timeUpResult, timeUpItems, 3);
+        }
+
+        ImGui::TextDisabled("Win = enemy HP 0  /  Lose = player HP 0");
+    }
+
+    // 弾幕エミッタ（ProjectileEmitterComponent）のエディタ。
+    void DrawProjectileEmitterComponentInspector(Registry* registry, EntityID entity)
+    {
+        auto* component = registry ? registry->GetComponent<ProjectileEmitterComponent>(entity) : nullptr;
+        if (!component) {
+            return;
+        }
+
+        bool open = true;
+        const bool headerOpen = ImGui::CollapsingHeader("ProjectileEmitterComponent", &open, ImGuiTreeNodeFlags_DefaultOpen);
+        if (!open) {
+            registry->RemoveComponent<ProjectileEmitterComponent>(entity);
+            return;
+        }
+        if (!headerOpen) {
+            return;
+        }
+
+        ImGui::Checkbox("Active", &component->active);
+
+        const char* patternItems[] = { "Aimed", "Spread", "Ring" };
+        if (component->pattern < 0 || component->pattern > 2) {
+            component->pattern = 0;
+        }
+        ImGui::Combo("Pattern", &component->pattern, patternItems, 3);
+        ImGui::DragFloat("Fire Interval (s)", &component->fireInterval, 0.05f, 0.05f, 10.0f);
+        if (component->pattern != 0) {
+            ImGui::DragInt("Bullets / Volley", &component->bulletsPerVolley, 1, 1, 128);
+        }
+        if (component->pattern == 1) {
+            ImGui::DragFloat("Spread Angle", &component->spreadAngleDeg, 1.0f, 0.0f, 360.0f);
+        }
+
+        ImGui::SeparatorText("Bullet");
+        ImGui::DragFloat("Speed", &component->bulletSpeed, 0.1f, 0.1f, 100.0f);
+        ImGui::DragFloat("Lifetime (s)", &component->bulletLifetime, 0.1f, 0.1f, 30.0f);
+        ImGui::DragInt("Damage", &component->bulletDamage, 1, 0, 9999);
+        ImGui::DragFloat("Hit Radius", &component->bulletRadius, 0.01f, 0.05f, 5.0f);
+        ImGui::DragFloat("Bullet Scale", &component->bulletScale, 0.01f, 0.01f, 10.0f);
+        ImGui::DragFloat3("Muzzle Offset", &component->muzzleOffset.x, 0.05f);
+        ImGui::Checkbox("Targets Player", &component->targetsPlayer);
+
+        // Bullet model: Asset Browser drag & drop.
+        const char* modelLabel = component->bulletModelPath.empty()
+            ? "(no model - drop here)"
+            : component->bulletModelPath.c_str();
+        ImGui::Text("Bullet Model");
+        ImGui::SameLine();
+        ImGui::Button(modelLabel, ImVec2(-1.0f, 0.0f));
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload("ENGINE_ASSET")) {
+                std::string dropped(static_cast<const char*>(pl->Data));
+                std::string ext = std::filesystem::path(dropped).extension().string();
+                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                if (ext == ".fbx" || ext == ".obj" || ext == ".blend" || ext == ".gltf" || ext == ".cereal") {
+                    component->bulletModelPath = dropped;
+                }
+            }
+            ImGui::EndDragDropTarget();
+        }
+        if (!component->bulletModelPath.empty()) {
+            if (ImGui::SmallButton("Clear Model")) {
+                component->bulletModelPath.clear();
+            }
+        }
     }
 
     template <typename T>
@@ -2088,6 +2277,10 @@ if (auto* prefabInstance = registry->GetComponent<PrefabInstanceComponent>(entit
 
             DrawComponentIfPresent<HierarchyComponent>(registry, entity);
             DrawComponentIfPresent<LightComponent>(registry, entity);
+            DrawDecalComponentInspector(registry, entity);
+            DrawColorGradingComponentInspector(registry, entity);
+            DrawBattleRulesComponentInspector(registry, entity);
+            DrawProjectileEmitterComponentInspector(registry, entity);
             DrawComponentIfPresent<CameraFreeControlComponent>(registry, entity);
             DrawCameraTPVControlComponentInspector(registry, entity);
             DrawComponentIfPresent<CameraLensComponent>(registry, entity);
@@ -2185,6 +2378,10 @@ ImGui::Spacing();
                 TryAddComponent<ColliderComponent>(registry, entity, "Collider");
                 TryAddComponent<MeshComponent>(registry, entity, "Mesh");
                 TryAddComponent<LightComponent>(registry, entity, "Light");
+                TryAddComponent<DecalComponent>(registry, entity, "Decal");
+                TryAddComponent<ColorGradingComponent>(registry, entity, "ColorGrading");
+                TryAddComponent<BattleRulesComponent>(registry, entity, "BattleRules");
+                TryAddComponent<ProjectileEmitterComponent>(registry, entity, "ProjectileEmitter");
                 TryAddComponent<AudioEmitterComponent>(registry, entity, "AudioEmitter");
                 TryAddComponent<AudioListenerComponent>(registry, entity, "AudioListener");
                 TryAddComponent<CameraLensComponent>(registry, entity, "CameraLens");

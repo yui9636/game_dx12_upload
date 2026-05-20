@@ -19,6 +19,7 @@ namespace PlayerEditorInternal
         case TimelineTrackType::Audio:       baseName = "Audio"; break;
         case TimelineTrackType::CameraShake: baseName = "Shake"; break;
         case TimelineTrackType::Event:       baseName = "Event"; break;
+        case TimelineTrackType::Projectile:  baseName = "Projectile"; break;
         case TimelineTrackType::Animation:   baseName = "Animation"; break;
         case TimelineTrackType::Camera:      baseName = "Camera"; break;
         default:                             baseName = "Custom"; break;
@@ -63,6 +64,9 @@ namespace PlayerEditorInternal
         case TimelineTrackType::Event:
             item.endFrame = item.startFrame;
             strcpy_s(item.eventName, "Event");
+            break;
+        case TimelineTrackType::Projectile:
+            item.endFrame = item.startFrame + 4;
             break;
         default:
             item.endFrame = item.startFrame + 15;

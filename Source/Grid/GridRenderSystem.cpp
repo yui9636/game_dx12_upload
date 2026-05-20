@@ -1,7 +1,7 @@
 ﻿#include "GridRenderSystem.h"
 #include "Component/GridComponent.h"
 #include "Component/TransformComponent.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IShader.h"
 #include "RHI/IBuffer.h"

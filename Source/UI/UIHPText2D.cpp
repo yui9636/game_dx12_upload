@@ -1,7 +1,7 @@
 ﻿// UIHPText2D の UI 関連実装をまとめます。
 #include "UIHPText2D.h"
 
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RenderContext/RenderContext.h"
 
 #include <algorithm>

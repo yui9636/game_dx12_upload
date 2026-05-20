@@ -15,7 +15,7 @@
 #include <cstdio>
 #define PARTICLE_LOG(...) do { char _buf[512]; snprintf(_buf, sizeof(_buf), __VA_ARGS__); OutputDebugStringA(_buf); OutputDebugStringA("\n"); Logger::Instance().Print(LogLevel::Info, __VA_ARGS__); } while(0)
 #include "EffectRuntime/EffectGraphAsset.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Model/ModelResource.h"
 #include "FastNoiseLite.h"
 #include "RHI/IBuffer.h"
@@ -27,7 +27,7 @@
 #include "RHI/DX12/DX12Texture.h"
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
-#include "ShadowMap.h"
+#include "Render/ShadowMap.h"
 #include "RenderContext/RenderQueue.h"
 #include "System/ResourceManager.h"
 

@@ -1,7 +1,7 @@
 ﻿// SkyboxPass のレンダーパス実装をまとめます。
 #include "SkyboxPass.h"
-#include "Graphics.h"
-#include "SkyBox.h"
+#include "Render/Graphics.h"
+#include "Render/SkyBox.h"
 #include "RenderGraph/FrameGraphBuilder.h"
 #include "RenderGraph/FrameGraphResources.h"
 #include "RHI/ICommandList.h"

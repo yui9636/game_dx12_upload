@@ -1,7 +1,7 @@
 ﻿#pragma once
 // 複数のシネマティックトラックをまとめるシーケンス定義。
 #include "CinematicTrack.h"
-#include "JSONManager.h"
+#include "Utils/JSONManager.h"
 #include <vector>
 #include <memory>
 

@@ -1102,101 +1102,18 @@ RetargetResult BakeAnimationLocalBindRelativeCore(
     const std::vector<XMFLOAT4X4>& calibrationBindGlobals =
         referenceTPose ? referenceBindGlobals : sourceBindGlobals;
 
-    // Per-bone T-pose calibration. For limb root bones (UpperArm, UpperLeg), compute the
-    // rotation in the target's parent-local frame that aligns the target's bind bone
-    // direction with the neutral T-pose reference when provided, otherwise with the
-    // source bind pose. This is computed independently per bone (no hierarchy compound),
-    // and the parent-local direct comparison avoids the world->parent conversion that
-    // broke the previous approach.
-    //
-    // Limbs below the root (LowerArm, Hand, LowerLeg, Foot) are left uncalibrated: their
-    // bind orientation RELATIVE TO their parent is essentially the same between rigs
-    // (straight elbow / knee), so calibrating the root propagates the correct orientation
-    // through the chain at runtime.
+    // T-pose calibration is intentionally DISABLED. A swing-only QuaternionFromTo
+    // alignment cannot preserve each bone's twist (roll about its own axis); the leftover
+    // arbitrary twist propagates to child bones and contorts elbows/knees, producing a
+    // result worse than no calibration at all. A correct fix requires a full muscle-space
+    // basis (per-bone primary/secondary axis definitions) which is a larger effort.
+    // Feeding identity quaternions makes this fall back to the known-good plain
+    // bind-relative transfer (recognizable pose with a T-pose vs A-pose rest offset).
     std::vector<XMFLOAT4> bindCalibration(targetNodes.size(), XMFLOAT4{ 0.0f, 0.0f, 0.0f, 1.0f });
-    {
-        struct LimbRoot { BoneSlot bone; BoneSlot child; };
-        const LimbRoot limbRoots[] = {
-            { BoneSlot::LeftUpperArm, BoneSlot::LeftLowerArm },
-            { BoneSlot::RightUpperArm, BoneSlot::RightLowerArm },
-            { BoneSlot::LeftUpperLeg, BoneSlot::LeftLowerLeg },
-            { BoneSlot::RightUpperLeg, BoneSlot::RightLowerLeg },
-        };
-
-        for (const LimbRoot& lr : limbRoots) {
-            // When a separate reference T-pose is supplied, use it only to correct the
-            // common A-pose/T-pose arm offset. Leg calibration tends to push the whole
-            // body through the hips and is visually much worse than leaving the target
-            // lower body in its own bind pose.
-            if (referenceTPose &&
-                (lr.bone == BoneSlot::LeftUpperLeg || lr.bone == BoneSlot::RightUpperLeg)) {
-                continue;
-            }
-
-            const int srcThis = calibrationProfile.Get(lr.bone);
-            const int srcChild = calibrationProfile.Get(lr.child);
-            const int tgtThis = result.targetProfile.Get(lr.bone);
-            const int tgtChild = result.targetProfile.Get(lr.child);
-            if (srcThis < 0 || srcChild < 0 || tgtThis < 0 || tgtChild < 0) {
-                continue;
-            }
-            if (srcThis >= static_cast<int>(calibrationBindGlobals.size()) ||
-                srcChild >= static_cast<int>(calibrationBindGlobals.size()) ||
-                tgtThis >= static_cast<int>(targetBindGlobals.size()) ||
-                tgtChild >= static_cast<int>(targetBindGlobals.size())) {
-                continue;
-            }
-
-            // World-space directions from "this" bone to its child at bind.
-            const XMVECTOR pSrcThis = LoadTranslation(calibrationBindGlobals[srcThis]);
-            const XMVECTOR pSrcChild = LoadTranslation(calibrationBindGlobals[srcChild]);
-            const XMVECTOR pTgtThis = LoadTranslation(targetBindGlobals[tgtThis]);
-            const XMVECTOR pTgtChild = LoadTranslation(targetBindGlobals[tgtChild]);
-
-            const XMVECTOR dSrcWorld = XMVectorSubtract(pSrcChild, pSrcThis);
-            const XMVECTOR dTgtWorld = XMVectorSubtract(pTgtChild, pTgtThis);
-            float lsSrc = 0.0f, lsTgt = 0.0f;
-            XMStoreFloat(&lsSrc, XMVector3LengthSq(dSrcWorld));
-            XMStoreFloat(&lsTgt, XMVector3LengthSq(dTgtWorld));
-            if (lsSrc < 0.0001f || lsTgt < 0.0001f) {
-                continue;
-            }
-
-            // Express directions in the respective parent-local frame. Comparison in
-            // parent-local space is robust as long as source and target parents (Chest
-            // for arms, Hips for legs) are similarly oriented at bind, which holds for
-            // typical T-pose vs A-pose humanoid rigs.
-            const auto& targetNodesLocal = targetNodes;
-            const int tgtParent = targetNodesLocal[static_cast<size_t>(tgtThis)].parentIndex;
-            const int srcParent = calibrationNodes[static_cast<size_t>(srcThis)].parentIndex;
-
-            XMMATRIX rSrcParent = XMMatrixIdentity();
-            if (srcParent >= 0 && srcParent < static_cast<int>(calibrationBindGlobals.size())) {
-                rSrcParent = ExtractRotationMatrix(calibrationBindGlobals[static_cast<size_t>(srcParent)]);
-            }
-            XMMATRIX rTgtParent = XMMatrixIdentity();
-            if (tgtParent >= 0 && tgtParent < static_cast<int>(targetBindGlobals.size())) {
-                rTgtParent = ExtractRotationMatrix(targetBindGlobals[static_cast<size_t>(tgtParent)]);
-            }
-
-            const XMVECTOR dSrcParentLocal = XMVector3TransformNormal(dSrcWorld, XMMatrixInverse(nullptr, rSrcParent));
-            const XMVECTOR dTgtParentLocal = XMVector3TransformNormal(dTgtWorld, XMMatrixInverse(nullptr, rTgtParent));
-
-            // Rotation in target's parent-local frame that aligns target's bone direction
-            // onto source's bone direction (both expressed in their respective parent frames).
-            XMVECTOR qCalib = XMQuaternionNormalize(QuaternionFromTo(dTgtParentLocal, dSrcParentLocal));
-            if (referenceTPose) {
-                float qW = 1.0f;
-                XMStoreFloat(&qW, XMVectorSplatW(qCalib));
-                const float angle = 2.0f * std::acos(std::clamp(qW, -1.0f, 1.0f));
-                if (angle > XMConvertToRadians(60.0f)) {
-                    qCalib = XMQuaternionIdentity();
-                }
-            }
-
-            XMStoreFloat4(&bindCalibration[static_cast<size_t>(tgtThis)], qCalib);
-        }
-    }
+    (void)calibrationModel;
+    (void)calibrationProfile;
+    (void)calibrationNodes;
+    (void)calibrationBindGlobals;
 
     // For each target node, find the corresponding source node. Direct slot mapping for
     // humanoid bones; spine intermediate bones (Spine -> Chest chain) via proportional

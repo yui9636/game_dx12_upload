@@ -1,7 +1,7 @@
 ﻿#include "CinematicSequenceSerializer.h"
 
 #include "CinematicSequenceAsset.h"
-#include "JSONManager.h"
+#include "Utils/JSONManager.h"
 
 #include <filesystem>
 #include <fstream>

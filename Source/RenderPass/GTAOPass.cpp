@@ -1,5 +1,5 @@
 ﻿#include "GTAOPass.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RHI/IShader.h"

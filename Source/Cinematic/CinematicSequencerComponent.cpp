@@ -1,7 +1,7 @@
 ﻿#include "CinematicSequencerComponent.h"
 #include "Cinematic/CinematicTrack.h"
 #include "Actor/Actor.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Camera/Camera.h"
 #include "System/Dialog.h"
 #include"Model\/Model.h"

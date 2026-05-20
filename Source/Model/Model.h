@@ -7,7 +7,7 @@
 #include<wrl.h>
 #include<d3d11.h>
 #include<string>
-#include "Easing.h"
+#include "Utils/easing.h"
 #include <DirectXCollision.h>
 #include <Collision\Collision.h>
 

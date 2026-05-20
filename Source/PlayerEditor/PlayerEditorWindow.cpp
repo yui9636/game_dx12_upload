@@ -6,9 +6,9 @@
 #include <imgui_impl_win32.h>
 #include <backends/imgui_impl_dx12.h>
 
-#include "EditorTheme.h"
+#include "Layer/EditorTheme.h"
 #include "Icon/IconsFontAwesome7.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "PlayerEditorPanel.h"
 #include "RHI/DX12/DX12Device.h"
 

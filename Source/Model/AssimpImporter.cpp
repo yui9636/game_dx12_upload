@@ -2,7 +2,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 #include "System/Misc.h"
-#include "AssimpImporter.h"
+#include "Model/AssimpImporter.h"
 #include <Console\Logger.h>
 AssimpImporter::AssimpImporter(const char* filename)
 	:filepath(filename)

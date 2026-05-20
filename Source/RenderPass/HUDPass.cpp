@@ -1,6 +1,6 @@
 ﻿#include "HUDPass.h"
 
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Font/FontManager.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
@@ -9,6 +9,7 @@
 #include "RenderGraph/FrameGraphResources.h"
 #include "Sprite/SpriteRenderer.h"
 #include "UI/DamageTextManager.h"
+#include "UI/BattleHud.h"
 #include "UI/UI2DSpriteRenderSystem.h"
 #include "UI/UI2DTextRenderSystem.h"
 #include "UI/UIManager.h"
@@ -50,6 +51,7 @@ void HUDPass::Execute(FrameGraphResources& resources, const RenderQueue& queue, 
     UI2DTextRenderSystem::RenderText(queue.ui2DTextPackets, queue.ui2DLayoutNodes, hudRc);
     UIManager::Instance().Render(hudRc);
     DamageTextManager::Instance().Render(hudRc);
+    BattleHud::Instance().Render(hudRc);
     SpriteRenderer::Instance().End();
     FontManager::Instance().ClearRuntimeViewport();
 }

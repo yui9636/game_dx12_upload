@@ -16,5 +16,10 @@ float bokehRadius;
 
     float motionBlurIntensity;
     float motionBlurSamples;
-    float _padding;
+    float lutAmount;
+
+    float lutSize;
+    float _padding1;
+    float _padding2;
+    float _padding3;
 };

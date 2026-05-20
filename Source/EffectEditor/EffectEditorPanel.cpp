@@ -32,7 +32,7 @@
 #include "EffectRuntime/EffectGraphSerializer.h"
 #include "EffectRuntime/EffectRuntimeRegistry.h"
 #include "Icon/IconsFontAwesome7.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "Registry/Registry.h"
 #include "System/ResourceManager.h"
 

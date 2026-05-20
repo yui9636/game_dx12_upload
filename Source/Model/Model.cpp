@@ -2,9 +2,9 @@
 #include "System/Misc.h"
 #include "Model.h"
 #include "ModelResource.h"
-#include "AssimpImporter.h"
+#include "Model/AssimpImporter.h"
 #include<filesystem>
-#include"GpuResourceUtils.h"
+#include"Render/GpuResourceUtils.h"
 #include <fstream>
 #include <cereal/cereal.hpp>
 #include <cereal/archives/binary.hpp>
@@ -21,7 +21,7 @@
 #include "RHI/ITexture.h"
 #include "RHI/IResourceFactory.h"
 #include <RHI\DX11\DX11Texture.h>
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include <DirectXTex.h>
 #include "Console/Logger.h"
 

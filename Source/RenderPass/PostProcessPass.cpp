@@ -1,8 +1,8 @@
 ﻿// PostProcessPass のレンダーパス実装をまとめます。
 #include "PostProcessPass.h"
 
-#include "../Graphics.h"
-#include "../PostEffect.h"
+#include "Render/Graphics.h"
+#include "PostEffect/PostEffect.h"
 #include "RHI/ICommandList.h"
 #include "RHI/ITexture.h"
 #include "RenderGraph/FrameGraphResources.h"

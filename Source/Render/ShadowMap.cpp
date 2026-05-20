@@ -1,6 +1,6 @@
-﻿#include "ShadowMap.h"
+﻿#include "Render/ShadowMap.h"
 #include "System/Misc.h"
-#include "GpuResourceUtils.h"
+#include "Render/GpuResourceUtils.h"
 #include "RenderContext/RenderContext.h"
 #include <algorithm>
 #include <cmath>
@@ -19,7 +19,7 @@
 #include "RHI/DX11/DX11Sampler.h"
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Console/Logger.h"
 
 using namespace DirectX;

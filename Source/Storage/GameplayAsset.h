@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <DirectXMath.h>
-#include "JSONManager.h" 
+#include "Utils/JSONManager.h" 
 #include "EffectRuntime/EffectService.h"
 
 namespace Effekseer { class Effect; }
@@ -117,6 +117,52 @@ inline void from_json(const nlohmann::json& j, GECameraShakePayload& p) {
     p.timeScale = j.value("timeScale", 0.0f);
 }
 
+// 弾幕発射 1 ボレー分の設定。Projectile トラックのアイテムが保持する。
+struct GEProjectilePayload
+{
+    int   pattern          = 0;     // 0=Aimed, 1=Spread, 2=Ring
+    int   bulletsPerVolley = 8;
+    float spreadAngleDeg   = 60.0f;
+    float bulletSpeed      = 9.0f;
+    float bulletLifetime   = 5.0f;
+    int   bulletDamage     = 8;
+    float bulletRadius     = 0.35f;
+    float bulletScale      = 0.3f;
+    bool  targetsPlayer    = true;
+    DirectX::XMFLOAT3 offsetLocal{ 0.0f, 1.2f, 0.0f };
+    char  bulletModelPath[256] = {};
+};
+
+inline void to_json(nlohmann::json& j, const GEProjectilePayload& p) {
+    j = nlohmann::json{
+        {"pattern", p.pattern},
+        {"bulletsPerVolley", p.bulletsPerVolley},
+        {"spreadAngleDeg", p.spreadAngleDeg},
+        {"bulletSpeed", p.bulletSpeed},
+        {"bulletLifetime", p.bulletLifetime},
+        {"bulletDamage", p.bulletDamage},
+        {"bulletRadius", p.bulletRadius},
+        {"bulletScale", p.bulletScale},
+        {"targetsPlayer", p.targetsPlayer},
+        {"offsetLocal", p.offsetLocal},
+        {"bulletModelPath", std::string(p.bulletModelPath)}
+    };
+}
+inline void from_json(const nlohmann::json& j, GEProjectilePayload& p) {
+    p.pattern          = j.value("pattern", 0);
+    p.bulletsPerVolley = j.value("bulletsPerVolley", 8);
+    p.spreadAngleDeg   = j.value("spreadAngleDeg", 60.0f);
+    p.bulletSpeed      = j.value("bulletSpeed", 9.0f);
+    p.bulletLifetime   = j.value("bulletLifetime", 5.0f);
+    p.bulletDamage     = j.value("bulletDamage", 8);
+    p.bulletRadius     = j.value("bulletRadius", 0.35f);
+    p.bulletScale      = j.value("bulletScale", 0.3f);
+    p.targetsPlayer    = j.value("targetsPlayer", true);
+    p.offsetLocal      = j.value("offsetLocal", DirectX::XMFLOAT3{ 0.0f, 1.2f, 0.0f });
+    const std::string model = j.value("bulletModelPath", "");
+    strncpy_s(p.bulletModelPath, model.c_str(), _TRUNCATE);
+}
+
 struct GESequencerItem
 {
     int          type = 0;
@@ -129,6 +175,7 @@ struct GESequencerItem
     GEVfxPayload    vfx;
     GEAudioPayload  audio;
     GECameraShakePayload shake;
+    GEProjectilePayload  proj;
     char eventName[64] = {};
     char eventData[256] = {};
 
@@ -151,6 +198,7 @@ inline void to_json(nlohmann::json& j, const GESequencerItem& p) {
         {"vfx", p.vfx},
         {"audio", p.audio},
         {"shake", p.shake},
+        {"proj", p.proj},
         {"eventName", std::string(p.eventName)},
         {"eventData", std::string(p.eventData)}
     };
@@ -166,6 +214,7 @@ inline void from_json(const nlohmann::json& j, GESequencerItem& p) {
     if (j.contains("vfx")) j.at("vfx").get_to(p.vfx);
     if (j.contains("audio")) j.at("audio").get_to(p.audio);
     if (j.contains("shake")) j.at("shake").get_to(p.shake);
+    if (j.contains("proj")) j.at("proj").get_to(p.proj);
     const std::string eventName = j.value("eventName", "");
     const std::string eventData = j.value("eventData", "");
     strncpy_s(p.eventName, eventName.c_str(), _TRUNCATE);

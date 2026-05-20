@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include <memory>
 #include <vector>
-#include "../Graphics.h"
+#include "Render/Graphics.h"
 #include "RenderContext.h"
 #include "../RenderPass/IRenderPass.h"
 #include "RHI/ICommandList.h"

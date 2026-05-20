@@ -111,6 +111,11 @@ namespace TimelineAssetRuntimeBuilder
                     strncpy_s(runtimeItem.eventData, item.eventData, _TRUNCATE);
                     runtimeItem.end = (std::max)(runtimeItem.start, runtimeItem.end);
                     break;
+                case TimelineTrackType::Projectile:
+                    runtimeItem.type = static_cast<int>(TimelineTrackType::Projectile);
+                    runtimeItem.proj = item.projectile;
+                    runtimeItem.end = (std::max)(runtimeItem.start, runtimeItem.end);
+                    break;
                 default:
                     partialBuild = true;
                     ++warningCount;

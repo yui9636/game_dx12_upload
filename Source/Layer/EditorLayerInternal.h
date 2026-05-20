@@ -52,7 +52,7 @@
 #include "Gameplay/HPGaugeComponent.h"
 #include "Console/Console.h"
 #include "RHI/ITexture.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "UI/UI2DDrawSystem.h"
 #include "UI/UIHitTestSystem.h"
 #include "UI/UI2DLayoutResolver.h"

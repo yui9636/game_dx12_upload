@@ -1,11 +1,11 @@
-﻿#include	"HeadUpDisplay.h"
+﻿#include	"Render/HeadUpDisplay.h"
 
 #include	<string.h>
 #include	"Message/MessageData.h"
 #include	"Message/Messenger.h"
 
 #include	"Camera/Camera.h"
-#include	"Graphics.h"
+#include	"Render/Graphics.h"
 #include	"RenderContext/RenderContext.h"
 #include	"Sprite/SpriteRenderer.h"
 

@@ -1,8 +1,8 @@
 ﻿#include "PlayerModelPreviewStudio.h"
 
 #include "Render/OffscreenRenderer.h"
-#include "Graphics.h"
-#include "Gizmos.h"
+#include "Render/Graphics.h"
+#include "Render/Gizmos.h"
 #include "Model/Model.h"
 #include "RHI/ITexture.h"
 #include "RHI/IResourceFactory.h"

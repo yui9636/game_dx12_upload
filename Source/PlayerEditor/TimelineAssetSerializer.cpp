@@ -1,6 +1,6 @@
 ﻿#include "TimelineAssetSerializer.h"
 #include "TimelineAsset.h"
-#include "JSONManager.h"
+#include "Utils/JSONManager.h"
 #include <algorithm>
 #include <fstream>
 
@@ -45,6 +45,7 @@ static nlohmann::json ItemToJson(const TimelineItem& item, TimelineTrackType tra
         j["eventName"] = std::string(item.eventName);
         j["eventData"] = std::string(item.eventData);
         break;
+    case TimelineTrackType::Projectile: j["projectile"] = item.projectile; break;
     default: break;
     }
     return j;
@@ -82,6 +83,9 @@ static TimelineItem ItemFromJson(const nlohmann::json& j, TimelineTrackType trac
         strncpy_s(item.eventData, ed.c_str(), _TRUNCATE);
         break;
     }
+    case TimelineTrackType::Projectile:
+        if (j.contains("projectile")) j.at("projectile").get_to(item.projectile);
+        break;
     default: break;
     }
     return item;

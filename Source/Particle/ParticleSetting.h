@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include"JSONManager.h"
+#include"Utils/JSONManager.h"
 // パーティクル描画方式
 // パーティクルをどの見た目で描画するかを表す列挙型。
 enum class RenderMode

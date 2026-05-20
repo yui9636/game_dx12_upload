@@ -166,7 +166,7 @@
     <ClInclude Include="Source\Audio\AudioWorldSystem.h" />
     <ClInclude Include="Source\Audio\AudioAssetSystem.h" />
     <ClInclude Include="Source\Audio\AudioClipAsset.h" />
-    <ClInclude Include="Source\AssimpImporter.h" />
+    <ClInclude Include="Source\Model\AssimpImporter.h" />
     <ClInclude Include="Source\Camera\Camera.h" />
     <ClInclude Include="Source\Camera\CameraFinalizeSystem.h" />
     <ClInclude Include="Source\Camera\Camera2DUtils.h" />
@@ -211,7 +211,7 @@
     <ClInclude Include="Source\Console\Profiler.h" />
     <ClInclude Include="Source\DebugRender\DebugRenderSystem.h" />
     <ClInclude Include="Source\Duplicate\DuplicateSystem.h" />
-    <ClInclude Include="Source\easing.h" />
+    <ClInclude Include="Source\Utils\easing.h" />
     <ClInclude Include="Source\Effect\EffectMaterial.h" />
     <ClInclude Include="Source\Engine\EditorSelection.h" />
     <ClInclude Include="Source\Engine\EngineMode.h" />
@@ -223,7 +223,7 @@
     <ClInclude Include="Source\Environment\EnvironmentExtractSystem.h" />
     <ClInclude Include="Source\Font\Font.h" />
     <ClInclude Include="Source\Font\FontManager.h" />
-    <ClInclude Include="Source\FrameBuffer.h" />
+    <ClInclude Include="Source\Render\FrameBuffer.h" />
     <ClInclude Include="Source\Component\UIButtonComponent.h" />
     <ClInclude Include="Source\GameLoop\GameLoopEditorPanelInternal.h" />
     <ClInclude Include="Source\GameLoop\GameLoopScenePicker.h" />
@@ -261,16 +261,16 @@
     <ClInclude Include="Source\GameLoop\SceneTransitionSystem.h" />
     <ClInclude Include="Source\GameLoop\UIButtonClickEventQueue.h" />
     <ClInclude Include="Source\GameLoop\UIButtonClickSystem.h" />
-    <ClInclude Include="Source\Gizmos.h" />
-    <ClInclude Include="Source\GpuResourceUtils.h" />
-    <ClInclude Include="Source\Graphics.h" />
+    <ClInclude Include="Source\Render\Gizmos.h" />
+    <ClInclude Include="Source\Render\GpuResourceUtils.h" />
+    <ClInclude Include="Source\Render\Graphics.h" />
     <ClInclude Include="Source\Grid\GridRenderSystem.h" />
-    <ClInclude Include="Source\HeadUpDisplay.h" />
+    <ClInclude Include="Source\Render\HeadUpDisplay.h" />
     <ClInclude Include="Source\Hierarchy\HierarchyECSUI.h" />
     <ClInclude Include="Source\Hierarchy\HierarchySystem.h" />
     <ClInclude Include="Source\Icon\IconFontManager.h" />
     <ClInclude Include="Source\Icon\IconsFontAwesome7.h" />
-    <ClInclude Include="Source\ImGuiRenderer.h" />
+    <ClInclude Include="Source\Render\ImGuiRenderer.h" />
     <ClInclude Include="Source\Input\EditorInputBridge.h" />
     <ClInclude Include="Source\Input\IInputBackend.h" />
     <ClInclude Include="Source\Input\InputActionMapAsset.h" />
@@ -331,7 +331,7 @@
     <ClInclude Include="Source\Gameplay\TimelineAssetRuntimeBuilder.h" />
     <ClInclude Include="Source\Gameplay\TimelineRuntimeSystem.h" />
     <ClInclude Include="Source\Inspector\InspectorECSUI.h" />
-    <ClInclude Include="Source\JSONManager.h" />
+    <ClInclude Include="Source\Utils\JSONManager.h" />
     <ClInclude Include="Source\Layer\EditorLayer.h" />
     <ClInclude Include="Source\Layer\EditorLayerInternal.h" />
     <ClInclude Include="Source\Layer\GameLayer.h" />
@@ -395,12 +395,12 @@
     <ClInclude Include="Source\Sequencer\CinematicSequenceSerializer.h" />
     <ClInclude Include="Source\Sequencer\CinematicService.h" />
     <ClInclude Include="Source\Sequencer\SequencerPanel.h" />
-    <ClInclude Include="Source\PostEffect.h" />
+    <ClInclude Include="Source\PostEffect\PostEffect.h" />
     <ClInclude Include="Source\PostEffect\BloomExtractSystem.h" />
     <ClInclude Include="Source\PostEffect\ColorFilterExtractSystem.h" />
     <ClInclude Include="Source\PostEffect\DoFExtractSystem.h" />
     <ClInclude Include="Source\PostEffect\MotionBlurExtractSystem.h" />
-    <ClInclude Include="Source\PrimitiveRenderer.h" />
+    <ClInclude Include="Source\Render\PrimitiveRenderer.h" />
     <ClInclude Include="Source\ReflectionProbe\ReflectionProbeBaker.h" />
     <ClInclude Include="Source\Registry\Registry.h" />
     <ClInclude Include="Source\RenderContext\RenderContext.h" />
@@ -413,6 +413,15 @@
     <ClInclude Include="Source\RenderGraph\FrameGraphTypes.h" />
     <ClInclude Include="Source\RenderGraph\RenderGraphResourcePool.h" />
     <ClInclude Include="Source\RenderPass\DeferredLightingPass.h" />
+    <ClInclude Include="Source\RenderPass\DeferredDecalPass.h" />
+    <ClInclude Include="Source\Component\DecalComponent.h" />
+    <ClInclude Include="Source\Component\ColorGradingComponent.h" />
+    <ClInclude Include="Source\Component\BattleRulesComponent.h" />
+    <ClInclude Include="Source\Component\ProjectileComponent.h" />
+    <ClInclude Include="Source\Component\ProjectileEmitterComponent.h" />
+    <ClInclude Include="Source\Gameplay\ProjectileSystem.h" />
+    <ClInclude Include="Source\Gameplay\TimelineProjectileSystem.h" />
+    <ClInclude Include="Source\Decal\DecalSystem.h" />
     <ClInclude Include="Source\RenderPass\DrawObjectsPass.h" />
     <ClInclude Include="Source\RenderPass\EffectMeshPass.h" />
     <ClInclude Include="Source\RenderPass\EffectParticlePass.h" />
@@ -477,9 +486,9 @@
     <ClInclude Include="Source\ShaderClass\ToonShader.h" />
     <ClInclude Include="Source\ShaderClass\Shader.h" />
     <ClInclude Include="Source\ShaderClass\ShaderCompiler.h" />
-    <ClInclude Include="Source\ShadowMap.h" />
+    <ClInclude Include="Source\Render\ShadowMap.h" />
     <ClInclude Include="Source\Shadow\ShadowExtractSystem.h" />
-    <ClInclude Include="Source\SkyBox.h" />
+    <ClInclude Include="Source\Render\SkyBox.h" />
     <ClInclude Include="Source\Sprite\Sprite.h" />
     <ClInclude Include="Source\Sprite\SpriteRenderer.h" />
     <ClInclude Include="Source\Sprite\Sprite3D.h" />
@@ -501,6 +510,7 @@
     <ClInclude Include="Source\Transform\TransformSystem.h" />
     <ClInclude Include="Source\Type\TypeInfo.h" />
     <ClInclude Include="Source\UI\DamageTextManager.h" />
+    <ClInclude Include="Source\UI\BattleHud.h" />
     <ClInclude Include="Source\UI\UI2DLayoutResolver.h" />
     <ClInclude Include="Source\UI\UI2DSpriteExtractSystem.h" />
     <ClInclude Include="Source\UI\UI2DSpriteRenderSystem.h" />
@@ -587,7 +597,7 @@
     <ClCompile Include="Source\Audio\AudioWorldSystem.cpp" />
     <ClCompile Include="Source\Audio\AudioAssetSystem.cpp" />
     <ClCompile Include="External\miniaudio-master\miniaudio.c" />
-    <ClCompile Include="Source\AssimpImporter.cpp" />
+    <ClCompile Include="Source\Model\AssimpImporter.cpp" />
     <ClCompile Include="Source\Camera\Camera.cpp" />
     <ClCompile Include="Source\Camera\CameraFinalizeSystem.cpp" />
     <ClCompile Include="Source\Camera\FreeCameraSystem.cpp" />
@@ -617,19 +627,19 @@
     <ClCompile Include="Source\Environment\EnvironmentExtractSystem.cpp" />
     <ClCompile Include="Source\Font\Font.cpp" />
     <ClCompile Include="Source\Font\FontManager.cpp" />
-    <ClCompile Include="Source\FrameBuffer.cpp" />
-    <ClCompile Include="Source\Gizmos.cpp" />
-    <ClCompile Include="Source\GpuResourceUtils.cpp" />
+    <ClCompile Include="Source\Render\FrameBuffer.cpp" />
+    <ClCompile Include="Source\Render\Gizmos.cpp" />
+    <ClCompile Include="Source\Render\GpuResourceUtils.cpp" />
     <ClCompile Include="External\tinyexr-release\deps\miniz\miniz.c">
       <CompileAs>CompileAsC</CompileAs>
     </ClCompile>
-    <ClCompile Include="Source\Graphics.cpp" />
+    <ClCompile Include="Source\Render\Graphics.cpp" />
     <ClCompile Include="Source\Grid\GridRenderSystem.cpp" />
-    <ClCompile Include="Source\HeadUpDisplay.cpp" />
+    <ClCompile Include="Source\Render\HeadUpDisplay.cpp" />
     <ClCompile Include="Source\Hierarchy\HierarchyECSUI.cpp" />
     <ClCompile Include="Source\Hierarchy\HierarchySystem.cpp" />
     <ClCompile Include="Source\Icon\IconFontManager.cpp" />
-    <ClCompile Include="Source\ImGuiRenderer.cpp" />
+    <ClCompile Include="Source\Render\ImGuiRenderer.cpp" />
     <ClCompile Include="Source\Input\EditorInputBridge.cpp" />
     <ClCompile Include="Source\Input\InputActionMapAsset.cpp" />
     <ClCompile Include="Source\Input\InputBindingProfileAsset.cpp" />
@@ -655,6 +665,8 @@
     <ClCompile Include="Source\Gameplay\TimelineShakeSystem.cpp" />
     <ClCompile Include="Source\Gameplay\HitboxTrackingSystem.cpp" />
     <ClCompile Include="Source\Gameplay\DamageSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\ProjectileSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\TimelineProjectileSystem.cpp" />
     <ClCompile Include="Source\Gameplay\LockOnSystem.cpp" />
     <ClCompile Include="Source\Gameplay\BattleFlowSystem.cpp" />
     <ClCompile Include="Source\UI\HUDBindingSystem.cpp" />
@@ -678,7 +690,7 @@
     <ClCompile Include="Source\GameLoop\UIButtonClickEventQueue.cpp" />
     <ClCompile Include="Source\GameLoop\UIButtonClickSystem.cpp" />
     <ClCompile Include="Source\Inspector\InspectorECSUI.cpp" />
-    <ClCompile Include="Source\JSONManager.cpp" />
+    <ClCompile Include="Source\Utils\JSONManager.cpp" />
     <ClCompile Include="Source\Layer\EditorLayer.cpp" />
     <ClCompile Include="Source\Layer\EditorLayerMenu.cpp" />
     <ClCompile Include="Source\Layer\EditorLayerOverlays.cpp" />
@@ -747,12 +759,12 @@
     <ClCompile Include="Source\Sequencer\CinematicSequenceSerializer.cpp" />
     <ClCompile Include="Source\Sequencer\CinematicService.cpp" />
     <ClCompile Include="Source\Sequencer\SequencerPanel.cpp" />
-    <ClCompile Include="Source\PostEffect.cpp" />
+    <ClCompile Include="Source\PostEffect\PostEffect.cpp" />
     <ClCompile Include="Source\PostEffect\BloomExtractSystem.cpp" />
     <ClCompile Include="Source\PostEffect\ColorFilterExtractSystem.cpp" />
     <ClCompile Include="Source\PostEffect\DoFExtractSystem.cpp" />
     <ClCompile Include="Source\PostEffect\MotionBlurExtractSystem.cpp" />
-    <ClCompile Include="Source\PrimitiveRenderer.cpp" />
+    <ClCompile Include="Source\Render\PrimitiveRenderer.cpp" />
     <ClCompile Include="Source\ReflectionProbe\ReflectionProbeBaker.cpp" />
     <ClCompile Include="Source\Registry\Registry.cpp" />
     <ClCompile Include="Source\RenderContext\RenderPipeline.cpp" />
@@ -760,6 +772,8 @@
     <ClCompile Include="Source\RenderGraph\FrameGraph.cpp" />
     <ClCompile Include="Source\RenderGraph\RenderGraphResourcePool.cpp" />
     <ClCompile Include="Source\RenderPass\DeferredLightingPass.cpp" />
+    <ClCompile Include="Source\RenderPass\DeferredDecalPass.cpp" />
+    <ClCompile Include="Source\Decal\DecalSystem.cpp" />
     <ClCompile Include="Source\RenderPass\DrawObjectsPass.cpp" />
     <ClCompile Include="Source\RenderPass\EffectMeshPass.cpp" />
     <ClCompile Include="Source\RenderPass\EffectParticlePass.cpp" />
@@ -806,9 +820,9 @@
     <ClCompile Include="Source\ShaderClass\PhongShader.cpp" />
     <ClCompile Include="Source\ShaderClass\ToonShader.cpp" />
     <ClCompile Include="Source\ShaderClass\ShaderCompiler.cpp" />
-    <ClCompile Include="Source\ShadowMap.cpp" />
+    <ClCompile Include="Source\Render\ShadowMap.cpp" />
     <ClCompile Include="Source\Shadow\ShadowExtractSystem.cpp" />
-    <ClCompile Include="Source\SkyBox.cpp" />
+    <ClCompile Include="Source\Render\SkyBox.cpp" />
     <ClCompile Include="Source\Sprite\Sprite.cpp" />
     <ClCompile Include="Source\Sprite\SpriteRenderer.cpp" />
     <ClCompile Include="Source\Sprite\Sprite3D.cpp" />
@@ -823,6 +837,7 @@
     <ClCompile Include="Source\System\ResourceManager.cpp" />
     <ClCompile Include="Source\Transform\TransformSystem.cpp" />
     <ClCompile Include="Source\UI\DamageTextManager.cpp" />
+    <ClCompile Include="Source\UI\BattleHud.cpp" />
     <ClCompile Include="Source\UI\UICombo.cpp" />
     <ClCompile Include="Source\UI\UIDamagePopup.cpp" />
     <ClCompile Include="Source\UI\UIElement.cpp" />
@@ -1176,6 +1191,18 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="Shader\ToonPS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\DecalVS.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="Shader\DecalPS.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>

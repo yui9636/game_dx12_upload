@@ -33,6 +33,18 @@ struct ColorFilterData {
     float hueShift = 0.0f;
     float flashAmount = 0.0f;
     float vignetteAmount = 0.0f;
+    std::string lutPath;          // color-grading LUT texture path ("" = disabled)
+    float lutAmount = 0.0f;       // LUT blend strength [0,1]
+};
+
+// One deferred decal extracted from a DecalComponent entity for the current frame.
+struct DecalInstance {
+    DirectX::XMFLOAT4X4 worldMatrix;                    // unit cube [-0.5,0.5] -> world
+    DirectX::XMFLOAT4X4 invWorldMatrix;                 // world -> box-local
+    ITexture* texture = nullptr;                        // decal albedo texture
+    DirectX::XMFLOAT4 tintOpacity = { 1, 1, 1, 1 };     // rgb tint, a = opacity
+    DirectX::XMFLOAT3 projectionAxis = { 0, 0, 1 };     // world-space decal forward (+Z)
+    float angleFade = 0.25f;                            // surface-normal fade threshold
 };
 
 
@@ -238,6 +250,7 @@ struct RenderContext
 
     DirectionalLight        directionalLight;
     std::vector<PointLight> pointLights;
+    std::vector<DecalInstance> decals;
 
     DirectX::XMFLOAT4X4 viewMatrix;
     DirectX::XMFLOAT4X4 projectionMatrix;

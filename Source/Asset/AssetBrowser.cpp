@@ -19,8 +19,8 @@
 #include "Undo/ComponentUndoAction.h"
 #include "Undo/EntitySnapshot.h"
 #include "Undo/EntityUndoActions.h"
-#include "Graphics.h"
-#include "ImGuiRenderer.h"
+#include "Render/Graphics.h"
+#include "Render/ImGuiRenderer.h"
 #include <unordered_set>
 #include <cstring>
 #include <optional>

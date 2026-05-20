@@ -4,7 +4,7 @@
 #include "RHI/DX11/DX11Buffer.h"
 #include "RHI/DX12/DX12Buffer.h"
 #include "RHI/DX12/DX12Device.h"
-#include "GpuResourceUtils.h"
+#include "Render/GpuResourceUtils.h"
 #include "RHI/ISampler.h"
 #include "RHI/ITexture.h"
 

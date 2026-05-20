@@ -6,8 +6,8 @@
 #include <ImGuizmo.h>
 #include <profiler.h>
 #include <cstdint>
-#include "ImGuiRenderer.h"
-#include "Graphics.h"
+#include "Render/ImGuiRenderer.h"
+#include "Render/Graphics.h"
 #include "RHI/ITexture.h"
 #include "RHI/DX11/DX11Texture.h"
 #include "RHI/DX12/DX12Device.h"

@@ -1,7 +1,7 @@
 ﻿// ShadowPass のレンダーパス実装をまとめます。
 #include "ShadowPass.h"
-#include "Graphics.h"
-#include "ShadowMap.h"
+#include "Render/Graphics.h"
+#include "Render/ShadowMap.h"
 #include "Render/GlobalRootSignature.h"
 #include "Render/ShaderCommon.h"
 #include "RenderGraph/FrameGraphBuilder.h"

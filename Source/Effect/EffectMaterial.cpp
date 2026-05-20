@@ -1,7 +1,7 @@
 ﻿#include "EffectMaterial.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RenderContext/RenderContext.h"
-#include "GpuResourceUtils.h"
+#include "Render/GpuResourceUtils.h"
 #include <cassert>
 #include "RHI/ICommandList.h"
 

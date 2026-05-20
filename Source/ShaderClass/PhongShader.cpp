@@ -1,7 +1,7 @@
 ﻿#include "PhongShader.h"
 
-#include "Graphics.h"
-#include "ShadowMap.h"
+#include "Render/Graphics.h"
+#include "Render/ShadowMap.h"
 #include "Material/MaterialAsset.h"
 #include "System/ResourceManager.h"
 #include "Material/MaterialAsset.h"

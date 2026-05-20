@@ -1,7 +1,7 @@
-﻿#include "PostEffect.h"
+﻿#include "PostEffect/PostEffect.h"
 
-#include "FrameBuffer.h"
-#include "Graphics.h"
+#include "Render/FrameBuffer.h"
+#include "Render/Graphics.h"
 #include "Console/Logger.h"
 #include "RenderContext/RenderContext.h"
 #include "RHI/IBuffer.h"
@@ -14,6 +14,7 @@
 #include "RHI/DX11/DX11Texture.h"
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
+#include "System/ResourceManager.h"
 
 #include "imgui.h"
 
@@ -417,17 +418,22 @@ void PostEffect::UberPostProcess(
     rc.commandList->SetPrimitiveTopology(PrimitiveTopology::TriangleStrip);
     rc.commandList->PSSetConstantBuffer(0, m_constantBuffer.get());
 
+    ITexture* lut = m_lutTexture.get();
     if (m_api == GraphicsAPI::DX12) {
         auto* dx12Cmd = static_cast<DX12CommandList*>(rc.commandList);
+        if (lut) {
+            rc.commandList->TransitionBarrier(lut, ResourceState::ShaderResource);
+        }
         DX12CommandList::PixelTextureBinding bindings[] = {
             MakeBinding(0, color),
             MakeBinding(1, luminance),
             MakeBinding(2, depth),
             MakeBinding(3, velocity),
+            MakeBinding(4, lut),
         };
         dx12Cmd->BindPixelTextureTable(bindings, _countof(bindings));
     } else {
-        ITexture* textures[] = { color, luminance, depth, velocity };
+        ITexture* textures[] = { color, luminance, depth, velocity, lut };
         rc.commandList->PSSetTextures(0, _countof(textures), textures);
         if (rc.renderState) {
             rc.commandList->PSSetSampler(0, rc.renderState->GetSamplerState(SamplerState::LinearClamp));
@@ -437,7 +443,7 @@ void PostEffect::UberPostProcess(
     rc.commandList->Draw(4, 0);
 
     if (m_api != GraphicsAPI::DX12) {
-        ITexture* nullTextures[4] = {};
+        ITexture* nullTextures[5] = {};
         rc.commandList->PSSetTextures(0, _countof(nullTextures), nullTextures);
         rc.commandList->PSSetSampler(0, nullptr);
     }
@@ -706,6 +712,21 @@ void PostEffect::Process(const RenderContext& rc, ITexture* src, ITexture* dst, 
     m_cbPostEffect.bokehRadius = rc.dofData.enable ? rc.dofData.bokehRadius : 0.0f;
     m_cbPostEffect.motionBlurIntensity = rc.motionBlurData.intensity;
     m_cbPostEffect.motionBlurSamples = rc.motionBlurData.samples;
+
+    // カラーグレーディング LUT。パスが変わったときだけ読み込み直す。
+    if (rc.colorFilterData.lutPath != m_lutLoadedPath) {
+        m_lutLoadedPath = rc.colorFilterData.lutPath;
+        m_lutTexture = m_lutLoadedPath.empty()
+            ? nullptr
+            : ResourceManager::Instance().GetTexture(m_lutLoadedPath);
+    }
+    if (m_lutTexture && rc.colorFilterData.lutAmount > 0.0001f) {
+        m_cbPostEffect.lutAmount = rc.colorFilterData.lutAmount;
+        m_cbPostEffect.lutSize = static_cast<float>(m_lutTexture->GetHeight());
+    } else {
+        m_cbPostEffect.lutAmount = 0.0f;
+        m_cbPostEffect.lutSize = 0.0f;
+    }
     rc.commandList->UpdateBuffer(m_constantBuffer.get(), &m_cbPostEffect, sizeof(m_cbPostEffect));
 
     Graphics& graphics = Graphics::Instance();

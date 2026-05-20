@@ -201,6 +201,12 @@ void PlayerEditorPanel::DrawTimelineTrackHeaders(float height)
             m_timelineDirty = true;
             timelineRuntimeChanged = true;
         }
+        if (ImGui::MenuItem("Projectile")) {
+            TimelineTrack* track = m_timelineAsset.AddTrack(TimelineTrackType::Projectile, GenerateDefaultTrackName(m_timelineAsset, TimelineTrackType::Projectile));
+            if (track) track->items.push_back(CreateDefaultTimelineItem(TimelineTrackType::Projectile, m_playheadFrame));
+            m_timelineDirty = true;
+            timelineRuntimeChanged = true;
+        }
         ImGui::EndPopup();
     }
 

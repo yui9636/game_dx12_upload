@@ -1,6 +1,6 @@
 ﻿#include "ThumbnailGenerator.h"
 #include "Render/OffscreenRenderer.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "System/ResourceManager.h"
 #include "Material/MaterialAsset.h"
 #include "Model/Model.h"
@@ -9,7 +9,7 @@
 #include "RHI/DX12/DX12Texture.h"
 #include "RenderGraph/FrameGraphTypes.h"
 #include "Console/Logger.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include <cmath>
 #include <filesystem>
 

@@ -30,7 +30,7 @@
 #include "Icon/IconsFontAwesome7.h"
 #include "PlayerEditorPanelInternal.h"
 #include "PlayerEditorSession.h"
-#include "EditorTheme.h"
+#include "Layer/EditorTheme.h"
 #include "Component/ColliderComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"

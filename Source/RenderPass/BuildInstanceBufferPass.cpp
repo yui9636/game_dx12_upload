@@ -1,5 +1,5 @@
 ﻿#include "BuildInstanceBufferPass.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/IBuffer.h"
 #include "System/TaskSystem.h"

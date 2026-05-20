@@ -1,9 +1,9 @@
 ﻿#include <sstream>
 #include <cstdio>
 #include <imgui.h>
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "Framework.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include <shellapi.h>
 #include "Asset/AssetManager.h"
 #include "Engine/EngineKernel.h"

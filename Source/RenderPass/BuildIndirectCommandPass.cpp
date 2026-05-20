@@ -1,6 +1,6 @@
 ﻿// BuildIndirectCommandPass のレンダーパス実装をまとめます。
 #include "BuildIndirectCommandPass.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Model/ModelResource.h"
 #include "RHI/IBuffer.h"
 #include "RHI/IResourceFactory.h"

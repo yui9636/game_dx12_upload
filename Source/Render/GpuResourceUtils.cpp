@@ -14,7 +14,7 @@
 #pragma pop_macro("min")
 #pragma pop_macro("max")
 #include "System/Misc.h"
-#include "GpuResourceUtils.h"
+#include "Render/GpuResourceUtils.h"
 
 namespace
 {

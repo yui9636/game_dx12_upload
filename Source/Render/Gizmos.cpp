@@ -1,6 +1,6 @@
 ﻿#include "System/Misc.h"
-#include "GpuResourceUtils.h"
-#include "Gizmos.h"
+#include "Render/GpuResourceUtils.h"
+#include "Render/Gizmos.h"
 #include "RHI/IResourceFactory.h"
 #include "RHI/ICommandList.h"
 #include "RHI/IShader.h"

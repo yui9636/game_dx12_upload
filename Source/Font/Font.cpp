@@ -4,7 +4,7 @@
 // FNTとTTF/OTFを共通の文字描画データへ展開し、文字ごとに矩形頂点を生成して描画する。
 
 #include "Console/Logger.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "RHI/IBuffer.h"
 #include "RHI/ICommandList.h"
 #include "RHI/IResourceFactory.h"

@@ -13,7 +13,7 @@
 
 #include "Asset/ThumbnailGenerator.h"
 #include "Icon/IconsFontAwesome7.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "System/ResourceManager.h"
 
 using namespace EffectEditorInternal;

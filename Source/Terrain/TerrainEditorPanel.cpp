@@ -8,7 +8,7 @@
 #include "Engine/EditorSelection.h"
 #include "Vegetation/GrassComponent.h"
 #include "Terrain/TerrainGpuPipeline.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cmath>

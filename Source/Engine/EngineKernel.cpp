@@ -1,6 +1,6 @@
 ﻿#include "EngineKernel.h"
 #include "Audio/AudioWorldSystem.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Layer/GameLayer.h"
 #include "Layer/EditorLayer.h"
 #include <imgui.h>
@@ -14,6 +14,7 @@
 #include "RenderPass/ShadowPass.h"
 #include <RenderPass\SkyboxPass.h>
 #include <RenderPass\GBufferPass.h>
+#include "RenderPass/DeferredDecalPass.h"
 #include <RenderPass\ForwardTransparentPass.h>
 #include <RenderPass\EffectMeshPass.h>
 #include <RenderPass\EffectParticlePass.h>
@@ -31,7 +32,7 @@
 #include "RenderPass/HUDPass.h"
 #include <Material\MaterialPreviewStudio.h>
 #include "RHI/IResourceFactory.h"
-#include "ImGuiRenderer.h"
+#include "Render/ImGuiRenderer.h"
 #include "RHI/DX11/DX11Texture.h"
 #include "RHI/DX12/DX12CommandList.h"
 #include "RHI/DX12/DX12Texture.h"
@@ -1100,6 +1101,7 @@ void EngineKernel::Initialize()
     m_renderPipeline->AddPass(std::make_shared<GBufferPass>());
     m_renderPipeline->AddPass(std::make_shared<TerrainRenderPass>());
     m_renderPipeline->AddPass(std::make_shared<GrassRenderPass>());     // Writes to GBuffer (after terrain)
+    m_renderPipeline->AddPass(std::make_shared<DeferredDecalPass>(factory)); // Projects decals onto GBuffer
     m_renderPipeline->AddPass(std::make_shared<GTAOPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<SSGIPass>(factory));
     m_renderPipeline->AddPass(std::make_shared<VolumetricFogPass>(factory));

@@ -1,7 +1,7 @@
 ﻿#pragma once
 #include <string>
 #include <DirectXMath.h>
-#include "JSONManager.h"
+#include "Utils/JSONManager.h"
 
 // マテリアル設定ファイルを読み書きするためのアセットクラス。
 // 色・金属度・粗さ・各種テクスチャパスなど、エディタで編集する値を保持します。

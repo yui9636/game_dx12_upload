@@ -11,7 +11,8 @@ struct BattleFlowComponent {
         Encounter = 1,
         Combat    = 2,
         Victory   = 3,
-        Defeat    = 4
+        Defeat    = 4,
+        Draw      = 5
     };
 
     Phase    phase           = Phase::Idle;

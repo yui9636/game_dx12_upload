@@ -1,7 +1,7 @@
 ﻿#include "GameLayer.h"
 #include "Terrain/TerrainExtractSystem.h"
 #include "Vegetation/GrassExtractSystem.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include <Transform\TransformSystem.h>
 #include <Transform\NodeAttachmentSystem.h>
 #include <Mesh\MeshExtractSystem.h>
@@ -38,7 +38,7 @@
 #include "Gameplay/LockOnSystem.h"
 #include "Gameplay/HealthSystem.h"
 #include "Gameplay/HPGaugeSystem.h"
-#include "HeadUpDisplay.h"
+#include "Render/HeadUpDisplay.h"
 #include "Gameplay/CharacterPhysicsSystem.h"
 #include "Gameplay/PlaybackSystem.h"
 #include "Gameplay/StateMachineSystem.h"
@@ -48,6 +48,8 @@
 #include "Gameplay/TimelineAudioSystem.h"
 #include "Gameplay/TimelineShakeSystem.h"
 #include "Gameplay/HitboxTrackingSystem.h"
+#include "Gameplay/ProjectileSystem.h"
+#include "Gameplay/TimelineProjectileSystem.h"
 #include "Collision/CollisionSystem.h"
 #include "DebugRender/DebugRenderSystem.h"
 #include "EffectRuntime/EffectService.h"
@@ -62,8 +64,10 @@
 #include "Component/AudioListenerComponent.h"
 #include "Environment/EnvironmentExtractSystem.h"
 #include <Component\ReflectionProbeComponent.h>
+#include "Component/ColorGradingComponent.h"
 #include "RHI/DX11/DX11Texture.h"
 #include "UI/UIManager.h"
+#include "UI/BattleHud.h"
 #include "UI/UI2DSpriteExtractSystem.h"
 #include "UI/UI2DTextExtractSystem.h"
 #include <algorithm>
@@ -122,6 +126,7 @@ void GameLayer::Initialize()
 {
     DamageEventRuntimeQueue::Clear();
     BattleFlowSystem::Reset();
+    BattleHud::Instance().Reset();
 
     // 新規 editor scene 用の既定 camera / light / probe を作成する。
     EntityID cameraEntity = m_registry.CreateEntity();
@@ -247,6 +252,7 @@ void GameLayer::Update(const EngineTime& time)
     TimelineVFXSystem::Update(m_registry);
     TimelineAudioSystem::Update(m_registry);
     TimelineShakeSystem::Update(m_registry, time.dt);
+    TimelineProjectileSystem::Update(m_registry, time.dt);
     // プレイヤーの最終 Transform が確定してから、Main Camera を TPV 追従位置へ置く。
     LockOnSystem::Update(m_registry, time.dt);
     ThirdPersonCameraSystem::Update(m_registry, time.dt);
@@ -261,11 +267,13 @@ void GameLayer::Update(const EngineTime& time)
     CollisionSystem collisionSystem;
     collisionSystem.Update(m_registry);
 
+    ProjectileSystem::Update(m_registry, time.dt);
     DamageSystem::Update(m_registry);
     HealthSystem::Update(m_registry, time.dt);
 
     HPGaugeSystem::Update(m_registry, time.dt);
     BattleFlowSystem::Update(m_registry, time.dt);
+    BattleHud::Instance().Update(time.dt);
 
     CameraFinalizeSystem::Update(m_registry);
 
@@ -313,6 +321,15 @@ void GameLayer::Render(RenderContext& rc, RenderQueue& queue)
     rc.colorFilterData.hueShift = m_postEffect.enableColorFilter ? m_postEffect.hueShift : 0.0f;
     rc.colorFilterData.flashAmount = m_postEffect.enableColorFilter ? m_postEffect.flashAmount : 0.0f;
     rc.colorFilterData.vignetteAmount = m_postEffect.enableColorFilter ? m_postEffect.vignetteAmount : 0.0f;
+
+    // カラーグレーディング LUT 設定
+    rc.colorFilterData.lutPath.clear();
+    rc.colorFilterData.lutAmount = 0.0f;
+    Query<ColorGradingComponent> gradingQuery(m_registry);
+    gradingQuery.ForEach([&rc](ColorGradingComponent& grading) {
+        rc.colorFilterData.lutPath = grading.lutTexturePath;
+        rc.colorFilterData.lutAmount = grading.intensity;
+    });
 
     rc.dofData.enable = m_postEffect.enableDoF;
     rc.dofData.focusDistance = m_postEffect.focusDistance;

@@ -24,6 +24,8 @@
 #include "RenderPass/ComputeCullingPass.h"
 #include "RenderPass/ShadowPass.h"
 #include "RenderPass/GBufferPass.h"
+#include "RenderPass/DeferredDecalPass.h"
+#include "Decal/DecalSystem.h"
 #include "RenderPass/GTAOPass.h"
 #include "RenderPass/SSGIPass.h"
 #include "RenderPass/VolumetricFogPass.h"
@@ -82,6 +84,7 @@ namespace
         if (dynamic_cast<ComputeCullingPass*>(pass.get())) return std::make_shared<ComputeCullingPass>();
         if (dynamic_cast<ShadowPass*>(pass.get())) return std::make_shared<ShadowPass>();
         if (dynamic_cast<GBufferPass*>(pass.get())) return std::make_shared<GBufferPass>();
+        if (dynamic_cast<DeferredDecalPass*>(pass.get())) return std::make_shared<DeferredDecalPass>(factory);
         if (dynamic_cast<GTAOPass*>(pass.get())) return std::make_shared<GTAOPass>(factory);
         if (dynamic_cast<SSGIPass*>(pass.get())) return std::make_shared<SSGIPass>(factory);
         if (dynamic_cast<VolumetricFogPass*>(pass.get())) return std::make_shared<VolumetricFogPass>(factory);
@@ -211,6 +214,7 @@ auto archetypes = registry.GetAllArchetypes();
 
     // 5. ライト情報の抽出
     LightSystem::ExtractLights(registry, rc);
+    DecalSystem::ExtractDecals(registry, rc);
 
     // 6. 行列計算とジッター処理
     DirectX::XMMATRIX V = DirectX::XMLoadFloat4x4(&rc.viewMatrix);

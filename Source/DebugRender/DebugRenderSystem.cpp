@@ -1,6 +1,6 @@
 ﻿#include "DebugRenderSystem.h"
-#include "Graphics.h"
-#include "Gizmos.h"
+#include "Render/Graphics.h"
+#include "Render/Gizmos.h"
 #include "Collision/CollisionManager.h"
 #include "Component/TransformComponent.h"
 #include "Component/ColliderComponent.h"

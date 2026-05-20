@@ -1,6 +1,6 @@
 ﻿#include "GizmoOverlay.h"
 #include "TimelineAsset.h"
-#include "Gizmos.h"
+#include "Render/Gizmos.h"
 #include <DirectXMath.h>
 
 using namespace DirectX;

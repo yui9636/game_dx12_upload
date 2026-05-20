@@ -3,8 +3,8 @@
 // FontManagerの実装。
 // ランタイム文字描画とエディタプレビュー用フォント読み込みを一元管理する。
 
-#include "Graphics.h"
-#include "ImGuiRenderer.h"
+#include "Render/Graphics.h"
+#include "Render/ImGuiRenderer.h"
 #include "Console/Logger.h"
 #include "RHI/DX11/DX11CommandList.h"
 #include "RHI/ICommandList.h"

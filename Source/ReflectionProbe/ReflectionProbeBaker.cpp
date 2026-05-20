@@ -1,5 +1,5 @@
 ﻿#include "ReflectionProbeBaker.h"
-#include "Graphics.h"
+#include "Render/Graphics.h"
 #include "Render/GlobalRootSignature.h"
 #include "Scene/SceneDataUploadSystem.h"
 #include "RHI/ICommandList.h"

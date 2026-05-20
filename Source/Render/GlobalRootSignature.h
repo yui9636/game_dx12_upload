@@ -4,7 +4,7 @@
 #include <d3d11.h>
 #include "ShaderCommon.h"
 #include "RenderContext/RenderState.h"
-#include "ShadowMap.h"
+#include "Render/ShadowMap.h"
 // ICommandList はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
 
 class ICommandList;
