@@ -11,6 +11,7 @@ from engine_client import DEFAULT_TIMEOUT, DEFAULT_URL, EngineClient
 from engine_client import EngineCommandError, EngineConnectionError
 from tools import EngineTools
 from verification_runner import VerificationValidationError
+from world_model import WorldModelValidationError
 from workflow_runner import WorkflowValidationError
 
 
@@ -417,6 +418,81 @@ def run_make_simple_game(args: argparse.Namespace) -> int:
         return 0 if result.get("summary", {}).get("ok") else 6
 
 
+def run_world_snapshot(args: argparse.Namespace) -> int:
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        print_json(EngineTools(engine).world.snapshot(
+            include_details=not args.no_details,
+            report_path=args.report,
+        ))
+    return 0
+
+
+def run_world_summary(args: argparse.Namespace) -> int:
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        print_json(EngineTools(engine).world.semantic_summary())
+    return 0
+
+
+def run_world_validate(args: argparse.Namespace) -> int:
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        result = EngineTools(engine).world.validate_gameplay(
+            style=args.style,
+            min_collectibles=args.min_collectibles,
+            min_hazards=args.min_hazards,
+            require_terrain=args.require_terrain,
+            require_light=args.require_light,
+        )
+        print_json(result)
+        return 0 if result.get("summary", {}).get("ok") else 7
+
+
+def run_world_goal(args: argparse.Namespace) -> int:
+    value = load_json_value(args.file)
+    if args.dry_run:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        result = EngineTools(engine).world.run_goal(
+            value,
+            dry_run=True,
+            max_repair_attempts=args.max_repair_attempts,
+            report_path=args.report,
+        )
+        print_json(result)
+        return 0
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        result = EngineTools(engine).world.run_goal(
+            value,
+            dry_run=False,
+            max_repair_attempts=args.max_repair_attempts,
+            report_path=args.report,
+        )
+        print_json(result)
+        return 0 if result.get("summary", {}).get("ok") else 7
+
+
+def run_make_world_game(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        result = EngineTools(engine).world.make_collect_game(
+            game_name=args.name,
+            coin_count=args.coins,
+            hazard_count=args.hazards,
+            dry_run=True,
+            max_repair_attempts=args.max_repair_attempts,
+        )
+        print_json(result)
+        return 0
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        result = EngineTools(engine).world.make_collect_game(
+            game_name=args.name,
+            coin_count=args.coins,
+            hazard_count=args.hazards,
+            dry_run=False,
+            max_repair_attempts=args.max_repair_attempts,
+        )
+        print_json(result)
+        return 0 if result.get("summary", {}).get("ok") else 7
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="High-level authoring tools for MyEngine automation.")
     parser.add_argument("--url", default=DEFAULT_URL, help=f"WebSocket URL. Default: {DEFAULT_URL}")
@@ -618,6 +694,37 @@ def build_parser() -> argparse.ArgumentParser:
     simple_game.add_argument("--dry-run", action="store_true")
     simple_game.set_defaults(func=run_make_simple_game)
 
+    world_snapshot = sub.add_parser("world-snapshot", help="Phase 7 ECS snapshot with semantic tags.")
+    world_snapshot.add_argument("--no-details", action="store_true", help="Skip per-entity component detail reads.")
+    world_snapshot.add_argument("--report", help="Optional path for a JSON snapshot report.")
+    world_snapshot.set_defaults(func=run_world_snapshot)
+
+    world_summary = sub.add_parser("world-summary", help="Phase 8 semantic ECS summary.")
+    world_summary.set_defaults(func=run_world_summary)
+
+    world_validate = sub.add_parser("world-validate", help="Phase 8 gameplay-loop validation over the ECS world model.")
+    world_validate.add_argument("--style", default="collect")
+    world_validate.add_argument("--min-collectibles", type=int, default=1)
+    world_validate.add_argument("--min-hazards", type=int, default=0)
+    world_validate.add_argument("--require-terrain", action="store_true")
+    world_validate.add_argument("--require-light", action="store_true")
+    world_validate.set_defaults(func=run_world_validate)
+
+    world_goal = sub.add_parser("world-goal", help="Phase 9 ECS-observed goal authoring.")
+    world_goal.add_argument("--file", required=True)
+    world_goal.add_argument("--dry-run", action="store_true")
+    world_goal.add_argument("--report", help="Optional path for a JSON world-authoring report.")
+    world_goal.add_argument("--max-repair-attempts", type=int, default=1)
+    world_goal.set_defaults(func=run_world_goal)
+
+    world_game = sub.add_parser("make-world-game", help="Use Phase 9 world authoring to create and validate a collect game.")
+    world_game.add_argument("--name", default="AI_WorldCollect")
+    world_game.add_argument("--coins", type=int, default=5)
+    world_game.add_argument("--hazards", type=int, default=3)
+    world_game.add_argument("--dry-run", action="store_true")
+    world_game.add_argument("--max-repair-attempts", type=int, default=1)
+    world_game.set_defaults(func=run_make_world_game)
+
     return parser
 
 
@@ -637,6 +744,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 4
     except AutonomyValidationError as exc:
         print(f"Autonomy validation failed: {exc}", file=sys.stderr)
+        return 4
+    except WorldModelValidationError as exc:
+        print(f"World model validation failed: {exc}", file=sys.stderr)
         return 4
     except (EngineConnectionError, OSError) as exc:
         print(f"Connection failed: {exc}", file=sys.stderr)

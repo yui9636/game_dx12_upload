@@ -9,11 +9,13 @@ try:
     from .autonomy_runner import AutonomyRunner, AutonomyValidationError
     from .engine_client import COMMANDS, EngineClient
     from .verification_runner import VerificationRunner, VerificationValidationError
+    from .world_model import ECSObserver, WorldAuthoringRunner, WorldModel, WorldModelValidationError, diff_snapshots
     from .workflow_runner import WorkflowRunner, WorkflowValidationError
 except ImportError:
     from autonomy_runner import AutonomyRunner, AutonomyValidationError
     from engine_client import COMMANDS, EngineClient
     from verification_runner import VerificationRunner, VerificationValidationError
+    from world_model import ECSObserver, WorldAuthoringRunner, WorldModel, WorldModelValidationError, diff_snapshots
     from workflow_runner import WorkflowRunner, WorkflowValidationError
 
 
@@ -1127,6 +1129,119 @@ class AutonomyTools:
         }, dry_run=dry_run)
 
 
+class WorldTools:
+    """Phase 7-9 ECS observation, semantic world model, and goal authoring tools."""
+
+    def __init__(self, root: "EngineTools"):
+        self.root = root
+        self.engine = root.engine
+
+    def snapshot(self, *, include_details: bool = True, report_path: Optional[str] = None) -> Dict[str, Any]:
+        return ECSObserver(self.root).snapshot(include_details=include_details, report_path=report_path)
+
+    def semantic_summary(self, snapshot: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+        world = WorldModel(snapshot or self.snapshot(include_details=True))
+        return world.semantic_summary()
+
+    def find(
+        self,
+        *,
+        kind: str = "",
+        tag: str = "",
+        role: str = "",
+        name: str = "",
+        component: str = "",
+        exact: bool = False,
+    ) -> List[Mapping[str, Any]]:
+        world = WorldModel(self.snapshot(include_details=True))
+        return world.find(kind=kind, tag=tag, role=role, name=name, component=component, exact=exact)
+
+    def validate_gameplay(
+        self,
+        snapshot: Optional[Mapping[str, Any]] = None,
+        *,
+        style: str = "collect",
+        min_collectibles: int = 1,
+        min_hazards: int = 0,
+        require_player: bool = True,
+        require_goal: bool = True,
+        require_camera: bool = True,
+        require_terrain: bool = False,
+        require_light: bool = False,
+    ) -> Dict[str, Any]:
+        world = WorldModel(snapshot or self.snapshot(include_details=True))
+        return world.validate_gameplay_loop(
+            style=style,
+            min_collectibles=min_collectibles,
+            min_hazards=min_hazards,
+            require_player=require_player,
+            require_goal=require_goal,
+            require_camera=require_camera,
+            require_terrain=require_terrain,
+            require_light=require_light,
+        )
+
+    def diff(self, before: Mapping[str, Any], after: Mapping[str, Any]) -> Dict[str, Any]:
+        return diff_snapshots(before, after)
+
+    def repair_plan(
+        self,
+        validation: Mapping[str, Any],
+        *,
+        snapshot: Optional[Mapping[str, Any]] = None,
+        game_name: str = "AI_WorldGame",
+        scene_path: Optional[str] = None,
+        screenshot_path: Optional[str] = None,
+        coin_count: int = 5,
+        hazard_count: int = 0,
+    ) -> Dict[str, Any]:
+        world = WorldModel(snapshot or self.snapshot(include_details=True))
+        return world.repair_plan(
+            validation,
+            game_name=game_name,
+            scene_path=scene_path,
+            screenshot_path=screenshot_path,
+            coin_count=coin_count,
+            hazard_count=hazard_count,
+        )
+
+    def run_goal(
+        self,
+        goal: Mapping[str, Any],
+        *,
+        dry_run: bool = False,
+        max_repair_attempts: int = 1,
+        report_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return WorldAuthoringRunner(self.root).run(
+            goal,
+            dry_run=dry_run,
+            max_repair_attempts=max_repair_attempts,
+            report_path=report_path,
+        )
+
+    def make_collect_game(
+        self,
+        *,
+        game_name: str = "AI_WorldCollect",
+        coin_count: int = 5,
+        hazard_count: int = 3,
+        dry_run: bool = False,
+        max_repair_attempts: int = 1,
+    ) -> Dict[str, Any]:
+        return self.run_goal({
+            "name": f"{game_name}_world_authoring",
+            "goal": "Create a collect-the-coins scene and validate it through the ECS world model.",
+            "template": "simple_collect_game",
+            "variables": {
+                "gameName": game_name,
+                "coinCount": int(coin_count),
+                "hazardCount": int(hazard_count),
+            },
+            "reportPath": f"Saved/AI/world/{game_name}_world_authoring_latest.json",
+        }, dry_run=dry_run, max_repair_attempts=max_repair_attempts)
+
+
 class WorkflowTools:
     """Phase 4-6 execution helpers: plan, run, verify, and checkpoint."""
 
@@ -1177,6 +1292,7 @@ class WorkflowTools:
             "runtime": self.root.runtime,
             "verify": self.root.verify,
             "autonomy": self.root.autonomy,
+            "world": self.root.world,
         }
         for family_name, family in families.items():
             for method_name in dir(family):
@@ -1204,6 +1320,11 @@ class WorkflowTools:
             "verification.validate": self.root.verify.validate,
             "autonomy.run": self.root.autonomy.run,
             "autonomy.make_simple_game": self.root.autonomy.make_simple_game,
+            "world.snapshot": self.root.world.snapshot,
+            "world.semantic_summary": self.root.world.semantic_summary,
+            "world.validate_gameplay": self.root.world.validate_gameplay,
+            "world.run_goal": self.root.world.run_goal,
+            "world.make_collect_game": self.root.world.make_collect_game,
         })
         return registry
 
@@ -1309,6 +1430,7 @@ class EngineTools:
         self.runtime = RuntimeTools(self)
         self.verify = VerificationTools(self)
         self.autonomy = AutonomyTools(self)
+        self.world = WorldTools(self)
         self.workflow = WorkflowTools(self)
 
     def coverage_report(self) -> Dict[str, Any]:

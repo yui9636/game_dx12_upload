@@ -4,8 +4,10 @@ from .autonomy_runner import AutonomyRunner, AutonomyValidationError
 from .tools import AssetTools, EditorTools, EffectEditorTools, EngineTools
 from .tools import EntityTools, GameLoopTools, LightingTools, MaterialTools
 from .tools import PlayerEditorTools, RuntimeTools, SequencerTools, SerializerTools, TerrainTools
-from .tools import AutonomyTools, UIEditorTools, VerificationTools, WorkflowTools
+from .tools import AutonomyTools, UIEditorTools, VerificationTools, WorkflowTools, WorldTools
 from .verification_runner import VerificationRunner, VerificationValidationError
+from .world_model import ECSObserver, SemanticClassifier, WorldAuthoringRunner, WorldModel, WorldModelValidationError
+from .world_model import diff_snapshots
 from .workflow_runner import WorkflowExecutionError, WorkflowRunner, WorkflowValidationError
 
 __all__ = [
@@ -37,6 +39,13 @@ __all__ = [
     "VerificationTools",
     "VerificationValidationError",
     "WorkflowTools",
+    "WorldTools",
+    "ECSObserver",
+    "SemanticClassifier",
+    "WorldAuthoringRunner",
+    "WorldModel",
+    "WorldModelValidationError",
+    "diff_snapshots",
     "WorkflowExecutionError",
     "WorkflowRunner",
     "WorkflowValidationError",

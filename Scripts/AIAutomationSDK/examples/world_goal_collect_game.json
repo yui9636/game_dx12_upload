@@ -1,0 +1,11 @@
+{
+  "name": "phase9_world_collect_authoring",
+  "goal": "Create a visible collect-the-coins scene, observe the ECS world, validate semantic gameplay roles, diff the result, and repair if needed.",
+  "template": "simple_collect_game",
+  "variables": {
+    "gameName": "AI_Phase9_WorldCollect",
+    "coinCount": 5,
+    "hazardCount": 3
+  },
+  "reportPath": "Saved/AI/world/AI_Phase9_WorldCollect_world_authoring_latest.json"
+}
