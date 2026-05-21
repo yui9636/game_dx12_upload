@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "cmd-effect-compile",
+  "command": "effect_editor.compile",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json"
+  }
+}

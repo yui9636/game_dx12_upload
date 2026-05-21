@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "cmd-effect-connect",
+  "command": "effect_editor.connect",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "fromNodeId": 6,
+    "toNodeId": 4,
+    "valueType": "Color",
+    "toPin": "Color"
+  }
+}

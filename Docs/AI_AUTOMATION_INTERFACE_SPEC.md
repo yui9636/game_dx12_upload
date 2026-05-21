@@ -1073,6 +1073,278 @@ Phase 3完了条件:
 - `place_asset_at_cursor`
 - Terrain / UI / Effect / PlayerEditor専用API
 
+Phase 4で追加する高レベル編集コマンド:
+
+### duplicate_entity
+
+Entity subtreeを複製し、元Entityと同じ親の子として復元する。Prefab制約を確認し、Undoに登録する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-duplicate",
+  "command": "duplicate_entity",
+  "params": {
+    "entity": 4294967296,
+    "nameSuffix": " (Clone)",
+    "select": true,
+    "recordUndo": true
+  }
+}
+```
+
+### reparent_entity
+
+Entityの親子関係を変更する。循環参照とPrefab制約を拒否し、必要ならworld transformを維持する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-reparent",
+  "command": "reparent_entity",
+  "params": {
+    "entity": 4294967296,
+    "parent": 8589934592,
+    "keepWorldTransform": true,
+    "recordUndo": true
+  }
+}
+```
+
+### instantiate_prefab
+
+Prefab assetをSceneへ配置する。`Data/` 配下の `.prefab` のみ許可する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-prefab",
+  "command": "instantiate_prefab",
+  "params": {
+    "path": "Data/Prefabs/Example.prefab",
+    "position": [0.0, 0.0, 0.0],
+    "parent": null,
+    "select": true
+  }
+}
+```
+
+### focus_entity / frame_selection
+
+Entityまたは現在選択中Entityのboundsを計算し、Scene View cameraを対象へ向ける。
+
+### raycast_scene_view
+
+Scene View座標からworld rayを作り、renderable meshとground planeへのhitを返す。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-raycast",
+  "command": "raycast_scene_view",
+  "params": {
+    "normalizedPosition": [0.5, 0.5],
+    "includeGroundPlane": true,
+    "maxDistance": 100000.0
+  }
+}
+```
+
+### place_asset_at_cursor
+
+Scene View rayがground planeに当たった位置へModelまたはPrefabを配置する。Modelは `create_model_entity` と同じ経路で作る。
+
+Phase 4完了条件:
+
+- `duplicate_entity` がsubtree複製、選択更新、Undo統合込みで動作する。
+- `reparent_entity` が親変更、world維持、循環拒否、Prefab制約、Undo統合込みで動作する。
+- `focus_entity` と `frame_selection` がEditor cameraを対象へ向ける。
+- `raycast_scene_view` がScene View座標からray、object hit、ground hitを返す。
+- `place_asset_at_cursor` がScene View座標または明示positionからModel entityを配置できる。
+- `instantiate_prefab` が許可pathのPrefabを配置し、不正pathや非Prefab拡張子を拒否する。
+- `Game.vcxproj` の Debug x64 ビルドが通る。
+- 実行中エンジンにコマンドを投入し、複製、親子付け、Focus、Raycast、配置、エラー応答を確認できる。
+
+### Phase 4B: Level Editor Complete API
+
+Level Editorの主要サブシステムを専用API化する。これによりAIはInspectorの汎用Component編集だけに頼らず、制作意図に近いコマンドでLevelを組める。
+
+Asset Browser:
+
+- `asset_browser.list`
+- `asset_browser.search`
+- `asset_browser.create_folder`
+- `asset_browser.copy`
+- `asset_browser.move`
+- `asset_browser.rename`
+- `asset_browser.delete`
+
+Prefab:
+
+- `prefab.save`
+- `prefab.apply`
+- `prefab.unpack`
+- `instantiate_prefab`
+
+Material:
+
+- `material.create`
+- `material.get`
+- `material.set`
+- `material.assign`
+
+Lighting:
+
+- `light.create`
+- `set_component_fields` for `LightComponent`
+
+Camera:
+
+- `camera.create`
+- `focus_entity`
+- `frame_selection`
+- `set_component_fields` for `CameraLensComponent`
+
+Terrain:
+
+- `terrain.create`
+- `terrain.list`
+- `terrain.apply_brush`
+- `terrain.save`
+- `terrain.load`
+
+Phase 4B完了条件:
+
+- Asset BrowserがData配下の列挙、検索、作成、コピー、移動、リネーム、削除をAPIで扱える。
+- 削除は既定で `Data/.ai_trash` へ移動し、`permanent:true` のときだけ実削除する。
+- Prefab保存、適用、Unpack、配置がAPIで扱える。
+- Material assetを作成、取得、更新し、Entityへ割り当てられる。
+- Light/Cameraを専用コマンドで作成でき、細かな値はComponent APIで編集できる。
+- Terrainを作成、一覧取得、brush適用、保存、読込できる。
+- すべてのファイル操作は `Data/` 配下へ制限され、プロジェクト外pathは拒否される。
+- `Game.vcxproj` の Debug x64 ビルドが通る。
+- 実行中エンジンに代表コマンドを投入し、成功/失敗JSONを確認できる。
+
+### Phase 4C: Effect Editor Operation API
+
+Effect Editorの操作は、EffectGraph assetをAIが直接編集し、人間のEffect Editorが同じassetを開ける形で保存する。対象ファイルは `Data/` 配下の `.effectgraph.json` に限定する。
+
+大原則として、Effect Editor操作は人間が画面上で確認できるようにする。変更系コマンドは既定で `showWorkspace: true` として扱い、Effect Editorワークスペースを開き、対象アセットをロードし直して変更結果を表示する。大量生成などで明示的に裏側処理したい場合だけ `showWorkspace: false` を指定する。
+
+Commands:
+
+- `effect_editor.list_node_types`
+- `effect_editor.create_asset`
+- `effect_editor.open_workspace`
+- `effect_editor.timeline_play`
+- `effect_editor.timeline_stop`
+- `effect_editor.get_asset`
+- `effect_editor.set_asset`
+- `effect_editor.add_node`
+- `effect_editor.set_node`
+- `effect_editor.delete_node`
+- `effect_editor.connect`
+- `effect_editor.disconnect`
+- `effect_editor.compile`
+- `effect_editor.preview_spawn`
+
+Node types:
+
+- `Output`
+- `Spawn`
+- `Lifetime`
+- `MeshSource`
+- `MeshRenderer`
+- `ParticleEmitter`
+- `SpriteRenderer`
+- `Float`
+- `Vec3`
+- `Color`
+
+`effect_editor.create_asset`:
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-create",
+  "command": "effect_editor.create_asset",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "name": "AI Slash",
+    "graphId": "ai_slash",
+    "previewDefaults": {
+      "duration": 1.2,
+      "seed": 7,
+      "previewMeshPath": "Data/Model/Cube/Cube.fbx",
+      "previewMaterialPath": "Data/Material/Default.material"
+    }
+  }
+}
+```
+
+`effect_editor.add_node`:
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-add-color",
+  "command": "effect_editor.add_node",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "type": "Color",
+    "position": [430.0, 340.0],
+    "fields": {
+      "title": "Slash Tint",
+      "vectorValue": [1.0, 0.25, 0.08, 1.0],
+      "vectorValue2": [1.0, 0.05, 0.0, 0.0]
+    }
+  }
+}
+```
+
+`effect_editor.connect` は `startPinId` / `endPinId` を直接指定できる。指定しない場合は `fromNodeId`, `toNodeId`, `valueType`, `fromPin`, `toPin` からピンを解決する。接続制約はEffect Editor本体と同じで、Output -> Input、型一致、Input 1本、重複禁止。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-connect",
+  "command": "effect_editor.connect",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "fromNodeId": 6,
+    "toNodeId": 4,
+    "valueType": "Color",
+    "toPin": "Color"
+  }
+}
+```
+
+`effect_editor.preview_spawn` はコンパイル成功したEffectGraphをSceneへプレビューEntityとして生成する。付与される主なComponentは `NameComponent`, `TransformComponent`, `HierarchyComponent`, `EffectAssetComponent`, `EffectPlaybackComponent`, `EffectSpawnRequestComponent`、既定で `EffectPreviewTagComponent` も付与する。
+
+`effect_editor.timeline_play` はEffect Editor画面を開き、対象アセットをロードし、Effect Editor内部のCompile/Preview/Timeline経路で再生を開始する。Timelineタブを選択し、プレビューEntityをEffect Editorの管理下に置くため、人間が画面上で再生状態を確認できる。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-timeline-play",
+  "command": "effect_editor.timeline_play",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "startTime": 0.0,
+    "paused": false
+  }
+}
+```
+
+Phase 4C完了条件:
+
+- AIがEffectGraph assetを作成、読み取り、更新、保存できる。
+- AIがノード追加、ノード値変更、ノード削除、リンク接続、リンク解除を行える。
+- AIがEffectCompilerでコンパイル結果、warnings、errors、execution plan、mesh/particle descriptor概要を取得できる。
+- AIがコンパイル済みEffectGraphをプレビューEntityとしてSceneに生成できる。
+- すべてのEffectGraphファイル操作は `Data/` 配下に制限され、パストラバーサルを拒否する。
+- `Game.vcxproj` の Debug x64 ビルドが通り、実行中エンジンで代表コマンドの成功/失敗JSONを確認できる。
+
 ### Phase 5: Live Protocol
 
 - 名前付きパイプ、HTTP、またはWebSocketに対応

@@ -28,6 +28,11 @@ public:
     void DrawWorkspace(Registry* registry, bool* outFocused);
     void SetViewportTexture(ITexture* texture) { m_viewportTexture = texture; }
     void SetSelectedContext(EntityID entity, const std::string& meshPath);
+    bool OpenDocumentFromAutomation(const std::string& path);
+    bool PlayTimelineFromAutomation(Registry* registry, float startTime = 0.0f, bool paused = false);
+    bool StopTimelineFromAutomation();
+    EntityID GetPreviewEntity() const { return m_previewEntity; }
+    const std::string& GetDocumentPath() const { return m_documentPath; }
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
     DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const { return m_previewAnchor; }
@@ -111,6 +116,7 @@ private:
     bool m_syncNodePositions = true;
     bool m_scrubResumesPlay = true;
     bool m_scrubWasPlaying = false;
+    bool m_requestTimelineTabFocus = false;
     uint32_t m_selectedNodeId = 0;
     uint32_t m_selectedLinkId = 0;
     DirectX::XMFLOAT2 m_pendingNodePopupPos = { 0.0f, 0.0f };

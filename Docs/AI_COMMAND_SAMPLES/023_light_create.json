@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "cmd-light-create",
+  "command": "light.create",
+  "params": {
+    "name": "Key Light",
+    "type": "Directional",
+    "color": [1.0, 0.92, 0.78],
+    "intensity": 2.0,
+    "castShadow": true,
+    "select": true
+  }
+}

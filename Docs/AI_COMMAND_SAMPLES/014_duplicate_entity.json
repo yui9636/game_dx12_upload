@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "cmd-duplicate-entity",
+  "command": "duplicate_entity",
+  "params": {
+    "entity": 4294967296,
+    "nameSuffix": " (Clone)",
+    "select": true,
+    "recordUndo": true
+  }
+}

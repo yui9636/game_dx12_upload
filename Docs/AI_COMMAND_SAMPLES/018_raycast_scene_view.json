@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "cmd-raycast-scene",
+  "command": "raycast_scene_view",
+  "params": {
+    "normalizedPosition": [0.5, 0.5],
+    "includeGroundPlane": true,
+    "maxDistance": 100000.0
+  }
+}

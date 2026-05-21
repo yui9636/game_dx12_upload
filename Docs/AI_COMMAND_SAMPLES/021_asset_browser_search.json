@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "cmd-asset-search",
+  "command": "asset_browser.search",
+  "params": {
+    "query": "cube",
+    "root": "Data",
+    "type": "Model",
+    "limit": 20
+  }
+}

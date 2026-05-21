@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "cmd-camera-create",
+  "command": "camera.create",
+  "params": {
+    "name": "Battle Camera",
+    "position": [0.0, 4.0, -8.0],
+    "fovY": 0.785398,
+    "nearZ": 0.1,
+    "farZ": 100000.0,
+    "main": true,
+    "select": true
+  }
+}

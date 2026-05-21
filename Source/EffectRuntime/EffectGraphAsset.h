@@ -482,11 +482,11 @@ inline EffectGraphAsset CreateDefaultEffectGraphAsset()
     asset.previewDefaults.duration = 2.0f;
     asset.previewDefaults.seed = 1;
 
-    auto& spawn = AddEffectGraphNode(asset, EffectGraphNodeType::Spawn, DirectX::XMFLOAT2{ 40.0f, 80.0f });
-    auto& lifetime = AddEffectGraphNode(asset, EffectGraphNodeType::Lifetime, DirectX::XMFLOAT2{ 280.0f, 80.0f });
-    auto& meshSource = AddEffectGraphNode(asset, EffectGraphNodeType::MeshSource, DirectX::XMFLOAT2{ 280.0f, 230.0f });
-    auto& meshRenderer = AddEffectGraphNode(asset, EffectGraphNodeType::MeshRenderer, DirectX::XMFLOAT2{ 560.0f, 150.0f });
-    auto& output = AddEffectGraphNode(asset, EffectGraphNodeType::Output, DirectX::XMFLOAT2{ 860.0f, 150.0f });
+    const uint32_t spawnId = AddEffectGraphNode(asset, EffectGraphNodeType::Spawn, DirectX::XMFLOAT2{ 40.0f, 80.0f }).id;
+    const uint32_t lifetimeId = AddEffectGraphNode(asset, EffectGraphNodeType::Lifetime, DirectX::XMFLOAT2{ 280.0f, 80.0f }).id;
+    const uint32_t meshSourceId = AddEffectGraphNode(asset, EffectGraphNodeType::MeshSource, DirectX::XMFLOAT2{ 280.0f, 230.0f }).id;
+    const uint32_t meshRendererId = AddEffectGraphNode(asset, EffectGraphNodeType::MeshRenderer, DirectX::XMFLOAT2{ 560.0f, 150.0f }).id;
+    const uint32_t outputId = AddEffectGraphNode(asset, EffectGraphNodeType::Output, DirectX::XMFLOAT2{ 860.0f, 150.0f }).id;
 
     // 条件に一致するピンを探す。
     auto findPin = [&](uint32_t nodeId, EffectPinKind kind, EffectValueType type) -> uint32_t {
@@ -507,10 +507,10 @@ inline EffectGraphAsset CreateDefaultEffectGraphAsset()
         asset.links.push_back(std::move(link));
         };
 
-    addLink(findPin(spawn.id, EffectPinKind::Output, EffectValueType::Flow), findPin(lifetime.id, EffectPinKind::Input, EffectValueType::Flow));
-    addLink(findPin(lifetime.id, EffectPinKind::Output, EffectValueType::Flow), findPin(meshRenderer.id, EffectPinKind::Input, EffectValueType::Flow));
-    addLink(findPin(meshSource.id, EffectPinKind::Output, EffectValueType::Mesh), findPin(meshRenderer.id, EffectPinKind::Input, EffectValueType::Mesh));
-    addLink(findPin(meshRenderer.id, EffectPinKind::Output, EffectValueType::Flow), findPin(output.id, EffectPinKind::Input, EffectValueType::Flow));
+    addLink(findPin(spawnId, EffectPinKind::Output, EffectValueType::Flow), findPin(lifetimeId, EffectPinKind::Input, EffectValueType::Flow));
+    addLink(findPin(lifetimeId, EffectPinKind::Output, EffectValueType::Flow), findPin(meshRendererId, EffectPinKind::Input, EffectValueType::Flow));
+    addLink(findPin(meshSourceId, EffectPinKind::Output, EffectValueType::Mesh), findPin(meshRendererId, EffectPinKind::Input, EffectValueType::Mesh));
+    addLink(findPin(meshRendererId, EffectPinKind::Output, EffectValueType::Flow), findPin(outputId, EffectPinKind::Input, EffectValueType::Flow));
 
     return asset;
 }

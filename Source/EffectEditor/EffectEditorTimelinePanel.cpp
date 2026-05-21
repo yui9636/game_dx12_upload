@@ -71,12 +71,7 @@ void EffectEditorPanel::DrawTimelinePanel()
                     EnsureGuiAuthoringLinks(m_asset);
                     m_compileDirty = true;
                 }
-                ImGui::EndTabItem();
-                ImGui::EndTabBar();
-                ImGui::End();
-                return;
-            }
-
+            } else {
             ImGui::TextDisabled("Life curves preview and edit");
             ImGui::SameLine();
             ImGui::Text("Time %.2f / %.2f", currentTime, duration);
@@ -251,6 +246,7 @@ void EffectEditorPanel::DrawTimelinePanel()
                     alphaSample);
             }
             ImGui::EndChild();
+            }
             ImGui::EndTabItem();
         }
 
@@ -366,7 +362,9 @@ void EffectEditorPanel::DrawTimelinePanel()
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem(ICON_FA_CLOCK " Timeline")) {
+        ImGuiTabItemFlags timelineFlags = m_requestTimelineTabFocus ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+        if (ImGui::BeginTabItem(ICON_FA_CLOCK " Timeline", nullptr, timelineFlags)) {
+            m_requestTimelineTabFocus = false;
             EffectPlaybackComponent* playback = nullptr;
             if (m_registry && !Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
                 playback = m_registry->GetComponent<EffectPlaybackComponent>(m_previewEntity);

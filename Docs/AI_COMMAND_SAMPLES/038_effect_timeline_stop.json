@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "cmd-effect-timeline-stop",
+  "command": "effect_editor.timeline_stop",
+  "params": {}
+}

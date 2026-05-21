@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "cmd-effect-create-asset",
+  "command": "effect_editor.create_asset",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "name": "AI Test Slash",
+    "graphId": "ai_test_slash",
+    "previewDefaults": {
+      "duration": 1.2,
+      "seed": 7,
+      "previewMeshPath": "Data/Model/Cube/Cube.fbx",
+      "previewMaterialPath": "Data/Material/Default.material"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "cmd-effect-open-workspace",
+  "command": "effect_editor.open_workspace",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json"
+  }
+}

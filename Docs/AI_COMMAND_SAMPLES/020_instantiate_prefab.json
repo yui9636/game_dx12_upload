@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "cmd-instantiate-prefab",
+  "command": "instantiate_prefab",
+  "params": {
+    "path": "Data/Prefabs/Example.prefab",
+    "position": [0.0, 0.0, 0.0],
+    "parent": null,
+    "select": true
+  }
+}

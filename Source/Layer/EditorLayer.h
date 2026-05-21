@@ -240,6 +240,12 @@ public:
 
     // AI automation から現在シーンを保存する。空 path の場合は現在の保存先を使う。
     bool SaveSceneFromAutomation(const std::filesystem::path& scenePath = {});
+    bool OpenEffectEditorFromAutomation(const std::filesystem::path& effectGraphPath = {});
+    bool PlayEffectTimelineFromAutomation(const std::filesystem::path& effectGraphPath = {}, float startTime = 0.0f, bool paused = false);
+    bool StopEffectTimelineFromAutomation();
+    EntityID GetEffectPreviewEntity() const { return m_effectEditorPanel.GetPreviewEntity(); }
+    bool IsEffectEditorWorkspaceActive() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }
+    const std::string& GetEffectEditorDocumentPath() const { return m_effectEditorPanel.GetDocumentPath(); }
 
 private:
     GameLayer* m_gameLayer;

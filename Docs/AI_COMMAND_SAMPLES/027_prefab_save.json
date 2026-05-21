@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "cmd-prefab-save",
+  "command": "prefab.save",
+  "params": {
+    "entity": 4294967296,
+    "path": "Data/Prefabs/AI/SavedEntity.prefab"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "cmd-effect-timeline-play",
+  "command": "effect_editor.timeline_play",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "startTime": 0.0,
+    "paused": false
+  }
+}

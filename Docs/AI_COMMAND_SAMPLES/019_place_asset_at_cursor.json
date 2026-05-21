@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "cmd-place-cube",
+  "command": "place_asset_at_cursor",
+  "params": {
+    "assetPath": "Data/Model/Cube/Cube.fbx",
+    "normalizedPosition": [0.5, 0.5],
+    "name": "Placed Cube",
+    "select": true,
+    "recordUndo": true
+  }
+}

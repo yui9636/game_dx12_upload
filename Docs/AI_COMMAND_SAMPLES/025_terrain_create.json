@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "cmd-terrain-create",
+  "command": "terrain.create",
+  "params": {
+    "name": "Battle Terrain",
+    "resolution": 128,
+    "worldSizeX": 256.0,
+    "worldSizeZ": 256.0,
+    "heightScale": 12.0,
+    "generateNoise": true,
+    "addGrass": true,
+    "select": true
+  }
+}

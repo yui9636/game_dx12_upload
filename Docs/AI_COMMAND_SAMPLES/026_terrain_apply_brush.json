@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "cmd-terrain-brush",
+  "command": "terrain.apply_brush",
+  "params": {
+    "entity": 4294967296,
+    "position": [0.0, 0.0, 0.0],
+    "mode": "flatten",
+    "radius": 18.0,
+    "strength": 0.8,
+    "falloff": 0.5,
+    "targetHeight": 0.45
+  }
+}

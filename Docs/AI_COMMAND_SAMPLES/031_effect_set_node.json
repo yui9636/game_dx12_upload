@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "cmd-effect-set-node",
+  "command": "effect_editor.set_node",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "nodeId": 2,
+    "fields": {
+      "scalar": 1.2,
+      "title": "Fast Lifetime"
+    }
+  }
+}

@@ -62,6 +62,51 @@ bool EffectEditorPanel::LoadDocument()
     return true;
 }
 
+bool EffectEditorPanel::OpenDocumentFromAutomation(const std::string& path)
+{
+    if (path.empty()) {
+        return true;
+    }
+
+    m_documentPath = path;
+    strcpy_s(m_documentPathBuffer, m_documentPath.c_str());
+    return LoadDocument();
+}
+
+bool EffectEditorPanel::PlayTimelineFromAutomation(Registry* registry, float startTime, bool paused)
+{
+    m_registry = registry;
+    if (!m_registry) {
+        return false;
+    }
+
+    if (m_compileDirty || !m_compiled || !m_compiled->valid) {
+        if (!CompileDocument()) {
+            return false;
+        }
+    }
+
+    QueuePreviewSpawnAt(startTime, paused);
+    if (!Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+        if (auto* playback = m_registry->GetComponent<EffectPlaybackComponent>(m_previewEntity)) {
+            playback->isPlaying = !paused;
+            playback->isPaused = paused;
+            playback->currentTime = startTime;
+            playback->stopRequested = false;
+        }
+    }
+
+    m_requestTimelineTabFocus = true;
+    return true;
+}
+
+bool EffectEditorPanel::StopTimelineFromAutomation()
+{
+    StopPreview();
+    m_requestTimelineTabFocus = true;
+    return true;
+}
+
 std::string EffectEditorPanel::BuildTransientAssetKey() const
 {
     return "editor://effect/" + m_asset.graphId;

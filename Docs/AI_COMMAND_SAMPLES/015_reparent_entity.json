@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "cmd-reparent-entity",
+  "command": "reparent_entity",
+  "params": {
+    "entity": 4294967296,
+    "parent": 8589934592,
+    "keepWorldTransform": true,
+    "recordUndo": true
+  }
+}

@@ -419,6 +419,37 @@ void EditorLayer::SyncEffectEditorPanelState()
     m_effectEditorPanel.SetSelectedContext(selectedEntity, meshPath);
 }
 
+bool EditorLayer::OpenEffectEditorFromAutomation(const std::filesystem::path& effectGraphPath)
+{
+    m_showEffectEditor = true;
+    m_activeWorkspace = WorkspaceTab::EffectEditor;
+    m_pendingWindowFocus = WindowFocusTarget::EffectEditor;
+
+    if (!effectGraphPath.empty()) {
+        return m_effectEditorPanel.OpenDocumentFromAutomation(effectGraphPath.generic_string());
+    }
+    return true;
+}
+
+bool EditorLayer::PlayEffectTimelineFromAutomation(const std::filesystem::path& effectGraphPath, float startTime, bool paused)
+{
+    if (!OpenEffectEditorFromAutomation(effectGraphPath)) {
+        return false;
+    }
+    if (!m_gameLayer) {
+        return false;
+    }
+    return m_effectEditorPanel.PlayTimelineFromAutomation(&m_gameLayer->GetRegistry(), startTime, paused);
+}
+
+bool EditorLayer::StopEffectTimelineFromAutomation()
+{
+    m_showEffectEditor = true;
+    m_activeWorkspace = WorkspaceTab::EffectEditor;
+    m_pendingWindowFocus = WindowFocusTarget::EffectEditor;
+    return m_effectEditorPanel.StopTimelineFromAutomation();
+}
+
 void EditorLayer::SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset)
 {
     m_editorCameraShakeOffset = offset;

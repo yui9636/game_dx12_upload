@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "cmd-material-create",
+  "command": "material.create",
+  "params": {
+    "path": "Data/Material/AI/TestMaterial.material",
+    "fields": {
+      "baseColor": [0.85, 0.15, 0.08, 1.0],
+      "metallic": 0.0,
+      "roughness": 0.45
+    }
+  }
+}

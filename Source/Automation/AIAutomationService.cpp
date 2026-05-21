@@ -5,8 +5,10 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <chrono>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <optional>
@@ -17,27 +19,43 @@
 #include <vector>
 
 #include <DirectXMath.h>
+#include <DirectXCollision.h>
 #include <nlohmann/json.hpp>
 #include <windows.h>
 
 #include "Archetype/Archetype.h"
 #include "Asset/PrefabSystem.h"
+#include "Asset/AssetManager.h"
 #include "Component/HierarchyComponent.h"
+#include "Component/EffectAssetComponent.h"
+#include "Component/EffectPlaybackComponent.h"
+#include "Component/EffectPreviewTagComponent.h"
+#include "Component/EffectSpawnRequestComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
+#include "Duplicate/DuplicateSystem.h"
 #include "Engine/EditorSelection.h"
 #include "Engine/EngineKernel.h"
+#include "EffectRuntime/EffectCompiler.h"
+#include "EffectRuntime/EffectGraphAsset.h"
+#include "EffectRuntime/EffectGraphSerializer.h"
 #include "Generated/ComponentMeta.generated.h"
 #include "Hierarchy/HierarchySystem.h"
 #include "Layer/EditorLayer.h"
 #include "Layer/GameLayer.h"
+#include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "Render/Graphics.h"
 #include "RHI/DX11/DX11Texture.h"
 #include "System/PathResolver.h"
 #include "System/ResourceManager.h"
+#include "Material/MaterialAsset.h"
+#include "Terrain/TerrainAssetIO.h"
+#include "Terrain/TerrainComponent.h"
+#include "Terrain/TerrainGpuPipeline.h"
+#include "Vegetation/GrassComponent.h"
 #include "System/UndoSystem.h"
 #include "Undo/ComponentUndoAction.h"
 #include "Undo/EntitySnapshot.h"
@@ -52,6 +70,7 @@ namespace
     enum class PathAccess
     {
         ReadAsset,
+        WriteAsset,
         ReadScene,
         WriteScene,
         AutomationFile
@@ -176,6 +195,68 @@ namespace
         return relative.generic_string();
     }
 
+    std::string ToLowerCopy(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    }
+
+    std::string AssetTypeToString(AssetType type)
+    {
+        switch (type) {
+        case AssetType::Folder: return "Folder";
+        case AssetType::Model: return "Model";
+        case AssetType::Texture: return "Texture";
+        case AssetType::Font: return "Font";
+        case AssetType::Prefab: return "Prefab";
+        case AssetType::Script: return "Script";
+        case AssetType::Audio: return "Audio";
+        case AssetType::Material: return "Material";
+        default: return "Unknown";
+        }
+    }
+
+    AssetType GuessAssetTypeFromPath(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        if (std::filesystem::is_directory(path, ec)) {
+            return AssetType::Folder;
+        }
+
+        const std::string ext = ToLowerCopy(path.extension().string());
+        if (ext == ".fbx" || ext == ".obj" || ext == ".gltf" || ext == ".glb") return AssetType::Model;
+        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".dds" || ext == ".tga" || ext == ".bmp") return AssetType::Texture;
+        if (ext == ".ttf" || ext == ".otf") return AssetType::Font;
+        if (ext == ".prefab") return AssetType::Prefab;
+        if (ext == ".h" || ext == ".hpp" || ext == ".cpp" || ext == ".cs") return AssetType::Script;
+        if (ext == ".wav" || ext == ".mp3" || ext == ".ogg") return AssetType::Audio;
+        if (ext == ".material" || ext == ".mat") return AssetType::Material;
+        if (ext == ".terrain") return AssetType::Unknown;
+        return AssetType::Unknown;
+    }
+
+    json AssetEntryToJson(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        const AssetType type = GuessAssetTypeFromPath(path);
+        json out = {
+            { "name", path.filename().string() },
+            { "path", ToGenericProjectPath(path) },
+            { "type", AssetTypeToString(type) },
+            { "extension", path.extension().string() },
+            { "isDirectory", std::filesystem::is_directory(path, ec) }
+        };
+        if (!out["isDirectory"].get<bool>()) {
+            out["size"] = std::filesystem::file_size(path, ec);
+            if (ec) {
+                out["size"] = nullptr;
+            }
+        }
+        return out;
+    }
+
     std::filesystem::path ResolveProjectPath(const std::string& input, PathAccess access, bool mustExist)
     {
         if (input.empty()) {
@@ -198,6 +279,7 @@ namespace
         std::vector<std::filesystem::path> allowedRoots;
         switch (access) {
         case PathAccess::ReadAsset:
+        case PathAccess::WriteAsset:
             allowedRoots = { root / "Data" };
             break;
         case PathAccess::ReadScene:
@@ -932,6 +1014,206 @@ namespace
         PrefabSystem::MarkPrefabOverride(entity, registry);
     }
 
+    EntityID GetEntityParent(Registry& registry, EntityID entity)
+    {
+        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
+            return hierarchy->parent;
+        }
+        if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+            return transform->parent == 0 ? Entity::NULL_ID : transform->parent;
+        }
+        return Entity::NULL_ID;
+    }
+
+    bool BuildEntityFocusBounds(Registry& registry, EntityID root, DirectX::XMFLOAT3& outCenter, float& outRadius)
+    {
+        bool hasBounds = false;
+        DirectX::BoundingBox merged{};
+
+        std::vector<EntityID> entities;
+        EntitySnapshot::CollectHierarchy(root, registry, entities);
+        if (entities.empty() && registry.IsAlive(root)) {
+            entities.push_back(root);
+        }
+
+        for (EntityID entity : entities) {
+            if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
+                if (mesh->model && mesh->isVisible) {
+                    const DirectX::BoundingBox& box = mesh->model->GetWorldBounds();
+                    if (!hasBounds) {
+                        merged = box;
+                        hasBounds = true;
+                    }
+                    else {
+                        DirectX::BoundingBox::CreateMerged(merged, merged, box);
+                    }
+                    continue;
+                }
+            }
+
+            if (!hasBounds) {
+                if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                    merged.Center = transform->worldPosition;
+                    merged.Extents = { 0.5f, 0.5f, 0.5f };
+                    hasBounds = true;
+                }
+            }
+        }
+
+        if (!hasBounds) {
+            return false;
+        }
+
+        outCenter = merged.Center;
+        outRadius = std::sqrt(
+            merged.Extents.x * merged.Extents.x +
+            merged.Extents.y * merged.Extents.y +
+            merged.Extents.z * merged.Extents.z);
+        return true;
+    }
+
+    float ComputeFocusDistanceForRadius(float radius, float fovY)
+    {
+        const float safeRadius = (std::max)(radius, 0.5f);
+        const float halfFov = (std::max)(fovY * 0.5f, 0.1f);
+        return (std::max)(2.0f, safeRadius / std::tan(halfFov));
+    }
+
+    bool BuildSceneViewRay(EditorLayer& editor,
+                           const json& params,
+                           DirectX::XMFLOAT3& outOrigin,
+                           DirectX::XMFLOAT3& outDirection)
+    {
+        using namespace DirectX;
+        const XMFLOAT4 rect = editor.GetSceneViewRect();
+        if (rect.z <= 1.0f || rect.w <= 1.0f) {
+            return false;
+        }
+
+        float screenX = rect.x + rect.z * 0.5f;
+        float screenY = rect.y + rect.w * 0.5f;
+        if (params.contains("screenPosition")) {
+            const json& p = params["screenPosition"];
+            if (!p.is_array() || p.size() < 2) {
+                throw MakeError("invalid_param", "screenPosition must be [x, y].");
+            }
+            screenX = p[0].get<float>();
+            screenY = p[1].get<float>();
+        }
+        else if (params.contains("normalizedPosition")) {
+            const json& p = params["normalizedPosition"];
+            if (!p.is_array() || p.size() < 2) {
+                throw MakeError("invalid_param", "normalizedPosition must be [x, y].");
+            }
+            screenX = rect.x + p[0].get<float>() * rect.z;
+            screenY = rect.y + p[1].get<float>() * rect.w;
+        }
+
+        const float localX = (screenX - rect.x) / rect.z;
+        const float localY = (screenY - rect.y) / rect.w;
+        if (localX < 0.0f || localX > 1.0f || localY < 0.0f || localY > 1.0f) {
+            return false;
+        }
+
+        const float aspect = rect.z / rect.w;
+        const XMFLOAT4X4 viewFloat = editor.GetEditorViewMatrix();
+        const XMFLOAT4X4 projectionFloat = editor.BuildEditorProjectionMatrix(aspect);
+        const XMMATRIX view = XMLoadFloat4x4(&viewFloat);
+        const XMMATRIX projection = XMLoadFloat4x4(&projectionFloat);
+        const XMMATRIX inverseViewProjection = XMMatrixInverse(nullptr, view * projection);
+
+        const float ndcX = localX * 2.0f - 1.0f;
+        const float ndcY = 1.0f - localY * 2.0f;
+        const XMVECTOR nearPoint = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 0.0f, 1.0f), inverseViewProjection);
+        const XMVECTOR farPoint = XMVector3TransformCoord(XMVectorSet(ndcX, ndcY, 1.0f, 1.0f), inverseViewProjection);
+        const XMVECTOR direction = XMVector3Normalize(farPoint - nearPoint);
+
+        XMStoreFloat3(&outOrigin, nearPoint);
+        XMStoreFloat3(&outDirection, direction);
+        return true;
+    }
+
+    bool IntersectGroundPlane(const DirectX::XMFLOAT3& origin,
+                              const DirectX::XMFLOAT3& direction,
+                              DirectX::XMFLOAT3& outPoint,
+                              float& outDistance)
+    {
+        const float denom = direction.y;
+        if (std::fabs(denom) < 0.0001f) {
+            return false;
+        }
+        const float t = -origin.y / denom;
+        if (!std::isfinite(t) || t <= 0.0f) {
+            return false;
+        }
+        outDistance = t;
+        outPoint = {
+            origin.x + direction.x * t,
+            0.0f,
+            origin.z + direction.z * t
+        };
+        return true;
+    }
+
+    json RaycastSceneObjects(Registry& registry,
+                             const DirectX::XMFLOAT3& origin,
+                             const DirectX::XMFLOAT3& direction,
+                             float maxDistance)
+    {
+        EntityID bestEntity = Entity::NULL_ID;
+        DirectX::XMFLOAT3 bestPoint{};
+        float bestDistance = maxDistance;
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<MeshComponent>())) {
+                continue;
+            }
+
+            auto* meshColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<MeshComponent>());
+            const auto& entities = archetype->GetEntities();
+            for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                EntityID entity = entities[i];
+                auto* mesh = static_cast<MeshComponent*>(meshColumn->Get(i));
+                if (!mesh || !mesh->model || !mesh->isVisible) {
+                    continue;
+                }
+
+                RaycastHit hit;
+                if (mesh->model->Raycast(origin, direction, hit) && hit.distance < bestDistance) {
+                    bestDistance = hit.distance;
+                    bestEntity = entity;
+                    bestPoint = hit.point;
+                    continue;
+                }
+
+                float boundsDistance = maxDistance;
+                const DirectX::XMVECTOR rayOrigin = DirectX::XMLoadFloat3(&origin);
+                const DirectX::XMVECTOR rayDirection = DirectX::XMVector3Normalize(DirectX::XMLoadFloat3(&direction));
+                if (mesh->model->GetWorldBounds().Intersects(rayOrigin, rayDirection, boundsDistance) &&
+                    boundsDistance < bestDistance) {
+                    bestDistance = boundsDistance;
+                    bestEntity = entity;
+                    bestPoint = {
+                        origin.x + direction.x * boundsDistance,
+                        origin.y + direction.y * boundsDistance,
+                        origin.z + direction.z * boundsDistance
+                    };
+                }
+            }
+        }
+
+        if (Entity::IsNull(bestEntity)) {
+            return nullptr;
+        }
+
+        return {
+            { "entity", EntityToString(bestEntity) },
+            { "distance", bestDistance },
+            { "position", Float3ToJson(bestPoint) }
+        };
+    }
+
     json EntitySummary(Registry& registry, EntityID entity, const Signature& signature)
     {
         json out;
@@ -1533,6 +1815,11 @@ namespace
         if (auto* editor = kernel.GetEditorLayer()) {
             out["currentScenePath"] = editor->GetCurrentScenePath();
             out["sceneViewMode"] = SceneViewModeToString(editor->GetSceneViewMode());
+            out["effectEditorActive"] = editor->IsEffectEditorWorkspaceActive();
+            out["effectEditorDocumentPath"] = editor->GetEffectEditorDocumentPath();
+            out["effectPreviewEntity"] = Entity::IsNull(editor->GetEffectPreviewEntity())
+                ? json(nullptr)
+                : json(EntityToString(editor->GetEffectPreviewEntity()));
             const auto sceneRect = editor->GetSceneViewRect();
             const auto gameRect = editor->GetGameViewRect();
             out["sceneViewRect"] = json::array({ sceneRect.x, sceneRect.y, sceneRect.z, sceneRect.w });
@@ -1545,6 +1832,9 @@ namespace
         }
         else {
             out["currentScenePath"] = nullptr;
+            out["effectEditorActive"] = false;
+            out["effectEditorDocumentPath"] = nullptr;
+            out["effectPreviewEntity"] = nullptr;
         }
 
         out["visualState"] = BuildVisualState(kernel);
@@ -1738,6 +2028,1516 @@ namespace
         return { { "deleted", EntityToString(entity) } };
     }
 
+    json HandleDuplicateEntity(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        if (!PrefabSystem::CanDuplicate(entity, registry)) {
+            throw MakeError("operation_not_allowed", "Entity cannot be duplicated because of prefab restrictions.", {
+                { "entity", EntityToString(entity) }
+            });
+        }
+
+        EntityID duplicate = Entity::NULL_ID;
+        if (params.value("recordUndo", true)) {
+            EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(entity, registry);
+            if (snapshot.nodes.empty()) {
+                throw MakeError("operation_not_allowed", "Entity subtree could not be captured.");
+            }
+            EntitySnapshot::AppendRootNameSuffix(snapshot, params.value("nameSuffix", std::string(" (Clone)")));
+            const EntityID parent = GetEntityParent(registry, entity);
+            auto action = std::make_unique<DuplicateEntityAction>(std::move(snapshot), parent);
+            auto* actionPtr = action.get();
+            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+            duplicate = actionPtr->GetLiveRoot();
+        }
+        else {
+            duplicate = DuplicateSystem::Duplicate(entity, registry);
+        }
+
+        if (Entity::IsNull(duplicate)) {
+            throw MakeError("operation_not_allowed", "Failed to duplicate entity.", { { "entity", EntityToString(entity) } });
+        }
+
+        if (params.value("select", true)) {
+            EditorSelection::Instance().SelectEntity(duplicate);
+        }
+        return { { "source", EntityToString(entity) }, { "entity", EntityToString(duplicate) } };
+    }
+
+    json HandleReparentEntity(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        const EntityID newParent = EntityFromJson(params.value("parent", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        if (!Entity::IsNull(newParent) && !registry.IsAlive(newParent)) {
+            throw MakeError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
+        }
+        if (HierarchySystem::WouldCreateCycle(entity, newParent, registry)) {
+            throw MakeError("operation_not_allowed", "Reparent would create a hierarchy cycle.");
+        }
+        if (!PrefabSystem::CanReparent(entity, newParent, registry)) {
+            throw MakeError("operation_not_allowed", "Entity cannot be reparented because of prefab restrictions.");
+        }
+
+        const EntityID oldParent = GetEntityParent(registry, entity);
+        const bool keepWorld = params.value("keepWorldTransform", true);
+        if (params.value("recordUndo", true)) {
+            auto action = std::make_unique<ReparentEntityAction>(entity, newParent, oldParent, keepWorld);
+            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+        }
+        else {
+            HierarchySystem::Reparent(entity, newParent, registry, keepWorld);
+        }
+
+        MarkEntityEdited(registry, entity);
+        return {
+            { "entity", EntityToString(entity) },
+            { "oldParent", Entity::IsNull(oldParent) ? json(nullptr) : json(EntityToString(oldParent)) },
+            { "parent", Entity::IsNull(newParent) ? json(nullptr) : json(EntityToString(newParent)) }
+        };
+    }
+
+    json HandleInstantiatePrefab(Registry& registry, const json& params)
+    {
+        const std::string prefabPath = params.value("path", params.value("prefabPath", std::string{}));
+        if (prefabPath.empty()) {
+            throw MakeError("missing_param", "path is required.");
+        }
+        const std::filesystem::path safePath = ResolveProjectPath(prefabPath, PathAccess::ReadAsset, true);
+        if (safePath.extension() != ".prefab") {
+            throw MakeError("invalid_param", "Prefab path must use .prefab extension.", { { "path", prefabPath } });
+        }
+
+        const EntityID parent = EntityFromJson(params.value("parent", json(nullptr)));
+        if (!Entity::IsNull(parent) && !registry.IsAlive(parent)) {
+            throw MakeError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
+        }
+        if (!PrefabSystem::CanCreateChild(parent, registry)) {
+            throw MakeError("operation_not_allowed", "Cannot create a prefab child under the requested parent.");
+        }
+
+        const EntityID entity = PrefabSystem::InstantiatePrefab(safePath, registry, parent);
+        if (Entity::IsNull(entity)) {
+            throw MakeError("prefab_instantiate_failed", "Failed to instantiate prefab.", { { "path", prefabPath } });
+        }
+
+        if (params.contains("position")) {
+            if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                ReadFloat3(params["position"], transform->localPosition);
+                transform->isDirty = true;
+                HierarchySystem::MarkDirtyRecursive(entity, registry);
+            }
+        }
+
+        if (params.value("select", true)) {
+            EditorSelection::Instance().SelectEntity(entity);
+        }
+        return { { "entity", EntityToString(entity) }, { "path", ToGenericProjectPath(safePath) } };
+    }
+
+    json HandleFocusEntity(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        DirectX::XMFLOAT3 center{};
+        float radius = 1.0f;
+        if (!BuildEntityFocusBounds(registry, entity, center, radius)) {
+            throw MakeError("operation_not_allowed", "Could not compute entity bounds.", { { "entity", EntityToString(entity) } });
+        }
+
+        const DirectX::XMFLOAT3 direction = editor->GetEditorCameraDirection();
+        const float distance = params.value("distance", ComputeFocusDistanceForRadius(radius, editor->GetEditorCameraFovY()));
+        const DirectX::XMFLOAT3 position = {
+            center.x - direction.x * distance,
+            center.y - direction.y * distance,
+            center.z - direction.z * distance
+        };
+        editor->SetEditorCameraLookAt(position, center);
+
+        if (params.value("select", true)) {
+            EditorSelection::Instance().SelectEntity(entity);
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "cameraPosition", Float3ToJson(position) },
+            { "target", Float3ToJson(center) },
+            { "radius", radius }
+        };
+    }
+
+    json HandleFrameSelection(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const EntityID primary = EditorSelection::Instance().GetPrimaryEntity();
+        if (Entity::IsNull(primary) || !registry.IsAlive(primary)) {
+            throw MakeError("entity_not_found", "No live primary selected entity.");
+        }
+        json focusParams = params;
+        focusParams["entity"] = EntityToString(primary);
+        return HandleFocusEntity(kernel, registry, focusParams);
+    }
+
+    json HandleRaycastSceneView(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        DirectX::XMFLOAT3 origin{};
+        DirectX::XMFLOAT3 direction{};
+        if (!BuildSceneViewRay(*editor, params, origin, direction)) {
+            throw MakeError("invalid_param", "Could not build a ray from the requested Scene View position.");
+        }
+
+        const float maxDistance = params.value("maxDistance", 100000.0f);
+        json objectHit = RaycastSceneObjects(registry, origin, direction, maxDistance);
+
+        DirectX::XMFLOAT3 groundPoint{};
+        float groundDistance = maxDistance;
+        json groundHit = nullptr;
+        if (params.value("includeGroundPlane", true) &&
+            IntersectGroundPlane(origin, direction, groundPoint, groundDistance) &&
+            groundDistance <= maxDistance) {
+            groundHit = {
+                { "distance", groundDistance },
+                { "position", Float3ToJson(groundPoint) }
+            };
+        }
+
+        return {
+            { "origin", Float3ToJson(origin) },
+            { "direction", Float3ToJson(direction) },
+            { "objectHit", std::move(objectHit) },
+            { "groundHit", std::move(groundHit) }
+        };
+    }
+
+    json HandlePlaceAssetAtCursor(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        DirectX::XMFLOAT3 position{};
+        if (params.contains("position")) {
+            ReadFloat3(params["position"], position);
+        }
+        else {
+            auto* editor = kernel.GetEditorLayer();
+            if (!editor) {
+                throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            }
+
+            DirectX::XMFLOAT3 origin{};
+            DirectX::XMFLOAT3 direction{};
+            if (!BuildSceneViewRay(*editor, params, origin, direction)) {
+                throw MakeError("invalid_param", "Could not build a ray from the requested Scene View position.");
+            }
+
+            float groundDistance = 0.0f;
+            if (!IntersectGroundPlane(origin, direction, position, groundDistance)) {
+                throw MakeError("operation_not_allowed", "Scene View ray did not hit the ground plane.");
+            }
+        }
+
+        const std::string assetPath = params.value("assetPath", params.value("path", std::string{}));
+        if (assetPath.empty()) {
+            throw MakeError("missing_param", "assetPath is required.");
+        }
+
+        const std::filesystem::path safePath = ResolveProjectPath(assetPath, PathAccess::ReadAsset, true);
+        const std::string extension = safePath.extension().string();
+        if (extension == ".prefab") {
+            json prefabParams = {
+                { "path", assetPath },
+                { "position", Float3ToJson(position) },
+                { "parent", params.value("parent", json(nullptr)) },
+                { "select", params.value("select", true) }
+            };
+            return HandleInstantiatePrefab(registry, prefabParams);
+        }
+
+        json createParams = {
+            { "name", params.value("name", safePath.stem().string()) },
+            { "modelFilePath", assetPath },
+            { "position", Float3ToJson(position) },
+            { "parent", params.value("parent", json(nullptr)) },
+            { "select", params.value("select", true) },
+            { "recordUndo", params.value("recordUndo", true) }
+        };
+        if (params.contains("scale")) {
+            createParams["scale"] = params["scale"];
+        }
+        if (params.contains("rotation")) {
+            createParams["rotation"] = params["rotation"];
+        }
+
+        json result = HandleCreateModelEntity(registry, createParams);
+        result["path"] = ToGenericProjectPath(safePath);
+        result["position"] = Float3ToJson(position);
+        return result;
+    }
+
+    json HandleAssetBrowserList(const json& params)
+    {
+        const std::string pathText = params.value("path", std::string("Data"));
+        const std::filesystem::path dir = ResolveProjectPath(pathText, PathAccess::ReadAsset, true);
+        std::error_code ec;
+        if (!std::filesystem::is_directory(dir, ec)) {
+            throw MakeError("invalid_param", "path must be a directory.", { { "path", pathText } });
+        }
+
+        const std::string typeFilter = params.value("type", std::string{});
+        json entries = json::array();
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (ec) {
+                break;
+            }
+            json item = AssetEntryToJson(entry.path());
+            if (!typeFilter.empty() && item["type"].get<std::string>() != typeFilter) {
+                continue;
+            }
+            entries.push_back(std::move(item));
+        }
+        return { { "path", ToGenericProjectPath(dir) }, { "entries", std::move(entries) } };
+    }
+
+    json HandleAssetBrowserSearch(const json& params)
+    {
+        const std::string query = ToLowerCopy(params.value("query", std::string{}));
+        const std::string rootText = params.value("root", std::string("Data"));
+        const std::string typeFilter = params.value("type", std::string{});
+        const int limit = params.value("limit", 100);
+        if (query.empty()) {
+            throw MakeError("missing_param", "query is required.");
+        }
+
+        const std::filesystem::path root = ResolveProjectPath(rootText, PathAccess::ReadAsset, true);
+        std::error_code ec;
+        json results = json::array();
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
+            if (ec || static_cast<int>(results.size()) >= limit) {
+                break;
+            }
+            const std::string name = ToLowerCopy(entry.path().filename().string());
+            const std::string generic = ToLowerCopy(ToGenericProjectPath(entry.path()));
+            if (name.find(query) == std::string::npos && generic.find(query) == std::string::npos) {
+                continue;
+            }
+            json item = AssetEntryToJson(entry.path());
+            if (!typeFilter.empty() && item["type"].get<std::string>() != typeFilter) {
+                continue;
+            }
+            results.push_back(std::move(item));
+        }
+        return { { "query", query }, { "results", std::move(results) } };
+    }
+
+    json HandleAssetBrowserCreateFolder(const json& params)
+    {
+        const std::filesystem::path parent = ResolveProjectPath(params.value("parent", std::string("Data")), PathAccess::WriteAsset, true);
+        const std::string name = params.value("name", std::string{});
+        if (name.empty()) {
+            throw MakeError("missing_param", "name is required.");
+        }
+        const std::filesystem::path target = (parent / name).lexically_normal();
+        ResolveProjectPath(target.string(), PathAccess::WriteAsset, false);
+        std::error_code ec;
+        std::filesystem::create_directories(target, ec);
+        if (ec) {
+            throw MakeError("asset_operation_failed", "Failed to create folder.", { { "path", target.string() } });
+        }
+        return { { "path", ToGenericProjectPath(target) } };
+    }
+
+    json HandleAssetBrowserCopyMove(const json& params, bool move)
+    {
+        const std::filesystem::path source = ResolveProjectPath(params.value("source", std::string{}), PathAccess::ReadAsset, true);
+        const std::filesystem::path destinationDir = ResolveProjectPath(params.value("destination", std::string{}), PathAccess::WriteAsset, true);
+        std::error_code ec;
+        if (!std::filesystem::is_directory(destinationDir, ec)) {
+            throw MakeError("invalid_param", "destination must be a directory.");
+        }
+
+        const std::filesystem::path target = destinationDir / source.filename();
+        if (move) {
+            std::filesystem::rename(source, target, ec);
+        }
+        else if (std::filesystem::is_directory(source, ec)) {
+            std::filesystem::copy(source, target, std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+        }
+        else {
+            std::filesystem::copy_file(source, target, std::filesystem::copy_options::overwrite_existing, ec);
+        }
+        if (ec) {
+            throw MakeError("asset_operation_failed", move ? "Failed to move asset." : "Failed to copy asset.", {
+                { "source", source.string() },
+                { "destination", target.string() }
+            });
+        }
+        return { { "path", ToGenericProjectPath(target) } };
+    }
+
+    json HandleAssetBrowserRename(const json& params)
+    {
+        const std::filesystem::path source = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, true);
+        const std::string newName = params.value("newName", std::string{});
+        if (newName.empty()) {
+            throw MakeError("missing_param", "newName is required.");
+        }
+        const std::filesystem::path target = source.parent_path() / newName;
+        ResolveProjectPath(target.string(), PathAccess::WriteAsset, false);
+        std::error_code ec;
+        std::filesystem::rename(source, target, ec);
+        if (ec) {
+            throw MakeError("asset_operation_failed", "Failed to rename asset.", { { "path", source.string() } });
+        }
+        return { { "path", ToGenericProjectPath(target) } };
+    }
+
+    json HandleAssetBrowserDelete(const json& params)
+    {
+        const std::filesystem::path source = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, true);
+        const bool permanent = params.value("permanent", false);
+        std::error_code ec;
+        if (permanent) {
+            if (std::filesystem::is_directory(source, ec)) {
+                std::filesystem::remove_all(source, ec);
+            }
+            else {
+                std::filesystem::remove(source, ec);
+            }
+            if (ec) {
+                throw MakeError("asset_operation_failed", "Failed to delete asset.", { { "path", source.string() } });
+            }
+            return { { "deleted", ToGenericProjectPath(source) }, { "permanent", true } };
+        }
+
+        const std::filesystem::path trashRoot = ResolveProjectPath("Data/.ai_trash", PathAccess::WriteAsset, false);
+        std::filesystem::create_directories(trashRoot, ec);
+        const std::filesystem::path target = trashRoot / (SanitizeFileStem(source.stem().string()) + "_" + MakeTimestampSuffix() + source.extension().string());
+        std::filesystem::rename(source, target, ec);
+        if (ec) {
+            throw MakeError("asset_operation_failed", "Failed to move asset to AI trash.", { { "path", source.string() } });
+        }
+        return { { "deleted", ToGenericProjectPath(source) }, { "trashPath", ToGenericProjectPath(target) }, { "permanent", false } };
+    }
+
+    json HandlePrefabSave(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        const std::string path = params.value("path", std::string{});
+        std::filesystem::path savedPath;
+        bool ok = false;
+        if (path.empty()) {
+            const std::filesystem::path dir = ResolveProjectPath(params.value("directory", std::string("Data/Prefabs")), PathAccess::WriteAsset, false);
+            std::error_code ec;
+            std::filesystem::create_directories(dir, ec);
+            ok = PrefabSystem::SaveEntityAsPrefab(entity, registry, dir, &savedPath);
+        }
+        else {
+            savedPath = ResolveProjectPath(path, PathAccess::WriteAsset, false);
+            if (savedPath.extension() != ".prefab") {
+                throw MakeError("invalid_param", "Prefab path must use .prefab extension.", { { "path", path } });
+            }
+            std::error_code ec;
+            std::filesystem::create_directories(savedPath.parent_path(), ec);
+            ok = PrefabSystem::SaveEntityToPrefabPath(entity, registry, savedPath);
+        }
+        if (!ok) {
+            throw MakeError("prefab_save_failed", "Failed to save prefab.");
+        }
+        return { { "path", ToGenericProjectPath(savedPath) } };
+    }
+
+    json HandlePrefabApply(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        if (!PrefabSystem::ApplyPrefab(entity, registry)) {
+            throw MakeError("prefab_apply_failed", "Failed to apply prefab.", { { "entity", EntityToString(entity) } });
+        }
+        return { { "entity", EntityToString(entity) } };
+    }
+
+    json HandlePrefabUnpack(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        if (!PrefabSystem::UnpackPrefab(entity, registry)) {
+            throw MakeError("prefab_unpack_failed", "Failed to unpack prefab.", { { "entity", EntityToString(entity) } });
+        }
+        return { { "entity", EntityToString(entity) } };
+    }
+
+    json MaterialToJson(const MaterialAsset& material)
+    {
+        return {
+            { "baseColor", Float4ToJson(material.baseColor) },
+            { "metallic", material.metallic },
+            { "roughness", material.roughness },
+            { "emissive", material.emissive },
+            { "diffuseTexturePath", material.diffuseTexturePath },
+            { "normalTexturePath", material.normalTexturePath },
+            { "metallicRoughnessTexturePath", material.metallicRoughnessTexturePath },
+            { "emissiveTexturePath", material.emissiveTexturePath },
+            { "shaderId", material.shaderId },
+            { "alphaMode", material.alphaMode },
+            { "toonShadingMode", material.toonShadingMode },
+            { "toonShadowTint", Float3ToJson(material.toonShadowTint) },
+            { "toonShadowDeep", Float3ToJson(material.toonShadowDeep) },
+            { "toonRimColor", Float3ToJson(material.toonRimColor) },
+            { "toonOutlineEnabled", material.toonOutlineEnabled },
+            { "toonOutlineColor", Float3ToJson(material.toonOutlineColor) }
+        };
+    }
+
+    void ApplyMaterialFields(MaterialAsset& material, const json& fields)
+    {
+        if (!fields.is_object()) {
+            throw MakeError("invalid_param", "fields must be an object.");
+        }
+        if (fields.contains("baseColor")) ReadFloat4(fields["baseColor"], material.baseColor);
+        if (fields.contains("metallic")) material.metallic = fields["metallic"].get<float>();
+        if (fields.contains("roughness")) material.roughness = fields["roughness"].get<float>();
+        if (fields.contains("emissive")) material.emissive = fields["emissive"].get<float>();
+        if (fields.contains("diffuseTexturePath")) material.diffuseTexturePath = fields["diffuseTexturePath"].get<std::string>();
+        if (fields.contains("normalTexturePath")) material.normalTexturePath = fields["normalTexturePath"].get<std::string>();
+        if (fields.contains("metallicRoughnessTexturePath")) material.metallicRoughnessTexturePath = fields["metallicRoughnessTexturePath"].get<std::string>();
+        if (fields.contains("emissiveTexturePath")) material.emissiveTexturePath = fields["emissiveTexturePath"].get<std::string>();
+        if (fields.contains("shaderId")) material.shaderId = fields["shaderId"].get<int>();
+        if (fields.contains("alphaMode")) material.alphaMode = fields["alphaMode"].get<int>();
+        if (fields.contains("toonShadingMode")) material.toonShadingMode = fields["toonShadingMode"].get<int>();
+        if (fields.contains("toonShadowTint")) ReadFloat3(fields["toonShadowTint"], material.toonShadowTint);
+        if (fields.contains("toonShadowDeep")) ReadFloat3(fields["toonShadowDeep"], material.toonShadowDeep);
+        if (fields.contains("toonRimColor")) ReadFloat3(fields["toonRimColor"], material.toonRimColor);
+        if (fields.contains("toonOutlineEnabled")) material.toonOutlineEnabled = fields["toonOutlineEnabled"].get<bool>();
+        if (fields.contains("toonOutlineColor")) ReadFloat3(fields["toonOutlineColor"], material.toonOutlineColor);
+    }
+
+    json HandleMaterialCreate(const json& params)
+    {
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, false);
+        if (path.extension() != ".material" && path.extension() != ".mat") {
+            throw MakeError("invalid_param", "Material path must use .material or .mat extension.", { { "path", path.string() } });
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        MaterialAsset material(path.string());
+        if (params.contains("fields")) {
+            ApplyMaterialFields(material, params["fields"]);
+        }
+        material.Save();
+        return { { "path", ToGenericProjectPath(path) }, { "material", MaterialToJson(material) } };
+    }
+
+    json HandleMaterialGet(const json& params)
+    {
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::ReadAsset, true);
+        MaterialAsset material(path.string());
+        return { { "path", ToGenericProjectPath(path) }, { "material", MaterialToJson(material) } };
+    }
+
+    json HandleMaterialSet(const json& params)
+    {
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, true);
+        MaterialAsset material(path.string());
+        ApplyMaterialFields(material, params.value("fields", json::object()));
+        material.Save();
+        return { { "path", ToGenericProjectPath(path) }, { "material", MaterialToJson(material) } };
+    }
+
+    json HandleMaterialAssign(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        const std::string pathText = params.value("path", std::string{});
+        const std::filesystem::path path = ResolveProjectPath(pathText, PathAccess::ReadAsset, true);
+        MaterialComponent before{};
+        if (auto* existing = registry.GetComponent<MaterialComponent>(entity)) {
+            before = *existing;
+        }
+        MaterialComponent after = before;
+        after.materialAssetPath = ToGenericProjectPath(path);
+        after.materialAsset = ResourceManager::Instance().GetMaterial(after.materialAssetPath);
+        if (params.value("recordUndo", true)) {
+            auto action = std::make_unique<OptionalComponentUndoAction<MaterialComponent>>(
+                entity,
+                registry.GetComponent<MaterialComponent>(entity) ? std::optional<MaterialComponent>(before) : std::nullopt,
+                after,
+                "AI Assign Material");
+            UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+        }
+        else {
+            registry.AddComponent<MaterialComponent>(entity, after);
+        }
+        MarkEntityEdited(registry, entity);
+        return { { "entity", EntityToString(entity) }, { "path", after.materialAssetPath } };
+    }
+
+    LightType LightTypeFromString(const std::string& value)
+    {
+        const std::string lower = ToLowerCopy(value);
+        if (lower == "directional") return LightType::Directional;
+        if (lower == "spot") return LightType::Spot;
+        return LightType::Point;
+    }
+
+    std::string LightTypeToStringValue(LightType type)
+    {
+        switch (type) {
+        case LightType::Directional: return "Directional";
+        case LightType::Spot: return "Spot";
+        default: return "Point";
+        }
+    }
+
+    json HandleLightCreate(Registry& registry, const json& params)
+    {
+        json createParams = {
+            { "name", params.value("name", std::string("Light")) },
+            { "position", params.value("position", json::array({ 0.0f, 3.0f, 0.0f })) },
+            { "select", params.value("select", true) },
+            { "recordUndo", params.value("recordUndo", true) }
+        };
+        json result = HandleCreateEmpty(registry, createParams);
+        const EntityID entity = EntityFromJson(result["entity"]);
+        LightComponent light;
+        light.type = LightTypeFromString(params.value("type", std::string("Point")));
+        if (params.contains("color")) ReadFloat3(params["color"], light.color);
+        light.intensity = params.value("intensity", light.intensity);
+        light.range = params.value("range", light.range);
+        light.castShadow = params.value("castShadow", light.castShadow);
+        registry.AddComponent<LightComponent>(entity, light);
+        MarkEntityEdited(registry, entity);
+        result["light"] = {
+            { "type", LightTypeToStringValue(light.type) },
+            { "color", Float3ToJson(light.color) },
+            { "intensity", light.intensity },
+            { "range", light.range },
+            { "castShadow", light.castShadow }
+        };
+        return result;
+    }
+
+    json HandleCameraCreate(Registry& registry, const json& params)
+    {
+        json createParams = {
+            { "name", params.value("name", std::string("Camera")) },
+            { "position", params.value("position", json::array({ 0.0f, 4.0f, -8.0f })) },
+            { "select", params.value("select", true) },
+            { "recordUndo", params.value("recordUndo", true) }
+        };
+        json result = HandleCreateEmpty(registry, createParams);
+        const EntityID entity = EntityFromJson(result["entity"]);
+        CameraLensComponent lens;
+        lens.fovY = params.value("fovY", lens.fovY);
+        lens.nearZ = params.value("nearZ", lens.nearZ);
+        lens.farZ = params.value("farZ", lens.farZ);
+        lens.aspect = params.value("aspect", lens.aspect);
+        registry.AddComponent<CameraLensComponent>(entity, lens);
+        if (params.value("main", false)) {
+            registry.AddComponent<CameraMainTagComponent>(entity, CameraMainTagComponent{});
+        }
+        MarkEntityEdited(registry, entity);
+        result["camera"] = { { "fovY", lens.fovY }, { "nearZ", lens.nearZ }, { "farZ", lens.farZ }, { "aspect", lens.aspect } };
+        return result;
+    }
+
+    EntityID FindTerrainEntity(Registry& registry, const json& params)
+    {
+        if (params.contains("entity")) {
+            const EntityID entity = EntityFromJson(params["entity"]);
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity) || !registry.GetComponent<TerrainComponent>(entity)) {
+                throw MakeError("entity_not_found", "Terrain entity is not alive or has no TerrainComponent.", { { "entity", params["entity"] } });
+            }
+            return entity;
+        }
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<TerrainComponent>())) {
+                continue;
+            }
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (registry.IsAlive(entity)) {
+                    return entity;
+                }
+            }
+        }
+        throw MakeError("entity_not_found", "No Terrain entity was found.");
+    }
+
+    json TerrainSummary(Registry& registry, EntityID entity)
+    {
+        auto* terrain = registry.GetComponent<TerrainComponent>(entity);
+        if (!terrain || !terrain->asset) {
+            return nullptr;
+        }
+        const TerrainAsset& asset = *terrain->asset;
+        return {
+            { "entity", EntityToString(entity) },
+            { "resolution", asset.resolution },
+            { "worldSize", json::array({ asset.worldSizeX, asset.worldSizeZ }) },
+            { "heightScale", asset.heightScale },
+            { "chunkCount", json::array({ asset.chunkCountX, asset.chunkCountZ }) },
+            { "layerCount", asset.layers.size() },
+            { "needsRebuild", terrain->needsRebuild },
+            { "needsSplatUpload", terrain->needsSplatUpload }
+        };
+    }
+
+    json HandleTerrainCreate(Registry& registry, const json& params)
+    {
+        EntityID entity = registry.CreateEntity();
+        registry.AddComponent(entity, NameComponent{ params.value("name", std::string("Terrain")) });
+        TransformComponent transform{};
+        if (params.contains("position")) ReadFloat3(params["position"], transform.localPosition);
+        transform.isDirty = true;
+        registry.AddComponent(entity, transform);
+        registry.AddComponent(entity, HierarchyComponent{});
+
+        TerrainComponent terrain;
+        terrain.asset = std::make_shared<TerrainAsset>();
+        TerrainAsset& asset = *terrain.asset;
+        asset.resolution = params.value("resolution", asset.resolution);
+        asset.worldSizeX = params.value("worldSizeX", asset.worldSizeX);
+        asset.worldSizeZ = params.value("worldSizeZ", asset.worldSizeZ);
+        asset.heightScale = params.value("heightScale", asset.heightScale);
+        asset.chunkCountX = params.value("chunkCountX", asset.chunkCountX);
+        asset.chunkCountZ = params.value("chunkCountZ", asset.chunkCountZ);
+        asset.EnsureDefaultLayers();
+        if (params.value("generateNoise", true)) {
+            TerrainGpuPipeline::Instance().Run(asset, TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat);
+        }
+        else {
+            asset.Reset(params.value("height", 0.0f));
+        }
+        terrain.needsRebuild = true;
+        registry.AddComponent(entity, terrain);
+
+        if (params.value("addGrass", true)) {
+            GrassComponent grass;
+            grass.enabled = true;
+            grass.needsRebuild = true;
+            grass.EnsureDefaultLayers();
+            registry.AddComponent(entity, grass);
+        }
+        if (params.value("select", true)) {
+            EditorSelection::Instance().SelectEntity(entity);
+        }
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainList(Registry& registry)
+    {
+        json terrains = json::array();
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<TerrainComponent>())) {
+                continue;
+            }
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (registry.IsAlive(entity)) {
+                    terrains.push_back(TerrainSummary(registry, entity));
+                }
+            }
+        }
+        return { { "terrains", std::move(terrains) } };
+    }
+
+    TerrainBrush::Mode TerrainBrushModeFromString(const std::string& value)
+    {
+        const std::string lower = ToLowerCopy(value);
+        if (lower == "lower") return TerrainBrush::Mode::Lower;
+        if (lower == "smooth") return TerrainBrush::Mode::Smooth;
+        if (lower == "flatten" || lower == "flat") return TerrainBrush::Mode::Flatten;
+        if (lower == "paint") return TerrainBrush::Mode::Paint;
+        return TerrainBrush::Mode::Raise;
+    }
+
+    void ApplyTerrainBrushToAsset(TerrainAsset& asset, TerrainComponent& terrain, const TerrainBrush& brush, float worldHitX, float worldHitZ)
+    {
+        if (asset.heightData.empty()) return;
+        const float halfW = asset.worldSizeX * 0.5f;
+        const float halfD = asset.worldSizeZ * 0.5f;
+        const float normX = (worldHitX + halfW) / asset.worldSizeX;
+        const float normZ = (worldHitZ + halfD) / asset.worldSizeZ;
+        const int px = static_cast<int>(normX * (asset.resolution - 1));
+        const int pz = static_cast<int>(normZ * (asset.resolution - 1));
+        const float cellSize = (asset.worldSizeX + asset.worldSizeZ) * 0.5f / static_cast<float>((std::max)(asset.resolution - 1u, 1u));
+        const int radiusPx = static_cast<int>(brush.radius / (std::max)(cellSize, 0.001f)) + 1;
+        const size_t expectedSplatSize = static_cast<size_t>(asset.resolution) * static_cast<size_t>(asset.resolution) * 4u;
+        if (brush.mode == TerrainBrush::Mode::Paint && asset.splatData.size() != expectedSplatSize) {
+            asset.splatData.assign(expectedSplatSize, 0);
+            for (uint32_t i = 0; i < asset.resolution * asset.resolution; ++i) asset.splatData[static_cast<size_t>(i) * 4u] = 255;
+        }
+        for (int dz = -radiusPx; dz <= radiusPx; ++dz) {
+            for (int dx = -radiusPx; dx <= radiusPx; ++dx) {
+                int ix = px + dx, iz = pz + dz;
+                if (ix < 0 || iz < 0 || ix >= static_cast<int>(asset.resolution) || iz >= static_cast<int>(asset.resolution)) continue;
+                float dist = std::sqrt(static_cast<float>(dx * dx + dz * dz)) / static_cast<float>(radiusPx);
+                if (dist > 1.0f) continue;
+                float w = (1.0f - dist) * brush.strength;
+                if (brush.falloff > 0.0f) w *= std::pow(1.0f - dist, brush.falloff);
+                float& h = asset.heightData[static_cast<size_t>(iz) * asset.resolution + ix];
+                switch (brush.mode) {
+                case TerrainBrush::Mode::Raise: h = (std::min)(1.0f, h + w * 0.01f); break;
+                case TerrainBrush::Mode::Lower: h = (std::max)(0.0f, h - w * 0.01f); break;
+                case TerrainBrush::Mode::Flatten: h += (brush.targetHeight - h) * w; break;
+                case TerrainBrush::Mode::Smooth: {
+                    float sum = 0.0f; int count = 0;
+                    for (int sz = -1; sz <= 1; ++sz) for (int sx = -1; sx <= 1; ++sx) {
+                        const int nx = ClampInt(ix + sx, 0, static_cast<int>(asset.resolution) - 1);
+                        const int nz = ClampInt(iz + sz, 0, static_cast<int>(asset.resolution) - 1);
+                        sum += asset.heightData[static_cast<size_t>(nz) * asset.resolution + nx]; ++count;
+                    }
+                    h += ((count > 0 ? sum / static_cast<float>(count) : h) - h) * w;
+                    break;
+                }
+                case TerrainBrush::Mode::Paint: {
+                    const int layer = ClampInt(brush.layerIndex, 0, 2);
+                    const size_t p = (static_cast<size_t>(iz) * asset.resolution + ix) * 4u;
+                    float weights[3] = { asset.splatData[p] / 255.0f, asset.splatData[p + 1] / 255.0f, asset.splatData[p + 2] / 255.0f };
+                    weights[layer] = (std::min)(1.0f, weights[layer] + w * 0.08f);
+                    const float fade = 1.0f - w * 0.08f;
+                    for (int i = 0; i < 3; ++i) if (i != layer) weights[i] *= fade;
+                    const float sum = (std::max)(weights[0] + weights[1] + weights[2], 0.0001f);
+                    asset.splatData[p] = static_cast<uint8_t>(ClampInt(static_cast<int>(weights[0] / sum * 255.0f), 0, 255));
+                    asset.splatData[p + 1] = static_cast<uint8_t>(ClampInt(static_cast<int>(weights[1] / sum * 255.0f), 0, 255));
+                    asset.splatData[p + 2] = static_cast<uint8_t>(ClampInt(static_cast<int>(weights[2] / sum * 255.0f), 0, 255));
+                    asset.splatData[p + 3] = 0;
+                    break;
+                }}
+            }
+        }
+        terrain.needsRebuild = brush.mode != TerrainBrush::Mode::Paint;
+        terrain.needsSplatUpload = brush.mode == TerrainBrush::Mode::Paint;
+    }
+
+    json HandleTerrainApplyBrush(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* terrain = registry.GetComponent<TerrainComponent>(entity);
+        TerrainBrush brush;
+        brush.mode = TerrainBrushModeFromString(params.value("mode", std::string("raise")));
+        brush.radius = params.value("radius", brush.radius);
+        brush.strength = params.value("strength", brush.strength);
+        brush.falloff = params.value("falloff", brush.falloff);
+        brush.layerIndex = params.value("layerIndex", brush.layerIndex);
+        brush.targetHeight = params.value("targetHeight", brush.targetHeight);
+        DirectX::XMFLOAT3 position{};
+        if (!params.contains("position") || !ReadFloat3(params["position"], position)) {
+            throw MakeError("missing_param", "position [x,y,z] is required.");
+        }
+        ApplyTerrainBrushToAsset(*terrain->asset, *terrain, brush, position.x, position.z);
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSaveLoad(Registry& registry, const json& params, bool save)
+    {
+        if (save) {
+            const EntityID entity = FindTerrainEntity(registry, params);
+            auto* terrain = registry.GetComponent<TerrainComponent>(entity);
+            const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, false);
+            std::error_code ec;
+            std::filesystem::create_directories(path.parent_path(), ec);
+            if (!TerrainAssetIO::SaveToFile(*terrain->asset, path)) {
+                throw MakeError("terrain_save_failed", "Failed to save terrain asset.", { { "path", path.string() } });
+            }
+            return { { "path", ToGenericProjectPath(path) }, { "terrain", TerrainSummary(registry, entity) } };
+        }
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::ReadAsset, true);
+        auto asset = std::make_shared<TerrainAsset>();
+        if (!TerrainAssetIO::LoadFromFile(*asset, path)) {
+            throw MakeError("terrain_load_failed", "Failed to load terrain asset.", { { "path", path.string() } });
+        }
+        EntityID entity = registry.CreateEntity();
+        registry.AddComponent(entity, NameComponent{ params.value("name", path.stem().string()) });
+        registry.AddComponent(entity, TransformComponent{});
+        registry.AddComponent(entity, HierarchyComponent{});
+        TerrainComponent terrain;
+        terrain.asset = asset;
+        terrain.needsRebuild = true;
+        registry.AddComponent(entity, terrain);
+        if (params.value("select", true)) EditorSelection::Instance().SelectEntity(entity);
+        return { { "path", ToGenericProjectPath(path) }, { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    std::string EffectNodeTypeToApiString(EffectGraphNodeType type)
+    {
+        switch (type) {
+        case EffectGraphNodeType::Output: return "Output";
+        case EffectGraphNodeType::Spawn: return "Spawn";
+        case EffectGraphNodeType::Lifetime: return "Lifetime";
+        case EffectGraphNodeType::MeshSource: return "MeshSource";
+        case EffectGraphNodeType::MeshRenderer: return "MeshRenderer";
+        case EffectGraphNodeType::ParticleEmitter: return "ParticleEmitter";
+        case EffectGraphNodeType::SpriteRenderer: return "SpriteRenderer";
+        case EffectGraphNodeType::Float: return "Float";
+        case EffectGraphNodeType::Vec3: return "Vec3";
+        case EffectGraphNodeType::Color: return "Color";
+        default: return "Unknown";
+        }
+    }
+
+    EffectGraphNodeType EffectNodeTypeFromString(const std::string& value)
+    {
+        const std::string lower = ToLowerCopy(value);
+        if (lower == "output" || lower == "effectoutput" || lower == "effect output") return EffectGraphNodeType::Output;
+        if (lower == "spawn") return EffectGraphNodeType::Spawn;
+        if (lower == "lifetime") return EffectGraphNodeType::Lifetime;
+        if (lower == "meshsource" || lower == "mesh source") return EffectGraphNodeType::MeshSource;
+        if (lower == "meshrenderer" || lower == "mesh renderer") return EffectGraphNodeType::MeshRenderer;
+        if (lower == "particleemitter" || lower == "particle emitter") return EffectGraphNodeType::ParticleEmitter;
+        if (lower == "spriterenderer" || lower == "sprite renderer") return EffectGraphNodeType::SpriteRenderer;
+        if (lower == "float") return EffectGraphNodeType::Float;
+        if (lower == "vec3" || lower == "vector3") return EffectGraphNodeType::Vec3;
+        if (lower == "color" || lower == "colour") return EffectGraphNodeType::Color;
+        throw MakeError("invalid_param", "Unknown effect node type.", { { "type", value } });
+    }
+
+    std::string EffectValueTypeToStringValue(EffectValueType type)
+    {
+        switch (type) {
+        case EffectValueType::Flow: return "Flow";
+        case EffectValueType::Float: return "Float";
+        case EffectValueType::Vec3: return "Vec3";
+        case EffectValueType::Color: return "Color";
+        case EffectValueType::Mesh: return "Mesh";
+        case EffectValueType::Particle: return "Particle";
+        default: return "Unknown";
+        }
+    }
+
+    EffectValueType EffectValueTypeFromString(const std::string& value)
+    {
+        const std::string lower = ToLowerCopy(value);
+        if (lower == "flow") return EffectValueType::Flow;
+        if (lower == "float") return EffectValueType::Float;
+        if (lower == "vec3" || lower == "vector3") return EffectValueType::Vec3;
+        if (lower == "color" || lower == "colour") return EffectValueType::Color;
+        if (lower == "mesh") return EffectValueType::Mesh;
+        if (lower == "particle") return EffectValueType::Particle;
+        throw MakeError("invalid_param", "Unknown effect value type.", { { "valueType", value } });
+    }
+
+    DirectX::XMFLOAT2 ReadFloat2OrDefault(const json& value, const DirectX::XMFLOAT2& fallback)
+    {
+        if (!value.is_array() || value.size() < 2) {
+            return fallback;
+        }
+        return { value[0].get<float>(), value[1].get<float>() };
+    }
+
+    json EffectPinToJson(const EffectGraphPin& pin)
+    {
+        return {
+            { "id", pin.id },
+            { "nodeId", pin.nodeId },
+            { "name", pin.name },
+            { "kind", pin.kind == EffectPinKind::Input ? "Input" : "Output" },
+            { "valueType", EffectValueTypeToStringValue(pin.valueType) }
+        };
+    }
+
+    json EffectNodeToJson(const EffectGraphNode& node)
+    {
+        return {
+            { "id", node.id },
+            { "type", EffectNodeTypeToApiString(node.type) },
+            { "title", node.title },
+            { "position", Float2ToJson(node.position) },
+            { "scalar", node.scalar },
+            { "scalar2", node.scalar2 },
+            { "vectorValue", Float4ToJson(node.vectorValue) },
+            { "vectorValue2", Float4ToJson(node.vectorValue2) },
+            { "vectorValue3", Float4ToJson(node.vectorValue3) },
+            { "vectorValue4", Float4ToJson(node.vectorValue4) },
+            { "vectorValue5", Float4ToJson(node.vectorValue5) },
+            { "vectorValue6", Float4ToJson(node.vectorValue6) },
+            { "vectorValue7", Float4ToJson(node.vectorValue7) },
+            { "vectorValue8", Float4ToJson(node.vectorValue8) },
+            { "vectorValue9", Float4ToJson(node.vectorValue9) },
+            { "stringValue", node.stringValue },
+            { "stringValue2", node.stringValue2 },
+            { "stringValue3", node.stringValue3 },
+            { "stringValue4", node.stringValue4 },
+            { "stringValue5", node.stringValue5 },
+            { "stringValue6", node.stringValue6 },
+            { "intValue", node.intValue },
+            { "intValue2", node.intValue2 },
+            { "boolValue", node.boolValue }
+        };
+    }
+
+    json EffectLinkToJson(const EffectGraphLink& link)
+    {
+        return {
+            { "id", link.id },
+            { "startPinId", link.startPinId },
+            { "endPinId", link.endPinId }
+        };
+    }
+
+    json EffectGraphSummaryToJson(const EffectGraphAsset& asset, const std::filesystem::path& path)
+    {
+        json nodes = json::array();
+        for (const auto& node : asset.nodes) {
+            nodes.push_back(EffectNodeToJson(node));
+        }
+        json pins = json::array();
+        for (const auto& pin : asset.pins) {
+            pins.push_back(EffectPinToJson(pin));
+        }
+        json links = json::array();
+        for (const auto& link : asset.links) {
+            links.push_back(EffectLinkToJson(link));
+        }
+        json parameters = json::array();
+        for (const auto& parameter : asset.exposedParameters) {
+            parameters.push_back({
+                { "name", parameter.name },
+                { "valueType", EffectValueTypeToStringValue(parameter.valueType) },
+                { "defaultValue", Float4ToJson(parameter.defaultValue) }
+            });
+        }
+        return {
+            { "path", path.empty() ? json(nullptr) : json(ToGenericProjectPath(path)) },
+            { "schemaVersion", asset.schemaVersion },
+            { "graphId", asset.graphId },
+            { "name", asset.name },
+            { "previewDefaults", {
+                { "duration", asset.previewDefaults.duration },
+                { "seed", asset.previewDefaults.seed },
+                { "previewMeshPath", asset.previewDefaults.previewMeshPath },
+                { "previewMaterialPath", asset.previewDefaults.previewMaterialPath }
+            } },
+            { "referencedAssets", asset.referencedAssets },
+            { "nodes", std::move(nodes) },
+            { "pins", std::move(pins) },
+            { "links", std::move(links) },
+            { "exposedParameters", std::move(parameters) }
+        };
+    }
+
+    std::filesystem::path ResolveEffectGraphPath(const json& params, PathAccess access, bool mustExist)
+    {
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), access, mustExist);
+        const std::string generic = path.generic_string();
+        const std::string suffix = ".effectgraph.json";
+        if (generic.size() < suffix.size() || generic.compare(generic.size() - suffix.size(), suffix.size(), suffix) != 0) {
+            throw MakeError("invalid_param", "Effect graph path must end with .effectgraph.json.", { { "path", ToGenericProjectPath(path) } });
+        }
+        return path;
+    }
+
+    EffectGraphAsset LoadEffectGraphAssetFromParams(const json& params, std::filesystem::path& path, PathAccess access)
+    {
+        path = ResolveEffectGraphPath(params, access, true);
+        EffectGraphAsset asset;
+        if (!EffectGraphSerializer::Load(path.string(), asset)) {
+            throw MakeError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+        }
+        return asset;
+    }
+
+    void SaveEffectGraphAssetOrThrow(const std::filesystem::path& path, const EffectGraphAsset& asset)
+    {
+        if (!EffectGraphSerializer::Save(path.string(), asset)) {
+            throw MakeError("effect_save_failed", "Failed to save effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+        }
+    }
+
+    void RevealEffectEditorChange(EngineKernel& kernel, const json& params, const std::filesystem::path& path)
+    {
+        if (!params.value("showWorkspace", true)) {
+            return;
+        }
+
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (!editor->OpenEffectEditorFromAutomation(path)) {
+            throw MakeError("effect_open_failed", "Failed to reflect the effect graph in Effect Editor.", {
+                { "path", ToGenericProjectPath(path) }
+            });
+        }
+    }
+
+    uint32_t FindEffectPinId(const EffectGraphAsset& asset,
+                             uint32_t nodeId,
+                             EffectPinKind kind,
+                             std::optional<EffectValueType> valueType,
+                             const std::string& name)
+    {
+        for (const auto& pin : asset.pins) {
+            if (pin.nodeId != nodeId || pin.kind != kind) {
+                continue;
+            }
+            if (valueType.has_value() && pin.valueType != *valueType) {
+                continue;
+            }
+            if (!name.empty() && ToLowerCopy(pin.name) != ToLowerCopy(name)) {
+                continue;
+            }
+            return pin.id;
+        }
+        return 0;
+    }
+
+    bool CanCreateEffectLink(const EffectGraphAsset& asset, uint32_t startPinId, uint32_t endPinId, std::string& reason)
+    {
+        const EffectGraphPin* startPin = asset.FindPin(startPinId);
+        const EffectGraphPin* endPin = asset.FindPin(endPinId);
+        if (!startPin || !endPin) {
+            reason = "Invalid pin";
+            return false;
+        }
+        if (startPin->nodeId == endPin->nodeId) {
+            reason = "Same node";
+            return false;
+        }
+        if (startPin->kind != EffectPinKind::Output || endPin->kind != EffectPinKind::Input) {
+            reason = "Output -> Input only";
+            return false;
+        }
+        if (startPin->valueType != endPin->valueType) {
+            reason = "Type mismatch";
+            return false;
+        }
+        for (const auto& link : asset.links) {
+            if (link.startPinId == startPinId && link.endPinId == endPinId) {
+                reason = "Duplicate link";
+                return false;
+            }
+            if (link.endPinId == endPinId) {
+                reason = "Input already connected";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void ApplyEffectNodeFields(EffectGraphNode& node, const json& fields)
+    {
+        if (!fields.is_object()) {
+            throw MakeError("invalid_param", "fields must be an object.");
+        }
+        if (fields.contains("title")) node.title = fields["title"].get<std::string>();
+        if (fields.contains("position")) node.position = ReadFloat2OrDefault(fields["position"], node.position);
+        if (fields.contains("scalar")) node.scalar = fields["scalar"].get<float>();
+        if (fields.contains("scalar2")) node.scalar2 = fields["scalar2"].get<float>();
+        if (fields.contains("vectorValue")) ReadFloat4(fields["vectorValue"], node.vectorValue);
+        if (fields.contains("vectorValue2")) ReadFloat4(fields["vectorValue2"], node.vectorValue2);
+        if (fields.contains("vectorValue3")) ReadFloat4(fields["vectorValue3"], node.vectorValue3);
+        if (fields.contains("vectorValue4")) ReadFloat4(fields["vectorValue4"], node.vectorValue4);
+        if (fields.contains("vectorValue5")) ReadFloat4(fields["vectorValue5"], node.vectorValue5);
+        if (fields.contains("vectorValue6")) ReadFloat4(fields["vectorValue6"], node.vectorValue6);
+        if (fields.contains("vectorValue7")) ReadFloat4(fields["vectorValue7"], node.vectorValue7);
+        if (fields.contains("vectorValue8")) ReadFloat4(fields["vectorValue8"], node.vectorValue8);
+        if (fields.contains("vectorValue9")) ReadFloat4(fields["vectorValue9"], node.vectorValue9);
+        if (fields.contains("stringValue")) node.stringValue = fields["stringValue"].get<std::string>();
+        if (fields.contains("stringValue2")) node.stringValue2 = fields["stringValue2"].get<std::string>();
+        if (fields.contains("stringValue3")) node.stringValue3 = fields["stringValue3"].get<std::string>();
+        if (fields.contains("stringValue4")) node.stringValue4 = fields["stringValue4"].get<std::string>();
+        if (fields.contains("stringValue5")) node.stringValue5 = fields["stringValue5"].get<std::string>();
+        if (fields.contains("stringValue6")) node.stringValue6 = fields["stringValue6"].get<std::string>();
+        if (fields.contains("intValue")) node.intValue = fields["intValue"].get<int>();
+        if (fields.contains("intValue2")) node.intValue2 = fields["intValue2"].get<int>();
+        if (fields.contains("boolValue")) node.boolValue = fields["boolValue"].get<bool>();
+    }
+
+    void ApplyEffectPreviewDefaults(EffectGraphAsset& asset, const json& fields)
+    {
+        if (!fields.is_object()) {
+            throw MakeError("invalid_param", "previewDefaults must be an object.");
+        }
+        if (fields.contains("duration")) asset.previewDefaults.duration = fields["duration"].get<float>();
+        if (fields.contains("seed")) asset.previewDefaults.seed = fields["seed"].get<uint32_t>();
+        if (fields.contains("previewMeshPath")) asset.previewDefaults.previewMeshPath = fields["previewMeshPath"].get<std::string>();
+        if (fields.contains("previewMaterialPath")) asset.previewDefaults.previewMaterialPath = fields["previewMaterialPath"].get<std::string>();
+    }
+
+    json EffectCompileResultToJson(const CompiledEffectAsset& compiled)
+    {
+        return {
+            { "valid", compiled.valid },
+            { "sourceAssetPath", compiled.sourceAssetPath },
+            { "graphId", compiled.graphId },
+            { "name", compiled.name },
+            { "duration", compiled.duration },
+            { "errors", compiled.errors },
+            { "warnings", compiled.warnings },
+            { "executionPlan", {
+                { "spawnNodeIds", compiled.executionPlan.spawnNodeIds },
+                { "updateNodeIds", compiled.executionPlan.updateNodeIds },
+                { "renderNodeIds", compiled.executionPlan.renderNodeIds }
+            } },
+            { "meshRenderer", {
+                { "enabled", compiled.meshRenderer.enabled },
+                { "meshAssetPath", compiled.meshRenderer.meshAssetPath },
+                { "materialAssetPath", compiled.meshRenderer.materialAssetPath },
+                { "tint", Float4ToJson(compiled.meshRenderer.tint) }
+            } },
+            { "particleRenderer", {
+                { "enabled", compiled.particleRenderer.enabled },
+                { "maxParticles", compiled.particleRenderer.maxParticles },
+                { "spawnRate", compiled.particleRenderer.spawnRate },
+                { "burstCount", compiled.particleRenderer.burstCount },
+                { "particleLifetime", compiled.particleRenderer.particleLifetime }
+            } },
+            { "requiredAssetReferences", compiled.requiredAssetReferences }
+        };
+    }
+
+    json HandleEffectListNodeTypes()
+    {
+        json types = json::array();
+        for (EffectGraphNodeType type : {
+            EffectGraphNodeType::Output,
+            EffectGraphNodeType::Spawn,
+            EffectGraphNodeType::Lifetime,
+            EffectGraphNodeType::MeshSource,
+            EffectGraphNodeType::MeshRenderer,
+            EffectGraphNodeType::ParticleEmitter,
+            EffectGraphNodeType::SpriteRenderer,
+            EffectGraphNodeType::Float,
+            EffectGraphNodeType::Vec3,
+            EffectGraphNodeType::Color }) {
+            types.push_back({
+                { "type", EffectNodeTypeToApiString(type) },
+                { "label", EffectGraphNodeTypeToString(type) }
+            });
+        }
+        return { { "nodeTypes", std::move(types) } };
+    }
+
+    json HandleEffectCreateAsset(EngineKernel& kernel, const json& params)
+    {
+        const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::WriteAsset, false);
+        EffectGraphAsset asset = CreateDefaultEffectGraphAsset();
+        asset.name = params.value("name", asset.name);
+        asset.graphId = params.value("graphId", asset.graphId);
+        if (params.contains("previewDefaults")) {
+            ApplyEffectPreviewDefaults(asset, params["previewDefaults"]);
+        }
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectGetAsset(const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::ReadAsset);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectSetAsset(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        if (params.contains("name")) asset.name = params["name"].get<std::string>();
+        if (params.contains("graphId")) asset.graphId = params["graphId"].get<std::string>();
+        if (params.contains("previewDefaults")) ApplyEffectPreviewDefaults(asset, params["previewDefaults"]);
+        if (params.contains("referencedAssets") && params["referencedAssets"].is_array()) {
+            asset.referencedAssets = params["referencedAssets"].get<std::vector<std::string>>();
+        }
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectAddNode(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        const EffectGraphNodeType type = EffectNodeTypeFromString(params.value("type", std::string{}));
+        const DirectX::XMFLOAT2 position = ReadFloat2OrDefault(params.value("position", json::array({ 0.0f, 0.0f })), { 0.0f, 0.0f });
+        EffectGraphNode& node = AddEffectGraphNode(asset, type, position);
+        if (params.contains("fields")) {
+            ApplyEffectNodeFields(node, params["fields"]);
+        }
+        const json nodeJson = EffectNodeToJson(node);
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "path", ToGenericProjectPath(path) }, { "node", nodeJson } };
+    }
+
+    json HandleEffectSetNode(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        const uint32_t nodeId = params.value("nodeId", 0u);
+        EffectGraphNode* node = asset.FindNode(nodeId);
+        if (!node) {
+            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+        }
+        ApplyEffectNodeFields(*node, params.value("fields", json::object()));
+        const json nodeJson = EffectNodeToJson(*node);
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "path", ToGenericProjectPath(path) }, { "node", nodeJson } };
+    }
+
+    json HandleEffectDeleteNode(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        const uint32_t nodeId = params.value("nodeId", 0u);
+        if (!asset.FindNode(nodeId)) {
+            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+        }
+        std::vector<uint32_t> pinsToRemove;
+        for (const auto& pin : asset.pins) {
+            if (pin.nodeId == nodeId) {
+                pinsToRemove.push_back(pin.id);
+            }
+        }
+        asset.links.erase(
+            std::remove_if(
+                asset.links.begin(),
+                asset.links.end(),
+                [&](const EffectGraphLink& link) {
+                    return std::find(pinsToRemove.begin(), pinsToRemove.end(), link.startPinId) != pinsToRemove.end() ||
+                        std::find(pinsToRemove.begin(), pinsToRemove.end(), link.endPinId) != pinsToRemove.end();
+                }),
+            asset.links.end());
+        asset.pins.erase(
+            std::remove_if(asset.pins.begin(), asset.pins.end(), [nodeId](const EffectGraphPin& pin) { return pin.nodeId == nodeId; }),
+            asset.pins.end());
+        asset.nodes.erase(
+            std::remove_if(asset.nodes.begin(), asset.nodes.end(), [nodeId](const EffectGraphNode& node) { return node.id == nodeId; }),
+            asset.nodes.end());
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectConnect(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        uint32_t startPinId = params.value("startPinId", 0u);
+        uint32_t endPinId = params.value("endPinId", 0u);
+        if (startPinId == 0 || endPinId == 0) {
+            const uint32_t fromNodeId = params.value("fromNodeId", 0u);
+            const uint32_t toNodeId = params.value("toNodeId", 0u);
+            if (!asset.FindNode(fromNodeId) || !asset.FindNode(toNodeId)) {
+                throw MakeError("node_not_found", "fromNodeId and toNodeId must refer to existing nodes.", {
+                    { "fromNodeId", fromNodeId },
+                    { "toNodeId", toNodeId }
+                });
+            }
+            std::optional<EffectValueType> valueType;
+            if (params.contains("valueType")) {
+                valueType = EffectValueTypeFromString(params["valueType"].get<std::string>());
+            }
+            startPinId = FindEffectPinId(asset, fromNodeId, EffectPinKind::Output, valueType, params.value("fromPin", std::string{}));
+            endPinId = FindEffectPinId(asset, toNodeId, EffectPinKind::Input, valueType, params.value("toPin", std::string{}));
+        }
+        std::string reason;
+        if (!CanCreateEffectLink(asset, startPinId, endPinId, reason)) {
+            throw MakeError("effect_link_invalid", "Cannot create effect graph link.", {
+                { "reason", reason },
+                { "startPinId", startPinId },
+                { "endPinId", endPinId }
+            });
+        }
+        EffectGraphLink link;
+        link.id = asset.nextLinkId++;
+        link.startPinId = startPinId;
+        link.endPinId = endPinId;
+        asset.links.push_back(link);
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "path", ToGenericProjectPath(path) }, { "link", EffectLinkToJson(link) } };
+    }
+
+    json HandleEffectDisconnect(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        const uint32_t linkId = params.value("linkId", 0u);
+        const size_t before = asset.links.size();
+        asset.links.erase(
+            std::remove_if(
+                asset.links.begin(),
+                asset.links.end(),
+                [&](const EffectGraphLink& link) {
+                    if (linkId != 0) {
+                        return link.id == linkId;
+                    }
+                    return link.startPinId == params.value("startPinId", 0u) &&
+                        link.endPinId == params.value("endPinId", 0u);
+                }),
+            asset.links.end());
+        if (asset.links.size() == before) {
+            throw MakeError("link_not_found", "Effect graph link was not found.");
+        }
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectCompile(const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::ReadAsset);
+        auto compiled = EffectCompiler::Compile(asset, ToGenericProjectPath(path));
+        if (!compiled) {
+            throw MakeError("effect_compile_failed", "Effect compiler returned no result.", { { "path", ToGenericProjectPath(path) } });
+        }
+        return { { "compile", EffectCompileResultToJson(*compiled) } };
+    }
+
+    json HandleEffectOpenWorkspace(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        std::filesystem::path path;
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+        }
+        if (!editor->OpenEffectEditorFromAutomation(path)) {
+            throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                { "path", path.empty() ? json(nullptr) : json(ToGenericProjectPath(path)) }
+            });
+        }
+        return {
+            { "effectEditorActive", editor->IsEffectEditorWorkspaceActive() },
+            { "documentPath", editor->GetEffectEditorDocumentPath() }
+        };
+    }
+
+    json HandleEffectTimelinePlay(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        std::filesystem::path path;
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+        }
+        const float startTime = params.value("startTime", 0.0f);
+        const bool paused = params.value("paused", false);
+        if (!editor->PlayEffectTimelineFromAutomation(path, startTime, paused)) {
+            throw MakeError("effect_timeline_play_failed", "Failed to play the Effect Editor timeline.", {
+                { "path", path.empty() ? json(nullptr) : json(ToGenericProjectPath(path)) },
+                { "startTime", startTime },
+                { "paused", paused }
+            });
+        }
+        return {
+            { "effectEditorActive", editor->IsEffectEditorWorkspaceActive() },
+            { "documentPath", editor->GetEffectEditorDocumentPath() },
+            { "previewEntity", Entity::IsNull(editor->GetEffectPreviewEntity()) ? json(nullptr) : json(EntityToString(editor->GetEffectPreviewEntity())) },
+            { "state", paused ? "paused" : "playing" },
+            { "startTime", startTime }
+        };
+    }
+
+    json HandleEffectTimelineStop(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (!editor->StopEffectTimelineFromAutomation()) {
+            throw MakeError("effect_timeline_stop_failed", "Failed to stop the Effect Editor timeline.");
+        }
+        return {
+            { "effectEditorActive", editor->IsEffectEditorWorkspaceActive() },
+            { "documentPath", editor->GetEffectEditorDocumentPath() },
+            { "previewEntity", nullptr },
+            { "state", "stopped" }
+        };
+    }
+
+    json HandleEffectPreviewSpawn(Registry& registry, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::ReadAsset);
+        auto compiled = EffectCompiler::Compile(asset, ToGenericProjectPath(path));
+        if (!compiled || !compiled->valid) {
+            throw MakeError("effect_compile_failed", "Effect graph must compile before preview spawn.", {
+                { "compile", compiled ? EffectCompileResultToJson(*compiled) : json(nullptr) }
+            });
+        }
+
+        EntityID entity = registry.CreateEntity();
+        registry.AddComponent(entity, NameComponent{ params.value("name", std::string("AI Effect Preview")) });
+        TransformComponent transform{};
+        if (params.contains("position")) ReadFloat3(params["position"], transform.localPosition);
+        transform.localScale = { 1.0f, 1.0f, 1.0f };
+        transform.isDirty = true;
+        registry.AddComponent(entity, transform);
+        registry.AddComponent(entity, HierarchyComponent{});
+        if (params.value("previewOnly", true)) {
+            registry.AddComponent(entity, EffectPreviewTagComponent{});
+        }
+
+        EffectAssetComponent assetComponent;
+        assetComponent.assetPath = ToGenericProjectPath(path);
+        assetComponent.autoPlay = true;
+        assetComponent.loop = params.value("loop", true);
+        assetComponent.useSelectedMeshFallback = params.value("useSelectedMeshFallback", true);
+        registry.AddComponent(entity, assetComponent);
+
+        EffectPlaybackComponent playback;
+        playback.isPlaying = true;
+        playback.isPaused = params.value("paused", false);
+        playback.currentTime = params.value("startTime", 0.0f);
+        playback.duration = compiled->duration;
+        playback.seed = params.value("seed", asset.previewDefaults.seed);
+        playback.loop = assetComponent.loop;
+        registry.AddComponent(entity, playback);
+
+        EffectSpawnRequestComponent request;
+        request.pending = true;
+        request.restartIfActive = true;
+        request.startTime = playback.currentTime;
+        registry.AddComponent(entity, request);
+
+        if (params.value("select", true)) {
+            EditorSelection::Instance().SelectEntity(entity);
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "assetPath", assetComponent.assetPath },
+            { "compile", EffectCompileResultToJson(*compiled) }
+        };
+    }
+
     json HandleSaveScene(EngineKernel& kernel, const json& params)
     {
         auto* editor = kernel.GetEditorLayer();
@@ -1842,6 +3642,75 @@ namespace
         if (name == "get_component_schema") {
             return HandleGetComponentSchema(params);
         }
+        if (name == "asset_browser.list") {
+            return HandleAssetBrowserList(params);
+        }
+        if (name == "asset_browser.search") {
+            return HandleAssetBrowserSearch(params);
+        }
+        if (name == "asset_browser.create_folder") {
+            return HandleAssetBrowserCreateFolder(params);
+        }
+        if (name == "asset_browser.copy") {
+            return HandleAssetBrowserCopyMove(params, false);
+        }
+        if (name == "asset_browser.move") {
+            return HandleAssetBrowserCopyMove(params, true);
+        }
+        if (name == "asset_browser.rename") {
+            return HandleAssetBrowserRename(params);
+        }
+        if (name == "asset_browser.delete") {
+            return HandleAssetBrowserDelete(params);
+        }
+        if (name == "material.create") {
+            return HandleMaterialCreate(params);
+        }
+        if (name == "material.get") {
+            return HandleMaterialGet(params);
+        }
+        if (name == "material.set") {
+            return HandleMaterialSet(params);
+        }
+        if (name == "effect_editor.list_node_types") {
+            return HandleEffectListNodeTypes();
+        }
+        if (name == "effect_editor.create_asset") {
+            return HandleEffectCreateAsset(kernel, params);
+        }
+        if (name == "effect_editor.open_workspace") {
+            return HandleEffectOpenWorkspace(kernel, params);
+        }
+        if (name == "effect_editor.timeline_play") {
+            return HandleEffectTimelinePlay(kernel, params);
+        }
+        if (name == "effect_editor.timeline_stop") {
+            return HandleEffectTimelineStop(kernel);
+        }
+        if (name == "effect_editor.get_asset") {
+            return HandleEffectGetAsset(params);
+        }
+        if (name == "effect_editor.set_asset") {
+            return HandleEffectSetAsset(kernel, params);
+        }
+        if (name == "effect_editor.add_node") {
+            return HandleEffectAddNode(kernel, params);
+        }
+        if (name == "effect_editor.set_node") {
+            return HandleEffectSetNode(kernel, params);
+        }
+        if (name == "effect_editor.delete_node") {
+            return HandleEffectDeleteNode(kernel, params);
+        }
+        if (name == "effect_editor.connect") {
+            return HandleEffectConnect(kernel, params);
+        }
+        if (name == "effect_editor.disconnect") {
+            return HandleEffectDisconnect(kernel, params);
+        }
+        if (name == "effect_editor.compile") {
+            return HandleEffectCompile(params);
+        }
         if (name == "capture_screenshot") {
             const std::filesystem::path defaultPath =
                 std::filesystem::path("Saved") / "AI" / "screenshots" /
@@ -1883,6 +3752,63 @@ namespace
         }
         if (name == "delete_entity") {
             return HandleDeleteEntity(*registry, params);
+        }
+        if (name == "duplicate_entity") {
+            return HandleDuplicateEntity(*registry, params);
+        }
+        if (name == "reparent_entity") {
+            return HandleReparentEntity(*registry, params);
+        }
+        if (name == "instantiate_prefab") {
+            return HandleInstantiatePrefab(*registry, params);
+        }
+        if (name == "focus_entity") {
+            return HandleFocusEntity(kernel, *registry, params);
+        }
+        if (name == "frame_selection") {
+            return HandleFrameSelection(kernel, *registry, params);
+        }
+        if (name == "raycast_scene_view") {
+            return HandleRaycastSceneView(kernel, *registry, params);
+        }
+        if (name == "place_asset_at_cursor") {
+            return HandlePlaceAssetAtCursor(kernel, *registry, params);
+        }
+        if (name == "prefab.save") {
+            return HandlePrefabSave(*registry, params);
+        }
+        if (name == "prefab.apply") {
+            return HandlePrefabApply(*registry, params);
+        }
+        if (name == "prefab.unpack") {
+            return HandlePrefabUnpack(*registry, params);
+        }
+        if (name == "material.assign") {
+            return HandleMaterialAssign(*registry, params);
+        }
+        if (name == "light.create") {
+            return HandleLightCreate(*registry, params);
+        }
+        if (name == "camera.create") {
+            return HandleCameraCreate(*registry, params);
+        }
+        if (name == "terrain.create") {
+            return HandleTerrainCreate(*registry, params);
+        }
+        if (name == "terrain.list") {
+            return HandleTerrainList(*registry);
+        }
+        if (name == "terrain.apply_brush") {
+            return HandleTerrainApplyBrush(*registry, params);
+        }
+        if (name == "terrain.save") {
+            return HandleTerrainSaveLoad(*registry, params, true);
+        }
+        if (name == "terrain.load") {
+            return HandleTerrainSaveLoad(*registry, params, false);
+        }
+        if (name == "effect_editor.preview_spawn") {
+            return HandleEffectPreviewSpawn(*registry, params);
         }
         if (name == "save_scene") {
             return HandleSaveScene(kernel, params);

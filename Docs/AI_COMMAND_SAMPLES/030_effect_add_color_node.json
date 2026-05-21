@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "cmd-effect-add-color-node",
+  "command": "effect_editor.add_node",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "type": "Color",
+    "position": [430.0, 340.0],
+    "fields": {
+      "title": "Slash Tint",
+      "vectorValue": [1.0, 0.25, 0.08, 1.0],
+      "vectorValue2": [1.0, 0.05, 0.0, 0.0]
+    }
+  }
+}

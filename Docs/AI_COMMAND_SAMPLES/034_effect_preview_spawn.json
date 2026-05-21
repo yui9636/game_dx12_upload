@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "cmd-effect-preview-spawn",
+  "command": "effect_editor.preview_spawn",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json",
+    "name": "AI Effect Preview",
+    "position": [0.0, 1.0, 0.0],
+    "loop": true,
+    "select": true
+  }
+}

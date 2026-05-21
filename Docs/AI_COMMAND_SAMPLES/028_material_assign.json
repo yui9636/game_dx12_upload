@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "cmd-material-assign",
+  "command": "material.assign",
+  "params": {
+    "entity": 4294967296,
+    "path": "Data/Material/AI/TestMaterial.material",
+    "recordUndo": true
+  }
+}

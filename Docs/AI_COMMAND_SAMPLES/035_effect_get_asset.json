@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "cmd-effect-get-asset",
+  "command": "effect_editor.get_asset",
+  "params": {
+    "path": "Data/EffectGraph/AI/TestSlash.effectgraph.json"
+  }
+}

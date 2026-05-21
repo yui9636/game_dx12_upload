@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "cmd-focus-entity",
+  "command": "focus_entity",
+  "params": {
+    "entity": 4294967296,
+    "select": true
+  }
+}
