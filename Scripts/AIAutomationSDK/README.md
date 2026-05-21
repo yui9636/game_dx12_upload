@@ -89,7 +89,7 @@ The high-level tool families cover every public automation command:
 ```text
 runtime, assets, entities, materials, terrain, editor, lighting,
 effects, player, ui, sequencer, game_loop, serializer, workflow,
-verify, autonomy, world
+verify, autonomy, world, link
 ```
 
 Tool CLI examples:
@@ -236,6 +236,41 @@ with EngineClient() as engine:
     )["summary"])
     result = tools.world.make_collect_game(
         game_name="AI_Phase9_WorldCollect",
+        coin_count=5,
+        hazard_count=3,
+    )
+    print(result["summary"])
+```
+
+## Phase 10-12 AI-Engine Link
+
+Phase 10 adds an affordance and intent layer. The SDK can now describe what the engine can do from the current world state, then compile a goal into an explicit intent plan.
+
+Phase 11 adds a session journal. Every important observation, plan, execution result, diff, validation, and repair is stored as a timeline so later AI passes can reason from history instead of a single command result.
+
+Phase 12 adds the linked orchestrator. It combines affordance mapping, intent planning, world authoring, ECS snapshots, semantic diffing, gameplay validation, repair, and journal/report writing.
+
+```powershell
+python Scripts\AIAutomationSDK\tools_cli.py link-affordances
+python Scripts\AIAutomationSDK\tools_cli.py link-plan --file Scripts\AIAutomationSDK\examples\link_goal_collect_game.json
+python Scripts\AIAutomationSDK\tools_cli.py link-run --file Scripts\AIAutomationSDK\examples\link_goal_collect_game.json --dry-run
+python Scripts\AIAutomationSDK\tools_cli.py link-run --file Scripts\AIAutomationSDK\examples\link_goal_collect_game.json
+python Scripts\AIAutomationSDK\tools_cli.py make-linked-game --name AI_Phase12_LinkedCollect --coins 5 --hazards 3
+```
+
+Python:
+
+```python
+with EngineClient() as engine:
+    tools = EngineTools(engine)
+    print(tools.link.affordances()["affordances"])
+    plan = tools.link.plan({
+        "intent": "collect_game",
+        "variables": {"gameName": "AI_Phase12_LinkedCollect", "coinCount": 5, "hazardCount": 3}
+    })
+    print(plan["steps"])
+    result = tools.link.make_collect_game(
+        game_name="AI_Phase12_LinkedCollect",
         coin_count=5,
         hazard_count=3,
     )

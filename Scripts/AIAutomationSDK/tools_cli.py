@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from autonomy_runner import AutonomyValidationError
+from engine_link import EngineLinkValidationError
 from engine_client import DEFAULT_TIMEOUT, DEFAULT_URL, EngineClient
 from engine_client import EngineCommandError, EngineConnectionError
 from tools import EngineTools
@@ -493,6 +494,74 @@ def run_make_world_game(args: argparse.Namespace) -> int:
         return 0 if result.get("summary", {}).get("ok") else 7
 
 
+def run_link_affordances(args: argparse.Namespace) -> int:
+    if args.snapshot:
+        with EngineClient(args.url, timeout=args.timeout) as engine:
+            print_json(EngineTools(engine).link.affordances(include_snapshot=True))
+    else:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        print_json(EngineTools(engine).link.affordances(include_snapshot=False))
+    return 0
+
+
+def run_link_plan(args: argparse.Namespace) -> int:
+    value = load_json_value(args.file)
+    if args.snapshot:
+        with EngineClient(args.url, timeout=args.timeout) as engine:
+            print_json(EngineTools(engine).link.plan(value, include_snapshot=True))
+    else:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        print_json(EngineTools(engine).link.plan(value, include_snapshot=False))
+    return 0
+
+
+def run_link_run(args: argparse.Namespace) -> int:
+    value = load_json_value(args.file)
+    if args.dry_run:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        result = EngineTools(engine).link.run(
+            value,
+            dry_run=True,
+            max_repair_attempts=args.max_repair_attempts,
+            report_path=args.report,
+        )
+        print_json(result)
+        return 0
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        result = EngineTools(engine).link.run(
+            value,
+            dry_run=False,
+            max_repair_attempts=args.max_repair_attempts,
+            report_path=args.report,
+        )
+        print_json(result)
+        return 0 if result.get("summary", {}).get("ok") else 8
+
+
+def run_make_linked_game(args: argparse.Namespace) -> int:
+    if args.dry_run:
+        engine = EngineClient(args.url, timeout=args.timeout)
+        result = EngineTools(engine).link.make_collect_game(
+            game_name=args.name,
+            coin_count=args.coins,
+            hazard_count=args.hazards,
+            dry_run=True,
+            max_repair_attempts=args.max_repair_attempts,
+        )
+        print_json(result)
+        return 0
+    with EngineClient(args.url, timeout=args.timeout) as engine:
+        result = EngineTools(engine).link.make_collect_game(
+            game_name=args.name,
+            coin_count=args.coins,
+            hazard_count=args.hazards,
+            dry_run=False,
+            max_repair_attempts=args.max_repair_attempts,
+        )
+        print_json(result)
+        return 0 if result.get("summary", {}).get("ok") else 8
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="High-level authoring tools for MyEngine automation.")
     parser.add_argument("--url", default=DEFAULT_URL, help=f"WebSocket URL. Default: {DEFAULT_URL}")
@@ -725,6 +794,30 @@ def build_parser() -> argparse.ArgumentParser:
     world_game.add_argument("--max-repair-attempts", type=int, default=1)
     world_game.set_defaults(func=run_make_world_game)
 
+    link_affordances = sub.add_parser("link-affordances", help="Phase 10 AI-engine affordance map.")
+    link_affordances.add_argument("--snapshot", action="store_true", help="Include a live ECS snapshot in readiness checks.")
+    link_affordances.set_defaults(func=run_link_affordances)
+
+    link_plan = sub.add_parser("link-plan", help="Phase 10 compile a goal into an AI-engine intent plan.")
+    link_plan.add_argument("--file", required=True)
+    link_plan.add_argument("--snapshot", action="store_true", help="Include a live ECS snapshot in the plan.")
+    link_plan.set_defaults(func=run_link_plan)
+
+    link_run = sub.add_parser("link-run", help="Phase 12 run an AI-engine linked goal with journal.")
+    link_run.add_argument("--file", required=True)
+    link_run.add_argument("--dry-run", action="store_true")
+    link_run.add_argument("--report", help="Optional path for a JSON link report.")
+    link_run.add_argument("--max-repair-attempts", type=int, default=1)
+    link_run.set_defaults(func=run_link_run)
+
+    linked_game = sub.add_parser("make-linked-game", help="Use Phase 12 AI-engine link to create and validate a collect game.")
+    linked_game.add_argument("--name", default="AI_LinkedCollect")
+    linked_game.add_argument("--coins", type=int, default=5)
+    linked_game.add_argument("--hazards", type=int, default=3)
+    linked_game.add_argument("--dry-run", action="store_true")
+    linked_game.add_argument("--max-repair-attempts", type=int, default=1)
+    linked_game.set_defaults(func=run_make_linked_game)
+
     return parser
 
 
@@ -747,6 +840,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 4
     except WorldModelValidationError as exc:
         print(f"World model validation failed: {exc}", file=sys.stderr)
+        return 4
+    except EngineLinkValidationError as exc:
+        print(f"Engine link validation failed: {exc}", file=sys.stderr)
         return 4
     except (EngineConnectionError, OSError) as exc:
         print(f"Connection failed: {exc}", file=sys.stderr)

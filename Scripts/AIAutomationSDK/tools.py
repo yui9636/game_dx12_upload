@@ -7,12 +7,14 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 
 try:
     from .autonomy_runner import AutonomyRunner, AutonomyValidationError
+    from .engine_link import EngineAffordanceMap, EngineLinkRunner, EngineLinkValidationError, IntentPlanner
     from .engine_client import COMMANDS, EngineClient
     from .verification_runner import VerificationRunner, VerificationValidationError
     from .world_model import ECSObserver, WorldAuthoringRunner, WorldModel, WorldModelValidationError, diff_snapshots
     from .workflow_runner import WorkflowRunner, WorkflowValidationError
 except ImportError:
     from autonomy_runner import AutonomyRunner, AutonomyValidationError
+    from engine_link import EngineAffordanceMap, EngineLinkRunner, EngineLinkValidationError, IntentPlanner
     from engine_client import COMMANDS, EngineClient
     from verification_runner import VerificationRunner, VerificationValidationError
     from world_model import ECSObserver, WorldAuthoringRunner, WorldModel, WorldModelValidationError, diff_snapshots
@@ -1242,6 +1244,57 @@ class WorldTools:
         }, dry_run=dry_run, max_repair_attempts=max_repair_attempts)
 
 
+class EngineLinkTools:
+    """Phase 10-12 AI-engine link: affordances, intent planning, session journal, orchestration."""
+
+    def __init__(self, root: "EngineTools"):
+        self.root = root
+        self.engine = root.engine
+
+    def affordances(self, *, include_snapshot: bool = False) -> Dict[str, Any]:
+        return EngineLinkRunner(self.root).affordances(include_snapshot=include_snapshot)
+
+    def plan(self, goal: Mapping[str, Any], *, include_snapshot: bool = False) -> Dict[str, Any]:
+        return EngineLinkRunner(self.root).plan(goal, include_snapshot=include_snapshot)
+
+    def run(
+        self,
+        goal: Mapping[str, Any],
+        *,
+        dry_run: bool = False,
+        max_repair_attempts: int = 1,
+        report_path: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return EngineLinkRunner(self.root).run(
+            goal,
+            dry_run=dry_run,
+            max_repair_attempts=max_repair_attempts,
+            report_path=report_path,
+        )
+
+    def make_collect_game(
+        self,
+        *,
+        game_name: str = "AI_LinkedCollect",
+        coin_count: int = 5,
+        hazard_count: int = 3,
+        dry_run: bool = False,
+        max_repair_attempts: int = 1,
+    ) -> Dict[str, Any]:
+        return self.run({
+            "name": f"{game_name}_engine_link",
+            "goal": "Create a collect-the-coins scene through the Phase 12 AI-engine link.",
+            "intent": "collect_game",
+            "variables": {
+                "gameName": game_name,
+                "coinCount": int(coin_count),
+                "hazardCount": int(hazard_count),
+            },
+            "reportPath": f"Saved/AI/link/{game_name}_link_latest.json",
+            "journalPath": f"Saved/AI/link/{game_name}_journal_latest.json",
+        }, dry_run=dry_run, max_repair_attempts=max_repair_attempts)
+
+
 class WorkflowTools:
     """Phase 4-6 execution helpers: plan, run, verify, and checkpoint."""
 
@@ -1293,6 +1346,7 @@ class WorkflowTools:
             "verify": self.root.verify,
             "autonomy": self.root.autonomy,
             "world": self.root.world,
+            "link": self.root.link,
         }
         for family_name, family in families.items():
             for method_name in dir(family):
@@ -1325,6 +1379,10 @@ class WorkflowTools:
             "world.validate_gameplay": self.root.world.validate_gameplay,
             "world.run_goal": self.root.world.run_goal,
             "world.make_collect_game": self.root.world.make_collect_game,
+            "link.affordances": self.root.link.affordances,
+            "link.plan": self.root.link.plan,
+            "link.run": self.root.link.run,
+            "link.make_collect_game": self.root.link.make_collect_game,
         })
         return registry
 
@@ -1431,6 +1489,7 @@ class EngineTools:
         self.verify = VerificationTools(self)
         self.autonomy = AutonomyTools(self)
         self.world = WorldTools(self)
+        self.link = EngineLinkTools(self)
         self.workflow = WorkflowTools(self)
 
     def coverage_report(self) -> Dict[str, Any]:

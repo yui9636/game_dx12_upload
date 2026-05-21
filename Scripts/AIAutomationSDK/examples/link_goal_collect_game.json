@@ -1,0 +1,12 @@
+{
+  "name": "phase12_linked_collect_authoring",
+  "goal": "Use the AI-engine link to map affordances, plan intent, author a visible collect game, journal the session, diff the ECS world, and validate gameplay semantics.",
+  "intent": "collect_game",
+  "variables": {
+    "gameName": "AI_Phase12_LinkedCollect",
+    "coinCount": 5,
+    "hazardCount": 3
+  },
+  "reportPath": "Saved/AI/link/AI_Phase12_LinkedCollect_link_latest.json",
+  "journalPath": "Saved/AI/link/AI_Phase12_LinkedCollect_journal_latest.json"
+}
