@@ -533,7 +533,7 @@ void EditorLayer::SetEditorCameraLookAt(const DirectX::XMFLOAT3& position, const
     XMStoreFloat3(&dir3, dir);
     m_editorCameraYaw = std::atan2(dir3.x, dir3.z);
     const float xzLen = std::sqrt(dir3.x * dir3.x + dir3.z * dir3.z);
-    m_editorCameraPitch = std::atan2(dir3.y, xzLen);
+    m_editorCameraPitch = -std::atan2(dir3.y, xzLen);
 }
 
 
@@ -1777,7 +1777,7 @@ void EditorLayer::SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, con
 
     m_editorCameraYaw = std::atan2(normalized.x, normalized.z);
     const float xzLen = std::sqrt(normalized.x * normalized.x + normalized.z * normalized.z);
-    m_editorCameraPitch = std::atan2(normalized.y, xzLen);
+    m_editorCameraPitch = -std::atan2(normalized.y, xzLen);
     m_editorCameraPosition = {
         target.x - normalized.x * distance,
         target.y - normalized.y * distance,

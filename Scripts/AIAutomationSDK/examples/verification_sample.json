@@ -1,0 +1,59 @@
+{
+  "name": "phase5_sample_verification",
+  "variables": {
+    "markerName": "AI_Workflow_PlayerStart",
+    "captureName": "workflow_sample",
+    "workflowReport": "Saved/AI/workflows/phase4_sample_authoring_workflow_latest.json"
+  },
+  "checks": [
+    {
+      "id": "engine_responds",
+      "type": "engine.ping"
+    },
+    {
+      "id": "phase3_tool_coverage",
+      "type": "coverage",
+      "phase3Complete": true
+    },
+    {
+      "id": "marker_exists",
+      "type": "entity.exists",
+      "name": "${vars.markerName}",
+      "exact": true,
+      "min": 1
+    },
+    {
+      "id": "marker_visible",
+      "type": "visual.selected_visible",
+      "name": "${vars.markerName}",
+      "exact": true,
+      "minVisible": 1
+    },
+    {
+      "id": "capture_is_valid",
+      "type": "image.bmp",
+      "path": "Saved/AI/screenshots/${vars.captureName}.bmp",
+      "minBytes": 1024,
+      "minWidth": 64,
+      "minHeight": 64,
+      "minUniqueColors": 2,
+      "minNonBlackRatio": 0.01
+    },
+    {
+      "id": "checkpoint_capture_is_valid",
+      "type": "image.bmp",
+      "path": "Saved/AI/screenshots/${vars.captureName}_checkpoint.bmp",
+      "minBytes": 1024,
+      "minWidth": 64,
+      "minHeight": 64,
+      "minUniqueColors": 2,
+      "minNonBlackRatio": 0.01
+    },
+    {
+      "id": "workflow_report_is_ok",
+      "type": "workflow.report",
+      "path": "${vars.workflowReport}"
+    }
+  ],
+  "reportPath": "Saved/AI/verification/${verification.name}_latest.json"
+}

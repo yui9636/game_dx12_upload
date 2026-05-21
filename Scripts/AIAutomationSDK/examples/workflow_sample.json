@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "name": "phase4_sample_authoring_workflow",
+  "variables": {
+    "assetQuery": "player",
+    "markerName": "AI_Workflow_PlayerStart",
+    "captureName": "workflow_sample"
+  },
+  "defaults": {
+    "retries": 1,
+    "retryDelay": 0.1
+  },
+  "steps": [
+    {
+      "id": "preflight",
+      "tool": "workflow.preflight",
+      "expect": {
+        "equals": ["${steps.preflight.result.coverage.phase3Complete}", true]
+      }
+    },
+    {
+      "id": "search_player_assets",
+      "tool": "asset.search",
+      "args": {
+        "query": "${vars.assetQuery}",
+        "limit": 5
+      }
+    },
+    {
+      "id": "create_player_start",
+      "tool": "entity.create_empty",
+      "saveAs": "playerStart",
+      "args": {
+        "name": "${vars.markerName}",
+        "position": [0.0, 0.0, -4.0]
+      },
+      "expect": {
+        "exists": "${steps.create_player_start.result.entity}"
+      }
+    },
+    {
+      "id": "select_player_start",
+      "tool": "entity.select_by_name",
+      "args": {
+        "name": "${vars.markerName}",
+        "exact": true
+      },
+      "expect": {
+        "exists": "${steps.select_player_start.result.selected}"
+      }
+    },
+    {
+      "id": "create_key_fill",
+      "tool": "lighting.rig",
+      "args": {
+        "name": "AI_WorkflowLightRig"
+      }
+    },
+    {
+      "id": "capture_scene",
+      "tool": "editor.capture",
+      "args": {
+        "path": "Saved/AI/screenshots/${vars.captureName}.bmp"
+      }
+    }
+  ],
+  "verify": [
+    {
+      "id": "verify_entities",
+      "tool": "workflow.verify",
+      "args": {
+        "name": "phase5_inline_authoring_verify",
+        "checks": [
+          {
+            "type": "entity.exists",
+            "name": "${vars.markerName}",
+            "exact": true,
+            "min": 1
+          },
+          {
+            "type": "visual.selected_visible",
+            "name": "${vars.markerName}",
+            "exact": true,
+            "minVisible": 1
+          },
+          {
+            "type": "image.bmp",
+            "path": "Saved/AI/screenshots/${vars.captureName}.bmp",
+            "minBytes": 1024,
+            "minWidth": 64,
+            "minHeight": 64,
+            "minUniqueColors": 2,
+            "minNonBlackRatio": 0.01
+          }
+        ]
+      },
+      "expect": {
+        "equals": ["${steps.verify_entities.result.summary.ok}", true]
+      }
+    }
+  ],
+  "checkpoint": {
+    "screenshot_path": "Saved/AI/screenshots/${vars.captureName}_checkpoint.bmp"
+  },
+  "reportPath": "Saved/AI/workflows/${workflow.name}_latest.json"
+}

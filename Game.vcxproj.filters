@@ -345,6 +345,9 @@
     <ClInclude Include="Source\Automation\AIAutomationService.h">
       <Filter>Source\Automation</Filter>
     </ClInclude>
+    <ClInclude Include="Source\Automation\WebSocketServer.h">
+      <Filter>Source\Automation</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Asset\AssetBrowser.h">
       <Filter>Source\Asset</Filter>
     </ClInclude>
@@ -1575,6 +1578,9 @@
       <Filter>Source\Archetype</Filter>
     </ClCompile>
     <ClCompile Include="Source\Automation\AIAutomationService.cpp">
+      <Filter>Source\Automation</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Automation\WebSocketServer.cpp">
       <Filter>Source\Automation</Filter>
     </ClCompile>
     <ClCompile Include="Source\Asset\AssetBrowser.cpp">

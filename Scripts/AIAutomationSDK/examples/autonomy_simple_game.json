@@ -1,0 +1,16 @@
+{
+  "name": "phase6_simple_game_autonomy",
+  "goal": "Create a simple collect-the-coins game scene with a start marker, goal marker, coins, hazards, terrain, camera, lighting, UI, saved scene, screenshot, verification, and autonomy report.",
+  "template": "simple_collect_game",
+  "variables": {
+    "gameName": "AI_MiniCollect",
+    "coinCount": 5,
+    "hazardCount": 3,
+    "scenePath": "Data/Scene/AI_MiniCollect.scene",
+    "capturePath": "Saved/AI/screenshots/AI_MiniCollect_scene.bmp",
+    "checkpointPath": "Saved/AI/screenshots/AI_MiniCollect_checkpoint.bmp",
+    "workflowReport": "Saved/AI/autonomy/AI_MiniCollect_workflow_latest.json",
+    "verificationReport": "Saved/AI/autonomy/AI_MiniCollect_verification_latest.json"
+  },
+  "reportPath": "Saved/AI/autonomy/AI_MiniCollect_autonomy_latest.json"
+}

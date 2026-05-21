@@ -1,4 +1,5 @@
 #include "Automation/AIAutomationService.h"
+#include "Automation/WebSocketServer.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -11,6 +12,7 @@
 #include <cctype>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -767,12 +769,34 @@ namespace
         }
     }
 
+    std::string JsonStringValue(const json& object, const char* key, std::string fallback = {})
+    {
+        if (!object.is_object()) {
+            return fallback;
+        }
+
+        const auto it = object.find(key);
+        if (it == object.end() || it->is_null()) {
+            return fallback;
+        }
+        if (it->is_string()) {
+            return it->get<std::string>();
+        }
+        if (it->is_number_integer()) {
+            return std::to_string(it->get<int64_t>());
+        }
+        if (it->is_number_unsigned()) {
+            return std::to_string(it->get<uint64_t>());
+        }
+        return fallback;
+    }
+
     json MakeResult(const json& command, bool ok, json result, json error)
     {
         json out;
         out["version"] = kProtocolVersion;
-        out["id"] = command.value("id", std::string{});
-        out["command"] = command.value("command", std::string{});
+        out["id"] = JsonStringValue(command, "id");
+        out["command"] = JsonStringValue(command, "command");
         out["ok"] = ok;
         out["result"] = ok ? std::move(result) : nullptr;
         out["error"] = ok ? nullptr : std::move(error);
@@ -7342,7 +7366,46 @@ namespace
         std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
         ofs << value.dump(2);
     }
+
+    json ExecuteAutomationCommand(EngineKernel& kernel, const json& command)
+    {
+        if (!command.is_object()) {
+            return MakeResult(json::object(), false, nullptr,
+                MakeError("invalid_command", "Command payload must be a JSON object."));
+        }
+
+        int version = kProtocolVersion;
+        try {
+            version = command.value("version", kProtocolVersion);
+        }
+        catch (const std::exception& e) {
+            return MakeResult(command, false, nullptr,
+                MakeError("invalid_command", "Command version must be an integer.", { { "reason", e.what() } }));
+        }
+
+        if (version != kProtocolVersion) {
+            return MakeResult(command, false, nullptr,
+                MakeError("unsupported_version", "Unsupported command version."));
+        }
+
+        try {
+            json result = DispatchCommand(kernel, command);
+            return MakeResult(command, true, std::move(result), nullptr);
+        }
+        catch (const json& jsonError) {
+            return MakeResult(command, false, nullptr, jsonError);
+        }
+        catch (const std::exception& e) {
+            return MakeResult(command, false, nullptr, MakeError("internal_error", e.what()));
+        }
+        catch (...) {
+            return MakeResult(command, false, nullptr, MakeError("internal_error", "Unknown exception."));
+        }
+    }
 }
+
+AIAutomationService::AIAutomationService() = default;
+AIAutomationService::~AIAutomationService() = default;
 
 void AIAutomationService::Initialize()
 {
@@ -7360,14 +7423,54 @@ void AIAutomationService::Initialize()
     std::filesystem::create_directories(m_screenshotsDir, ec);
     std::filesystem::create_directories(m_stateDir, ec);
     LOG_INFO("[AIAutomation] Initialized file command interface at %s", m_rootDir.string().c_str());
+
+    m_webSocketServer = std::make_unique<WebSocketServer>(9876);
+    if (m_webSocketServer->Start()) {
+        LOG_INFO("[AIAutomation] WebSocket command server listening on ws://127.0.0.1:9876");
+    }
+    else {
+        LOG_WARN("[AIAutomation] Failed to start WebSocket command server on ws://127.0.0.1:9876");
+        m_webSocketServer.reset();
+    }
 }
 
 void AIAutomationService::Finalize()
 {
+    if (m_webSocketServer) {
+        m_webSocketServer->Stop();
+        m_webSocketServer.reset();
+    }
 }
 
 void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
 {
+    if (m_webSocketServer && m_webSocketServer->IsRunning()) {
+        constexpr int kMaxWebSocketMessagesPerTick = 64;
+        int processedMessages = 0;
+
+        WebSocketServer::Message message;
+        while (processedMessages < kMaxWebSocketMessagesPerTick && m_webSocketServer->PollMessage(message)) {
+            json response;
+            try {
+                const json command = json::parse(message.text);
+                response = ExecuteAutomationCommand(kernel, command);
+            }
+            catch (const std::exception& e) {
+                response = MakeResult(json::object(), false, nullptr, MakeError("invalid_json", e.what()));
+            }
+            catch (...) {
+                response = MakeResult(json::object(), false, nullptr, MakeError("invalid_json", "Unknown JSON parse error."));
+            }
+
+            m_webSocketServer->SendToClient(message.clientId, response.dump());
+            ++processedMessages;
+        }
+
+        if (processedMessages == kMaxWebSocketMessagesPerTick) {
+            LOG_WARN("[AIAutomation] WebSocket command queue reached per-frame processing limit.");
+        }
+    }
+
     if (m_commandsDir.empty()) {
         return;
     }
@@ -7399,26 +7502,11 @@ void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
         if (!ReadJsonFile(activePath, command, error)) {
             response = MakeResult(json{ { "id", activePath.stem().string() }, { "command", "" } }, false, nullptr, error);
         }
-        else if (command.value("version", kProtocolVersion) != kProtocolVersion) {
-            response = MakeResult(command, false, nullptr, MakeError("unsupported_version", "Unsupported command version."));
-        }
         else {
-            try {
-                json result = DispatchCommand(kernel, command);
-                response = MakeResult(command, true, std::move(result), nullptr);
-            }
-            catch (const json& jsonError) {
-                response = MakeResult(command, false, nullptr, jsonError);
-            }
-            catch (const std::exception& e) {
-                response = MakeResult(command, false, nullptr, MakeError("internal_error", e.what()));
-            }
-            catch (...) {
-                response = MakeResult(command, false, nullptr, MakeError("internal_error", "Unknown exception."));
-            }
+            response = ExecuteAutomationCommand(kernel, command);
         }
 
-        const std::string resultName = SanitizeFileStem(command.value("id", activePath.stem().string()));
+        const std::string resultName = SanitizeFileStem(JsonStringValue(command, "id", activePath.stem().string()));
         WriteJsonFile(m_resultsDir / (resultName + ".json"), response);
 
         std::error_code removeEc;

@@ -1,0 +1,1373 @@
+{
+  "editor": {
+    "sceneViewMode": "3D"
+  },
+  "nodes": [
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Root"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/cylinder/fbx_cylinder_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Hazard_03"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -4.0,
+            "y": 0.3499999940395355,
+            "z": 4.400000095367432
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.2000000476837158,
+            "y": 0.699999988079071,
+            "z": 1.2000000476837158
+          }
+        }
+      },
+      "id": 1,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/cylinder/fbx_cylinder_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Hazard_02"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 4.0,
+            "y": 0.3499999940395355,
+            "z": 1.2000000476837158
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.2000000476837158,
+            "y": 0.699999988079071,
+            "z": 1.2000000476837158
+          }
+        }
+      },
+      "id": 2,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/cylinder/fbx_cylinder_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Hazard_01"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -4.0,
+            "y": 0.3499999940395355,
+            "z": -2.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.2000000476837158,
+            "y": 0.699999988079071,
+            "z": 1.2000000476837158
+          }
+        }
+      },
+      "id": 3,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/ring/fbx_ring_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Coin_05"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 4.800000190734863,
+            "y": 0.44999998807907104,
+            "z": 2.0999999046325684
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.44999998807907104,
+            "y": 0.44999998807907104,
+            "z": 0.44999998807907104
+          }
+        }
+      },
+      "id": 4,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/ring/fbx_ring_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Coin_04"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 2.4000000953674316,
+            "y": 0.44999998807907104,
+            "z": 0.699999988079071
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.44999998807907104,
+            "y": 0.44999998807907104,
+            "z": 0.44999998807907104
+          }
+        }
+      },
+      "id": 5,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/ring/fbx_ring_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Coin_03"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.44999998807907104,
+            "z": -0.699999988079071
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.44999998807907104,
+            "y": 0.44999998807907104,
+            "z": 0.44999998807907104
+          }
+        }
+      },
+      "id": 6,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/ring/fbx_ring_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Coin_02"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -2.4000000953674316,
+            "y": 0.44999998807907104,
+            "z": -2.0999999046325684
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.44999998807907104,
+            "y": 0.44999998807907104,
+            "z": 0.44999998807907104
+          }
+        }
+      },
+      "id": 7,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/ring/fbx_ring_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Coin_01"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": -4.800000190734863,
+            "y": 0.44999998807907104,
+            "z": -3.5
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.44999998807907104,
+            "y": 0.44999998807907104,
+            "z": 0.44999998807907104
+          }
+        }
+      },
+      "id": 8,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/crystal/fbx_crystal_001.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Goal"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.5,
+            "z": 7.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.399999976158142,
+            "y": 1.399999976158142,
+            "z": 1.399999976158142
+          }
+        }
+      },
+      "id": 9,
+      "parent": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "Data/Model/Cube/Cube.fbx"
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_PlayerStart"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.3499999940395355,
+            "z": -7.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 0.800000011920929,
+            "y": 1.399999976158142,
+            "z": 0.800000011920929
+          }
+        }
+      },
+      "id": 10,
+      "parent": 0
+    },
+    {
+      "components": {
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
+        },
+        "CameraFreeControlComponent": {
+          "moveSpeed": 20.0,
+          "pitch": 0.0,
+          "rotateSpeed": 0.004999999888241291,
+          "yaw": 0.0
+        },
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Main Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 2.0,
+            "z": -10.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 11
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "intensity": 1.0,
+          "range": 10.0,
+          "type": 0
+        },
+        "NameComponent": {
+          "name": "Directional Light"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 0.8535533547401428,
+            "x": 0.3535533845424652,
+            "y": 0.3535533845424652,
+            "z": -0.1464466005563736
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 12
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": true,
+          "color": {
+            "x": 1.0,
+            "y": 0.9200000166893005,
+            "z": 0.7799999713897705
+          },
+          "intensity": 2.0,
+          "range": 10.0,
+          "type": 0
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_LightRig_Key"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 3.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 13
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 0.550000011920929,
+            "y": 0.6499999761581421,
+            "z": 1.0
+          },
+          "intensity": 0.550000011920929,
+          "range": 18.0,
+          "type": 1
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_LightRig_Fill"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 4.0,
+            "z": -5.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 14
+    },
+    {
+      "components": {
+        "NameComponent": {
+          "name": "Reflection Probe"
+        },
+        "ReflectionProbeComponent": {
+          "position": {
+            "x": 0.0,
+            "y": 1.5,
+            "z": 0.0
+          },
+          "radius": 20.0
+        }
+      },
+      "id": 15
+    },
+    {
+      "components": {
+        "InputActionMapComponent": {
+          "actions": [
+            {
+              "actionName": "Save",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 22,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Undo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 29,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Redo",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 28,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Delete",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 76,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Duplicate",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 7,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Copy",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 6,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Paste",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 25,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Play",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 62,
+              "trigger": "Pressed"
+            },
+            {
+              "actionName": "Rename",
+              "axisDirection": 1.0,
+              "gamepadAxis": 255,
+              "gamepadButton": 255,
+              "mouseButton": 0,
+              "scancode": 59,
+              "trigger": "Pressed"
+            }
+          ],
+          "axes": [],
+          "contextCategory": "EditorGlobal",
+          "doubleTapGapFrames": 15,
+          "holdThresholdFrames": 30,
+          "name": "EditorGlobal"
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "InputUserComponent": {
+          "deviceMask": 4294967295,
+          "isEditorUser": true,
+          "isPrimary": true,
+          "profileName": "Editor",
+          "userId": 0
+        }
+      },
+      "id": 16
+    },
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 17
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 18
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 0,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 19
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": false,
+          "enabled": true,
+          "pointerEnabled": true,
+          "priority": 1,
+          "textInputEnabled": false,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 20
+    },
+    {
+      "components": {
+        "InputContextComponent": {
+          "activeMapCount": 0,
+          "activeMapIndices": [],
+          "consumeLowerPriority": true,
+          "enabled": false,
+          "pointerEnabled": true,
+          "priority": 5,
+          "textInputEnabled": true,
+          "uiNavigationEnabled": false
+        }
+      },
+      "id": 21
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Terrain"
+        },
+        "TerrainComponent": {
+          "assetPath": "AI_Phase6_FinalCollect_v3_terrain_22.terrain",
+          "showInEditor": true
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": -0.05000000074505806,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 22
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": false,
+          "lockAspect": false,
+          "orderInLayer": -100,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "UIAuthoring_Canvas"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 1920.0,
+            "y": 1080.0
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 23
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 100,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HPGaugeBindingComponent": {
+          "damagePreviewDelay": 0.3499999940395355,
+          "damagePreviewSpeed": 6.0,
+          "explicitTarget": 18446744073709551615,
+          "hideWhenDead": true,
+          "hideWhenFull": false,
+          "smoothingSpeed": 12.0,
+          "targetMode": 1,
+          "visibleWhenNoTarget": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "PlayerHP_Widget"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 440.0,
+            "y": 56.0
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 24,
+      "parent": 23
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 3,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HPGaugeTextComponent": {
+          "bindingRoot": 18446744073709551615,
+          "format": 0,
+          "hideWhenDead": false,
+          "hideWhenFull": false,
+          "hideWhenNoTarget": false,
+          "label": "HP"
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "HP_Text"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": -1.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 440.0,
+            "y": 56.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 0.9599999785423279,
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 24.0,
+          "lineSpacing": 1.0,
+          "text": "0 / 0",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": -1.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 25,
+      "parent": 24
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 2,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HPGaugeFillComponent": {
+          "bindingRoot": 18446744073709551615,
+          "colorMode": 1,
+          "fillDirection": 0,
+          "fixedColor": {
+            "w": 0.9399999976158142,
+            "x": 0.18000000715255737,
+            "y": 0.8600000143051147,
+            "z": 0.36000001430511475
+          },
+          "hideWhenFull": false,
+          "hideWhenNoTarget": false,
+          "highColor": {
+            "w": 0.9399999976158142,
+            "x": 0.18000000715255737,
+            "y": 0.8600000143051147,
+            "z": 0.36000001430511475
+          },
+          "lowColor": {
+            "w": 0.9399999976158142,
+            "x": 0.949999988079071,
+            "y": 0.1599999964237213,
+            "z": 0.11999999731779099
+          },
+          "lowThreshold": 0.25,
+          "midColor": {
+            "w": 0.9399999976158142,
+            "x": 0.949999988079071,
+            "y": 0.75,
+            "z": 0.18000000715255737
+          },
+          "midThreshold": 0.5,
+          "minVisibleRatio": 0.0,
+          "useDelayedRatio": false,
+          "useDisplayedRatio": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Fill"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 440.0,
+            "y": 40.0
+          }
+        },
+        "SpriteComponent": {
+          "textureAssetPath": "Data/Texture/UI/White.png",
+          "tint": {
+            "w": 0.9399999976158142,
+            "x": 0.949999988079071,
+            "y": 0.1599999964237213,
+            "z": 0.11999999731779099
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 26,
+      "parent": 24
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 1,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HPGaugeFillComponent": {
+          "bindingRoot": 18446744073709551615,
+          "colorMode": 0,
+          "fillDirection": 0,
+          "fixedColor": {
+            "w": 0.41999998688697815,
+            "x": 0.8500000238418579,
+            "y": 0.1599999964237213,
+            "z": 0.11999999731779099
+          },
+          "hideWhenFull": false,
+          "hideWhenNoTarget": false,
+          "highColor": {
+            "w": 0.9399999976158142,
+            "x": 0.18000000715255737,
+            "y": 0.8600000143051147,
+            "z": 0.36000001430511475
+          },
+          "lowColor": {
+            "w": 0.9399999976158142,
+            "x": 0.949999988079071,
+            "y": 0.1599999964237213,
+            "z": 0.11999999731779099
+          },
+          "lowThreshold": 0.25,
+          "midColor": {
+            "w": 0.9399999976158142,
+            "x": 0.949999988079071,
+            "y": 0.75,
+            "z": 0.18000000715255737
+          },
+          "midThreshold": 0.5,
+          "minVisibleRatio": 0.0,
+          "useDelayedRatio": true,
+          "useDisplayedRatio": false
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "DamagePreview"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 440.0,
+            "y": 40.0
+          }
+        },
+        "SpriteComponent": {
+          "textureAssetPath": "Data/Texture/UI/White.png",
+          "tint": {
+            "w": 0.41999998688697815,
+            "x": 0.8500000238418579,
+            "y": 0.1599999964237213,
+            "z": 0.11999999731779099
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 27,
+      "parent": 24
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Background"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 440.0,
+            "y": 40.0
+          }
+        },
+        "SpriteComponent": {
+          "textureAssetPath": "Data/Texture/UI/White.png",
+          "tint": {
+            "w": 0.7200000286102295,
+            "x": 0.019999999552965164,
+            "y": 0.019999999552965164,
+            "z": 0.02500000037252903
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 28,
+      "parent": 24
+    },
+    {
+      "components": {
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "AI_Phase6_FinalCollect_v3_Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 7.5,
+            "z": -10.5
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 29
+    }
+  ],
+  "rootLocalIds": [
+    0,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    29
+  ],
+  "type": "scene",
+  "version": 1
+}

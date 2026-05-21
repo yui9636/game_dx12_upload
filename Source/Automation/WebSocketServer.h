@@ -6,20 +6,20 @@
 #include <winsock2.h>
 
 #include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <queue>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 // Minimal RFC 6455 WebSocket server.
 //
 // Threading model
 // ---------------
-//   AcceptThread  – blocks on accept(), spawns a ClientThread per connection
-//   ClientThread  – one per connection, blocks on recv(), queues messages
-//   Main thread   – calls PollMessage() + SendToClient() / BroadcastEvent()
+//   AcceptThread  - blocks on accept(), spawns a ClientThread per connection
+//   ClientThread  - one per connection, blocks on recv(), queues messages
+//   Main thread   - calls PollMessage() + SendToClient() / BroadcastEvent()
 //
 // Engine / game state is only touched from the main thread.
 // WebSocket threads only touch the thread-safe queues and client list.
@@ -36,7 +36,7 @@ public:
     explicit WebSocketServer(uint16_t port = 9876);
     ~WebSocketServer();
 
-    // Start listening (non-blocking – spawns background thread).
+    // Start listening (non-blocking; spawns a background thread).
     bool Start();
     void Stop();
     bool IsRunning() const { return m_running.load(); }
@@ -56,7 +56,7 @@ public:
 private:
     struct ClientEntry
     {
-        SOCKET      socket  = INVALID_SOCKET;
+        SOCKET      socket = INVALID_SOCKET;
         std::string id;
     };
 
@@ -72,7 +72,7 @@ private:
     void        SendPongFrame(SOCKET sock, const std::vector<uint8_t>& payload);
     void        SendCloseFrame(SOCKET sock);
 
-    // Crypto helpers (implemented in .cpp anonymous namespace)
+    // Crypto helpers
     static std::string MakeAcceptKey(const std::string& clientKey);
 
     // State
@@ -86,7 +86,7 @@ private:
     std::vector<std::thread>  m_clientThreads;   // guarded by m_clientsMtx
 
     std::mutex            m_inQueueMtx;
-    std::queue<Message>   m_inQueue;             // WS threads → main thread
+    std::queue<Message>   m_inQueue;             // WS threads -> main thread
 
     std::atomic<uint32_t> m_nextId{ 1 };
 };

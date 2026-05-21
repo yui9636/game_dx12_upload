@@ -69,7 +69,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;ws2_32.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MD\x64\Debug;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug;.\External\SDL-release-3.4.x\build\Debug</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
@@ -109,7 +109,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;d3d12.lib;dxgi.lib;dxguid.lib;ws2_32.lib;assimp.lib;zlibstatic.lib;Jolt.lib;SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>.\External\assimp\lib\$(Platform)\$(Configuration);.\External\Effekseer170e\lib\vs2022\MT\x64\Debug;.\External\Effekseer170e\lib\vs2022\MT\x64\Release;.\External\Effekseer170e\lib\vs2022\MD\x64\Release;%(AdditionalLibraryDirectories);.\External\JoltPhysics-master\Build\VS2022_CL;.\External\JoltPhysics-master\Build\VS2022_CL\Debug;.\External\SDL-release-3.4.x\build\Release</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
@@ -158,6 +158,7 @@
     <ClInclude Include="Source\Archetype\Archetype.h" />
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
     <ClInclude Include="Source\Automation\AIAutomationService.h" />
+    <ClInclude Include="Source\Automation\WebSocketServer.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
     <ClInclude Include="Source\Asset\AssetManager.h" />
     <ClInclude Include="Source\Asset\ModelAssetSerializer.h" />
@@ -590,6 +591,7 @@
     <ClCompile Include="Source\Archetype\Archetype.cpp" />
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
     <ClCompile Include="Source\Automation\AIAutomationService.cpp" />
+    <ClCompile Include="Source\Automation\WebSocketServer.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
     <ClCompile Include="Source\Asset\AssetManager.cpp" />
     <ClCompile Include="Source\Asset\ModelAssetSerializer.cpp" />
