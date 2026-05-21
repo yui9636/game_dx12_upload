@@ -35,6 +35,7 @@
 #include "Gameplay/DamageEventComponent.h"
 #include "Gameplay/BattleFlowComponent.h"
 #include "Gameplay/BattleFlowSystem.h"
+#include "Gameplay/CoinGameSystem.h"
 #include "Gameplay/LockOnSystem.h"
 #include "Gameplay/HealthSystem.h"
 #include "Gameplay/HPGaugeSystem.h"
@@ -126,6 +127,7 @@ void GameLayer::Initialize()
 {
     DamageEventRuntimeQueue::Clear();
     BattleFlowSystem::Reset();
+    CoinGameSystem::Reset();
     BattleHud::Instance().Reset();
 
     // 新規 editor scene 用の既定 camera / light / probe を作成する。
@@ -273,6 +275,7 @@ void GameLayer::Update(const EngineTime& time)
 
     HPGaugeSystem::Update(m_registry, time.dt);
     BattleFlowSystem::Update(m_registry, time.dt);
+    CoinGameSystem::Update(m_registry, time.dt);
     BattleHud::Instance().Update(time.dt);
 
     CameraFinalizeSystem::Update(m_registry);

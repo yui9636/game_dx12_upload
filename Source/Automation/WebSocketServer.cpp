@@ -294,15 +294,12 @@ void WebSocketServer::Stop()
         m_acceptThread.join();
     }
 
-    std::vector<std::thread> threads;
     {
-        std::lock_guard<std::mutex> lock(m_clientsMtx);
-        threads.swap(m_clientThreads);
-    }
-
-    for (std::thread& thread : threads) {
-        if (thread.joinable()) {
-            thread.join();
+        using namespace std::chrono_literals;
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (m_activeClientCount.load() > 0 &&
+               std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(10ms);
         }
     }
 
@@ -340,22 +337,34 @@ bool WebSocketServer::PollMessage(Message& out)
 
 void WebSocketServer::SendToClient(const std::string& clientId, const std::string& json)
 {
-    std::lock_guard<std::mutex> lock(m_clientsMtx);
-    for (const ClientEntry& client : m_clients) {
-        if (client.id == clientId && client.socket != INVALID_SOCKET) {
-            SendTextFrame(client.socket, json);
-            return;
+    SOCKET target = INVALID_SOCKET;
+    {
+        std::lock_guard<std::mutex> lock(m_clientsMtx);
+        for (const ClientEntry& client : m_clients) {
+            if (client.id == clientId && client.socket != INVALID_SOCKET) {
+                target = client.socket;
+                break;
+            }
         }
+    }
+    if (target != INVALID_SOCKET) {
+        SendTextFrame(target, json);
     }
 }
 
 void WebSocketServer::BroadcastEvent(const std::string& json)
 {
-    std::lock_guard<std::mutex> lock(m_clientsMtx);
-    for (const ClientEntry& client : m_clients) {
-        if (client.socket != INVALID_SOCKET) {
-            SendTextFrame(client.socket, json);
+    std::vector<SOCKET> sockets;
+    {
+        std::lock_guard<std::mutex> lock(m_clientsMtx);
+        for (const ClientEntry& client : m_clients) {
+            if (client.socket != INVALID_SOCKET) {
+                sockets.push_back(client.socket);
+            }
         }
+    }
+    for (SOCKET sock : sockets) {
+        SendTextFrame(sock, json);
     }
 }
 
@@ -390,8 +399,9 @@ void WebSocketServer::AcceptLoop()
         {
             std::lock_guard<std::mutex> lock(m_clientsMtx);
             m_clients.push_back(ClientEntry{ clientSock, clientId });
-            m_clientThreads.emplace_back(&WebSocketServer::ClientLoop, this, clientSock, clientId);
         }
+        m_activeClientCount.fetch_add(1);
+        std::thread(&WebSocketServer::ClientLoop, this, clientSock, clientId).detach();
     }
 }
 
@@ -415,15 +425,18 @@ void WebSocketServer::ClientLoop(SOCKET sock, std::string clientId)
         }
     }
 
-    std::lock_guard<std::mutex> lock(m_clientsMtx);
-    auto it = std::remove_if(m_clients.begin(), m_clients.end(), [&](ClientEntry& client) {
-        if (client.id == clientId) {
-            CloseSocketQuietly(client.socket);
-            return true;
-        }
-        return false;
-    });
-    m_clients.erase(it, m_clients.end());
+    {
+        std::lock_guard<std::mutex> lock(m_clientsMtx);
+        auto it = std::remove_if(m_clients.begin(), m_clients.end(), [&](ClientEntry& client) {
+            if (client.id == clientId) {
+                CloseSocketQuietly(client.socket);
+                return true;
+            }
+            return false;
+        });
+        m_clients.erase(it, m_clients.end());
+    }
+    m_activeClientCount.fetch_sub(1);
 }
 
 bool WebSocketServer::DoHandshake(SOCKET sock)
@@ -477,18 +490,23 @@ bool WebSocketServer::RecvFrame(SOCKET sock, std::string& outText, bool& outClos
     outText.clear();
     outClose = false;
 
+    std::string fragmented;
+    bool inFragmented = false;
+
     for (;;) {
         uint8_t header[2] = {};
         if (!RecvExact(sock, header, sizeof(header))) {
             return false;
         }
 
-        const bool fin = (header[0] & 0x80u) != 0;
+        const bool fin    = (header[0] & 0x80u) != 0;
         const uint8_t opcode = header[0] & 0x0fu;
         const bool masked = (header[1] & 0x80u) != 0;
         uint64_t payloadLen = header[1] & 0x7fu;
 
-        if (!fin) {
+        // Control frames must not be fragmented (RFC 6455 §5.5)
+        const bool isControl = (opcode >= 0x8u);
+        if (isControl && !fin) {
             return false;
         }
 
@@ -510,7 +528,12 @@ bool WebSocketServer::RecvFrame(SOCKET sock, std::string& outText, bool& outClos
             }
         }
 
-        if (!masked || payloadLen > kMaxFramePayloadBytes) {
+        if (!masked) {
+            return false;
+        }
+
+        // Guard total accumulated size against the limit
+        if (fragmented.size() + payloadLen > kMaxFramePayloadBytes) {
             return false;
         }
 
@@ -529,9 +552,33 @@ bool WebSocketServer::RecvFrame(SOCKET sock, std::string& outText, bool& outClos
         }
 
         if (opcode == 0x1u) {
-            outText.assign(reinterpret_cast<const char*>(payload.data()), payload.size());
-            return true;
+            // Text frame: start of a (possibly fragmented) message
+            if (inFragmented) {
+                return false; // protocol error: new data frame during fragmentation
+            }
+            if (fin) {
+                outText.assign(reinterpret_cast<const char*>(payload.data()), payload.size());
+                return true;
+            }
+            // FIN=0: begin fragmented message
+            fragmented.assign(reinterpret_cast<const char*>(payload.data()), payload.size());
+            inFragmented = true;
+            continue;
         }
+
+        if (opcode == 0x0u) {
+            // Continuation frame
+            if (!inFragmented) {
+                return false; // protocol error: continuation without initial frame
+            }
+            fragmented.append(reinterpret_cast<const char*>(payload.data()), payload.size());
+            if (fin) {
+                outText = std::move(fragmented);
+                return true;
+            }
+            continue;
+        }
+
         if (opcode == 0x8u) {
             outClose = true;
             return true;

@@ -6,6 +6,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <chrono>
@@ -63,6 +64,9 @@
 #include "Undo/EntitySnapshot.h"
 #include "Undo/EntityUndoActions.h"
 #include "PlayerEditor/PlayerEditorSession.h"
+#include "Gameplay/CoinGameSystem.h"
+#include "GameLoop/GameLoopAsset.h"
+#include "Gameplay/CoinTagComponent.h"
 #include "Component/NodeSocket.h"
 #include "Component/ColliderComponent.h"
 #include "Input/InputActionMapAsset.h"
@@ -522,6 +526,11 @@ namespace
             return false;
         }
 
+        // Wait for any in-flight GPU work to complete before issuing the capture
+        // barrier. This prevents a validation error when the back buffer is still
+        // in D3D12_RESOURCE_STATE_RENDER_TARGET from the previous frame.
+        dx12->WaitForGPU();
+
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
         if (FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(allocator.GetAddressOf())))) {
@@ -767,6 +776,194 @@ namespace
             }
             ofs.write(reinterpret_cast<const char*>(row.data()), row.size());
         }
+    }
+
+    // ---- PNG writer (no external dependencies, store-block deflate) ----
+
+    uint32_t Crc32Update(uint32_t crc, const uint8_t* data, size_t len)
+    {
+        static const auto kTable = []() {
+            std::array<uint32_t, 256> t{};
+            for (uint32_t i = 0; i < 256; ++i) {
+                uint32_t c = i;
+                for (int k = 0; k < 8; ++k) {
+                    c = (c & 1) ? (0xedb88320u ^ (c >> 1)) : (c >> 1);
+                }
+                t[i] = c;
+            }
+            return t;
+        }();
+        crc = ~crc;
+        for (size_t i = 0; i < len; ++i) {
+            crc = kTable[(crc ^ data[i]) & 0xffu] ^ (crc >> 8);
+        }
+        return ~crc;
+    }
+
+    void WritePng(const std::filesystem::path& path, const ImageBuffer& image)
+    {
+        if (image.width <= 0 || image.height <= 0 || image.bgra.empty()) {
+            throw MakeError("capture_failed", "Captured image is empty.", { { "path", path.string() } });
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+        if (!ofs.is_open()) {
+            throw MakeError("file_write_failed", "Failed to open PNG output.", { { "path", path.string() } });
+        }
+
+        const int W = image.width;
+        const int H = image.height;
+
+        // Helpers
+        auto writeBytes = [&](const uint8_t* p, size_t n) {
+            ofs.write(reinterpret_cast<const char*>(p), static_cast<std::streamsize>(n));
+        };
+        auto writeU8 = [&](uint8_t v) { ofs.put(static_cast<char>(v)); };
+        auto writeU32BE = [&](uint32_t v) {
+            uint8_t b[4] = {
+                static_cast<uint8_t>(v >> 24),
+                static_cast<uint8_t>(v >> 16),
+                static_cast<uint8_t>(v >> 8),
+                static_cast<uint8_t>(v)
+            };
+            writeBytes(b, 4);
+        };
+
+        // PNG chunk helper: writes length + type + data + CRC
+        auto writeChunk = [&](const char type[4], const std::vector<uint8_t>& data) {
+            writeU32BE(static_cast<uint32_t>(data.size()));
+            writeBytes(reinterpret_cast<const uint8_t*>(type), 4);
+            if (!data.empty()) writeBytes(data.data(), data.size());
+            uint32_t crc = Crc32Update(0, reinterpret_cast<const uint8_t*>(type), 4);
+            if (!data.empty()) crc = Crc32Update(crc, data.data(), data.size());
+            writeU32BE(crc);
+        };
+
+        // PNG signature
+        const uint8_t kSig[] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+        writeBytes(kSig, 8);
+
+        // IHDR
+        {
+            std::vector<uint8_t> ihdr(13);
+            auto w32 = [&](int off, uint32_t v) {
+                ihdr[off + 0] = static_cast<uint8_t>(v >> 24);
+                ihdr[off + 1] = static_cast<uint8_t>(v >> 16);
+                ihdr[off + 2] = static_cast<uint8_t>(v >> 8);
+                ihdr[off + 3] = static_cast<uint8_t>(v);
+            };
+            w32(0, static_cast<uint32_t>(W));
+            w32(4, static_cast<uint32_t>(H));
+            ihdr[8]  = 8;   // bit depth
+            ihdr[9]  = 2;   // color type: RGB
+            ihdr[10] = 0;   // compression: deflate
+            ihdr[11] = 0;   // filter: adaptive
+            ihdr[12] = 0;   // interlace: none
+            writeChunk("IHDR", ihdr);
+        }
+
+        // IDAT: non-compressed deflate store blocks
+        // Each row: filter byte 0x00 followed by W*3 RGB bytes (converted from BGRA)
+        const size_t rowBytes = static_cast<size_t>(W) * 3u;
+        const size_t filteredRowBytes = 1u + rowBytes;
+        const size_t rawDataSize = static_cast<size_t>(H) * filteredRowBytes;
+
+        // Build raw (uncompressed) image data
+        std::vector<uint8_t> raw;
+        raw.reserve(rawDataSize);
+        for (int y = 0; y < H; ++y) {
+            raw.push_back(0x00); // filter type None
+            for (int x = 0; x < W; ++x) {
+                const size_t s = (static_cast<size_t>(y) * static_cast<size_t>(W) + static_cast<size_t>(x)) * 4u;
+                raw.push_back(image.bgra[s + 2]); // R
+                raw.push_back(image.bgra[s + 1]); // G
+                raw.push_back(image.bgra[s + 0]); // B
+            }
+        }
+
+        // Wrap in zlib/deflate stored blocks (non-compressed)
+        // zlib header: CMF=0x78 (deflate, 32KB window), FLG computed for FCHECK
+        {
+            std::vector<uint8_t> zlib;
+            zlib.push_back(0x78); // CMF
+            // FLG: no dict, level 0; must satisfy (CMF*256+FLG) % 31 == 0
+            // 0x78*256 = 30720; 30720 % 31 = 30720 - 991*31 = 30720 - 30721... recalc:
+            // 991*31=30721, so need FLG = 1 so 30721%31=0. Actually 30720+FLG divisible by 31.
+            // 30720 mod 31: 30720/31=990 rem 30, so FLG=1 -> 30721/31=991 exactly.
+            zlib.push_back(0x01); // FLG
+
+            // Adler-32 accumulators
+            uint32_t s1 = 1, s2 = 0;
+            constexpr uint32_t MOD_ADLER = 65521;
+
+            size_t offset = 0;
+            const size_t totalRaw = raw.size();
+            constexpr size_t kMaxBlock = 65535;
+
+            while (offset < totalRaw || totalRaw == 0) {
+                const size_t blockSize = (kMaxBlock < totalRaw - offset) ? kMaxBlock : (totalRaw - offset);
+                const bool bfinal = (offset + blockSize >= totalRaw);
+
+                // BFINAL | BTYPE=00 (stored)
+                zlib.push_back(static_cast<uint8_t>(bfinal ? 0x01 : 0x00));
+                // LEN
+                const uint16_t len16 = static_cast<uint16_t>(blockSize);
+                zlib.push_back(static_cast<uint8_t>(len16 & 0xff));
+                zlib.push_back(static_cast<uint8_t>(len16 >> 8));
+                // NLEN
+                const uint16_t nlen16 = ~len16;
+                zlib.push_back(static_cast<uint8_t>(nlen16 & 0xff));
+                zlib.push_back(static_cast<uint8_t>(nlen16 >> 8));
+
+                for (size_t i = 0; i < blockSize; ++i) {
+                    const uint8_t b = raw[offset + i];
+                    zlib.push_back(b);
+                    s1 = (s1 + b) % MOD_ADLER;
+                    s2 = (s2 + s1) % MOD_ADLER;
+                }
+
+                offset += blockSize;
+                if (bfinal) break;
+                if (totalRaw == 0) break;
+            }
+
+            // Adler-32 checksum (big-endian)
+            const uint32_t adler = (s2 << 16) | s1;
+            zlib.push_back(static_cast<uint8_t>(adler >> 24));
+            zlib.push_back(static_cast<uint8_t>(adler >> 16));
+            zlib.push_back(static_cast<uint8_t>(adler >> 8));
+            zlib.push_back(static_cast<uint8_t>(adler));
+
+            writeChunk("IDAT", zlib);
+        }
+
+        // IEND
+        writeChunk("IEND", {});
+    }
+
+    // ---- Base64 encode ----
+
+    std::string Base64Encode(const uint8_t* data, size_t len)
+    {
+        static constexpr char kTable[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+        std::string out;
+        out.reserve(((len + 2u) / 3u) * 4u);
+        for (size_t i = 0; i < len; i += 3u) {
+            const uint32_t b0 = data[i];
+            const uint32_t b1 = (i + 1u < len) ? data[i + 1u] : 0u;
+            const uint32_t b2 = (i + 2u < len) ? data[i + 2u] : 0u;
+            const uint32_t triple = (b0 << 16) | (b1 << 8) | b2;
+
+            out.push_back(kTable[(triple >> 18) & 0x3fu]);
+            out.push_back(kTable[(triple >> 12) & 0x3fu]);
+            out.push_back((i + 1u < len) ? kTable[(triple >> 6) & 0x3fu] : '=');
+            out.push_back((i + 2u < len) ? kTable[triple & 0x3fu] : '=');
+        }
+        return out;
     }
 
     std::string JsonStringValue(const json& object, const char* key, std::string fallback = {})
@@ -4105,12 +4302,24 @@ namespace
         }
 
         const std::string target = params.value("target", std::string("window"));
+        const std::string format = params.value("format", std::string("bmp"));
+        const bool inlineResult = params.value("inline", false);
+
+        if (format != "bmp" && format != "png") {
+            throw MakeError("invalid_param", "format must be bmp or png.", { { "format", format } });
+        }
+
+        const std::string ext = std::string(".") + format;
         std::filesystem::path path = params.value("path", std::string{});
         if (path.empty()) {
             path = defaultPath;
         }
         if (path.extension().empty()) {
-            path += ".bmp";
+            path += ext;
+        }
+        else {
+            // Replace any existing extension with the chosen one
+            path.replace_extension(ext);
         }
 
         const std::filesystem::path safePath = ResolveProjectPath(path.string(), PathAccess::AutomationFile, false);
@@ -4136,13 +4345,33 @@ namespace
             });
         }
 
-        WriteBmp24(safePath, outputImage);
-        return {
+        if (format == "png") {
+            WritePng(safePath, outputImage);
+        }
+        else {
+            WriteBmp24(safePath, outputImage);
+        }
+
+        json result = {
             { "path", ToGenericProjectPath(safePath) },
             { "target", target },
+            { "format", format },
             { "width", outputImage.width },
             { "height", outputImage.height }
         };
+
+        if (inlineResult) {
+            // Read the written file back and base64-encode it
+            std::ifstream ifs(safePath, std::ios::binary);
+            if (ifs.is_open()) {
+                const std::vector<uint8_t> fileBytes(
+                    (std::istreambuf_iterator<char>(ifs)),
+                    std::istreambuf_iterator<char>());
+                result["imageBase64"] = Base64Encode(fileBytes.data(), fileBytes.size());
+            }
+        }
+
+        return result;
     }
 
     // =========================================================
@@ -4734,6 +4963,17 @@ namespace
             throw MakeError("operation_not_allowed", "EditorLayer is not available.");
         }
         auto& panel = editor->GetPlayerEditorPanel();
+
+        // If path is specified, save directly without opening a dialog
+        const std::string pathStr = params.value("path", std::string{});
+        if (!pathStr.empty()) {
+            const std::filesystem::path safePath = ResolveProjectPath(pathStr, PathAccess::WriteAsset, false);
+            if (!PlayerEditorSession::SavePrefabDocumentToPath(panel, safePath.string())) {
+                throw MakeError("save_failed", "Failed to save prefab to path.", { { "path", pathStr } });
+            }
+            return { { "saved", true }, { "path", ToGenericProjectPath(safePath) } };
+        }
+
         const bool saveAs = params.value("saveAs", false);
         if (!PlayerEditorSession::SavePrefabDocument(panel, saveAs)) {
             throw MakeError("save_failed", "Failed to save prefab document.");
@@ -4989,6 +5229,22 @@ namespace
         return {
             { "currentPath", panel.GetCurrentPath().generic_string() },
             { "nodeCount",   static_cast<int>(panel.GetAsset().nodes.size()) }
+        };
+    }
+
+    json HandleGameFlowRegister(EngineKernel& kernel, const json& params)
+    {
+        const std::filesystem::path path = ResolveProjectPath(
+            params.value("path", std::string{}), PathAccess::ReadAsset, true);
+        GameLoopAsset asset;
+        if (!asset.LoadFromFile(path)) {
+            throw MakeError("load_failed", "Failed to load gameflow file.", { { "path", path.generic_string() } });
+        }
+        kernel.RegisterGameLoopAssetFromEditor(asset, path);
+        return {
+            { "registered", true },
+            { "path",       ToGenericProjectPath(path) },
+            { "nodeCount",  static_cast<int>(asset.nodes.size()) }
         };
     }
 
@@ -6840,12 +7096,50 @@ namespace
 
     // =========================================================
 
+    // Forward declaration
+    json DispatchCommand(EngineKernel& kernel, const json& command);
+
+    json HandleBatch(EngineKernel& kernel, const json& params)
+    {
+        if (!params.contains("commands") || !params["commands"].is_array()) {
+            throw MakeError("missing_param", "params.commands must be an array.");
+        }
+
+        json results = json::array();
+        for (const json& subCommand : params["commands"]) {
+            json entry;
+            try {
+                json subResult = DispatchCommand(kernel, subCommand);
+                entry["ok"] = true;
+                entry["result"] = std::move(subResult);
+            }
+            catch (const json& jsonError) {
+                entry["ok"] = false;
+                entry["error"] = jsonError;
+            }
+            catch (const std::exception& e) {
+                entry["ok"] = false;
+                entry["error"] = MakeError("internal_error", e.what());
+            }
+            catch (...) {
+                entry["ok"] = false;
+                entry["error"] = MakeError("internal_error", "Unknown exception.");
+            }
+            results.push_back(std::move(entry));
+        }
+
+        return { { "results", std::move(results) } };
+    }
+
     json DispatchCommand(EngineKernel& kernel, const json& command)
     {
         const std::string name = command.value("command", std::string{});
         const json params = command.value("params", json::object());
         Registry* registry = kernel.GetGameRegistry();
 
+        if (name == "batch") {
+            return HandleBatch(kernel, params);
+        }
         if (name == "ping") {
             return HandlePing();
         }
@@ -7088,6 +7382,47 @@ namespace
         }
         if (name == "terrain.set_brush") {
             return HandleTerrainSetBrush(kernel, params);
+        }
+        if (name == "coingame.start") {
+            const int   total = params.value("totalCoins", 10);
+            const float limit = params.value("timeLimitSeconds", 600.0f);
+            CoinGameSystem::Start(total, limit);
+            return { { "started", true }, { "totalCoins", total }, { "timeLimitSeconds", limit } };
+        }
+        if (name == "coingame.reset") {
+            CoinGameSystem::Reset();
+            return { { "reset", true } };
+        }
+        if (name == "coingame.status") {
+            return {
+                { "active",        CoinGameSystem::IsActive() },
+                { "coinCount",     CoinGameSystem::GetCoinCount() },
+                { "totalCoins",    CoinGameSystem::GetTotalCoins() },
+                { "remainingTime", CoinGameSystem::GetRemainingTime() },
+            };
+        }
+        if (name == "coingame.tag_coins") {
+            if (!registry) throw MakeError("no_registry", "No game registry available.");
+            int tagged = 0;
+            const auto nameTypeId = TypeManager::GetComponentTypeID<NameComponent>();
+            std::vector<EntityID> toTag;
+            for (Archetype* arch : registry->GetAllArchetypes()) {
+                if (!arch->GetSignature().test(nameTypeId)) continue;
+                auto* nameCol = arch->GetColumn(nameTypeId);
+                const auto& entities = arch->GetEntities();
+                for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                    auto* nc = static_cast<NameComponent*>(nameCol->Get(i));
+                    if (nc && nc->name.rfind("Coin_", 0) == 0) {
+                        toTag.push_back(entities[i]);
+                    }
+                }
+            }
+            for (EntityID e : toTag) {
+                CoinTagComponent tag{};
+                registry->AddComponent(e, tag);
+                tagged++;
+            }
+            return { { "tagged", tagged } };
         }
         if (name == "play") {
             kernel.Play();
@@ -7338,6 +7673,30 @@ namespace
         // ---- model_serializer.* ----
         if (name == "model_serializer.build")     { return HandleModelSerializerBuild(kernel, params); }
 
+        if (name == "fire_ui_button") {
+            const std::string buttonId = params.value("buttonId", std::string{});
+            if (buttonId.empty()) throw MakeError("missing_param", "buttonId is required.");
+            kernel.GetFlowEventQueue().Push("ui.button.clicked", buttonId);
+            return { { "fired", true }, { "buttonId", buttonId } };
+        }
+        if (name == "push_flow_event") {
+            const std::string evtName  = params.value("name",  std::string{});
+            const std::string evtValue = params.value("value", std::string{});
+            if (evtName.empty()) throw MakeError("missing_param", "name is required.");
+            kernel.GetFlowEventQueue().Push(evtName, evtValue);
+            return { { "pushed", true }, { "name", evtName }, { "value", evtValue } };
+        }
+
+        if (name == "gameflow.register")          { return HandleGameFlowRegister(kernel, params); }
+
+        // ---- gameloop_editor.* ----
+        if (name == "gameloop_editor.open")       { return HandleGameLoopEditorOpen(kernel, params); }
+        if (name == "gameloop_editor.get_status") { return HandleGameLoopEditorGetStatus(kernel); }
+        if (name == "gameloop_editor.get_asset")  { return HandleGameLoopEditorGetAsset(kernel); }
+        if (name == "gameloop_editor.load")       { return HandleGameLoopEditorLoad(kernel, params); }
+        if (name == "gameloop_editor.save")       { return HandleGameLoopEditorSave(kernel); }
+        if (name == "gameloop_editor.validate")   { return HandleGameLoopEditorValidate(kernel); }
+
         throw MakeError("unknown_command", "Unknown AI automation command.", { { "command", name } });
     }
 
@@ -7409,6 +7768,7 @@ AIAutomationService::~AIAutomationService() = default;
 
 void AIAutomationService::Initialize()
 {
+    m_lastStateWriteTime = {};
     m_rootDir = std::filesystem::path("Saved") / "AI";
     m_commandsDir = m_rootDir / "commands";
     m_processingDir = m_rootDir / "processing";
@@ -7513,11 +7873,16 @@ void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
         std::filesystem::remove(activePath, removeEc);
     }
 
-    try {
-        json state = HandleGetEngineState(kernel);
-        state["version"] = kProtocolVersion;
-        WriteJsonFile(m_stateDir / "latest_editor_state.json", state);
-    }
-    catch (...) {
+    const auto now = std::chrono::steady_clock::now();
+    constexpr auto kStateWriteInterval = std::chrono::seconds(2);
+    if (now - m_lastStateWriteTime >= kStateWriteInterval) {
+        try {
+            json state = HandleGetEngineState(kernel);
+            state["version"] = kProtocolVersion;
+            WriteJsonFile(m_stateDir / "latest_editor_state.json", state);
+            m_lastStateWriteTime = now;
+        }
+        catch (...) {
+        }
     }
 }

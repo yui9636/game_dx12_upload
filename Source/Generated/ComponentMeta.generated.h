@@ -104,6 +104,8 @@ struct ComponentMeta;
 #include "Gameplay/TeamComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineLibraryComponent.h"
+#include "Gameplay/CoinTagComponent.h"
+#include "Gameplay/CoinHUDTagComponent.h"
 #include "AI/AggroComponent.h"
 #include "AI/BehaviorTreeAssetComponent.h"
 #include "AI/BehaviorTreeRuntimeComponent.h"
@@ -1256,7 +1258,7 @@ struct ComponentMeta<GrassComponent> {
     );
 };
 
-// 全コンポーネントの型リスト
+// All component types list
 using AllComponentTypes = std::tuple<
     ActorTypeComponent,
     AudioBusSendComponent,
@@ -1352,5 +1354,23 @@ using AllComponentTypes = std::tuple<
     BlackboardComponent,
     PerceptionComponent,
     TerrainComponent,
-    GrassComponent
+    GrassComponent,
+    CoinTagComponent,
+    CoinHUDTagComponent
 >;
+
+template <>
+struct ComponentMeta<CoinTagComponent> {
+    static constexpr std::string_view Name = "CoinTagComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("collected", &CoinTagComponent::collected)
+    );
+};
+
+template <>
+struct ComponentMeta<CoinHUDTagComponent> {
+    static constexpr std::string_view Name = "CoinHUDTagComponent";
+    static constexpr auto Fields = std::make_tuple(
+        MakeField("tag", &CoinHUDTagComponent::tag)
+    );
+};

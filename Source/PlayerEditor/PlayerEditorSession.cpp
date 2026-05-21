@@ -644,6 +644,41 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
     return true;
 }
 
+bool PlayerEditorSession::SavePrefabDocumentToPath(PlayerEditorPanel& panel, const std::string& path)
+{
+    if (!panel.m_registry || Entity::IsNull(panel.m_previewEntity)) {
+        return false;
+    }
+    panel.RemoveBrokenTransitions();
+    ApplyEditorBindingsToPreviewEntity(panel);
+    ExportSocketsToPreviewEntity(panel);
+    PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*panel.m_registry, panel.m_previewEntity);
+    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, panel.m_previewEntity);
+    PlayerRuntimeSetup::ResetPlayerRuntimeState(*panel.m_registry, panel.m_previewEntity);
+
+    TransformComponent* previewTransform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity);
+    const DirectX::XMFLOAT3 displayScale = previewTransform ? previewTransform->localScale : DirectX::XMFLOAT3{ 1.0f, 1.0f, 1.0f };
+    if (previewTransform && panel.m_previewEntityOwned && panel.m_hasOwnedPreviewAuthoringScale) {
+        previewTransform->localScale = panel.m_ownedPreviewAuthoringScale;
+        previewTransform->isDirty = true;
+    }
+
+    const bool saved = PrefabSystem::SaveEntityToPrefabPath(panel.m_previewEntity, *panel.m_registry, path);
+
+    if (previewTransform && panel.m_previewEntityOwned) {
+        previewTransform->localScale = displayScale;
+        previewTransform->isDirty = true;
+    }
+    if (saved) {
+        panel.m_timelineDirty = false;
+        panel.m_stateMachineDirty = false;
+        panel.m_modelAnimationDirty = false;
+        panel.m_socketDirty = false;
+        panel.m_colliderDirty = false;
+    }
+    return saved;
+}
+
 void PlayerEditorSession::ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel)
 {
     if (!panel.CanUsePreviewEntity()) {

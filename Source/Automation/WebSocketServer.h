@@ -83,10 +83,10 @@ private:
 
     mutable std::mutex        m_clientsMtx;
     std::vector<ClientEntry>  m_clients;         // guarded by m_clientsMtx
-    std::vector<std::thread>  m_clientThreads;   // guarded by m_clientsMtx
 
     std::mutex            m_inQueueMtx;
     std::queue<Message>   m_inQueue;             // WS threads -> main thread
 
     std::atomic<uint32_t> m_nextId{ 1 };
+    std::atomic<int>      m_activeClientCount{ 0 };
 };

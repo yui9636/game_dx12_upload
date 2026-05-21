@@ -249,6 +249,9 @@
     <ClInclude Include="Source\Gameplay\DamageSystem.h" />
     <ClInclude Include="Source\Gameplay\LockOnSystem.h" />
     <ClInclude Include="Source\Gameplay\BattleFlowSystem.h" />
+    <ClInclude Include="Source\Gameplay\CoinTagComponent.h" />
+    <ClInclude Include="Source\Gameplay\CoinHUDTagComponent.h" />
+    <ClInclude Include="Source\Gameplay\CoinGameSystem.h" />
     <ClInclude Include="Source\RenderContext\IndirectDrawCommon.h" />
     <ClInclude Include="Source\UI\HUDBindingSystem.h" />
     <ClInclude Include="Source\UIEditor\HPGaugeTemplateFactory.h" />
@@ -673,6 +676,7 @@
     <ClCompile Include="Source\Gameplay\TimelineProjectileSystem.cpp" />
     <ClCompile Include="Source\Gameplay\LockOnSystem.cpp" />
     <ClCompile Include="Source\Gameplay\BattleFlowSystem.cpp" />
+    <ClCompile Include="Source\Gameplay\CoinGameSystem.cpp" />
     <ClCompile Include="Source\UI\HUDBindingSystem.cpp" />
     <ClCompile Include="Source\UIEditor\HPGaugeTemplateFactory.cpp" />
     <ClCompile Include="Source\UIEditor\UIEditorPanel.cpp" />

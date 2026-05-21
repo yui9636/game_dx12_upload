@@ -18,6 +18,7 @@ public:
 
     static bool OpenModelFromPath(PlayerEditorPanel& panel, const std::string& path);
     static bool SavePrefabDocument(PlayerEditorPanel& panel, bool saveAs);
+    static bool SavePrefabDocumentToPath(PlayerEditorPanel& panel, const std::string& path);
 
     static void ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel);
     static void RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& panel);

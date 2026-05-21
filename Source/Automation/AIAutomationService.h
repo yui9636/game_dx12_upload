@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 
@@ -25,4 +26,6 @@ private:
     std::filesystem::path m_resultsDir;
     std::filesystem::path m_screenshotsDir;
     std::filesystem::path m_stateDir;
+
+    std::chrono::steady_clock::time_point m_lastStateWriteTime;
 };

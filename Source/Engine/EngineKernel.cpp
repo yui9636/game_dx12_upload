@@ -60,6 +60,7 @@
 #include "UI/DamageTextManager.h"
 #include "UI/UIManager.h"
 #include "Gameplay/BattleFlowSystem.h"
+#include "Gameplay/CoinGameSystem.h"
 #include "Component/CameraComponent.h"
 #include "Component/Camera2DComponent.h"
 #include "Component/Camera2DMainTagComponent.h"
@@ -1361,6 +1362,7 @@ void EngineKernel::Update(float rawDt)
     if (m_gameLayer) {
         m_gameLayer->Update(time);
         BattleFlowSystem::DrainEvents(m_flowEventQueue);
+        CoinGameSystem::DrainEvents(m_flowEventQueue);
     }
 
     UIManager::Instance().Update(time.dt);
@@ -2256,6 +2258,7 @@ void EngineKernel::Play()
         rt.Reset();
         m_flowEventQueue.Clear();
         BattleFlowSystem::Reset();
+        CoinGameSystem::Reset();
 
         if (!m_gameLoopAssetRegistered) {
             LOG_INFO("[GameFlow] no loaded GameFlow asset; Play starts without GameFlow.");
@@ -2313,6 +2316,7 @@ void EngineKernel::StopImmediate()
         m_uiButtonClickQueue.Clear();
         m_flowEventQueue.Clear();
         BattleFlowSystem::Reset();
+        CoinGameSystem::Reset();
 
         // Play 前に開いていた editor scene を復元する。
         if (m_editorLayer && !m_savedEditorScenePath.empty()) {
