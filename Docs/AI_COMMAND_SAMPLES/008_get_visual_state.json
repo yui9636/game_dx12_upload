@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "cmd-get-visual-state",
+  "command": "get_visual_state",
+  "params": {}
+}

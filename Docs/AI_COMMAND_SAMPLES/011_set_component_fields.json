@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "cmd-set-health",
+  "command": "set_component_fields",
+  "params": {
+    "entity": 4294967296,
+    "component": "HealthComponent",
+    "fields": {
+      "health": 120,
+      "lastDamage": 30
+    },
+    "recordUndo": true
+  }
+}

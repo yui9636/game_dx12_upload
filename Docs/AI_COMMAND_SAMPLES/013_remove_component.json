@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "id": "cmd-remove-health",
+  "command": "remove_component",
+  "params": {
+    "entity": 4294967296,
+    "component": "HealthComponent",
+    "recordUndo": true
+  }
+}

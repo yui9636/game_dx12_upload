@@ -1,5 +1,6 @@
 ﻿#include "EngineKernel.h"
 #include "Audio/AudioWorldSystem.h"
+#include "Automation/AIAutomationService.h"
 #include "Render/Graphics.h"
 #include "Layer/GameLayer.h"
 #include "Layer/EditorLayer.h"
@@ -1229,6 +1230,8 @@ void EngineKernel::Initialize()
     if (isDX12) {
         m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
         m_editorLayer->Initialize();
+        m_aiAutomationService = std::make_unique<AIAutomationService>();
+        m_aiAutomationService->Initialize();
         return;
     }
 
@@ -1238,11 +1241,18 @@ void EngineKernel::Initialize()
 
     m_editorLayer = std::make_unique<EditorLayer>(m_gameLayer.get());
     m_editorLayer->Initialize();
+    m_aiAutomationService = std::make_unique<AIAutomationService>();
+    m_aiAutomationService->Initialize();
 }
 
 // 全サブシステムを終了処理する。
 void EngineKernel::Finalize()
 {
+    if (m_aiAutomationService) {
+        m_aiAutomationService->Finalize();
+        m_aiAutomationService.reset();
+    }
+
     if (m_inputBackend) {
         m_inputBackend->Shutdown();
         m_inputBackend.reset();
@@ -1282,6 +1292,10 @@ void EngineKernel::Update(float rawDt)
     if (m_stopRequested) {
         m_stopRequested = false;
         StopImmediate();
+    }
+
+    if (m_aiAutomationService) {
+        m_aiAutomationService->ProcessPendingCommands(*this);
     }
 
     if (m_editorLayer) {

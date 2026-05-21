@@ -238,6 +238,9 @@ public:
     // 入力データを読み込む。 a scene from a path (publicly exposed for EngineKernel::Stop).
     bool LoadSceneFromPath(const std::filesystem::path& scenePath);
 
+    // AI automation から現在シーンを保存する。空 path の場合は現在の保存先を使う。
+    bool SaveSceneFromAutomation(const std::filesystem::path& scenePath = {});
+
 private:
     GameLayer* m_gameLayer;
     std::unique_ptr<AssetBrowser> m_assetBrowser;

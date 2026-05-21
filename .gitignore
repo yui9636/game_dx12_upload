@@ -22,6 +22,10 @@ imgui.ini
 Data/Effect/imgui.ini
 Data/Scene/imgui.ini
 Docs/
+!Docs/
+!Docs/AI_AUTOMATION_INTERFACE_SPEC.md
+!Docs/AI_COMMAND_SAMPLES/
+!Docs/AI_COMMAND_SAMPLES/*.json
 
 # Runtime debug logs
 *.log

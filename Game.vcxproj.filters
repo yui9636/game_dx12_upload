@@ -73,6 +73,9 @@
     <Filter Include="Source\Asset">
       <UniqueIdentifier>{30d7a499-81b1-5a90-896c-e917573f2783}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source\Automation">
+      <UniqueIdentifier>{542d93e3-d0c2-4ac3-a185-a6a7bb0c7a16}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Source\Audio">
       <UniqueIdentifier>{ab90af88-dc38-595a-9990-adbb757b8cd2}</UniqueIdentifier>
     </Filter>
@@ -338,6 +341,9 @@
     </ClInclude>
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h">
       <Filter>Source\Archetype</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Automation\AIAutomationService.h">
+      <Filter>Source\Automation</Filter>
     </ClInclude>
     <ClInclude Include="Source\Asset\AssetBrowser.h">
       <Filter>Source\Asset</Filter>
@@ -1567,6 +1573,9 @@
     </ClCompile>
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp">
       <Filter>Source\Archetype</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Automation\AIAutomationService.cpp">
+      <Filter>Source\Automation</Filter>
     </ClCompile>
     <ClCompile Include="Source\Asset\AssetBrowser.cpp">
       <Filter>Source\Asset</Filter>

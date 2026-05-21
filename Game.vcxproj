@@ -157,6 +157,7 @@
     <ClInclude Include="Source\Animator\RootMotionSystem.h" />
     <ClInclude Include="Source\Archetype\Archetype.h" />
     <ClInclude Include="Source\Archetype\ArchetypeGraph.h" />
+    <ClInclude Include="Source\Automation\AIAutomationService.h" />
     <ClInclude Include="Source\Asset\AssetBrowser.h" />
     <ClInclude Include="Source\Asset\AssetManager.h" />
     <ClInclude Include="Source\Asset\ModelAssetSerializer.h" />
@@ -588,6 +589,7 @@
     <ClCompile Include="Source\Animator\RootMotionSystem.cpp" />
     <ClCompile Include="Source\Archetype\Archetype.cpp" />
     <ClCompile Include="Source\Archetype\ArchetypeGraph.cpp" />
+    <ClCompile Include="Source\Automation\AIAutomationService.cpp" />
     <ClCompile Include="Source\Asset\AssetBrowser.cpp" />
     <ClCompile Include="Source\Asset\AssetManager.cpp" />
     <ClCompile Include="Source\Asset\ModelAssetSerializer.cpp" />

@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <memory>
 
+class AIAutomationService;
 class GameLayer;
 class EditorLayer;
 
@@ -99,6 +100,12 @@ public:
     // const 版の GameLayer Registry を取得する。
     const Registry* GetGameRegistry() const;
 
+    // 現在の EditorLayer を取得する。
+    EditorLayer* GetEditorLayer() { return m_editorLayer.get(); }
+
+    // const 版の EditorLayer を取得する。
+    const EditorLayer* GetEditorLayer() const { return m_editorLayer.get(); }
+
     // 1 フレーム分の UI ボタンクリックイベントキューを取得する。
     UIButtonClickEventQueue& GetUIButtonClickQueue() { return m_uiButtonClickQueue; }
 
@@ -171,6 +178,9 @@ private:
 
     // エディタ用レイヤー。
     std::unique_ptr<EditorLayer> m_editorLayer;
+
+    // AI / external tool 用の自動化インターフェース。
+    std::unique_ptr<AIAutomationService> m_aiAutomationService;
 
     // サムネイルや各種プレビュー用の共有 offscreen renderer。
     std::unique_ptr<OffscreenRenderer> m_sharedOffscreen;

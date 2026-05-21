@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "sample-get-engine-state",
+  "command": "get_engine_state",
+  "params": {}
+}

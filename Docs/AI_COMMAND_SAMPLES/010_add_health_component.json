@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "id": "cmd-add-health",
+  "command": "add_component",
+  "params": {
+    "entity": 4294967296,
+    "component": "HealthComponent",
+    "fields": {
+      "health": 150,
+      "maxHealth": 150,
+      "isInvincible": false
+    },
+    "recordUndo": true
+  }
+}

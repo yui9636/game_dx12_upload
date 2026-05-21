@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "sample-save-scene",
+  "command": "save_scene",
+  "params": {
+    "path": "Data/Scene/AI_Phase1_Test.scene"
+  }
+}

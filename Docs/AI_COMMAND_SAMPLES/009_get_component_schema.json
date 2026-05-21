@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "cmd-get-health-schema",
+  "command": "get_component_schema",
+  "params": {
+    "component": "HealthComponent"
+  }
+}

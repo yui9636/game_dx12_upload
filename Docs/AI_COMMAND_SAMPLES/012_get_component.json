@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "cmd-get-health",
+  "command": "get_component",
+  "params": {
+    "entity": 4294967296,
+    "component": "HealthComponent"
+  }
+}

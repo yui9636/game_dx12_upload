@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "sample-create-empty",
+  "command": "create_empty",
+  "params": {
+    "name": "AI Sample Empty",
+    "position": [0.0, 1.0, 0.0],
+    "rotation": [0.0, 0.0, 0.0, 1.0],
+    "scale": [1.0, 1.0, 1.0],
+    "select": true,
+    "recordUndo": true
+  }
+}

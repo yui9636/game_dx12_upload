@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "id": "sample-list-entities",
+  "command": "list_entities",
+  "params": {}
+}

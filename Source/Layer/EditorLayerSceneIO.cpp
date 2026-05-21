@@ -408,3 +408,10 @@ bool EditorLayer::SaveCurrentSceneAs()
     return SaveCurrentScene();
 }
 
+bool EditorLayer::SaveSceneFromAutomation(const std::filesystem::path& scenePath)
+{
+    if (!scenePath.empty()) {
+        m_sceneSavePath = scenePath.string();
+    }
+    return SaveCurrentScene();
+}

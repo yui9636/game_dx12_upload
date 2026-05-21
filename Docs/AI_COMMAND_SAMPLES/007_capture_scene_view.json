@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "id": "cmd-capture-scene-view",
+  "command": "capture_screenshot",
+  "params": {
+    "target": "scene_view",
+    "path": "Saved/AI/screenshots/scene_view_sample.bmp"
+  }
+}
