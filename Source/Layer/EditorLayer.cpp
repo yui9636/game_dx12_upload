@@ -450,6 +450,59 @@ bool EditorLayer::StopEffectTimelineFromAutomation()
     return m_effectEditorPanel.StopTimelineFromAutomation();
 }
 
+bool EditorLayer::OpenGameLoopEditorFromAutomation(const std::filesystem::path& assetPath)
+{
+    m_showGameLoopEditor = true;
+    m_pendingWindowFocus = WindowFocusTarget::GameLoopEditor;
+
+    if (!assetPath.empty()) {
+        m_gameLoopEditorPanel.LoadAutomation(assetPath);
+    }
+    return true;
+}
+
+bool EditorLayer::OpenSequencerFromAutomation()
+{
+    m_showSequencer = true;
+    m_pendingWindowFocus = WindowFocusTarget::Sequencer;
+    return true;
+}
+
+bool EditorLayer::OpenUIEditorFromAutomation()
+{
+    m_showUIEditor = true;
+    m_activeWorkspace = WorkspaceTab::UIEditor;
+    return true;
+}
+
+bool EditorLayer::OpenLightingWindowFromAutomation()
+{
+    m_showLightingWindow = true;
+    m_pendingWindowFocus = WindowFocusTarget::Lighting;
+    return true;
+}
+
+bool EditorLayer::OpenTerrainEditorFromAutomation(EntityID entity)
+{
+    m_showTerrainEditor = true;
+    if (!Entity::IsNull(entity)) {
+        EditorSelection::Instance().SelectEntity(entity);
+    }
+    return true;
+}
+
+bool EditorLayer::OpenPlayerEditorFromAutomation(const std::filesystem::path& modelPath)
+{
+    m_showPlayerEditor = true;
+    m_activeWorkspace = WorkspaceTab::PlayerEditor;
+    m_pendingWindowFocus = WindowFocusTarget::PlayerEditor;
+
+    if (!modelPath.empty()) {
+        return PlayerEditorSession::OpenModelFromPath(m_playerEditorPanel, modelPath.generic_string());
+    }
+    return true;
+}
+
 void EditorLayer::SetPlayerEditorCameraShakeOffset(const DirectX::XMFLOAT3& offset)
 {
     m_editorCameraShakeOffset = offset;

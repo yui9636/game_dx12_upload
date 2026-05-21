@@ -247,6 +247,154 @@ public:
     bool IsEffectEditorWorkspaceActive() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }
     const std::string& GetEffectEditorDocumentPath() const { return m_effectEditorPanel.GetDocumentPath(); }
 
+    bool OpenPlayerEditorFromAutomation(const std::filesystem::path& modelPath = {});
+
+    GameLoopEditorPanel& GetGameLoopEditorPanel() { return m_gameLoopEditorPanel; }
+    const GameLoopEditorPanel& GetGameLoopEditorPanel() const { return m_gameLoopEditorPanel; }
+    bool IsGameLoopEditorActive() const { return m_showGameLoopEditor; }
+    bool OpenGameLoopEditorFromAutomation(const std::filesystem::path& assetPath = {});
+
+    TerrainEditorPanel& GetTerrainEditorPanel() { return m_terrainEditorPanel; }
+    const TerrainEditorPanel& GetTerrainEditorPanel() const { return m_terrainEditorPanel; }
+    bool IsTerrainEditorActive() const { return m_showTerrainEditor; }
+    bool OpenTerrainEditorFromAutomation(EntityID entity = Entity::NULL_ID);
+
+    // ---- Sequencer Automation ----
+    SequencerPanel& GetSequencerPanel() { return m_sequencerPanel; }
+    const SequencerPanel& GetSequencerPanel() const { return m_sequencerPanel; }
+    bool IsSequencerActive() const { return m_showSequencer; }
+    bool OpenSequencerFromAutomation();
+
+    // ---- UI Editor Automation ----
+    UIEditorPanel& GetUIEditorPanel() { return m_uiEditorPanel; }
+    const UIEditorPanel& GetUIEditorPanel() const { return m_uiEditorPanel; }
+    bool IsUIEditorActive() const { return m_showUIEditor && m_activeWorkspace == WorkspaceTab::UIEditor; }
+    bool OpenUIEditorFromAutomation();
+
+    // ---- Lighting Automation ----
+    bool OpenLightingWindowFromAutomation();
+
+    // ---- Scene View Automation ----
+    SceneShadingMode GetSceneShadingMode()     const { return m_sceneShadingMode; }
+    void SetSceneShadingModeAutomation(SceneShadingMode m)   { m_sceneShadingMode = m; }
+    GizmoOperation GetGizmoOperation()         const { return m_gizmoOperation; }
+    void SetGizmoOperationAutomation(GizmoOperation op)      { m_gizmoOperation = op; }
+    GizmoSpace GetGizmoSpace()                 const { return m_gizmoSpace; }
+    void SetGizmoSpaceAutomation(GizmoSpace s)               { m_gizmoSpace = s; }
+    float GetEditorCameraYaw()                 const { return m_editorCameraYaw; }
+    float GetEditorCameraPitch()               const { return m_editorCameraPitch; }
+    float GetCameraMoveSpeed()                 const { return m_cameraMoveSpeed; }
+    void  SetCameraMoveSpeedAutomation(float s)              { m_cameraMoveSpeed = s; }
+    void  SetEditorCameraTransformAutomation(const DirectX::XMFLOAT3& pos, float yaw, float pitch)
+    {
+        m_editorCameraPosition   = pos;
+        m_editorCameraYaw        = yaw;
+        m_editorCameraPitch      = pitch;
+        m_editorCameraUserOverride = true;
+    }
+    void SaveCameraBookmarkAutomation(int slot) { if (slot >= 0 && slot < 3) SaveCameraBookmark((size_t)slot); }
+    void LoadCameraBookmarkAutomation(int slot) { if (slot >= 0 && slot < 3) LoadCameraBookmark((size_t)slot); }
+
+    bool GetShowSceneGizmo()          const { return m_showSceneGizmo; }
+    void SetShowSceneGizmo(bool v)          { m_showSceneGizmo = v; }
+    bool GetShowSceneStats()          const { return m_showSceneStatsOverlay; }
+    void SetShowSceneStats(bool v)          { m_showSceneStatsOverlay = v; }
+    bool GetShowSelectionOutline()    const { return m_showSceneSelectionOutline; }
+    void SetShowSelectionOutline(bool v)    { m_showSceneSelectionOutline = v; }
+    bool GetShowLightIcons()          const { return m_showSceneLightIcons; }
+    void SetShowLightIcons(bool v)          { m_showSceneLightIcons = v; }
+    bool GetShowCameraIcons()         const { return m_showSceneCameraIcons; }
+    void SetShowCameraIcons(bool v)         { m_showSceneCameraIcons = v; }
+    bool GetShowBounds()              const { return m_showSceneBounds; }
+    void SetShowBounds(bool v)              { m_showSceneBounds = v; }
+    bool GetShowCollision()           const { return m_showSceneCollision; }
+    void SetShowCollision(bool v)           { m_showSceneCollision = v; }
+    bool GetShowInputDebug()          const { return m_showInputDebug; }
+    void SetShowInputDebug(bool v)          { m_showInputDebug = v; }
+
+    // ---- Panel Visibility Automation ----
+    bool GetShowSceneView()           const { return m_showSceneView; }
+    void SetShowSceneView(bool v)           { m_showSceneView = v; }
+    bool GetShowGameView()            const { return m_showGameView; }
+    void SetShowGameView(bool v)            { m_showGameView = v; }
+    bool GetShowHierarchy()           const { return m_showHierarchy; }
+    void SetShowHierarchy(bool v)           { m_showHierarchy = v; }
+    bool GetShowInspector()           const { return m_showInspector; }
+    void SetShowInspector(bool v)           { m_showInspector = v; }
+    bool GetShowAssetBrowser()        const { return m_showAssetBrowser; }
+    void SetShowAssetBrowser(bool v)        { m_showAssetBrowser = v; }
+    bool GetShowConsole()             const { return m_showConsole; }
+    void SetShowConsole(bool v)             { m_showConsole = v; }
+    bool GetShowSerializer()          const { return m_showSerializer; }
+    void SetShowSerializer(bool v)          { m_showSerializer = v; }
+    bool GetShowAudioWindow()         const { return m_showAudioWindow; }
+    void SetShowAudioWindow(bool v)         { m_showAudioWindow = v; }
+    bool GetShowRenderPasses()        const { return m_showRenderPassesWindow; }
+    void SetShowRenderPasses(bool v)        { m_showRenderPassesWindow = v; }
+    bool GetShowGBufferDebug()        const { return m_showGBufferDebug; }
+    void SetShowGBufferDebug(bool v)        { m_showGBufferDebug = v; }
+    bool GetShowGridSettings()        const { return m_showGridSettingsWindow; }
+    void SetShowGridSettings(bool v)        { m_showGridSettingsWindow = v; }
+    bool GetShowStatusBar()           const { return m_showStatusBar; }
+    void SetShowStatusBar(bool v)           { m_showStatusBar = v; }
+
+    // ---- Scene Grid Automation ----
+    void SetSceneGridCellSize(float v)      { m_sceneGridCellSize = v; }
+    void SetSceneGridHalfLineCount(int v)   { m_sceneGridHalfLineCount = v; }
+
+    // ---- 2D View Automation ----
+    DirectX::XMFLOAT2 Get2DCenter()   const { return m_editor2DCenter; }
+    float             Get2DZoom()     const { return m_editor2DZoom; }
+    void Set2DCenter(const DirectX::XMFLOAT2& c) { m_editor2DCenter = c; }
+    void Set2DZoom(float z)                 { m_editor2DZoom = z; }
+
+    // ---- Snap Settings Automation ----
+    bool  GetTranslateSnapEnabled()   const { return m_translateSnapEnabled; }
+    void  SetTranslateSnapEnabled(bool v)   { m_translateSnapEnabled = v; }
+    bool  GetRotateSnapEnabled()      const { return m_rotateSnapEnabled; }
+    void  SetRotateSnapEnabled(bool v)      { m_rotateSnapEnabled = v; }
+    bool  GetScaleSnapEnabled()       const { return m_scaleSnapEnabled; }
+    void  SetScaleSnapEnabled(bool v)       { m_scaleSnapEnabled = v; }
+    float GetTranslateSnapStep()      const { return m_translateSnapStep; }
+    void  SetTranslateSnapStep(float v)     { m_translateSnapStep = v; }
+    float GetRotateSnapStep()         const { return m_rotateSnapStep; }
+    void  SetRotateSnapStep(float v)        { m_rotateSnapStep = v; }
+    float GetScaleSnapStep()          const { return m_scaleSnapStep; }
+    void  SetScaleSnapStep(float v)         { m_scaleSnapStep = v; }
+
+    // ---- Game View Settings Automation ----
+    GameViewResolutionPreset GetGameViewResolutionPreset() const { return m_gameViewResolutionPreset; }
+    void SetGameViewResolutionPreset(GameViewResolutionPreset p) { m_gameViewResolutionPreset = p; }
+    GameViewAspectPolicy GetGameViewAspectPolicy()         const { return m_gameViewAspectPolicy; }
+    void SetGameViewAspectPolicy(GameViewAspectPolicy p)         { m_gameViewAspectPolicy = p; }
+    GameViewScalePolicy  GetGameViewScalePolicy()          const { return m_gameViewScalePolicy; }
+    void SetGameViewScalePolicy(GameViewScalePolicy p)           { m_gameViewScalePolicy = p; }
+    bool GetGameViewShowSafeArea()    const { return m_gameViewShowSafeArea; }
+    void SetGameViewShowSafeArea(bool v)    { m_gameViewShowSafeArea = v; }
+    bool GetGameViewShowStats()       const { return m_gameViewShowStatsOverlay; }
+    void SetGameViewShowStats(bool v)       { m_gameViewShowStatsOverlay = v; }
+    bool GetGameViewShowUIOverlay()   const { return m_gameViewShowUIOverlay; }
+    void SetGameViewShowUIOverlay(bool v)   { m_gameViewShowUIOverlay = v; }
+    bool GetGameViewShow2DOverlay()   const { return m_gameViewShow2DOverlay; }
+    void SetGameViewShow2DOverlay(bool v)   { m_gameViewShow2DOverlay = v; }
+
+    // ---- Undo / Redo Automation ----
+    void ExecuteUndoAutomation()            { ExecuteUndo(); }
+    void ExecuteRedoAutomation()            { ExecuteRedo(); }
+
+    // ---- Window Focus Automation ----
+    void FocusPanelAutomation(WindowFocusTarget t) { RequestWindowFocus(t); }
+
+    // ---- Camera Align Automation ----
+    void AlignCameraToViewAutomation()      { AlignMainCameraEntityToEditorCamera(); }
+
+    // ---- New Scene Automation ----
+    void RequestNewSceneAutomation(SceneViewMode mode = SceneViewMode::Mode3D)
+    {
+        m_pendingNewSceneRequest = true;
+        m_pendingNewSceneMode    = mode;
+    }
+
 private:
     GameLayer* m_gameLayer;
     std::unique_ptr<AssetBrowser> m_assetBrowser;

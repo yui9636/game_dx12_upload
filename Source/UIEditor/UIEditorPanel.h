@@ -14,6 +14,22 @@ class UIEditorPanel
 public:
     void DrawWorkspace(Registry* registry, bool* outFocused);
 
+    // ---- Automation API ----
+    void     SetRegistryForAutomation(Registry* registry)        { m_registry = registry; }
+    EntityID GetSelectedEntityAutomation()               const   { return m_selectedEntity; }
+    void     SelectEntityAutomation(EntityID entity)             { SelectEntity(entity); }
+    EntityID FindCanvasAutomation()                      const   { return FindCanvas(); }
+    EntityID FindOrCreateCanvasAutomation()                      { return FindOrCreateCanvas(); }
+    EntityID CreateTemplateAutomation(UIEditorTemplateKind kind) { return CreateTemplate(kind); }
+    EntityID CreatePartAutomation(UIEditorPartKind kind)         { return CreatePart(kind); }
+    bool     SaveSelectedAsPrefabAutomation()                    { return SaveSelectedAsPrefab(); }
+    bool     ApplySelectedPrefabAutomation()                     { return ApplySelectedPrefab(); }
+    bool     RevertSelectedPrefabAutomation()                    { return RevertSelectedPrefab(); }
+    bool     UnpackSelectedPrefabAutomation()                    { return UnpackSelectedPrefab(); }
+    const UIEditorViewState&   GetViewState()            const   { return m_viewState; }
+    UIEditorViewState&         GetViewStateMutable()             { return m_viewState; }
+    const UIEditorPrefabState& GetPrefabState()          const   { return m_prefabState; }
+
 private:
     void DrawToolbar();
     void DrawPalette();

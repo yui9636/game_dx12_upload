@@ -135,6 +135,75 @@ public:
     
     void SetCurrentPath(const std::filesystem::path& p) { m_currentPath = p; }
 
+    // ---- Automation API ----
+    GameLoopAsset&       GetAsset()       { return m_asset; }
+    const GameLoopAsset& GetAsset() const { return m_asset; }
+
+    bool     IsDirty()           const { return m_dirty; }
+    void     MarkDirtyForAutomation()  { m_dirty = true; m_validated = false; }
+    void     RequestFitGraph()         { m_fitRequested = true; }
+
+    uint32_t GetSelectedNodeId()        const { return m_selectedNodeId; }
+    uint32_t GetSelectedTransitionId()  const
+    {
+        if (m_selectedTransitionIndex >= 0 &&
+            m_selectedTransitionIndex < static_cast<int>(m_asset.transitions.size()))
+            return m_asset.transitions[m_selectedTransitionIndex].id;
+        return 0u;
+    }
+
+    void SelectNodeById(uint32_t id)          { SelectNode(id); }
+    void SelectTransitionById(uint32_t id)
+    {
+        for (int i = 0; i < static_cast<int>(m_asset.transitions.size()); ++i) {
+            if (m_asset.transitions[i].id == id) { SelectTransition(i); return; }
+        }
+    }
+    void ClearSelectionAutomation()           { ClearSelection(); }
+
+    // Returns the new node ID (0 on failure).
+    uint32_t AddSceneNodeAutomation(const std::string& scenePath, const DirectX::XMFLOAT2& pos)
+    {
+        AddSceneNode(scenePath, pos);
+        return m_selectedNodeId;   // SelectNode() is called inside AddSceneNode
+    }
+    uint32_t AddFlowNodeAutomation(GameLoopNodeType type, const std::string& name, const DirectX::XMFLOAT2& pos)
+    {
+        AddFlowNode(type, name, pos);
+        return m_selectedNodeId;   // SelectNode() is called inside AddFlowNode
+    }
+    // Returns the new transition ID (0 on failure).
+    uint32_t AddTransitionAutomation(uint32_t from, uint32_t to)
+    {
+        const std::size_t before = m_asset.transitions.size();
+        AddTransition(from, to);
+        if (m_asset.transitions.size() > before)
+            return m_asset.transitions.back().id;
+        return 0u;
+    }
+
+    void DeleteNodeAutomation(uint32_t id)             { DeleteNode(id); }
+    void DeleteTransitionByIdAutomation(uint32_t id)
+    {
+        for (int i = 0; i < static_cast<int>(m_asset.transitions.size()); ++i) {
+            if (m_asset.transitions[i].id == id) { DeleteTransition(i); return; }
+        }
+    }
+
+    void ReverseTransitionByIdAutomation(uint32_t id)
+    {
+        for (int i = 0; i < static_cast<int>(m_asset.transitions.size()); ++i) {
+            if (m_asset.transitions[i].id == id) { ReverseTransition(i); return; }
+        }
+    }
+
+    void ValidateAutomation() { Validate(); }
+    void SaveAutomation()     { Save(); }
+    void LoadAutomation(const std::filesystem::path& path) { Load(path); }
+
+    const GameLoopValidateResult& GetValidateResult() const { return m_validateResult; }
+    const std::string&            GetStatusMessage()  const { return m_statusMessage; }
+
 private:
     enum class SelectionKind { None, Node, Transition };
     enum class PickerMode { None, CreateNode, ReplaceNode, CreateNodeAndTransition, SelectLoadingScene };

@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "EditorLayer.h"
+#include "PlayerEditor/PlayerEditorSession.h"
 #include "Engine/Editor2DEntityUtils.h"
 #include "Engine/EngineKernel.h" // カーネルの機能(Play/Stop)を呼ぶため
 #include "Icon/IconFontManager.h"

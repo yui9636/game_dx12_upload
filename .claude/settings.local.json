@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\2230343\\\\Documents\\\\game_dx12_upload\\\\Source\\\\PlayerEditor\" -Filter \"PlayerEditorPanel*\" -File)",
+      "Bash(findstr /n \"DispatchCommand\\\\|unknown_command\\\\|game_loop_editor.set_start_node\\\\|player_editor.save_prefab\\\\|HandleGameLoopEditorFitGraph\\\\|HandlePlayerEditorGet\" \"C:\\\\Users\\\\2230343\\\\Documents\\\\game_dx12_upload\\\\Source\\\\Automation\\\\AIAutomationService.cpp\")",
+      "Bash(cmake --build build --config Release --parallel 8)",
+      "Bash(ls \"C:\\\\Users\\\\2230343\\\\Documents\\\\game_dx12_upload\\\\\" 2>/dev/null || dir \"C:\\\\Users\\\\2230343\\\\Documents\\\\game_dx12_upload\" 2>&1 | head -20)"
+    ]
+  }
+}

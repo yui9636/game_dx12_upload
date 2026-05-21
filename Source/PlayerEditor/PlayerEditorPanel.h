@@ -85,6 +85,66 @@ public:
     // 選択中ボーン（タイムライン項目インスペクタで使用）
     int  GetSelectedBoneIndex() const { return m_selectedBoneIndex; }
 
+    // ---- Automation API ----
+    void MarkStateMachineDirty()  { m_stateMachineDirty  = true; }
+    void MarkTimelineDirty()      { m_timelineDirty      = true; }
+    void MarkSocketDirty()        { m_socketDirty        = true; }
+    void MarkColliderDirty()      { m_colliderDirty      = true; }
+
+    ActorEditorMode      GetActorEditorMode()    const { return m_actorEditorMode; }
+    void                 SetActorEditorMode(ActorEditorMode m) { m_actorEditorMode = m; }
+
+    PlayerEditorViewMode GetViewMode()           const { return m_viewMode; }
+    void                 SetViewMode(PlayerEditorViewMode m) { m_viewMode = m; }
+
+    int                  GetWorkbenchActiveTab() const { return m_workbenchActiveTab; }
+    void                 SetWorkbenchActiveTab(int t)  { m_workbenchActiveTab = t; }
+
+    uint32_t             GetSelectedStateNodeId()    const { return m_selectedNodeId; }
+    void                 SelectStateNode(uint32_t id)      { m_selectedNodeId = id; m_selectionCtx = SelectionContext::StateNode; }
+
+    uint32_t             GetSelectedTransitionId()   const { return m_selectedTransitionId; }
+    void                 SelectTransition(uint32_t id)     { m_selectedTransitionId = id; m_selectionCtx = SelectionContext::Transition; }
+
+    int                  GetSelectedTrackId()        const { return m_selectedTrackId; }
+    void                 SelectTrack(int id)               { m_selectedTrackId = id; m_selectionCtx = SelectionContext::TimelineTrack; }
+
+    void                 ClearEditorSelection()            { m_selectionCtx = SelectionContext::None; }
+
+    int                  GetPlayheadFrame()          const { return m_playheadFrame; }
+    void                 SetPlayheadFrame(int f)           { m_playheadFrame = f; }
+
+    bool                 IsTimelinePlaying()         const { return m_isPlaying; }
+    void                 SetTimelinePlaying(bool p)        { m_isPlaying = p; }
+
+    void                 RequestGraphFit()                 { m_graphFitRequested = true; }
+
+    const std::string&   GetCurrentModelPath()       const { return m_currentModelPath; }
+
+    // ---- Automation: Socket ----
+    const std::vector<NodeSocket>& GetSockets()        const { return m_sockets; }
+    std::vector<NodeSocket>&       GetSocketsMutable()       { return m_sockets; }
+    int                            GetSelectedSocketIdx()  const { return m_selectedSocketIdx; }
+    void SelectSocket(int idx)
+    {
+        m_selectedSocketIdx = idx;
+        m_selectionCtx = (idx >= 0) ? SelectionContext::Socket : SelectionContext::None;
+    }
+
+    // ---- Automation: Collider ----
+    int              GetSelectedColliderIdx()                  const { return m_selectedColliderIdx; }
+    ColliderComponent* GetPreviewColliderForAutomation(bool create)  { return GetPreviewColliderComponent(create); }
+    void             AddColliderAutomation(ColliderAttribute attr)   { AddPersistentCollider(attr); }
+    void             SelectColliderAutomation(int idx)               { SelectPersistentCollider(idx); }
+
+    // ---- Automation: Animator ----
+    int  GetSelectedAnimationIndex()  const { return m_selectedAnimIndex; }
+    void SetSelectedAnimationIndex(int idx) { m_selectedAnimIndex = idx; }
+
+    // ---- Automation: Input Mapping ----
+    InputMappingTab&       GetInputMappingTab()       { return m_inputMappingTab; }
+    const InputMappingTab& GetInputMappingTab() const { return m_inputMappingTab; }
+
 private:
     friend class PlayerEditorSession;
 

@@ -60,6 +60,15 @@
 #include "Undo/ComponentUndoAction.h"
 #include "Undo/EntitySnapshot.h"
 #include "Undo/EntityUndoActions.h"
+#include "PlayerEditor/PlayerEditorSession.h"
+#include "Component/NodeSocket.h"
+#include "Component/ColliderComponent.h"
+#include "Input/InputActionMapAsset.h"
+#include "Component/EnvironmentComponent.h"
+#include "Component/PostEffectComponent.h"
+#include "UIEditor/UIEditorState.h"
+#include "Sequencer/CinematicSequenceAsset.h"
+#include "Asset/ModelAssetSerializer.h"
 
 namespace
 {
@@ -153,6 +162,16 @@ namespace
         out.y = in[1].get<float>();
         out.z = in[2].get<float>();
         out.w = in[3].get<float>();
+        return true;
+    }
+
+    bool ReadFloat2(const json& in, DirectX::XMFLOAT2& out)
+    {
+        if (!in.is_array() || in.size() < 2) {
+            return false;
+        }
+        out.x = in[0].get<float>();
+        out.y = in[1].get<float>();
         return true;
     }
 
@@ -2886,6 +2905,484 @@ namespace
         return { { "path", ToGenericProjectPath(path) }, { "terrain", TerrainSummary(registry, entity) } };
     }
 
+    // ---- Terrain helpers ----
+
+    json TerrainLayerToJson(const TerrainLayer& l)
+    {
+        return {
+            { "albedoPath",     l.albedoPath },
+            { "normalPath",     l.normalPath },
+            { "roughnessPath",  l.roughnessPath },
+            { "tileScale",      l.tileScale },
+            { "blendSharpness", l.blendSharpness }
+        };
+    }
+
+    json FoliageLayerToJson(const FoliageLayer& l)
+    {
+        return {
+            { "enabled",           l.enabled },
+            { "name",              l.name },
+            { "meshPath",          l.meshPath },
+            { "densityMultiplier", l.densityMultiplier },
+            { "maxPerCell",        static_cast<int>(l.maxPerCell) },
+            { "densityThreshold",  l.densityThreshold },
+            { "splatChannel",      l.splatChannel },
+            { "minAltitudeNorm",   l.minAltitudeNorm },
+            { "maxAltitudeNorm",   l.maxAltitudeNorm },
+            { "maxSlopeDegrees",   l.maxSlopeDegrees },
+            { "sizeScale",         l.sizeScale },
+            { "sizeVariance",      l.sizeVariance },
+            { "colorBottom",       json::array({ l.colorBottom.x, l.colorBottom.y, l.colorBottom.z }) },
+            { "colorTop",          json::array({ l.colorTop.x, l.colorTop.y, l.colorTop.z }) },
+            { "useWind",           l.useWind },
+            { "windStrength",      l.windStrength },
+            { "windSpeed",         l.windSpeed },
+            { "seed",              l.seed },
+            { "lastInstanceCount", static_cast<int>(l.lastInstanceCount) }
+        };
+    }
+
+    json TerrainDetailJson(Registry& registry, EntityID entity)
+    {
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        if (!tc || !tc->asset) return nullptr;
+        const TerrainAsset& a = *tc->asset;
+
+        std::string entityName;
+        if (auto* nc = registry.GetComponent<NameComponent>(entity)) entityName = nc->name;
+
+        json layers = json::array();
+        for (const auto& l : a.layers) layers.push_back(TerrainLayerToJson(l));
+
+        return {
+            { "entity",      EntityToString(entity) },
+            { "name",        entityName },
+            // Dimensions
+            { "resolution",  a.resolution },
+            { "worldSizeX",  a.worldSizeX },
+            { "worldSizeZ",  a.worldSizeZ },
+            { "heightScale", a.heightScale },
+            { "chunkCountX", a.chunkCountX },
+            { "chunkCountZ", a.chunkCountZ },
+            // Noise
+            { "noiseType",           a.noiseType },
+            { "noiseFreq",           a.noiseFreq },
+            { "octaves",             a.octaves },
+            { "lacunarity",          a.lacunarity },
+            { "gain",                a.gain },
+            { "seed",                a.seed },
+            { "domainWarpStrength",  a.domainWarpStrength },
+            { "terraceSteps",        a.terraceSteps },
+            // AutoSplat
+            { "autoSplat", {
+                { "rockAltitudeMin",  a.autoSplat.rockAltitudeMin },
+                { "rockSlopeDegrees", a.autoSplat.rockSlopeDegrees },
+                { "dirtMidAltitude",  a.autoSplat.dirtMidAltitude },
+                { "dirtStrength",     a.autoSplat.dirtStrength }
+            }},
+            // Water
+            { "water", {
+                { "enabled",      a.water.enabled },
+                { "seaLevel",     a.water.seaLevel },
+                { "shallowColor", json::array({ a.water.shallowColor.x, a.water.shallowColor.y, a.water.shallowColor.z, a.water.shallowColor.w }) },
+                { "deepColor",    json::array({ a.water.deepColor.x, a.water.deepColor.y, a.water.deepColor.z, a.water.deepColor.w }) },
+                { "depthFade",    a.water.depthFade },
+                { "waveSpeed",    a.water.waveSpeed },
+                { "waveScale",    a.water.waveScale }
+            }},
+            // Erosion
+            { "erosion", {
+                { "iterations",             a.erosion.iterations },
+                { "erosionRadius",          a.erosion.erosionRadius },
+                { "maxDropletLifetime",     a.erosion.maxDropletLifetime },
+                { "inertia",                a.erosion.inertia },
+                { "sedimentCapacityFactor", a.erosion.sedimentCapacityFactor },
+                { "minSedimentCapacity",    a.erosion.minSedimentCapacity },
+                { "erodeSpeed",             a.erosion.erodeSpeed },
+                { "depositSpeed",           a.erosion.depositSpeed },
+                { "evaporateSpeed",         a.erosion.evaporateSpeed },
+                { "gravity",                a.erosion.gravity },
+                { "seed",                   a.erosion.seed }
+            }},
+            // PBR layers
+            { "layers", std::move(layers) },
+            // Status
+            { "needsRebuild",     tc->needsRebuild },
+            { "needsSplatUpload", tc->needsSplatUpload }
+        };
+    }
+
+    // ---- Terrain open / brush ----
+
+    json HandleTerrainOpen(EngineKernel& kernel, const json& params)
+    {
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        EntityID entity = Entity::NULL_ID;
+        if (params.contains("entity")) {
+            Registry* reg = kernel.GetGameRegistry();
+            if (reg) {
+                entity = EntityFromJson(params["entity"]);
+                if (!Entity::IsNull(entity) && (!reg->IsAlive(entity) || !reg->GetComponent<TerrainComponent>(entity)))
+                    entity = Entity::NULL_ID;
+            }
+        }
+        editor->OpenTerrainEditorFromAutomation(entity);
+        return { { "open", true } };
+    }
+
+    json HandleTerrainSetBrush(EngineKernel& kernel, const json& params)
+    {
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        TerrainBrush& brush = editor->GetTerrainEditorPanel().GetBrushMutable();
+        bool activated = false;
+        if (params.contains("mode"))         { brush.mode        = TerrainBrushModeFromString(params["mode"].get<std::string>()); activated = true; }
+        if (params.contains("radius"))       { brush.radius      = params["radius"].get<float>();       activated = true; }
+        if (params.contains("strength"))     { brush.strength    = params["strength"].get<float>();     activated = true; }
+        if (params.contains("falloff"))      { brush.falloff     = params["falloff"].get<float>(); }
+        if (params.contains("layerIndex"))   { brush.layerIndex  = params["layerIndex"].get<int>(); }
+        if (params.contains("targetHeight")) { brush.targetHeight= params["targetHeight"].get<float>(); }
+        if (params.value("enable", activated))
+            editor->GetTerrainEditorPanel().SetSceneBrushEnabled(true);
+        if (params.value("disable", false))
+            editor->GetTerrainEditorPanel().SetSceneBrushEnabled(false);
+
+        const char* modeNames[] = { "raise", "lower", "smooth", "flatten", "paint" };
+        const int   modeIdx     = static_cast<int>(brush.mode);
+        return { { "brush", {
+            { "mode",        modeNames[ClampInt(modeIdx, 0, 4)] },
+            { "radius",      brush.radius },
+            { "strength",    brush.strength },
+            { "falloff",     brush.falloff },
+            { "layerIndex",  brush.layerIndex },
+            { "targetHeight",brush.targetHeight },
+            { "enabled",     editor->GetTerrainEditorPanel().IsSceneBrushEnabled() }
+        }}};
+    }
+
+    // ---- Terrain asset operations ----
+
+    json HandleTerrainGet(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        return { { "terrain", TerrainDetailJson(registry, entity) } };
+    }
+
+    json HandleTerrainSetDimensions(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        TerrainAsset& a = *tc->asset;
+        bool changed = false;
+        if (params.contains("worldSizeX"))  { a.worldSizeX  = params["worldSizeX"].get<float>();  changed = true; }
+        if (params.contains("worldSizeZ"))  { a.worldSizeZ  = params["worldSizeZ"].get<float>();  changed = true; }
+        if (params.contains("heightScale")) { a.heightScale = params["heightScale"].get<float>(); changed = true; }
+        if (params.contains("resolution"))  { a.resolution  = static_cast<uint32_t>(std::clamp(params["resolution"].get<int>(), 64, 1024)); changed = true; }
+        if (params.contains("chunkCountX")) { a.chunkCountX = static_cast<uint32_t>(params["chunkCountX"].get<int>()); changed = true; }
+        if (params.contains("chunkCountZ")) { a.chunkCountZ = static_cast<uint32_t>(params["chunkCountZ"].get<int>()); changed = true; }
+        if (changed) { tc->needsRebuild = true; MarkEntityEdited(registry, entity); }
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSetNoise(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        TerrainAsset& a = *tc->asset;
+        if (params.contains("noiseType"))          a.noiseType          = std::clamp(params["noiseType"].get<int>(), 0, 2);
+        if (params.contains("noiseFreq"))          a.noiseFreq          = params["noiseFreq"].get<float>();
+        if (params.contains("octaves"))            a.octaves            = std::clamp(params["octaves"].get<int>(), 1, 8);
+        if (params.contains("lacunarity"))         a.lacunarity         = params["lacunarity"].get<float>();
+        if (params.contains("gain"))               a.gain               = params["gain"].get<float>();
+        if (params.contains("seed"))               a.seed               = params["seed"].get<int>();
+        if (params.contains("domainWarpStrength")) a.domainWarpStrength = params["domainWarpStrength"].get<float>();
+        if (params.contains("terraceSteps"))       a.terraceSteps       = params["terraceSteps"].get<float>();
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSetErosion(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        auto& ep = tc->asset->erosion;
+        if (params.contains("iterations"))             ep.iterations             = params["iterations"].get<int>();
+        if (params.contains("erosionRadius"))          ep.erosionRadius          = params["erosionRadius"].get<int>();
+        if (params.contains("maxDropletLifetime"))     ep.maxDropletLifetime     = params["maxDropletLifetime"].get<int>();
+        if (params.contains("inertia"))                ep.inertia                = params["inertia"].get<float>();
+        if (params.contains("sedimentCapacityFactor")) ep.sedimentCapacityFactor = params["sedimentCapacityFactor"].get<float>();
+        if (params.contains("minSedimentCapacity"))    ep.minSedimentCapacity    = params["minSedimentCapacity"].get<float>();
+        if (params.contains("erodeSpeed"))             ep.erodeSpeed             = params["erodeSpeed"].get<float>();
+        if (params.contains("depositSpeed"))           ep.depositSpeed           = params["depositSpeed"].get<float>();
+        if (params.contains("evaporateSpeed"))         ep.evaporateSpeed         = params["evaporateSpeed"].get<float>();
+        if (params.contains("gravity"))                ep.gravity                = params["gravity"].get<float>();
+        if (params.contains("seed"))                   ep.seed                   = params["seed"].get<int>();
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainRunErosion(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        tc->asset->RunHydraulicErosion(tc->asset->erosion);
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSetAutoSplat(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        TerrainAsset& a = *tc->asset;
+        auto& as = a.autoSplat;
+        if (params.contains("rockAltitudeMin"))  as.rockAltitudeMin  = params["rockAltitudeMin"].get<float>();
+        if (params.contains("rockSlopeDegrees")) as.rockSlopeDegrees = params["rockSlopeDegrees"].get<float>();
+        if (params.contains("dirtMidAltitude"))  as.dirtMidAltitude  = params["dirtMidAltitude"].get<float>();
+        if (params.contains("dirtStrength"))     as.dirtStrength     = params["dirtStrength"].get<float>();
+        if (params.value("regenerate", true)) {
+            a.GenerateAutoSplat(as);
+            tc->needsRebuild = true;
+        }
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSetWater(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        auto& w = tc->asset->water;
+        if (params.contains("enabled"))   w.enabled   = params["enabled"].get<bool>();
+        if (params.contains("seaLevel"))  w.seaLevel  = params["seaLevel"].get<float>();
+        if (params.contains("depthFade")) w.depthFade = params["depthFade"].get<float>();
+        if (params.contains("waveSpeed")) w.waveSpeed = params["waveSpeed"].get<float>();
+        if (params.contains("waveScale")) w.waveScale = params["waveScale"].get<float>();
+        if (params.contains("shallowColor") && params["shallowColor"].is_array() && params["shallowColor"].size() >= 4)
+            w.shallowColor = { params["shallowColor"][0].get<float>(), params["shallowColor"][1].get<float>(), params["shallowColor"][2].get<float>(), params["shallowColor"][3].get<float>() };
+        if (params.contains("deepColor") && params["deepColor"].is_array() && params["deepColor"].size() >= 4)
+            w.deepColor = { params["deepColor"][0].get<float>(), params["deepColor"][1].get<float>(), params["deepColor"][2].get<float>(), params["deepColor"][3].get<float>() };
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainFitWater(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        TerrainAsset& a = *tc->asset;
+        a.water.enabled  = true;
+        a.water.seaLevel = a.SuggestVisibleWaterLevel();
+        a.GenerateAutoSplat(a.autoSplat);
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "seaLevel", a.water.seaLevel }, { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    uint32_t TerrainStagesFromString(const std::string& value)
+    {
+        const std::string lower = ToLowerCopy(value);
+        if (lower == "noise")                            return TerrainGpuPipeline::StageNoise;
+        if (lower == "erosion" || lower == "erode")      return TerrainGpuPipeline::StageErode;
+        if (lower == "splat"   || lower == "autosplat")  return TerrainGpuPipeline::StageAutoSplat;
+        if (lower == "noise_splat")                      return TerrainGpuPipeline::StageNoise | TerrainGpuPipeline::StageAutoSplat;
+        if (lower == "erosion_splat")                    return TerrainGpuPipeline::StageErode | TerrainGpuPipeline::StageAutoSplat;
+        return TerrainGpuPipeline::StageAll;  // "all" or unknown
+    }
+
+    json HandleTerrainRegenerate(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        const uint32_t stages = TerrainStagesFromString(params.value("stages", std::string("all")));
+        TerrainGpuPipeline::Instance().Run(*tc->asset, stages);
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    void ApplyTerrainPresetByName(TerrainAsset& a, const std::string& name)
+    {
+        const std::string lower = ToLowerCopy(name);
+        if (lower == "flat_plains" || lower == "flatplains") {
+            a.noiseType = 1; a.noiseFreq = 0.0025f; a.octaves = 3; a.lacunarity = 2.0f; a.gain = 0.42f;
+            a.domainWarpStrength = 25.0f; a.terraceSteps = 0.0f; a.heightScale = 14.0f;
+            a.autoSplat = { 0.92f, 60.0f, 0.55f, 0.40f }; a.water.enabled = false;
+        } else if (lower == "rolling_hills" || lower == "rollinghills") {
+            a.noiseType = 1; a.noiseFreq = 0.0035f; a.octaves = 4; a.lacunarity = 2.0f; a.gain = 0.5f;
+            a.domainWarpStrength = 60.0f; a.terraceSteps = 0.0f; a.heightScale = 32.0f;
+            a.autoSplat = { 0.78f, 38.0f, 0.5f, 0.45f };
+        } else if (lower == "mountain_range" || lower == "mountainrange") {
+            a.noiseType = 0; a.noiseFreq = 0.0045f; a.octaves = 5; a.lacunarity = 2.2f; a.gain = 0.5f;
+            a.domainWarpStrength = 100.0f; a.terraceSteps = 0.0f; a.heightScale = 80.0f;
+            a.autoSplat = { 0.55f, 28.0f, 0.42f, 0.40f }; a.erosion.iterations = 80000;
+        } else if (lower == "plateau_mesa" || lower == "plateaumesa") {
+            a.noiseType = 1; a.noiseFreq = 0.003f; a.octaves = 4; a.lacunarity = 2.0f; a.gain = 0.5f;
+            a.domainWarpStrength = 50.0f; a.terraceSteps = 8.0f; a.heightScale = 55.0f;
+            a.autoSplat = { 0.7f, 45.0f, 0.45f, 0.4f };
+        } else if (lower == "lake_basin" || lower == "lakebasin") {
+            a.noiseType = 1; a.noiseFreq = 0.0028f; a.octaves = 4; a.lacunarity = 2.0f; a.gain = 0.5f;
+            a.domainWarpStrength = 70.0f; a.terraceSteps = 0.0f; a.heightScale = 30.0f;
+            a.water.enabled = true; a.autoSplat = { 0.85f, 50.0f, 0.4f, 0.5f };
+        } else if (lower == "rocky_wasteland" || lower == "rockywasteland") {
+            a.noiseType = 2; a.noiseFreq = 0.006f; a.octaves = 4; a.lacunarity = 2.0f; a.gain = 0.5f;
+            a.domainWarpStrength = 50.0f; a.terraceSteps = 0.0f; a.heightScale = 50.0f;
+            a.autoSplat = { 0.35f, 22.0f, 0.35f, 0.35f }; a.water.enabled = false;
+        } else if (lower == "archipelago") {
+            a.noiseType = 1; a.noiseFreq = 0.0045f; a.octaves = 4; a.lacunarity = 2.0f; a.gain = 0.55f;
+            a.domainWarpStrength = 90.0f; a.terraceSteps = 0.0f; a.heightScale = 35.0f;
+            a.water.enabled = true; a.water.seaLevel = 2.0f; a.autoSplat = { 0.8f, 45.0f, 0.4f, 0.5f };
+        } else if (lower == "volcanic_crater" || lower == "volcaniccrater") {
+            a.noiseType = 0; a.noiseFreq = 0.005f; a.octaves = 5; a.lacunarity = 2.3f; a.gain = 0.55f;
+            a.domainWarpStrength = 60.0f; a.terraceSteps = 0.0f; a.heightScale = 90.0f;
+            a.autoSplat = { 0.45f, 25.0f, 0.4f, 0.5f }; a.erosion.iterations = 100000;
+        }
+        // unknown preset: no change
+    }
+
+    json HandleTerrainApplyPreset(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        const std::string presetName = params.value("preset", std::string("flat_plains"));
+        ApplyTerrainPresetByName(*tc->asset, presetName);
+        const uint32_t stages = TerrainStagesFromString(params.value("stages", std::string("all")));
+        TerrainGpuPipeline::Instance().Run(*tc->asset, stages);
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "preset", presetName }, { "terrain", TerrainSummary(registry, entity) } };
+    }
+
+    json HandleTerrainSetLayer(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* tc = registry.GetComponent<TerrainComponent>(entity);
+        TerrainAsset& a = *tc->asset;
+        a.EnsureDefaultLayers();
+        const int idx = params.value("index", 0);
+        if (idx < 0 || idx >= static_cast<int>(a.layers.size()))
+            throw MakeError("invalid_index", "Layer index out of range.", { { "index", idx } });
+        TerrainLayer& l = a.layers[idx];
+        if (params.contains("albedoPath"))     l.albedoPath    = params["albedoPath"].get<std::string>();
+        if (params.contains("normalPath"))     l.normalPath    = params["normalPath"].get<std::string>();
+        if (params.contains("roughnessPath"))  l.roughnessPath = params["roughnessPath"].get<std::string>();
+        if (params.contains("tileScale"))      l.tileScale     = params["tileScale"].get<float>();
+        if (params.contains("blendSharpness")) l.blendSharpness= params["blendSharpness"].get<float>();
+        tc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "index", idx }, { "layer", TerrainLayerToJson(l) } };
+    }
+
+    // ---- Terrain foliage ----
+
+    json HandleTerrainGetFoliage(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) return { { "foliage", nullptr } };
+        json foliageLayers = json::array();
+        for (const auto& l : gc->layers) foliageLayers.push_back(FoliageLayerToJson(l));
+        return { { "foliage", {
+            { "enabled",       gc->enabled },
+            { "drawDistance",  gc->drawDistance },
+            { "windDirection", json::array({ gc->windDirection.x, gc->windDirection.y, gc->windDirection.z }) },
+            { "layers",        std::move(foliageLayers) }
+        }}};
+    }
+
+    json HandleTerrainSetFoliage(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (params.contains("enabled"))      gc->enabled      = params["enabled"].get<bool>();
+        if (params.contains("drawDistance")) gc->drawDistance = params["drawDistance"].get<float>();
+        if (params.contains("windDirection") && params["windDirection"].is_array() && params["windDirection"].size() >= 3)
+            gc->windDirection = { params["windDirection"][0].get<float>(), params["windDirection"][1].get<float>(), params["windDirection"][2].get<float>() };
+        gc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "entity", EntityToString(entity) } };
+    }
+
+    json HandleTerrainAddFoliageLayer(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        FoliageLayer newLayer;
+        if (params.contains("name"))     newLayer.name     = params["name"].get<std::string>();
+        if (params.contains("meshPath")) newLayer.meshPath = params["meshPath"].get<std::string>();
+        gc->layers.push_back(std::move(newLayer));
+        gc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        const int idx = static_cast<int>(gc->layers.size()) - 1;
+        return { { "index", idx }, { "layer", FoliageLayerToJson(gc->layers[idx]) } };
+    }
+
+    json HandleTerrainSetFoliageLayer(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        const int idx = params.value("index", 0);
+        if (idx < 0 || idx >= static_cast<int>(gc->layers.size()))
+            throw MakeError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
+        FoliageLayer& l = gc->layers[idx];
+        if (params.contains("enabled"))           l.enabled           = params["enabled"].get<bool>();
+        if (params.contains("name"))              l.name              = params["name"].get<std::string>();
+        if (params.contains("meshPath"))          l.meshPath          = params["meshPath"].get<std::string>();
+        if (params.contains("densityMultiplier")) l.densityMultiplier = params["densityMultiplier"].get<float>();
+        if (params.contains("maxPerCell"))        l.maxPerCell        = static_cast<uint32_t>(params["maxPerCell"].get<int>());
+        if (params.contains("densityThreshold"))  l.densityThreshold  = params["densityThreshold"].get<float>();
+        if (params.contains("splatChannel"))      l.splatChannel      = params["splatChannel"].get<int>();
+        if (params.contains("minAltitudeNorm"))   l.minAltitudeNorm   = params["minAltitudeNorm"].get<float>();
+        if (params.contains("maxAltitudeNorm"))   l.maxAltitudeNorm   = params["maxAltitudeNorm"].get<float>();
+        if (params.contains("maxSlopeDegrees"))   l.maxSlopeDegrees   = params["maxSlopeDegrees"].get<float>();
+        if (params.contains("sizeScale"))         l.sizeScale         = params["sizeScale"].get<float>();
+        if (params.contains("sizeVariance"))      l.sizeVariance      = params["sizeVariance"].get<float>();
+        if (params.contains("useWind"))           l.useWind           = params["useWind"].get<bool>();
+        if (params.contains("windStrength"))      l.windStrength      = params["windStrength"].get<float>();
+        if (params.contains("windSpeed"))         l.windSpeed         = params["windSpeed"].get<float>();
+        if (params.contains("seed"))              l.seed              = params["seed"].get<int>();
+        if (params.contains("colorBottom") && params["colorBottom"].is_array() && params["colorBottom"].size() >= 3)
+            l.colorBottom = { params["colorBottom"][0].get<float>(), params["colorBottom"][1].get<float>(), params["colorBottom"][2].get<float>() };
+        if (params.contains("colorTop") && params["colorTop"].is_array() && params["colorTop"].size() >= 3)
+            l.colorTop = { params["colorTop"][0].get<float>(), params["colorTop"][1].get<float>(), params["colorTop"][2].get<float>() };
+        gc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "index", idx }, { "layer", FoliageLayerToJson(l) } };
+    }
+
+    json HandleTerrainDeleteFoliageLayer(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        const int idx = params.value("index", 0);
+        if (idx < 0 || idx >= static_cast<int>(gc->layers.size()))
+            throw MakeError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
+        gc->layers.erase(gc->layers.begin() + idx);
+        gc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "layerCount", static_cast<int>(gc->layers.size()) } };
+    }
+
+    json HandleTerrainResetFoliage(Registry& registry, const json& params)
+    {
+        const EntityID entity = FindTerrainEntity(registry, params);
+        auto* gc = registry.GetComponent<GrassComponent>(entity);
+        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        gc->layers.clear();
+        gc->EnsureDefaultLayers();
+        gc->needsRebuild = true;
+        MarkEntityEdited(registry, entity);
+        return { { "layerCount", static_cast<int>(gc->layers.size()) } };
+    }
+
     std::string EffectNodeTypeToApiString(EffectGraphNodeType type)
     {
         switch (type) {
@@ -3624,6 +4121,2701 @@ namespace
         };
     }
 
+    // =========================================================
+    // PlayerEditor helpers
+    // =========================================================
+
+    std::string ActorEditorModeToString(ActorEditorMode m)
+    {
+        switch (m) {
+        case ActorEditorMode::Enemy: return "Enemy";
+        case ActorEditorMode::NPC:   return "NPC";
+        default:                     return "Player";
+        }
+    }
+
+    ActorEditorMode ActorEditorModeFromString(const std::string& s)
+    {
+        if (s == "Enemy") return ActorEditorMode::Enemy;
+        if (s == "NPC")   return ActorEditorMode::NPC;
+        return ActorEditorMode::Player;
+    }
+
+    std::string StateNodeTypeToString(StateNodeType t)
+    {
+        switch (t) {
+        case StateNodeType::Locomotion: return "Locomotion";
+        case StateNodeType::Action:     return "Action";
+        case StateNodeType::Dodge:      return "Dodge";
+        case StateNodeType::Jump:       return "Jump";
+        case StateNodeType::Damage:     return "Damage";
+        case StateNodeType::Dead:       return "Dead";
+        default:                        return "Custom";
+        }
+    }
+
+    StateNodeType StateNodeTypeFromString(const std::string& s)
+    {
+        if (s == "Locomotion") return StateNodeType::Locomotion;
+        if (s == "Action")     return StateNodeType::Action;
+        if (s == "Dodge")      return StateNodeType::Dodge;
+        if (s == "Jump")       return StateNodeType::Jump;
+        if (s == "Damage")     return StateNodeType::Damage;
+        if (s == "Dead")       return StateNodeType::Dead;
+        return StateNodeType::Custom;
+    }
+
+    std::string ConditionTypeToString(ConditionType t)
+    {
+        switch (t) {
+        case ConditionType::Timer:     return "Timer";
+        case ConditionType::AnimEnd:   return "AnimEnd";
+        case ConditionType::Health:    return "Health";
+        case ConditionType::Stamina:   return "Stamina";
+        case ConditionType::Parameter: return "Parameter";
+        default:                       return "Input";
+        }
+    }
+
+    ConditionType ConditionTypeFromString(const std::string& s)
+    {
+        if (s == "Timer")     return ConditionType::Timer;
+        if (s == "AnimEnd")   return ConditionType::AnimEnd;
+        if (s == "Health")    return ConditionType::Health;
+        if (s == "Stamina")   return ConditionType::Stamina;
+        if (s == "Parameter") return ConditionType::Parameter;
+        return ConditionType::Input;
+    }
+
+    std::string CompareOpToString(CompareOp op)
+    {
+        switch (op) {
+        case CompareOp::NotEqual:     return "NotEqual";
+        case CompareOp::Greater:      return "Greater";
+        case CompareOp::Less:         return "Less";
+        case CompareOp::GreaterEqual: return "GreaterEqual";
+        case CompareOp::LessEqual:    return "LessEqual";
+        default:                      return "Equal";
+        }
+    }
+
+    CompareOp CompareOpFromString(const std::string& s)
+    {
+        if (s == "NotEqual")     return CompareOp::NotEqual;
+        if (s == "Greater")      return CompareOp::Greater;
+        if (s == "Less")         return CompareOp::Less;
+        if (s == "GreaterEqual") return CompareOp::GreaterEqual;
+        if (s == "LessEqual")    return CompareOp::LessEqual;
+        return CompareOp::Equal;
+    }
+
+    std::string ParameterTypeToString(ParameterType t)
+    {
+        switch (t) {
+        case ParameterType::Int:     return "Int";
+        case ParameterType::Bool:    return "Bool";
+        case ParameterType::Trigger: return "Trigger";
+        default:                     return "Float";
+        }
+    }
+
+    ParameterType ParameterTypeFromString(const std::string& s)
+    {
+        if (s == "Int")     return ParameterType::Int;
+        if (s == "Bool")    return ParameterType::Bool;
+        if (s == "Trigger") return ParameterType::Trigger;
+        return ParameterType::Float;
+    }
+
+    std::string TimelineTrackTypeToString(TimelineTrackType t)
+    {
+        switch (t) {
+        case TimelineTrackType::Animation:   return "Animation";
+        case TimelineTrackType::Hitbox:      return "Hitbox";
+        case TimelineTrackType::VFX:         return "VFX";
+        case TimelineTrackType::Audio:       return "Audio";
+        case TimelineTrackType::CameraShake: return "CameraShake";
+        case TimelineTrackType::Camera:      return "Camera";
+        case TimelineTrackType::Event:       return "Event";
+        case TimelineTrackType::Projectile:  return "Projectile";
+        default:                             return "Custom";
+        }
+    }
+
+    TimelineTrackType TimelineTrackTypeFromString(const std::string& s)
+    {
+        if (s == "Animation")   return TimelineTrackType::Animation;
+        if (s == "Hitbox")      return TimelineTrackType::Hitbox;
+        if (s == "VFX")         return TimelineTrackType::VFX;
+        if (s == "Audio")       return TimelineTrackType::Audio;
+        if (s == "CameraShake") return TimelineTrackType::CameraShake;
+        if (s == "Camera")      return TimelineTrackType::Camera;
+        if (s == "Event")       return TimelineTrackType::Event;
+        if (s == "Projectile")  return TimelineTrackType::Projectile;
+        return TimelineTrackType::Custom;
+    }
+
+    json StateNodeToJson(const StateNode& s)
+    {
+        return {
+            { "id",               s.id },
+            { "name",             s.name },
+            { "type",             StateNodeTypeToString(s.type) },
+            { "animationIndex",   s.animationIndex },
+            { "timelineId",       s.timelineId },
+            { "loopAnimation",    s.loopAnimation },
+            { "animSpeed",        s.animSpeed },
+            { "canInterrupt",     s.canInterrupt },
+            { "position",         json::array({ s.position.x, s.position.y }) },
+            { "behaviorTreePath", s.behaviorTreePath },
+            { "aiNote",           s.aiNote }
+        };
+    }
+
+    json StateTransitionToJson(const StateTransition& t)
+    {
+        json conditions = json::array();
+        for (const auto& c : t.conditions) {
+            conditions.push_back({
+                { "type",    ConditionTypeToString(c.type) },
+                { "param",   std::string(c.param) },
+                { "compare", CompareOpToString(c.compare) },
+                { "value",   c.value }
+            });
+        }
+        return {
+            { "id",                  t.id },
+            { "fromState",           t.fromState },
+            { "toState",             t.toState },
+            { "priority",            t.priority },
+            { "exitTimeNormalized",  t.exitTimeNormalized },
+            { "blendDuration",       t.blendDuration },
+            { "hasExitTime",         t.hasExitTime },
+            { "conditions",          std::move(conditions) }
+        };
+    }
+
+    json StateMachineAssetToJson(const StateMachineAsset& sm)
+    {
+        json states = json::array();
+        for (const auto& s : sm.states) states.push_back(StateNodeToJson(s));
+        json transitions = json::array();
+        for (const auto& t : sm.transitions) transitions.push_back(StateTransitionToJson(t));
+        json parameters = json::array();
+        for (const auto& p : sm.parameters) {
+            parameters.push_back({
+                { "name",         p.name },
+                { "type",         ParameterTypeToString(p.type) },
+                { "defaultValue", p.defaultValue }
+            });
+        }
+        return {
+            { "name",           sm.name },
+            { "defaultStateId", sm.defaultStateId },
+            { "states",         std::move(states) },
+            { "transitions",    std::move(transitions) },
+            { "parameters",     std::move(parameters) }
+        };
+    }
+
+    json TimelineTrackToJson(const TimelineTrack& t)
+    {
+        json items = json::array();
+        for (const auto& item : t.items) {
+            items.push_back({
+                { "startFrame", item.startFrame },
+                { "endFrame",   item.endFrame },
+                { "eventName",  std::string(item.eventName) },
+                { "eventData",  std::string(item.eventData) }
+            });
+        }
+        json keyframes = json::array();
+        for (const auto& kf : t.keyframes) {
+            keyframes.push_back({
+                { "frame", kf.frame },
+                { "value", json::array({ kf.value[0], kf.value[1], kf.value[2], kf.value[3] }) }
+            });
+        }
+        return {
+            { "id",        t.id },
+            { "name",      t.name },
+            { "type",      TimelineTrackTypeToString(t.type) },
+            { "muted",     t.muted },
+            { "locked",    t.locked },
+            { "color",     t.color },
+            { "items",     std::move(items) },
+            { "keyframes", std::move(keyframes) }
+        };
+    }
+
+    json TimelineAssetToJson(const TimelineAsset& tl)
+    {
+        json tracks = json::array();
+        for (const auto& t : tl.tracks) tracks.push_back(TimelineTrackToJson(t));
+        return {
+            { "id",             tl.id },
+            { "name",           tl.name },
+            { "fps",            tl.fps },
+            { "duration",       tl.duration },
+            { "frameCount",     tl.GetFrameCount() },
+            { "animationIndex", tl.animationIndex },
+            { "tracks",         std::move(tracks) }
+        };
+    }
+
+    PlayerEditorPanel& RequirePlayerEditorPanel(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        return editor->GetPlayerEditorPanel();
+    }
+
+    // =========================================================
+    // PlayerEditor handlers
+    // =========================================================
+
+    json HandlePlayerEditorOpen(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        std::filesystem::path modelPath;
+        const std::string modelPathStr = params.value("modelPath", std::string{});
+        if (!modelPathStr.empty()) {
+            modelPath = ResolveProjectPath(modelPathStr, PathAccess::ReadAsset, true);
+        }
+
+        if (!editor->OpenPlayerEditorFromAutomation(modelPath)) {
+            throw MakeError("player_editor_open_failed", "Failed to open Player Editor.");
+        }
+
+        auto& panel = editor->GetPlayerEditorPanel();
+        if (params.contains("actorMode")) {
+            panel.SetActorEditorMode(ActorEditorModeFromString(params.value("actorMode", std::string("Player"))));
+        }
+
+        return {
+            { "active",    editor->IsPlayerWorkspaceActive() },
+            { "modelPath", panel.GetCurrentModelPath() },
+            { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) }
+        };
+    }
+
+    json HandlePlayerEditorGetStatus(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const auto& panel = editor->GetPlayerEditorPanel();
+        return {
+            { "active",           editor->IsPlayerWorkspaceActive() },
+            { "modelPath",        panel.GetCurrentModelPath() },
+            { "actorMode",        ActorEditorModeToString(panel.GetActorEditorMode()) },
+            { "viewMode",         panel.GetViewMode() == PlayerEditorViewMode::Test ? "Test" : "Edit" },
+            { "previewEntity",    Entity::IsNull(panel.GetPreviewEntity()) ? json(nullptr) : json(EntityToString(panel.GetPreviewEntity())) },
+            { "isTimelinePlaying",panel.IsTimelinePlaying() },
+            { "playheadFrame",    panel.GetPlayheadFrame() }
+        };
+    }
+
+    json HandlePlayerEditorLoadModel(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const std::filesystem::path path = ResolveProjectPath(
+            params.value("path", std::string{}), PathAccess::ReadAsset, true);
+
+        if (!editor->OpenPlayerEditorFromAutomation(path)) {
+            throw MakeError("player_editor_load_model_failed", "Failed to load model into Player Editor.", {
+                { "path", ToGenericProjectPath(path) }
+            });
+        }
+        return { { "modelPath", editor->GetPlayerEditorPanel().GetCurrentModelPath() } };
+    }
+
+    json HandlePlayerEditorGetStateMachine(EngineKernel& kernel)
+    {
+        return StateMachineAssetToJson(RequirePlayerEditorPanel(kernel).GetStateMachineAsset());
+    }
+
+    json HandlePlayerEditorAddState(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const std::string   name = params.value("name", std::string("New State"));
+        const StateNodeType type = StateNodeTypeFromString(params.value("type", std::string("Custom")));
+
+        StateNode* node = sm.AddState(name, type);
+        if (params.contains("animationIndex"))   node->animationIndex   = params["animationIndex"].get<int>();
+        if (params.contains("loopAnimation"))    node->loopAnimation    = params["loopAnimation"].get<bool>();
+        if (params.contains("animSpeed"))        node->animSpeed        = params["animSpeed"].get<float>();
+        if (params.contains("canInterrupt"))     node->canInterrupt     = params["canInterrupt"].get<bool>();
+        if (params.contains("position"))         ReadFloat2(params["position"], node->position);
+        if (params.contains("behaviorTreePath")) node->behaviorTreePath = params["behaviorTreePath"].get<std::string>();
+        if (params.contains("aiNote"))           node->aiNote           = params["aiNote"].get<std::string>();
+
+        const uint32_t id = node->id;
+        panel.MarkStateMachineDirty();
+        panel.SelectStateNode(id);
+        panel.RequestGraphFit();
+
+        const StateNode* found = sm.FindState(id);
+        return found ? StateNodeToJson(*found) : json{ { "id", id } };
+    }
+
+    json HandlePlayerEditorSetState(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        StateNode* node = sm.FindState(id);
+        if (!node) {
+            throw MakeError("not_found", "State node not found.", { { "id", id } });
+        }
+
+        if (params.contains("name"))             node->name             = params["name"].get<std::string>();
+        if (params.contains("type"))             node->type             = StateNodeTypeFromString(params["type"].get<std::string>());
+        if (params.contains("animationIndex"))   node->animationIndex   = params["animationIndex"].get<int>();
+        if (params.contains("timelineId"))       node->timelineId       = params["timelineId"].get<uint32_t>();
+        if (params.contains("loopAnimation"))    node->loopAnimation    = params["loopAnimation"].get<bool>();
+        if (params.contains("animSpeed"))        node->animSpeed        = params["animSpeed"].get<float>();
+        if (params.contains("canInterrupt"))     node->canInterrupt     = params["canInterrupt"].get<bool>();
+        if (params.contains("position"))         ReadFloat2(params["position"], node->position);
+        if (params.contains("behaviorTreePath")) node->behaviorTreePath = params["behaviorTreePath"].get<std::string>();
+        if (params.contains("aiNote"))           node->aiNote           = params["aiNote"].get<std::string>();
+
+        panel.MarkStateMachineDirty();
+        panel.SelectStateNode(id);
+
+        return StateNodeToJson(*node);
+    }
+
+    json HandlePlayerEditorDeleteState(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        if (!sm.FindState(id)) {
+            throw MakeError("not_found", "State node not found.", { { "id", id } });
+        }
+
+        sm.RemoveState(id);
+        panel.MarkStateMachineDirty();
+        panel.ClearEditorSelection();
+
+        return { { "deleted", id } };
+    }
+
+    json HandlePlayerEditorAddTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t fromState = params.value("fromState", 0u);
+        const uint32_t toState   = params.value("toState",   0u);
+        if (!sm.FindState(fromState)) {
+            throw MakeError("not_found", "fromState not found.", { { "fromState", fromState } });
+        }
+        if (!sm.FindState(toState)) {
+            throw MakeError("not_found", "toState not found.", { { "toState", toState } });
+        }
+
+        StateTransition* t = sm.AddTransition(fromState, toState);
+        if (params.contains("blendDuration"))      t->blendDuration      = params["blendDuration"].get<float>();
+        if (params.contains("exitTimeNormalized")) t->exitTimeNormalized = params["exitTimeNormalized"].get<float>();
+        if (params.contains("hasExitTime"))        t->hasExitTime        = params["hasExitTime"].get<bool>();
+        if (params.contains("priority"))           t->priority           = params["priority"].get<int>();
+
+        const uint32_t id = t->id;
+        panel.MarkStateMachineDirty();
+        panel.SelectTransition(id);
+
+        for (const auto& tr : sm.transitions) {
+            if (tr.id == id) return StateTransitionToJson(tr);
+        }
+        return { { "id", id } };
+    }
+
+    json HandlePlayerEditorSetTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        StateTransition* t = nullptr;
+        for (auto& tr : sm.transitions) {
+            if (tr.id == id) { t = &tr; break; }
+        }
+        if (!t) {
+            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+        }
+
+        if (params.contains("blendDuration"))      t->blendDuration      = params["blendDuration"].get<float>();
+        if (params.contains("exitTimeNormalized")) t->exitTimeNormalized = params["exitTimeNormalized"].get<float>();
+        if (params.contains("hasExitTime"))        t->hasExitTime        = params["hasExitTime"].get<bool>();
+        if (params.contains("priority"))           t->priority           = params["priority"].get<int>();
+
+        panel.MarkStateMachineDirty();
+        panel.SelectTransition(id);
+
+        return StateTransitionToJson(*t);
+    }
+
+    json HandlePlayerEditorDeleteTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        bool found = false;
+        for (const auto& t : sm.transitions) {
+            if (t.id == id) { found = true; break; }
+        }
+        if (!found) {
+            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+        }
+
+        sm.RemoveTransition(id);
+        panel.MarkStateMachineDirty();
+        panel.ClearEditorSelection();
+
+        return { { "deleted", id } };
+    }
+
+    json HandlePlayerEditorSelect(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+
+        if (params.contains("stateId")) {
+            const uint32_t id = params["stateId"].get<uint32_t>();
+            panel.SelectStateNode(id);
+            return { { "selectedStateId", id } };
+        }
+        if (params.contains("transitionId")) {
+            const uint32_t id = params["transitionId"].get<uint32_t>();
+            panel.SelectTransition(id);
+            return { { "selectedTransitionId", id } };
+        }
+        if (params.contains("trackId")) {
+            const int id = params["trackId"].get<int>();
+            panel.SelectTrack(id);
+            return { { "selectedTrackId", id } };
+        }
+
+        panel.ClearEditorSelection();
+        return { { "cleared", true } };
+    }
+
+    json HandlePlayerEditorSetDefaultState(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sm = panel.GetStateMachineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        if (!sm.FindState(id)) {
+            throw MakeError("not_found", "State node not found.", { { "id", id } });
+        }
+
+        sm.defaultStateId = id;
+        panel.MarkStateMachineDirty();
+        panel.SelectStateNode(id);
+
+        return { { "defaultStateId", id } };
+    }
+
+    json HandlePlayerEditorGetTimeline(EngineKernel& kernel)
+    {
+        return TimelineAssetToJson(RequirePlayerEditorPanel(kernel).GetTimelineAsset());
+    }
+
+    json HandlePlayerEditorAddTrack(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tl = panel.GetTimelineAsset();
+
+        const std::string     typeStr = params.value("type", std::string("Custom"));
+        const std::string     name    = params.value("name", typeStr);
+        const TimelineTrackType type  = TimelineTrackTypeFromString(typeStr);
+
+        TimelineTrack* track = tl.AddTrack(type, name);
+        if (params.contains("muted"))  track->muted  = params["muted"].get<bool>();
+        if (params.contains("locked")) track->locked = params["locked"].get<bool>();
+
+        const int trackId = static_cast<int>(track->id);
+        panel.MarkTimelineDirty();
+        panel.SelectTrack(trackId);
+
+        return TimelineTrackToJson(*track);
+    }
+
+    json HandlePlayerEditorDeleteTrack(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tl = panel.GetTimelineAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        bool found = false;
+        for (const auto& t : tl.tracks) {
+            if (t.id == id) { found = true; break; }
+        }
+        if (!found) {
+            throw MakeError("not_found", "Track not found.", { { "id", id } });
+        }
+
+        tl.RemoveTrack(id);
+        panel.MarkTimelineDirty();
+        panel.ClearEditorSelection();
+
+        return { { "deleted", id } };
+    }
+
+    json HandlePlayerEditorSetPlayhead(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        const int frameCount = panel.GetTimelineAsset().GetFrameCount();
+
+        int frame = params.value("frame", 0);
+        frame = ClampInt(frame, 0, frameCount > 0 ? frameCount : 0);
+        panel.SetPlayheadFrame(frame);
+
+        return { { "frame", frame } };
+    }
+
+    json HandlePlayerEditorTimelinePlay(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        const bool play = params.value("play", true);
+        panel.SetTimelinePlaying(play);
+
+        return {
+            { "playing", panel.IsTimelinePlaying() },
+            { "frame",   panel.GetPlayheadFrame() }
+        };
+    }
+
+    json HandlePlayerEditorSavePrefab(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        auto& panel = editor->GetPlayerEditorPanel();
+        const bool saveAs = params.value("saveAs", false);
+        if (!PlayerEditorSession::SavePrefabDocument(panel, saveAs)) {
+            throw MakeError("save_failed", "Failed to save prefab document.");
+        }
+        return { { "saved", true } };
+    }
+
+    // =========================================================
+    // GameLoopEditor helpers
+    // =========================================================
+
+    std::string GameLoopNodeTypeToString(GameLoopNodeType t)
+    {
+        switch (t) {
+        case GameLoopNodeType::Scene:  return "Scene";
+        case GameLoopNodeType::State:  return "State";
+        case GameLoopNodeType::Event:  return "Event";
+        case GameLoopNodeType::Action: return "Action";
+        case GameLoopNodeType::Battle: return "Battle";
+        }
+        return "State";
+    }
+
+    GameLoopNodeType GameLoopNodeTypeFromString(const std::string& s)
+    {
+        if (s == "Scene")  return GameLoopNodeType::Scene;
+        if (s == "Event")  return GameLoopNodeType::Event;
+        if (s == "Action") return GameLoopNodeType::Action;
+        if (s == "Battle") return GameLoopNodeType::Battle;
+        return GameLoopNodeType::State;
+    }
+
+    std::string GameFlowConditionTypeToString(GameFlowConditionType t)
+    {
+        switch (t) {
+        case GameFlowConditionType::InputAction:    return "InputAction";
+        case GameFlowConditionType::UIButtonClick:  return "UIButtonClick";
+        case GameFlowConditionType::TimerElapsed:   return "TimerElapsed";
+        case GameFlowConditionType::FlagEquals:     return "FlagEquals";
+        case GameFlowConditionType::BattleResult:   return "BattleResult";
+        case GameFlowConditionType::SceneLoaded:    return "SceneLoaded";
+        default:                                    return "Event";
+        }
+    }
+
+    GameFlowConditionType GameFlowConditionTypeFromString(const std::string& s)
+    {
+        if (s == "InputAction")   return GameFlowConditionType::InputAction;
+        if (s == "UIButtonClick") return GameFlowConditionType::UIButtonClick;
+        if (s == "TimerElapsed")  return GameFlowConditionType::TimerElapsed;
+        if (s == "FlagEquals")    return GameFlowConditionType::FlagEquals;
+        if (s == "BattleResult")  return GameFlowConditionType::BattleResult;
+        if (s == "SceneLoaded")   return GameFlowConditionType::SceneLoaded;
+        return GameFlowConditionType::Event;
+    }
+
+    std::string GameFlowActionTypeToString(GameFlowActionType t)
+    {
+        switch (t) {
+        case GameFlowActionType::LoadScene:          return "LoadScene";
+        case GameFlowActionType::SetCurrentNode:     return "SetCurrentNode";
+        case GameFlowActionType::EmitEvent:          return "EmitEvent";
+        case GameFlowActionType::SetFlag:            return "SetFlag";
+        case GameFlowActionType::ClearFlag:          return "ClearFlag";
+        case GameFlowActionType::StartBattleFlow:    return "StartBattleFlow";
+        case GameFlowActionType::ResetBattleFlow:    return "ResetBattleFlow";
+        case GameFlowActionType::Fade:               return "Fade";
+        case GameFlowActionType::Wait:               return "Wait";
+        case GameFlowActionType::ShowLoadingOverlay: return "ShowLoadingOverlay";
+        case GameFlowActionType::HideLoadingOverlay: return "HideLoadingOverlay";
+        }
+        return "LoadScene";
+    }
+
+    GameFlowActionType GameFlowActionTypeFromString(const std::string& s)
+    {
+        if (s == "SetCurrentNode")     return GameFlowActionType::SetCurrentNode;
+        if (s == "EmitEvent")          return GameFlowActionType::EmitEvent;
+        if (s == "SetFlag")            return GameFlowActionType::SetFlag;
+        if (s == "ClearFlag")          return GameFlowActionType::ClearFlag;
+        if (s == "StartBattleFlow")    return GameFlowActionType::StartBattleFlow;
+        if (s == "ResetBattleFlow")    return GameFlowActionType::ResetBattleFlow;
+        if (s == "Fade")               return GameFlowActionType::Fade;
+        if (s == "Wait")               return GameFlowActionType::Wait;
+        if (s == "ShowLoadingOverlay") return GameFlowActionType::ShowLoadingOverlay;
+        if (s == "HideLoadingOverlay") return GameFlowActionType::HideLoadingOverlay;
+        return GameFlowActionType::LoadScene;
+    }
+
+    json GameFlowConditionToJson(const GameFlowCondition& c)
+    {
+        return {
+            { "type",              GameFlowConditionTypeToString(c.type) },
+            { "name",              c.name },
+            { "value",             c.value },
+            { "seconds",           c.seconds },
+            { "expectedFlagValue", c.expectedFlagValue }
+        };
+    }
+
+    GameFlowCondition GameFlowConditionFromJson(const json& j)
+    {
+        GameFlowCondition c;
+        c.type              = GameFlowConditionTypeFromString(j.value("type", std::string("UIButtonClick")));
+        c.name              = j.value("name",  std::string{});
+        c.value             = j.value("value", std::string{});
+        c.seconds           = j.value("seconds", 0.0f);
+        c.expectedFlagValue = j.value("expectedFlagValue", true);
+        return c;
+    }
+
+    json GameFlowActionToJson(const GameFlowAction& a)
+    {
+        return {
+            { "type",      GameFlowActionTypeToString(a.type) },
+            { "target",    a.target },
+            { "value",     a.value },
+            { "boolValue", a.boolValue },
+            { "seconds",   a.seconds },
+            { "message",   a.message }
+        };
+    }
+
+    GameFlowAction GameFlowActionFromJson(const json& j)
+    {
+        GameFlowAction a;
+        a.type      = GameFlowActionTypeFromString(j.value("type", std::string("LoadScene")));
+        a.target    = j.value("target",    std::string{});
+        a.value     = j.value("value",     std::string{});
+        a.boolValue = j.value("boolValue", true);
+        a.seconds   = j.value("seconds",   0.0f);
+        a.message   = j.value("message",   std::string{});
+        return a;
+    }
+
+    json GameLoopNodeToJson(const GameLoopNode& n)
+    {
+        return {
+            { "id",        n.id },
+            { "name",      n.name },
+            { "type",      GameLoopNodeTypeToString(n.type) },
+            { "scenePath", n.scenePath },
+            { "graphPos",  json::array({ n.graphPos.x, n.graphPos.y }) }
+        };
+    }
+
+    json GameLoopTransitionToJson(const GameLoopTransition& t)
+    {
+        json conditions = json::array();
+        for (const auto& c : t.conditions) conditions.push_back(GameFlowConditionToJson(c));
+        json actions = json::array();
+        for (const auto& a : t.actions) actions.push_back(GameFlowActionToJson(a));
+        return {
+            { "id",                    t.id },
+            { "fromNodeId",            t.fromNodeId },
+            { "toNodeId",              t.toNodeId },
+            { "name",                  t.name },
+            { "priority",              t.priority },
+            { "conditionMode",         t.conditionMode == GameFlowConditionMode::Any ? "Any" : "All" },
+            { "loadingScenePath",      t.loadingScenePath },
+            { "loadingMinimumSeconds", t.loadingMinimumSeconds },
+            { "conditions",            std::move(conditions) },
+            { "actions",               std::move(actions) }
+        };
+    }
+
+    json GameLoopAssetToJson(const GameLoopAsset& asset)
+    {
+        json nodes = json::array();
+        for (const auto& n : asset.nodes) nodes.push_back(GameLoopNodeToJson(n));
+        json transitions = json::array();
+        for (const auto& t : asset.transitions) transitions.push_back(GameLoopTransitionToJson(t));
+        return {
+            { "startNodeId", asset.startNodeId },
+            { "nodes",       std::move(nodes) },
+            { "transitions", std::move(transitions) }
+        };
+    }
+
+    GameLoopEditorPanel& RequireGameLoopEditorPanel(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        return editor->GetGameLoopEditorPanel();
+    }
+
+    // =========================================================
+    // GameLoopEditor handlers
+    // =========================================================
+
+    json HandleGameLoopEditorOpen(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        std::filesystem::path assetPath;
+        const std::string pathStr = params.value("path", std::string{});
+        if (!pathStr.empty()) {
+            assetPath = ResolveProjectPath(pathStr, PathAccess::ReadAsset, true);
+        }
+
+        editor->OpenGameLoopEditorFromAutomation(assetPath);
+
+        const auto& panel = editor->GetGameLoopEditorPanel();
+        return {
+            { "active",      editor->IsGameLoopEditorActive() },
+            { "currentPath", panel.GetCurrentPath().generic_string() },
+            { "dirty",       panel.IsDirty() }
+        };
+    }
+
+    json HandleGameLoopEditorGetStatus(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const auto& panel = editor->GetGameLoopEditorPanel();
+        const auto& result = panel.GetValidateResult();
+        return {
+            { "active",            editor->IsGameLoopEditorActive() },
+            { "currentPath",       panel.GetCurrentPath().generic_string() },
+            { "dirty",             panel.IsDirty() },
+            { "selectedNodeId",       panel.GetSelectedNodeId() },
+            { "selectedTransitionId", panel.GetSelectedTransitionId() },
+            { "statusMessage",     panel.GetStatusMessage() },
+            { "validationErrors",  result.ErrorCount() },
+            { "validationWarnings",result.WarningCount() }
+        };
+    }
+
+    json HandleGameLoopEditorGetAsset(EngineKernel& kernel)
+    {
+        return GameLoopAssetToJson(RequireGameLoopEditorPanel(kernel).GetAsset());
+    }
+
+    json HandleGameLoopEditorLoad(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const std::filesystem::path path = ResolveProjectPath(
+            params.value("path", std::string{}), PathAccess::ReadAsset, true);
+
+        editor->OpenGameLoopEditorFromAutomation(path);
+
+        const auto& panel = editor->GetGameLoopEditorPanel();
+        return {
+            { "currentPath", panel.GetCurrentPath().generic_string() },
+            { "nodeCount",   static_cast<int>(panel.GetAsset().nodes.size()) }
+        };
+    }
+
+    json HandleGameLoopEditorSave(EngineKernel& kernel)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+        panel.SaveAutomation();
+        return {
+            { "currentPath",  panel.GetCurrentPath().generic_string() },
+            { "dirty",        panel.IsDirty() },
+            { "statusMessage",panel.GetStatusMessage() }
+        };
+    }
+
+    json HandleGameLoopEditorValidate(EngineKernel& kernel)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+        panel.ValidateAutomation();
+        const auto& result = panel.GetValidateResult();
+
+        json messages = json::array();
+        for (const auto& msg : result.messages) {
+            const char* sev =
+                msg.severity == GameLoopValidateSeverity::Error   ? "Error" :
+                msg.severity == GameLoopValidateSeverity::Warning ? "Warning" : "Info";
+            messages.push_back({ { "severity", sev }, { "message", msg.message } });
+        }
+        return {
+            { "errors",   result.ErrorCount() },
+            { "warnings", result.WarningCount() },
+            { "messages", std::move(messages) }
+        };
+    }
+
+    json HandleGameLoopEditorAddNode(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        editor->OpenGameLoopEditorFromAutomation();   // ensure visible
+
+        auto& panel = editor->GetGameLoopEditorPanel();
+
+        const std::string typeStr = params.value("type", std::string("State"));
+        const GameLoopNodeType type = GameLoopNodeTypeFromString(typeStr);
+
+        DirectX::XMFLOAT2 pos = { 200.0f, 200.0f };
+        if (params.contains("position")) ReadFloat2(params["position"], pos);
+
+        uint32_t newId = 0;
+        if (type == GameLoopNodeType::Scene) {
+            const std::string scenePath = params.value("scenePath", std::string{});
+            if (scenePath.empty()) {
+                throw MakeError("missing_param", "scenePath is required for Scene nodes.");
+            }
+            newId = panel.AddSceneNodeAutomation(scenePath, pos);
+        }
+        else {
+            const std::string name = params.value("name", typeStr);
+            newId = panel.AddFlowNodeAutomation(type, name, pos);
+        }
+
+        if (newId == 0) {
+            throw MakeError("add_node_failed", "Failed to add node (invalid scenePath?).", {
+                { "type", typeStr }
+            });
+        }
+
+        const GameLoopNode* node = panel.GetAsset().FindNode(newId);
+        return node ? GameLoopNodeToJson(*node) : json{ { "id", newId } };
+    }
+
+    json HandleGameLoopEditorSetNode(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+        auto& asset = panel.GetAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        GameLoopNode* node = asset.FindNode(id);
+        if (!node) {
+            throw MakeError("not_found", "Node not found.", { { "id", id } });
+        }
+
+        if (params.contains("name"))      node->name      = params["name"].get<std::string>();
+        if (params.contains("scenePath")) node->scenePath = params["scenePath"].get<std::string>();
+        if (params.contains("type"))      node->type      = GameLoopNodeTypeFromString(params["type"].get<std::string>());
+        if (params.contains("position"))  ReadFloat2(params["position"], node->graphPos);
+
+        panel.MarkDirty();
+        panel.SelectNodeById(id);
+
+        return GameLoopNodeToJson(*node);
+    }
+
+    json HandleGameLoopEditorDeleteNode(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+
+        const uint32_t id = params.value("id", 0u);
+        if (!panel.GetAsset().FindNode(id)) {
+            throw MakeError("not_found", "Node not found.", { { "id", id } });
+        }
+
+        panel.DeleteNodeAutomation(id);
+        return { { "deleted", id } };
+    }
+
+    json HandleGameLoopEditorAddTransition(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        editor->OpenGameLoopEditorFromAutomation();
+
+        auto& panel = editor->GetGameLoopEditorPanel();
+        const auto& asset = panel.GetAsset();
+
+        const uint32_t from = params.value("fromNodeId", 0u);
+        const uint32_t to   = params.value("toNodeId",   0u);
+        if (!asset.FindNode(from)) {
+            throw MakeError("not_found", "fromNodeId not found.", { { "fromNodeId", from } });
+        }
+        if (!asset.FindNode(to)) {
+            throw MakeError("not_found", "toNodeId not found.", { { "toNodeId", to } });
+        }
+
+        const uint32_t newId = panel.AddTransitionAutomation(from, to);
+        if (newId == 0) {
+            throw MakeError("add_transition_failed", "Failed to add transition (same node?).");
+        }
+
+        // Apply optional overrides
+        for (auto& t : panel.GetAsset().transitions) {
+            if (t.id != newId) continue;
+            if (params.contains("name"))                 t.name                  = params["name"].get<std::string>();
+            if (params.contains("priority"))             t.priority              = params["priority"].get<int>();
+            if (params.contains("conditionMode"))        t.conditionMode         = params["conditionMode"].get<std::string>() == "Any" ? GameFlowConditionMode::Any : GameFlowConditionMode::All;
+            if (params.contains("loadingScenePath"))     t.loadingScenePath      = params["loadingScenePath"].get<std::string>();
+            if (params.contains("loadingMinimumSeconds"))t.loadingMinimumSeconds = params["loadingMinimumSeconds"].get<float>();
+            if (params.contains("conditions")) {
+                t.conditions.clear();
+                for (const auto& cj : params["conditions"]) t.conditions.push_back(GameFlowConditionFromJson(cj));
+            }
+            if (params.contains("actions")) {
+                t.actions.clear();
+                for (const auto& aj : params["actions"]) t.actions.push_back(GameFlowActionFromJson(aj));
+            }
+            panel.SelectTransitionById(newId);
+            return GameLoopTransitionToJson(t);
+        }
+        return { { "id", newId } };
+    }
+
+    json HandleGameLoopEditorSetTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+
+        const uint32_t id = params.value("id", 0u);
+        GameLoopTransition* t = nullptr;
+        for (auto& tr : panel.GetAsset().transitions) {
+            if (tr.id == id) { t = &tr; break; }
+        }
+        if (!t) {
+            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+        }
+
+        if (params.contains("name"))                  t->name                  = params["name"].get<std::string>();
+        if (params.contains("priority"))              t->priority              = params["priority"].get<int>();
+        if (params.contains("conditionMode"))         t->conditionMode         = params["conditionMode"].get<std::string>() == "Any" ? GameFlowConditionMode::Any : GameFlowConditionMode::All;
+        if (params.contains("loadingScenePath"))      t->loadingScenePath      = params["loadingScenePath"].get<std::string>();
+        if (params.contains("loadingMinimumSeconds")) t->loadingMinimumSeconds = params["loadingMinimumSeconds"].get<float>();
+        if (params.contains("conditions")) {
+            t->conditions.clear();
+            for (const auto& cj : params["conditions"]) t->conditions.push_back(GameFlowConditionFromJson(cj));
+        }
+        if (params.contains("actions")) {
+            t->actions.clear();
+            for (const auto& aj : params["actions"]) t->actions.push_back(GameFlowActionFromJson(aj));
+        }
+
+        panel.MarkDirty();
+        panel.SelectTransitionById(id);
+
+        return GameLoopTransitionToJson(*t);
+    }
+
+    json HandleGameLoopEditorDeleteTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+
+        const uint32_t id = params.value("id", 0u);
+        bool found = false;
+        for (const auto& t : panel.GetAsset().transitions) {
+            if (t.id == id) { found = true; break; }
+        }
+        if (!found) {
+            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+        }
+
+        panel.DeleteTransitionByIdAutomation(id);
+        return { { "deleted", id } };
+    }
+
+    json HandleGameLoopEditorSelect(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+
+        if (params.contains("nodeId")) {
+            const uint32_t id = params["nodeId"].get<uint32_t>();
+            panel.SelectNodeById(id);
+            return { { "selectedNodeId", id } };
+        }
+        if (params.contains("transitionId")) {
+            const uint32_t id = params["transitionId"].get<uint32_t>();
+            panel.SelectTransitionById(id);
+            return { { "selectedTransitionId", id } };
+        }
+        panel.ClearSelection();
+        return { { "cleared", true } };
+    }
+
+    json HandleGameLoopEditorSetStartNode(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+        auto& asset = panel.GetAsset();
+
+        const uint32_t id = params.value("id", 0u);
+        if (!asset.FindNode(id)) {
+            throw MakeError("not_found", "Node not found.", { { "id", id } });
+        }
+
+        asset.startNodeId = id;
+        panel.MarkDirty();
+        panel.SelectNodeById(id);
+
+        return { { "startNodeId", id } };
+    }
+
+    // =========================================================
+    // PlayerEditor: Socket / Collider / Animator / InputMapping helpers
+    // =========================================================
+
+    json SocketToJson(int index, const NodeSocket& s)
+    {
+        return {
+            { "index",          index },
+            { "name",           s.name },
+            { "parentBoneName", s.parentBoneName },
+            { "offsetPos",      json::array({ s.offsetPos.x,    s.offsetPos.y,    s.offsetPos.z }) },
+            { "offsetRotDeg",   json::array({ s.offsetRotDeg.x, s.offsetRotDeg.y, s.offsetRotDeg.z }) },
+            { "offsetScale",    json::array({ s.offsetScale.x,  s.offsetScale.y,  s.offsetScale.z }) }
+        };
+    }
+
+    std::string ColliderShapeToString(ColliderShape s)
+    {
+        switch (s) {
+        case ColliderShape::Capsule: return "Capsule";
+        case ColliderShape::Box:     return "Box";
+        default:                     return "Sphere";
+        }
+    }
+
+    ColliderShape ColliderShapeFromString(const std::string& s)
+    {
+        if (s == "Capsule") return ColliderShape::Capsule;
+        if (s == "Box")     return ColliderShape::Box;
+        return ColliderShape::Sphere;
+    }
+
+    std::string ColliderAttributeToString(ColliderAttribute a)
+    {
+        return a == ColliderAttribute::Attack ? "Attack" : "Body";
+    }
+
+    ColliderAttribute ColliderAttributeFromString(const std::string& s)
+    {
+        return s == "Attack" ? ColliderAttribute::Attack : ColliderAttribute::Body;
+    }
+
+    json ColliderElementToJson(int index, const ColliderComponent::Element& e)
+    {
+        return {
+            { "index",       index },
+            { "type",        ColliderShapeToString(e.type) },
+            { "attribute",   ColliderAttributeToString(e.attribute) },
+            { "enabled",     e.enabled },
+            { "nodeIndex",   e.nodeIndex },
+            { "offsetLocal", json::array({ e.offsetLocal.x, e.offsetLocal.y, e.offsetLocal.z }) },
+            { "radius",      e.radius },
+            { "height",      e.height },
+            { "size",        json::array({ e.size.x, e.size.y, e.size.z }) },
+            { "hitVfxPath",  e.hitVfxPath },
+            { "hitSfxPath",  e.hitSfxPath }
+        };
+    }
+
+    std::string ActionTriggerToString(ActionTriggerType t)
+    {
+        switch (t) {
+        case ActionTriggerType::Released:  return "Released";
+        case ActionTriggerType::Held:      return "Held";
+        case ActionTriggerType::DoubleTap: return "DoubleTap";
+        default:                           return "Pressed";
+        }
+    }
+
+    ActionTriggerType ActionTriggerFromString(const std::string& s)
+    {
+        if (s == "Released")  return ActionTriggerType::Released;
+        if (s == "Held")      return ActionTriggerType::Held;
+        if (s == "DoubleTap") return ActionTriggerType::DoubleTap;
+        return ActionTriggerType::Pressed;
+    }
+
+    json ActionBindingToJson(int index, const ActionBinding& b)
+    {
+        return {
+            { "index",        index },
+            { "actionName",   b.actionName },
+            { "scancode",     b.scancode },
+            { "mouseButton",  b.mouseButton },
+            { "gamepadButton",b.gamepadButton },
+            { "trigger",      ActionTriggerToString(b.trigger) }
+        };
+    }
+
+    json AxisBindingToJson(int index, const AxisBinding& b)
+    {
+        return {
+            { "index",       index },
+            { "axisName",    b.axisName },
+            { "positiveKey", b.positiveKey },
+            { "negativeKey", b.negativeKey },
+            { "gamepadAxis", b.gamepadAxis },
+            { "deadzone",    b.deadzone },
+            { "sensitivity", b.sensitivity }
+        };
+    }
+
+    json InputMapToJson(const InputActionMapAsset& m)
+    {
+        json actions = json::array();
+        for (int i = 0; i < static_cast<int>(m.actions.size()); ++i)
+            actions.push_back(ActionBindingToJson(i, m.actions[i]));
+        json axes = json::array();
+        for (int i = 0; i < static_cast<int>(m.axes.size()); ++i)
+            axes.push_back(AxisBindingToJson(i, m.axes[i]));
+        return {
+            { "name",                m.name },
+            { "contextCategory",     m.contextCategory },
+            { "holdThresholdFrames", m.holdThresholdFrames },
+            { "doubleTapGapFrames",  m.doubleTapGapFrames },
+            { "actions",             std::move(actions) },
+            { "axes",                std::move(axes) }
+        };
+    }
+
+    // =========================================================
+    // PlayerEditor: Socket handlers
+    // =========================================================
+
+    json HandlePlayerEditorGetSockets(EngineKernel& kernel)
+    {
+        const auto& panel = RequirePlayerEditorPanel(kernel);
+        json list = json::array();
+        const auto& sockets = panel.GetSockets();
+        for (int i = 0; i < static_cast<int>(sockets.size()); ++i)
+            list.push_back(SocketToJson(i, sockets[i]));
+        return { { "sockets", std::move(list) } };
+    }
+
+    json HandlePlayerEditorAddSocket(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sockets = panel.GetSocketsMutable();
+
+        NodeSocket s;
+        s.name           = params.value("name", std::string("Socket"));
+        s.parentBoneName = params.value("parentBoneName", std::string{});
+        if (params.contains("offsetPos"))    ReadFloat3(params["offsetPos"],    s.offsetPos);
+        if (params.contains("offsetRotDeg")) ReadFloat3(params["offsetRotDeg"], s.offsetRotDeg);
+        if (params.contains("offsetScale"))  ReadFloat3(params["offsetScale"],  s.offsetScale);
+
+        sockets.push_back(std::move(s));
+        const int newIdx = static_cast<int>(sockets.size()) - 1;
+
+        panel.MarkSocketDirty();
+        panel.SelectSocket(newIdx);
+
+        return SocketToJson(newIdx, sockets[newIdx]);
+    }
+
+    json HandlePlayerEditorSetSocket(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sockets = panel.GetSocketsMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(sockets.size())) {
+            throw MakeError("out_of_range", "Socket index out of range.", { { "index", idx } });
+        }
+        auto& s = sockets[idx];
+        if (params.contains("name"))           s.name           = params["name"].get<std::string>();
+        if (params.contains("parentBoneName")) s.parentBoneName = params["parentBoneName"].get<std::string>();
+        if (params.contains("offsetPos"))      ReadFloat3(params["offsetPos"],    s.offsetPos);
+        if (params.contains("offsetRotDeg"))   ReadFloat3(params["offsetRotDeg"], s.offsetRotDeg);
+        if (params.contains("offsetScale"))    ReadFloat3(params["offsetScale"],  s.offsetScale);
+
+        panel.MarkSocketDirty();
+        panel.SelectSocket(idx);
+
+        return SocketToJson(idx, s);
+    }
+
+    json HandlePlayerEditorDeleteSocket(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& sockets = panel.GetSocketsMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(sockets.size())) {
+            throw MakeError("out_of_range", "Socket index out of range.", { { "index", idx } });
+        }
+
+        sockets.erase(sockets.begin() + idx);
+        panel.MarkSocketDirty();
+        panel.ClearEditorSelection();
+
+        return { { "deleted", idx }, { "remaining", static_cast<int>(sockets.size()) } };
+    }
+
+    // =========================================================
+    // PlayerEditor: Collider handlers
+    // =========================================================
+
+    json HandlePlayerEditorGetColliders(EngineKernel& kernel)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+
+        if (Entity::IsNull(panel.GetPreviewEntity())) {
+            return { { "colliders", json::array() }, { "note", "No preview entity loaded." } };
+        }
+        const ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+        json list = json::array();
+        if (comp) {
+            for (int i = 0; i < static_cast<int>(comp->elements.size()); ++i)
+                list.push_back(ColliderElementToJson(i, comp->elements[i]));
+        }
+        return { { "colliders", std::move(list) } };
+    }
+
+    json HandlePlayerEditorAddCollider(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+
+        if (Entity::IsNull(panel.GetPreviewEntity())) {
+            throw MakeError("no_preview_entity", "Load a model into the Player Editor first.");
+        }
+
+        const ColliderAttribute attr = ColliderAttributeFromString(
+            params.value("attribute", std::string("Body")));
+        panel.AddColliderAutomation(attr);   // creates component if needed, appends element, selects it
+
+        ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+        if (!comp || comp->elements.empty()) {
+            throw MakeError("add_collider_failed", "Collider element could not be created.");
+        }
+
+        const int newIdx = static_cast<int>(comp->elements.size()) - 1;
+        auto& e = comp->elements[newIdx];
+
+        // Apply optional overrides AFTER the element exists
+        if (params.contains("type"))        e.type      = ColliderShapeFromString(params["type"].get<std::string>());
+        if (params.contains("nodeIndex"))   e.nodeIndex = params["nodeIndex"].get<int>();
+        if (params.contains("radius"))      e.radius    = params["radius"].get<float>();
+        if (params.contains("height"))      e.height    = params["height"].get<float>();
+        if (params.contains("enabled"))     e.enabled   = params["enabled"].get<bool>();
+        if (params.contains("hitVfxPath"))  e.hitVfxPath = params["hitVfxPath"].get<std::string>();
+        if (params.contains("hitSfxPath"))  e.hitSfxPath = params["hitSfxPath"].get<std::string>();
+        if (params.contains("offsetLocal")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["offsetLocal"], v);
+            e.offsetLocal = { v.x, v.y, v.z };
+        }
+        if (params.contains("size")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["size"], v);
+            e.size = { v.x, v.y, v.z };
+        }
+
+        panel.MarkColliderDirty();
+        return ColliderElementToJson(newIdx, e);
+    }
+
+    json HandlePlayerEditorSetCollider(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+        if (!comp) {
+            throw MakeError("not_found", "No ColliderComponent on the preview entity.");
+        }
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
+            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+        }
+        auto& e = comp->elements[idx];
+
+        if (params.contains("type"))        e.type      = ColliderShapeFromString(params["type"].get<std::string>());
+        if (params.contains("attribute"))   e.attribute = ColliderAttributeFromString(params["attribute"].get<std::string>());
+        if (params.contains("enabled"))     e.enabled   = params["enabled"].get<bool>();
+        if (params.contains("nodeIndex"))   e.nodeIndex = params["nodeIndex"].get<int>();
+        if (params.contains("radius"))      e.radius    = params["radius"].get<float>();
+        if (params.contains("height"))      e.height    = params["height"].get<float>();
+        if (params.contains("hitVfxPath"))  e.hitVfxPath = params["hitVfxPath"].get<std::string>();
+        if (params.contains("hitSfxPath"))  e.hitSfxPath = params["hitSfxPath"].get<std::string>();
+        if (params.contains("offsetLocal")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["offsetLocal"], v);
+            e.offsetLocal = { v.x, v.y, v.z };
+        }
+        if (params.contains("size")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["size"], v);
+            e.size = { v.x, v.y, v.z };
+        }
+
+        panel.MarkColliderDirty();
+        panel.SelectColliderAutomation(idx);
+
+        return ColliderElementToJson(idx, e);
+    }
+
+    json HandlePlayerEditorDeleteCollider(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+        if (!comp) {
+            throw MakeError("not_found", "No ColliderComponent on the preview entity.");
+        }
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
+            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+        }
+
+        comp->elements.erase(comp->elements.begin() + idx);
+        panel.MarkColliderDirty();
+        panel.ClearEditorSelection();
+
+        return { { "deleted", idx }, { "remaining", static_cast<int>(comp->elements.size()) } };
+    }
+
+    // =========================================================
+    // PlayerEditor: Animator handlers
+    // =========================================================
+
+    json HandlePlayerEditorGetAnimations(EngineKernel& kernel)
+    {
+        const auto& panel = RequirePlayerEditorPanel(kernel);
+        const Model* model = panel.GetPreviewModel();
+        if (!model) {
+            return { { "animations", json::array() }, { "note", "No model loaded." } };
+        }
+
+        const auto& anims = model->GetAnimations();
+        json list = json::array();
+        for (int i = 0; i < static_cast<int>(anims.size()); ++i) {
+            list.push_back({
+                { "index",         i },
+                { "name",          anims[i].name },
+                { "secondsLength", anims[i].secondsLength }
+            });
+        }
+        return {
+            { "animations",     std::move(list) },
+            { "selectedIndex",  panel.GetSelectedAnimationIndex() }
+        };
+    }
+
+    json HandlePlayerEditorSetAnimator(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        auto& panel = editor->GetPlayerEditorPanel();
+
+        const int idx = params.value("animationIndex", panel.GetSelectedAnimationIndex());
+
+        const Model* model = panel.GetPreviewModel();
+        if (model) {
+            const auto& anims = model->GetAnimations();
+            if (idx < 0 || idx >= static_cast<int>(anims.size())) {
+                throw MakeError("out_of_range", "animationIndex out of range.",
+                    { { "animationIndex", idx }, { "count", static_cast<int>(anims.size()) } });
+            }
+        }
+
+        panel.SetSelectedAnimationIndex(idx);
+
+        // Sync preview timeline so the UI updates immediately
+        PlayerEditorSession::SyncPreviewTimelinePlayback(panel);
+
+        const std::string animName = (model && idx >= 0 && idx < static_cast<int>(model->GetAnimations().size()))
+                                     ? model->GetAnimations()[idx].name : std::string{};
+        return {
+            { "animationIndex", idx },
+            { "animationName",  animName }
+        };
+    }
+
+    // =========================================================
+    // PlayerEditor: Input Mapping handlers
+    // =========================================================
+
+    json HandlePlayerEditorGetInputMap(EngineKernel& kernel)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        return InputMapToJson(panel.GetInputMappingTab().GetEditingMap());
+    }
+
+    json HandlePlayerEditorAddActionBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        ActionBinding b;
+        b.actionName   = params.value("actionName",    std::string("NewAction"));
+        b.scancode     = params.value("scancode",      0u);
+        b.mouseButton  = params.value("mouseButton",   static_cast<uint8_t>(0xFF));
+        b.gamepadButton= params.value("gamepadButton", static_cast<uint8_t>(0xFF));
+        b.trigger      = ActionTriggerFromString(params.value("trigger", std::string("Pressed")));
+
+        map.actions.push_back(std::move(b));
+        tab.MarkDirty();
+        panel.SetWorkbenchActiveTab(3); // Input タブを前面に
+
+        const int newIdx = static_cast<int>(map.actions.size()) - 1;
+        return ActionBindingToJson(newIdx, map.actions[newIdx]);
+    }
+
+    json HandlePlayerEditorSetActionBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(map.actions.size())) {
+            throw MakeError("out_of_range", "Action binding index out of range.", { { "index", idx } });
+        }
+        auto& b = map.actions[idx];
+        if (params.contains("actionName"))    b.actionName    = params["actionName"].get<std::string>();
+        if (params.contains("scancode"))      b.scancode      = params["scancode"].get<uint32_t>();
+        if (params.contains("mouseButton"))   b.mouseButton   = params["mouseButton"].get<uint8_t>();
+        if (params.contains("gamepadButton")) b.gamepadButton = params["gamepadButton"].get<uint8_t>();
+        if (params.contains("trigger"))       b.trigger       = ActionTriggerFromString(params["trigger"].get<std::string>());
+
+        tab.MarkDirty();
+        panel.SetWorkbenchActiveTab(3);
+
+        return ActionBindingToJson(idx, b);
+    }
+
+    json HandlePlayerEditorDeleteActionBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(map.actions.size())) {
+            throw MakeError("out_of_range", "Action binding index out of range.", { { "index", idx } });
+        }
+
+        map.actions.erase(map.actions.begin() + idx);
+        tab.MarkDirty();
+
+        return { { "deleted", idx }, { "remaining", static_cast<int>(map.actions.size()) } };
+    }
+
+    json HandlePlayerEditorAddAxisBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        AxisBinding b;
+        b.axisName    = params.value("axisName",    std::string("NewAxis"));
+        b.positiveKey = params.value("positiveKey", 0u);
+        b.negativeKey = params.value("negativeKey", 0u);
+        b.gamepadAxis = params.value("gamepadAxis", static_cast<uint8_t>(0xFF));
+        b.deadzone    = params.value("deadzone",    0.1f);
+        b.sensitivity = params.value("sensitivity", 1.0f);
+
+        map.axes.push_back(std::move(b));
+        tab.MarkDirty();
+        panel.SetWorkbenchActiveTab(3);
+
+        const int newIdx = static_cast<int>(map.axes.size()) - 1;
+        return AxisBindingToJson(newIdx, map.axes[newIdx]);
+    }
+
+    json HandlePlayerEditorSetAxisBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(map.axes.size())) {
+            throw MakeError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
+        }
+        auto& b = map.axes[idx];
+        if (params.contains("axisName"))    b.axisName    = params["axisName"].get<std::string>();
+        if (params.contains("positiveKey")) b.positiveKey = params["positiveKey"].get<uint32_t>();
+        if (params.contains("negativeKey")) b.negativeKey = params["negativeKey"].get<uint32_t>();
+        if (params.contains("gamepadAxis")) b.gamepadAxis = params["gamepadAxis"].get<uint8_t>();
+        if (params.contains("deadzone"))    b.deadzone    = params["deadzone"].get<float>();
+        if (params.contains("sensitivity")) b.sensitivity = params["sensitivity"].get<float>();
+
+        tab.MarkDirty();
+        panel.SetWorkbenchActiveTab(3);
+
+        return AxisBindingToJson(idx, b);
+    }
+
+    json HandlePlayerEditorDeleteAxisBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        auto& tab   = panel.GetInputMappingTab();
+        auto& map   = tab.GetEditingMapMutable();
+
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(map.axes.size())) {
+            throw MakeError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
+        }
+
+        map.axes.erase(map.axes.begin() + idx);
+        tab.MarkDirty();
+
+        return { { "deleted", idx }, { "remaining", static_cast<int>(map.axes.size()) } };
+    }
+
+    // =========================================================
+    // GameLoopEditor: reverse_transition / fit_graph handlers
+    // =========================================================
+
+    json HandleGameLoopEditorReverseTransition(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+
+        const uint32_t id = params.value("id", 0u);
+        bool found = false;
+        for (const auto& t : panel.GetAsset().transitions)
+            if (t.id == id) { found = true; break; }
+        if (!found) {
+            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+        }
+
+        panel.ReverseTransitionByIdAutomation(id);
+
+        // Find it again (from/to have swapped)
+        for (const auto& t : panel.GetAsset().transitions) {
+            if (t.id == id) return GameLoopTransitionToJson(t);
+        }
+        return { { "id", id } };
+    }
+
+    json HandleGameLoopEditorFitGraph(EngineKernel& kernel)
+    {
+        auto& panel = RequireGameLoopEditorPanel(kernel);
+        panel.RequestFitGraph();
+        return { { "fitRequested", true } };
+    }
+
+    // =========================================================
+    // Scene View handlers
+    // =========================================================
+
+    EditorLayer& RequireEditorLayer(EngineKernel& kernel)
+    {
+        EditorLayer* ed = kernel.GetEditorLayer();
+        if (!ed) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        return *ed;
+    }
+
+    std::string ShadingModeToString(EditorLayer::SceneShadingMode m)
+    {
+        switch (m) {
+        case EditorLayer::SceneShadingMode::Unlit:     return "unlit";
+        case EditorLayer::SceneShadingMode::Wireframe: return "wireframe";
+        default:                                       return "lit";
+        }
+    }
+    EditorLayer::SceneShadingMode ShadingModeFromString(const std::string& s)
+    {
+        const std::string lower = ToLowerCopy(s);
+        if (lower == "unlit")     return EditorLayer::SceneShadingMode::Unlit;
+        if (lower == "wireframe") return EditorLayer::SceneShadingMode::Wireframe;
+        return EditorLayer::SceneShadingMode::Lit;
+    }
+    std::string GizmoOpToString(EditorLayer::GizmoOperation op)
+    {
+        switch (op) {
+        case EditorLayer::GizmoOperation::Rotate: return "rotate";
+        case EditorLayer::GizmoOperation::Scale:  return "scale";
+        default:                                  return "translate";
+        }
+    }
+    EditorLayer::GizmoOperation GizmoOpFromString(const std::string& s)
+    {
+        const std::string lower = ToLowerCopy(s);
+        if (lower == "rotate") return EditorLayer::GizmoOperation::Rotate;
+        if (lower == "scale")  return EditorLayer::GizmoOperation::Scale;
+        return EditorLayer::GizmoOperation::Translate;
+    }
+    std::string GizmoSpaceToString(EditorLayer::GizmoSpace sp)
+    {
+        return sp == EditorLayer::GizmoSpace::World ? "world" : "local";
+    }
+    EditorLayer::GizmoSpace GizmoSpaceFromString(const std::string& s)
+    {
+        return ToLowerCopy(s) == "world" ? EditorLayer::GizmoSpace::World : EditorLayer::GizmoSpace::Local;
+    }
+    EditorLayer::SceneViewMode SceneViewModeFromString(const std::string& s)
+    {
+        return ToLowerCopy(s) == "2d" ? EditorLayer::SceneViewMode::Mode2D : EditorLayer::SceneViewMode::Mode3D;
+    }
+
+    json HandleSceneViewGetState(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const auto pos = ed.GetEditorCameraPosition();
+        return {
+            { "mode",          SceneViewModeToString(ed.GetSceneViewMode()) },
+            { "shadingMode",   ShadingModeToString(ed.GetSceneShadingMode()) },
+            { "gizmoOperation",GizmoOpToString(ed.GetGizmoOperation()) },
+            { "gizmoSpace",    GizmoSpaceToString(ed.GetGizmoSpace()) },
+            { "cameraPosition",json::array({ pos.x, pos.y, pos.z }) },
+            { "cameraYaw",     ed.GetEditorCameraYaw() },
+            { "cameraPitch",   ed.GetEditorCameraPitch() },
+            { "cameraMoveSpeed", ed.GetCameraMoveSpeed() },
+            { "visibility", {
+                { "gizmo",           ed.GetShowSceneGizmo() },
+                { "stats",           ed.GetShowSceneStats() },
+                { "selectionOutline",ed.GetShowSelectionOutline() },
+                { "lightIcons",      ed.GetShowLightIcons() },
+                { "cameraIcons",     ed.GetShowCameraIcons() },
+                { "bounds",          ed.GetShowBounds() },
+                { "collision",       ed.GetShowCollision() },
+                { "inputDebug",      ed.GetShowInputDebug() }
+            }}
+        };
+    }
+
+    json HandleSceneViewSetCamera(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        auto pos = ed.GetEditorCameraPosition();
+        float yaw   = ed.GetEditorCameraYaw();
+        float pitch = ed.GetEditorCameraPitch();
+        if (params.contains("position") && params["position"].is_array() && params["position"].size() >= 3)
+            pos = { params["position"][0].get<float>(), params["position"][1].get<float>(), params["position"][2].get<float>() };
+        if (params.contains("yaw"))   yaw   = params["yaw"].get<float>();
+        if (params.contains("pitch")) pitch = params["pitch"].get<float>();
+        ed.SetEditorCameraTransformAutomation(pos, yaw, pitch);
+        if (params.contains("moveSpeed")) ed.SetCameraMoveSpeedAutomation(params["moveSpeed"].get<float>());
+        return { { "cameraPosition", json::array({ pos.x, pos.y, pos.z }) }, { "yaw", yaw }, { "pitch", pitch } };
+    }
+
+    json HandleSceneViewSetLookAt(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        DirectX::XMFLOAT3 pos{}, target{};
+        if (!params.contains("position") || !ReadFloat3(params["position"], pos))
+            throw MakeError("missing_param", "'position' [x,y,z] is required.");
+        if (!params.contains("target") || !ReadFloat3(params["target"], target))
+            throw MakeError("missing_param", "'target' [x,y,z] is required.");
+        ed.SetEditorCameraLookAt(pos, target);
+        return { { "ok", true } };
+    }
+
+    json HandleSceneViewSetGizmoOperation(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const std::string op = params.value("operation", std::string("translate"));
+        ed.SetGizmoOperationAutomation(GizmoOpFromString(op));
+        return { { "operation", GizmoOpToString(ed.GetGizmoOperation()) } };
+    }
+
+    json HandleSceneViewSetGizmoSpace(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const std::string sp = params.value("space", std::string("local"));
+        ed.SetGizmoSpaceAutomation(GizmoSpaceFromString(sp));
+        return { { "space", GizmoSpaceToString(ed.GetGizmoSpace()) } };
+    }
+
+    json HandleSceneViewSetShadingMode(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        ed.SetSceneShadingModeAutomation(ShadingModeFromString(params.value("mode", std::string("lit"))));
+        return { { "shadingMode", ShadingModeToString(ed.GetSceneShadingMode()) } };
+    }
+
+    json HandleSceneViewSetMode(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        ed.SetSceneViewMode(SceneViewModeFromString(params.value("mode", std::string("3d"))));
+        return { { "mode", SceneViewModeToString(ed.GetSceneViewMode()) } };
+    }
+
+    json HandleSceneViewSetVisibility(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("gizmo"))            ed.SetShowSceneGizmo(params["gizmo"].get<bool>());
+        if (params.contains("stats"))            ed.SetShowSceneStats(params["stats"].get<bool>());
+        if (params.contains("selectionOutline")) ed.SetShowSelectionOutline(params["selectionOutline"].get<bool>());
+        if (params.contains("lightIcons"))       ed.SetShowLightIcons(params["lightIcons"].get<bool>());
+        if (params.contains("cameraIcons"))      ed.SetShowCameraIcons(params["cameraIcons"].get<bool>());
+        if (params.contains("bounds"))           ed.SetShowBounds(params["bounds"].get<bool>());
+        if (params.contains("collision"))        ed.SetShowCollision(params["collision"].get<bool>());
+        if (params.contains("inputDebug"))       ed.SetShowInputDebug(params["inputDebug"].get<bool>());
+        return { { "ok", true } };
+    }
+
+    json HandleSceneViewBookmark(EngineKernel& kernel, const json& params, bool save)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const int slot = std::clamp(params.value("slot", 0), 0, 2);
+        if (save) ed.SaveCameraBookmarkAutomation(slot);
+        else      ed.LoadCameraBookmarkAutomation(slot);
+        return { { "slot", slot }, { "action", save ? "saved" : "loaded" } };
+    }
+
+    // =========================================================
+    // Lighting / PostFX handlers
+    // =========================================================
+
+    EntityID FindEntityWithComponent_Environment(Registry& registry)
+    {
+        for (Archetype* arch : registry.GetAllArchetypes()) {
+            if (!arch->GetSignature().test(TypeManager::GetComponentTypeID<EnvironmentComponent>())) continue;
+            for (EntityID e : arch->GetEntities()) { if (registry.IsAlive(e)) return e; }
+        }
+        return Entity::NULL_ID;
+    }
+    EntityID FindEntityWithComponent_PostEffect(Registry& registry)
+    {
+        for (Archetype* arch : registry.GetAllArchetypes()) {
+            if (!arch->GetSignature().test(TypeManager::GetComponentTypeID<PostEffectComponent>())) continue;
+            for (EntityID e : arch->GetEntities()) { if (registry.IsAlive(e)) return e; }
+        }
+        return Entity::NULL_ID;
+    }
+
+    json EnvironmentToJson(const EnvironmentComponent& c)
+    {
+        return {
+            { "enableSkybox",     c.enableSkybox },
+            { "skyboxPath",       c.skyboxPath },
+            { "diffuseIBLPath",   c.diffuseIBLPath },
+            { "specularIBLPath",  c.specularIBLPath }
+        };
+    }
+    json PostEffectToJson(const PostEffectComponent& c)
+    {
+        return {
+            { "enableComputeCulling",  c.enableComputeCulling },
+            { "enableAsyncCompute",    c.enableAsyncCompute },
+            { "enableGTAO",            c.enableGTAO },
+            { "enableSSGI",            c.enableSSGI },
+            { "enableSSR",             c.enableSSR },
+            { "enableVolumetricFog",   c.enableVolumetricFog },
+            { "enableBloom",           c.enableBloom },
+            { "enableColorFilter",     c.enableColorFilter },
+            { "enableMotionBlur",      c.enableMotionBlur },
+            { "luminanceLowerEdge",    c.luminanceLowerEdge },
+            { "luminanceHigherEdge",   c.luminanceHigherEdge },
+            { "bloomIntensity",        c.bloomIntensity },
+            { "gaussianSigma",         c.gaussianSigma },
+            { "exposure",              c.exposure },
+            { "monoBlend",             c.monoBlend },
+            { "hueShift",              c.hueShift },
+            { "flashAmount",           c.flashAmount },
+            { "vignetteAmount",        c.vignetteAmount },
+            { "enableDoF",             c.enableDoF },
+            { "focusDistance",         c.focusDistance },
+            { "focusRange",            c.focusRange },
+            { "bokehRadius",           c.bokehRadius },
+            { "motionBlurIntensity",   c.motionBlurIntensity },
+            { "motionBlurSamples",     c.motionBlurSamples }
+        };
+    }
+
+    json HandleLightingOpen(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        ed.OpenLightingWindowFromAutomation();
+        return { { "open", true } };
+    }
+
+    json HandleLightingGet(Registry& registry)
+    {
+        json result;
+        EntityID envEnt = FindEntityWithComponent_Environment(registry);
+        if (!Entity::IsNull(envEnt))
+            result["environment"] = EnvironmentToJson(*registry.GetComponent<EnvironmentComponent>(envEnt));
+        else
+            result["environment"] = nullptr;
+        EntityID pfxEnt = FindEntityWithComponent_PostEffect(registry);
+        if (!Entity::IsNull(pfxEnt))
+            result["postEffects"] = PostEffectToJson(*registry.GetComponent<PostEffectComponent>(pfxEnt));
+        else
+            result["postEffects"] = nullptr;
+        return result;
+    }
+
+    json HandleLightingSetEnvironment(Registry& registry, const json& params)
+    {
+        EntityID ent = FindEntityWithComponent_Environment(registry);
+        if (Entity::IsNull(ent)) throw MakeError("entity_not_found", "No entity with EnvironmentComponent found.");
+        auto* c = registry.GetComponent<EnvironmentComponent>(ent);
+        if (params.contains("enableSkybox"))    c->enableSkybox    = params["enableSkybox"].get<bool>();
+        if (params.contains("skyboxPath"))      c->skyboxPath      = params["skyboxPath"].get<std::string>();
+        if (params.contains("diffuseIBLPath"))  c->diffuseIBLPath  = params["diffuseIBLPath"].get<std::string>();
+        if (params.contains("specularIBLPath")) c->specularIBLPath = params["specularIBLPath"].get<std::string>();
+        MarkEntityEdited(registry, ent);
+        return { { "environment", EnvironmentToJson(*c) } };
+    }
+
+    json HandleLightingSetPostEffects(Registry& registry, const json& params)
+    {
+        EntityID ent = FindEntityWithComponent_PostEffect(registry);
+        if (Entity::IsNull(ent)) throw MakeError("entity_not_found", "No entity with PostEffectComponent found.");
+        auto* c = registry.GetComponent<PostEffectComponent>(ent);
+        if (params.contains("enableComputeCulling"))  c->enableComputeCulling  = params["enableComputeCulling"].get<bool>();
+        if (params.contains("enableAsyncCompute"))    c->enableAsyncCompute    = params["enableAsyncCompute"].get<bool>();
+        if (params.contains("enableGTAO"))            c->enableGTAO            = params["enableGTAO"].get<bool>();
+        if (params.contains("enableSSGI"))            c->enableSSGI            = params["enableSSGI"].get<bool>();
+        if (params.contains("enableSSR"))             c->enableSSR             = params["enableSSR"].get<bool>();
+        if (params.contains("enableVolumetricFog"))   c->enableVolumetricFog   = params["enableVolumetricFog"].get<bool>();
+        if (params.contains("enableBloom"))           c->enableBloom           = params["enableBloom"].get<bool>();
+        if (params.contains("enableColorFilter"))     c->enableColorFilter     = params["enableColorFilter"].get<bool>();
+        if (params.contains("enableMotionBlur"))      c->enableMotionBlur      = params["enableMotionBlur"].get<bool>();
+        if (params.contains("luminanceLowerEdge"))    c->luminanceLowerEdge    = params["luminanceLowerEdge"].get<float>();
+        if (params.contains("luminanceHigherEdge"))   c->luminanceHigherEdge   = params["luminanceHigherEdge"].get<float>();
+        if (params.contains("bloomIntensity"))        c->bloomIntensity        = params["bloomIntensity"].get<float>();
+        if (params.contains("gaussianSigma"))         c->gaussianSigma         = params["gaussianSigma"].get<float>();
+        if (params.contains("exposure"))              c->exposure              = params["exposure"].get<float>();
+        if (params.contains("monoBlend"))             c->monoBlend             = params["monoBlend"].get<float>();
+        if (params.contains("hueShift"))              c->hueShift              = params["hueShift"].get<float>();
+        if (params.contains("flashAmount"))           c->flashAmount           = params["flashAmount"].get<float>();
+        if (params.contains("vignetteAmount"))        c->vignetteAmount        = params["vignetteAmount"].get<float>();
+        if (params.contains("enableDoF"))             c->enableDoF             = params["enableDoF"].get<bool>();
+        if (params.contains("focusDistance"))         c->focusDistance         = params["focusDistance"].get<float>();
+        if (params.contains("focusRange"))            c->focusRange            = params["focusRange"].get<float>();
+        if (params.contains("bokehRadius"))           c->bokehRadius           = params["bokehRadius"].get<float>();
+        if (params.contains("motionBlurIntensity"))   c->motionBlurIntensity   = params["motionBlurIntensity"].get<float>();
+        if (params.contains("motionBlurSamples"))     c->motionBlurSamples     = params["motionBlurSamples"].get<int>();
+        MarkEntityEdited(registry, ent);
+        return { { "postEffects", PostEffectToJson(*c) } };
+    }
+
+    // =========================================================
+    // UI Editor handlers
+    // =========================================================
+
+    std::string UITemplateKindToString(UIEditorTemplateKind k)
+    {
+        switch (k) {
+        case UIEditorTemplateKind::BossHP: return "boss_hp";
+        default:                           return "player_hp";
+        }
+    }
+    UIEditorTemplateKind UITemplateKindFromString(const std::string& s)
+    {
+        if (ToLowerCopy(s) == "boss_hp") return UIEditorTemplateKind::BossHP;
+        return UIEditorTemplateKind::PlayerHP;
+    }
+
+    std::string UIPartKindToString(UIEditorPartKind k)
+    {
+        switch (k) {
+        case UIEditorPartKind::GaugeRoot:     return "gauge_root";
+        case UIEditorPartKind::Image:         return "image";
+        case UIEditorPartKind::FillImage:     return "fill_image";
+        case UIEditorPartKind::DamagePreview: return "damage_preview";
+        case UIEditorPartKind::HPText:        return "hp_text";
+        default:                              return "canvas";
+        }
+    }
+    UIEditorPartKind UIPartKindFromString(const std::string& s)
+    {
+        const std::string lower = ToLowerCopy(s);
+        if (lower == "gauge_root")     return UIEditorPartKind::GaugeRoot;
+        if (lower == "image")          return UIEditorPartKind::Image;
+        if (lower == "fill_image")     return UIEditorPartKind::FillImage;
+        if (lower == "damage_preview") return UIEditorPartKind::DamagePreview;
+        if (lower == "hp_text")        return UIEditorPartKind::HPText;
+        return UIEditorPartKind::Canvas;
+    }
+
+    UIEditorPanel& RequireUIEditorPanel(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (!ed.IsUIEditorActive()) {
+            // Open it if not active so subsequent calls can interact with it
+            ed.OpenUIEditorFromAutomation();
+        }
+        return ed.GetUIEditorPanel();
+    }
+
+    json HandleUIEditorOpen(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        ed.OpenUIEditorFromAutomation();
+        return { { "open", true } };
+    }
+
+    json HandleUIEditorGetState(EngineKernel& kernel)
+    {
+        auto& panel = RequireUIEditorPanel(kernel);
+        const auto& vs = panel.GetViewState();
+        const EntityID sel = panel.GetSelectedEntityAutomation();
+        const EntityID canvas = panel.FindCanvasAutomation();
+        return {
+            { "selectedEntity", Entity::IsNull(sel)    ? json(nullptr) : json(EntityToString(sel)) },
+            { "canvas",         Entity::IsNull(canvas) ? json(nullptr) : json(EntityToString(canvas)) },
+            { "view", {
+                { "referenceResolution", json::array({ vs.referenceResolution.x, vs.referenceResolution.y }) },
+                { "pan",   json::array({ vs.pan.x, vs.pan.y }) },
+                { "zoom",  vs.zoom },
+                { "gridSize",   vs.gridSize },
+                { "showSafeArea", vs.showSafeArea },
+                { "showGrid",   vs.showGrid },
+                { "snapToGrid", vs.snapToGrid },
+                { "pixelSnap",  vs.pixelSnap }
+            }}
+        };
+    }
+
+    json HandleUIEditorSelect(EngineKernel& kernel, const json& params)
+    {
+        auto& ed     = RequireEditorLayer(kernel);
+        auto& panel  = ed.GetUIEditorPanel();
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        panel.SetRegistryForAutomation(reg);
+        if (params.contains("entity")) {
+            const EntityID ent = EntityFromJson(params["entity"]);
+            if (!Entity::IsNull(ent) && reg->IsAlive(ent)) panel.SelectEntityAutomation(ent);
+        }
+        return { { "selectedEntity", EntityToString(panel.GetSelectedEntityAutomation()) } };
+    }
+
+    json HandleUIEditorCreateCanvas(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        auto& panel = ed.GetUIEditorPanel();
+        panel.SetRegistryForAutomation(reg);
+        const EntityID canvas = panel.FindOrCreateCanvasAutomation();
+        panel.SelectEntityAutomation(canvas);
+        return { { "canvas", EntityToString(canvas) } };
+    }
+
+    json HandleUIEditorCreateTemplate(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        auto& panel = ed.GetUIEditorPanel();
+        panel.SetRegistryForAutomation(reg);
+        const auto kind = UITemplateKindFromString(params.value("kind", std::string("player_hp")));
+        const EntityID ent = panel.CreateTemplateAutomation(kind);
+        panel.SelectEntityAutomation(ent);
+        return { { "entity", EntityToString(ent) }, { "kind", UITemplateKindToString(kind) } };
+    }
+
+    json HandleUIEditorCreatePart(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        auto& panel = ed.GetUIEditorPanel();
+        panel.SetRegistryForAutomation(reg);
+        const auto kind = UIPartKindFromString(params.value("kind", std::string("image")));
+        const EntityID ent = panel.CreatePartAutomation(kind);
+        panel.SelectEntityAutomation(ent);
+        return { { "entity", EntityToString(ent) }, { "kind", UIPartKindToString(kind) } };
+    }
+
+    json HandleUIEditorPrefab(EngineKernel& kernel, const json& params, const std::string& action)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        auto& panel = ed.GetUIEditorPanel();
+        panel.SetRegistryForAutomation(reg);
+        bool ok = false;
+        if (action == "save")   ok = panel.SaveSelectedAsPrefabAutomation();
+        else if (action == "apply")  ok = panel.ApplySelectedPrefabAutomation();
+        else if (action == "revert") ok = panel.RevertSelectedPrefabAutomation();
+        else if (action == "unpack") ok = panel.UnpackSelectedPrefabAutomation();
+        return { { "action", action }, { "ok", ok } };
+    }
+
+    json HandleUIEditorSetView(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireUIEditorPanel(kernel);
+        auto& vs = panel.GetViewStateMutable();
+        if (params.contains("zoom"))        vs.zoom        = params["zoom"].get<float>();
+        if (params.contains("gridSize"))    vs.gridSize    = params["gridSize"].get<float>();
+        if (params.contains("showSafeArea"))vs.showSafeArea= params["showSafeArea"].get<bool>();
+        if (params.contains("showGrid"))    vs.showGrid    = params["showGrid"].get<bool>();
+        if (params.contains("snapToGrid"))  vs.snapToGrid  = params["snapToGrid"].get<bool>();
+        if (params.contains("pixelSnap"))   vs.pixelSnap   = params["pixelSnap"].get<bool>();
+        if (params.contains("pan") && params["pan"].is_array() && params["pan"].size() >= 2)
+            vs.pan = { params["pan"][0].get<float>(), params["pan"][1].get<float>() };
+        return { { "ok", true } };
+    }
+
+    // =========================================================
+    // Sequencer handlers
+    // =========================================================
+
+    std::string CinematicTrackTypeToString(CinematicTrackType t)
+    {
+        switch (t) {
+        case CinematicTrackType::Camera:      return "camera";
+        case CinematicTrackType::Animation:   return "animation";
+        case CinematicTrackType::Effect:      return "effect";
+        case CinematicTrackType::Audio:       return "audio";
+        case CinematicTrackType::Event:       return "event";
+        case CinematicTrackType::CameraShake: return "camera_shake";
+        case CinematicTrackType::Bool:        return "bool";
+        case CinematicTrackType::Float:       return "float";
+        default:                              return "transform";
+        }
+    }
+    CinematicTrackType CinematicTrackTypeFromString(const std::string& s)
+    {
+        const std::string lower = ToLowerCopy(s);
+        if (lower == "camera")       return CinematicTrackType::Camera;
+        if (lower == "animation")    return CinematicTrackType::Animation;
+        if (lower == "effect")       return CinematicTrackType::Effect;
+        if (lower == "audio")        return CinematicTrackType::Audio;
+        if (lower == "event")        return CinematicTrackType::Event;
+        if (lower == "camera_shake") return CinematicTrackType::CameraShake;
+        if (lower == "bool")         return CinematicTrackType::Bool;
+        if (lower == "float")        return CinematicTrackType::Float;
+        return CinematicTrackType::Transform;
+    }
+
+    json CinematicSectionSummaryToJson(const CinematicSection& s)
+    {
+        return {
+            { "sectionId",   s.sectionId },
+            { "label",       s.label },
+            { "startFrame",  s.startFrame },
+            { "endFrame",    s.endFrame },
+            { "muted",       s.muted },
+            { "locked",      s.locked }
+        };
+    }
+    json CinematicTrackSummaryToJson(const CinematicTrack& t)
+    {
+        json sections = json::array();
+        for (const auto& s : t.sections) sections.push_back(CinematicSectionSummaryToJson(s));
+        return {
+            { "trackId",     t.trackId },
+            { "type",        CinematicTrackTypeToString(t.type) },
+            { "displayName", t.displayName },
+            { "muted",       t.muted },
+            { "sectionCount",static_cast<int>(t.sections.size()) },
+            { "sections",    std::move(sections) }
+        };
+    }
+    json CinematicBindingSummaryToJson(const CinematicBinding& b)
+    {
+        json tracks = json::array();
+        for (const auto& t : b.tracks) tracks.push_back(CinematicTrackSummaryToJson(t));
+        return {
+            { "bindingId",   b.bindingId },
+            { "displayName", b.displayName },
+            { "entity",      Entity::IsNull(b.targetEntity) ? json(nullptr) : json(EntityToString(b.targetEntity)) },
+            { "trackCount",  static_cast<int>(b.tracks.size()) },
+            { "tracks",      std::move(tracks) }
+        };
+    }
+    json CinematicSequenceSummaryToJson(const CinematicSequenceAsset& seq)
+    {
+        json bindings = json::array();
+        for (const auto& b : seq.bindings) bindings.push_back(CinematicBindingSummaryToJson(b));
+        json masterTracks = json::array();
+        for (const auto& t : seq.masterTracks) masterTracks.push_back(CinematicTrackSummaryToJson(t));
+        return {
+            { "name",          seq.name },
+            { "frameRate",     seq.frameRate },
+            { "durationFrames",seq.durationFrames },
+            { "playRangeStart",seq.playRangeStart },
+            { "playRangeEnd",  seq.playRangeEnd },
+            { "bindingCount",  static_cast<int>(seq.bindings.size()) },
+            { "bindings",      std::move(bindings) },
+            { "masterTracks",  std::move(masterTracks) }
+        };
+    }
+
+    SequencerPanel& RequireSequencerPanel(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        return ed.GetSequencerPanel();
+    }
+
+    json HandleSequencerOpen(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        ed.OpenSequencerFromAutomation();
+        return { { "open", true } };
+    }
+
+    json HandleSequencerNew(EngineKernel& kernel)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        panel.NewSequenceAutomation();
+        return { { "sequence", CinematicSequenceSummaryToJson(panel.GetSequenceAsset()) } };
+    }
+
+    json HandleSequencerLoad(EngineKernel& kernel, const json& params)
+    {
+        const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::ReadAsset, true);
+        auto& panel = RequireSequencerPanel(kernel);
+        if (!panel.LoadSequenceAutomation(path.generic_string()))
+            throw MakeError("load_failed", "Failed to load sequence.", { { "path", path.string() } });
+        return { { "path", ToGenericProjectPath(path) }, { "sequence", CinematicSequenceSummaryToJson(panel.GetSequenceAsset()) } };
+    }
+
+    json HandleSequencerSave(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        const bool saveAs = params.contains("path") && !params["path"].get<std::string>().empty();
+        if (saveAs) {
+            // saveAs: modify document path then save
+            auto& seq = panel.GetSequenceAssetMutable();
+            (void)seq; // path is set inside SaveSequence via dialog in full UI; automation uses direct path
+            // Fall through to plain save - full save-as dialog not accessible headlessly
+        }
+        if (!panel.SaveSequenceAutomation(saveAs))
+            throw MakeError("save_failed", "Failed to save sequence.");
+        return { { "path", panel.GetDocumentPathAutomation() } };
+    }
+
+    json HandleSequencerGet(EngineKernel& kernel)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        json result = CinematicSequenceSummaryToJson(panel.GetSequenceAsset());
+        result["currentFrame"]     = panel.GetCurrentFrameAutomation();
+        result["playing"]          = panel.IsPlayingAutomation();
+        result["looping"]          = panel.IsLoopingAutomation();
+        result["documentPath"]     = panel.GetDocumentPathAutomation();
+        result["selectedBindingId"]= panel.GetSelectedBindingId();
+        result["selectedTrackId"]  = panel.GetSelectedTrackId();
+        result["selectedSectionId"]= panel.GetSelectedSectionId();
+        return result;
+    }
+
+    json HandleSequencerSetPlayback(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        if (params.contains("playing"))     panel.SetPlayingAutomation(params["playing"].get<bool>());
+        if (params.contains("looping"))     panel.SetLoopingAutomation(params["looping"].get<bool>());
+        if (params.contains("currentFrame"))panel.SetCurrentFrameAutomation(params["currentFrame"].get<float>());
+        auto& seq = panel.GetSequenceAssetMutable();
+        if (params.contains("playRangeStart")) seq.playRangeStart = params["playRangeStart"].get<int>();
+        if (params.contains("playRangeEnd"))   seq.playRangeEnd   = params["playRangeEnd"].get<int>();
+        return { { "playing", panel.IsPlayingAutomation() }, { "currentFrame", panel.GetCurrentFrameAutomation() } };
+    }
+
+    json HandleSequencerAddBinding(EngineKernel& kernel, const json& params)
+    {
+        auto& panel   = RequireSequencerPanel(kernel);
+        Registry* reg = kernel.GetGameRegistry();
+        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (params.contains("entity")) {
+            const EntityID ent = EntityFromJson(params["entity"]);
+            if (!Entity::IsNull(ent) && reg->IsAlive(ent))
+                EditorSelection::Instance().SelectEntity(ent);
+        }
+        const int bindingCountBefore = static_cast<int>(panel.GetSequenceAsset().bindings.size());
+        panel.AddBindingFromSelectedEntityAutomation(reg);
+        const auto& bindings = panel.GetSequenceAsset().bindings;
+        if (static_cast<int>(bindings.size()) <= bindingCountBefore)
+            throw MakeError("add_binding_failed", "Failed to add binding. Make sure an entity is selected.");
+        const auto& newBinding = bindings.back();
+        panel.SelectBindingAutomation(newBinding.bindingId);
+        return { { "binding", CinematicBindingSummaryToJson(newBinding) } };
+    }
+
+    json HandleSequencerAddTrack(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        const uint64_t bindingId = params.value("bindingId", (uint64_t)0);
+        auto& bindings = panel.GetSequenceAssetMutable().bindings;
+        int bindingIdx = -1;
+        for (int i = 0; i < static_cast<int>(bindings.size()); ++i) {
+            if (bindings[i].bindingId == bindingId) { bindingIdx = i; break; }
+        }
+        if (bindingIdx < 0)
+            throw MakeError("binding_not_found", "Binding not found.", { { "bindingId", bindingId } });
+        const auto trackType = CinematicTrackTypeFromString(params.value("type", std::string("transform")));
+        const int trackCountBefore = static_cast<int>(bindings[bindingIdx].tracks.size());
+        panel.AddTrackToBindingAutomation(bindingIdx, trackType);
+        const auto& tracks = panel.GetSequenceAsset().bindings[bindingIdx].tracks;
+        if (static_cast<int>(tracks.size()) <= trackCountBefore)
+            throw MakeError("add_track_failed", "Failed to add track.");
+        const auto& newTrack = tracks.back();
+        panel.SelectTrackAutomation(newTrack.trackId);
+        panel.MarkDirtyAutomation();
+        return { { "track", CinematicTrackSummaryToJson(newTrack) } };
+    }
+
+    json HandleSequencerAddMasterTrack(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        const auto trackType = CinematicTrackTypeFromString(params.value("type", std::string("event")));
+        const int countBefore = static_cast<int>(panel.GetSequenceAsset().masterTracks.size());
+        panel.AddMasterTrackAutomation(trackType);
+        const auto& masterTracks = panel.GetSequenceAsset().masterTracks;
+        if (static_cast<int>(masterTracks.size()) <= countBefore)
+            throw MakeError("add_track_failed", "Failed to add master track.");
+        const auto& newTrack = masterTracks.back();
+        panel.SelectTrackAutomation(newTrack.trackId);
+        panel.MarkDirtyAutomation();
+        return { { "track", CinematicTrackSummaryToJson(newTrack) } };
+    }
+
+    json HandleSequencerAddSection(EngineKernel& kernel, const json& params)
+    {
+        auto& panel    = RequireSequencerPanel(kernel);
+        const uint64_t trackId    = params.value("trackId",    (uint64_t)0);
+        const uint64_t bindingId  = params.value("bindingId",  (uint64_t)0);
+        const bool     isMaster   = params.value("master",     false);
+
+        // Find track reference
+        CinematicTrack* target = nullptr;
+        auto& seq = panel.GetSequenceAssetMutable();
+        if (isMaster || bindingId == 0) {
+            for (auto& t : seq.masterTracks) { if (t.trackId == trackId) { target = &t; break; } }
+        }
+        if (!target) {
+            for (auto& b : seq.bindings) {
+                if (bindingId != 0 && b.bindingId != bindingId) continue;
+                for (auto& t : b.tracks) { if (t.trackId == trackId) { target = &t; break; } }
+                if (target) break;
+            }
+        }
+        if (!target) throw MakeError("track_not_found", "Track not found.", { { "trackId", trackId } });
+
+        const int sectionCountBefore = static_cast<int>(target->sections.size());
+        panel.AddSectionToTrackAutomation(*target);
+        if (static_cast<int>(target->sections.size()) <= sectionCountBefore)
+            throw MakeError("add_section_failed", "Failed to add section.");
+        const auto& newSection = target->sections.back();
+        panel.SelectSectionAutomation(newSection.sectionId);
+        panel.MarkDirtyAutomation();
+        return { { "section", CinematicSectionSummaryToJson(newSection) } };
+    }
+
+    json HandleSequencerSelect(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        if (params.contains("bindingId"))  panel.SelectBindingAutomation(params["bindingId"].get<uint64_t>());
+        if (params.contains("trackId"))    panel.SelectTrackAutomation(params["trackId"].get<uint64_t>());
+        if (params.contains("sectionId"))  panel.SelectSectionAutomation(params["sectionId"].get<uint64_t>());
+        return {
+            { "selectedBindingId", panel.GetSelectedBindingId() },
+            { "selectedTrackId",   panel.GetSelectedTrackId() },
+            { "selectedSectionId", panel.GetSelectedSectionId() }
+        };
+    }
+
+    json HandleSequencerSetSequenceParams(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequireSequencerPanel(kernel);
+        auto& seq   = panel.GetSequenceAssetMutable();
+        if (params.contains("name"))           seq.name           = params["name"].get<std::string>();
+        if (params.contains("frameRate"))      seq.frameRate      = params["frameRate"].get<float>();
+        if (params.contains("durationFrames")) seq.durationFrames = params["durationFrames"].get<int>();
+        if (params.contains("workRangeStart")) seq.workRangeStart = params["workRangeStart"].get<int>();
+        if (params.contains("workRangeEnd"))   seq.workRangeEnd   = params["workRangeEnd"].get<int>();
+        panel.MarkDirtyAutomation();
+        return { { "sequence", CinematicSequenceSummaryToJson(seq) } };
+    }
+
+    // =========================================================
+    // scene.new
+    // =========================================================
+
+    json HandleSceneNew(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const std::string modeStr = params.value("mode", "3D");
+        const EditorLayer::SceneViewMode mode =
+            (ToLowerCopy(modeStr) == "2d")
+            ? EditorLayer::SceneViewMode::Mode2D
+            : EditorLayer::SceneViewMode::Mode3D;
+        ed.RequestNewSceneAutomation(mode);
+        return { { "ok", true }, { "mode", (mode == EditorLayer::SceneViewMode::Mode2D) ? "2D" : "3D" } };
+    }
+
+    // =========================================================
+    // editor.undo / redo
+    // =========================================================
+
+    json HandleEditorUndo(EngineKernel& kernel)
+    {
+        RequireEditorLayer(kernel).ExecuteUndoAutomation();
+        return { { "ok", true } };
+    }
+
+    json HandleEditorRedo(EngineKernel& kernel)
+    {
+        RequireEditorLayer(kernel).ExecuteRedoAutomation();
+        return { { "ok", true } };
+    }
+
+    // =========================================================
+    // editor.focus_panel
+    // =========================================================
+
+    static EditorLayer::WindowFocusTarget PanelNameToFocusTarget(const std::string& name)
+    {
+        const std::string n = ToLowerCopy(name);
+        if (n == "scene_view"   || n == "sceneview")    return EditorLayer::WindowFocusTarget::SceneView;
+        if (n == "game_view"    || n == "gameview")     return EditorLayer::WindowFocusTarget::GameView;
+        if (n == "hierarchy")                           return EditorLayer::WindowFocusTarget::Hierarchy;
+        if (n == "inspector")                           return EditorLayer::WindowFocusTarget::Inspector;
+        if (n == "asset_browser"|| n == "assetbrowser") return EditorLayer::WindowFocusTarget::AssetBrowser;
+        if (n == "serializer"   || n == "model_serializer") return EditorLayer::WindowFocusTarget::Serializer;
+        if (n == "console")                             return EditorLayer::WindowFocusTarget::Console;
+        if (n == "sequencer")                           return EditorLayer::WindowFocusTarget::Sequencer;
+        if (n == "lighting")                            return EditorLayer::WindowFocusTarget::Lighting;
+        if (n == "audio")                               return EditorLayer::WindowFocusTarget::Audio;
+        if (n == "render_passes"|| n == "renderpasses") return EditorLayer::WindowFocusTarget::RenderPasses;
+        if (n == "grid_settings"|| n == "gridsettings") return EditorLayer::WindowFocusTarget::GridSettings;
+        if (n == "gbuffer_debug"|| n == "gbufferdebug") return EditorLayer::WindowFocusTarget::GBufferDebug;
+        if (n == "player_editor"|| n == "playereditor") return EditorLayer::WindowFocusTarget::PlayerEditor;
+        if (n == "effect_editor"|| n == "effecteditor") return EditorLayer::WindowFocusTarget::EffectEditor;
+        if (n == "ui_editor"    || n == "uieditor")     return EditorLayer::WindowFocusTarget::UIEditor;
+        if (n == "game_loop_editor" || n == "gamloopeditor") return EditorLayer::WindowFocusTarget::GameLoopEditor;
+        return EditorLayer::WindowFocusTarget::None;
+    }
+
+    json HandleEditorFocusPanel(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const std::string panel = params.value("panel", std::string{});
+        if (panel.empty()) throw MakeError("missing_param", "'panel' is required.", {});
+        const auto target = PanelNameToFocusTarget(panel);
+        if (target == EditorLayer::WindowFocusTarget::None)
+            throw MakeError("invalid_param", "Unknown panel name.", { { "panel", panel } });
+        ed.FocusPanelAutomation(target);
+        return { { "ok", true }, { "panel", panel } };
+    }
+
+    // =========================================================
+    // editor.get_panels / editor.show_panel
+    // =========================================================
+
+    json HandleEditorGetPanels(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        return {
+            { "panels", {
+                { "scene_view",     ed.GetShowSceneView()     },
+                { "game_view",      ed.GetShowGameView()      },
+                { "hierarchy",      ed.GetShowHierarchy()     },
+                { "inspector",      ed.GetShowInspector()     },
+                { "asset_browser",  ed.GetShowAssetBrowser()  },
+                { "console",        ed.GetShowConsole()       },
+                { "serializer",     ed.GetShowSerializer()    },
+                { "audio",          ed.GetShowAudioWindow()   },
+                { "render_passes",  ed.GetShowRenderPasses()  },
+                { "gbuffer_debug",  ed.GetShowGBufferDebug()  },
+                { "grid_settings",  ed.GetShowGridSettings()  },
+                { "status_bar",     ed.GetShowStatusBar()     }
+            } }
+        };
+    }
+
+    json HandleEditorShowPanel(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const std::string panel = params.value("panel", std::string{});
+        if (panel.empty()) throw MakeError("missing_param", "'panel' is required.", {});
+        if (!params.contains("visible"))
+            throw MakeError("missing_param", "'visible' is required.", {});
+        const bool visible = params["visible"].get<bool>();
+
+        const std::string n = ToLowerCopy(panel);
+        if      (n == "scene_view"   ) ed.SetShowSceneView(visible);
+        else if (n == "game_view"    ) ed.SetShowGameView(visible);
+        else if (n == "hierarchy"    ) ed.SetShowHierarchy(visible);
+        else if (n == "inspector"    ) ed.SetShowInspector(visible);
+        else if (n == "asset_browser") ed.SetShowAssetBrowser(visible);
+        else if (n == "console"      ) ed.SetShowConsole(visible);
+        else if (n == "serializer"   ) ed.SetShowSerializer(visible);
+        else if (n == "audio"        ) ed.SetShowAudioWindow(visible);
+        else if (n == "render_passes") ed.SetShowRenderPasses(visible);
+        else if (n == "gbuffer_debug") ed.SetShowGBufferDebug(visible);
+        else if (n == "grid_settings") ed.SetShowGridSettings(visible);
+        else if (n == "status_bar"   ) ed.SetShowStatusBar(visible);
+        else throw MakeError("invalid_param", "Unknown panel name.", { { "panel", panel } });
+
+        return { { "ok", true }, { "panel", panel }, { "visible", visible } };
+    }
+
+    // =========================================================
+    // scene_view.get_snap / set_snap
+    // =========================================================
+
+    json HandleSceneViewGetSnap(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        return {
+            { "translate", {
+                { "enabled", ed.GetTranslateSnapEnabled() },
+                { "step",    ed.GetTranslateSnapStep()    }
+            } },
+            { "rotate", {
+                { "enabled", ed.GetRotateSnapEnabled()    },
+                { "step",    ed.GetRotateSnapStep()       }
+            } },
+            { "scale", {
+                { "enabled", ed.GetScaleSnapEnabled()     },
+                { "step",    ed.GetScaleSnapStep()        }
+            } }
+        };
+    }
+
+    json HandleSceneViewSetSnap(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("translateEnabled")) ed.SetTranslateSnapEnabled(params["translateEnabled"].get<bool>());
+        if (params.contains("rotateEnabled"))    ed.SetRotateSnapEnabled(params["rotateEnabled"].get<bool>());
+        if (params.contains("scaleEnabled"))     ed.SetScaleSnapEnabled(params["scaleEnabled"].get<bool>());
+        if (params.contains("translateStep"))    ed.SetTranslateSnapStep(params["translateStep"].get<float>());
+        if (params.contains("rotateStep"))       ed.SetRotateSnapStep(params["rotateStep"].get<float>());
+        if (params.contains("scaleStep"))        ed.SetScaleSnapStep(params["scaleStep"].get<float>());
+        return HandleSceneViewGetSnap(kernel);
+    }
+
+    // =========================================================
+    // scene_view.set_grid
+    // =========================================================
+
+    json HandleSceneViewSetGrid(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("visible"))       ed.SetSceneGridVisible(params["visible"].get<bool>());
+        if (params.contains("cellSize"))      ed.SetSceneGridCellSize(params["cellSize"].get<float>());
+        if (params.contains("halfLineCount")) ed.SetSceneGridHalfLineCount(params["halfLineCount"].get<int>());
+        return {
+            { "ok",            true                          },
+            { "visible",       ed.IsSceneGridVisible()       },
+            { "cellSize",      ed.GetSceneGridCellSize()     },
+            { "halfLineCount", ed.GetSceneGridHalfLineCount()}
+        };
+    }
+
+    // =========================================================
+    // scene_view.set_2d_view
+    // =========================================================
+
+    json HandleSceneViewSet2DView(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("centerX") || params.contains("centerY"))
+        {
+            const auto cur = ed.Get2DCenter();
+            const float cx = params.value("centerX", cur.x);
+            const float cy = params.value("centerY", cur.y);
+            ed.Set2DCenter({ cx, cy });
+        }
+        if (params.contains("zoom")) ed.Set2DZoom(params["zoom"].get<float>());
+        const auto c = ed.Get2DCenter();
+        return { { "ok", true }, { "centerX", c.x }, { "centerY", c.y }, { "zoom", ed.Get2DZoom() } };
+    }
+
+    // =========================================================
+    // scene_view.align_camera
+    // =========================================================
+
+    json HandleSceneViewAlignCamera(EngineKernel& kernel)
+    {
+        RequireEditorLayer(kernel).AlignCameraToViewAutomation();
+        return { { "ok", true } };
+    }
+
+    // =========================================================
+    // game_view.get_state / set_resolution / set_overlay
+    // =========================================================
+
+    static std::string GameViewResolutionToString(EditorLayer::GameViewResolutionPreset p)
+    {
+        switch (p)
+        {
+        case EditorLayer::GameViewResolutionPreset::HD1080:           return "hd1080";
+        case EditorLayer::GameViewResolutionPreset::HD720:            return "hd720";
+        case EditorLayer::GameViewResolutionPreset::Portrait1080x1920:return "portrait_1080x1920";
+        case EditorLayer::GameViewResolutionPreset::Portrait750x1334: return "portrait_750x1334";
+        default:                                                       return "free";
+        }
+    }
+    static EditorLayer::GameViewResolutionPreset GameViewResolutionFromString(const std::string& s)
+    {
+        const std::string n = ToLowerCopy(s);
+        if (n == "hd1080")              return EditorLayer::GameViewResolutionPreset::HD1080;
+        if (n == "hd720")               return EditorLayer::GameViewResolutionPreset::HD720;
+        if (n == "portrait_1080x1920")  return EditorLayer::GameViewResolutionPreset::Portrait1080x1920;
+        if (n == "portrait_750x1334")   return EditorLayer::GameViewResolutionPreset::Portrait750x1334;
+        return EditorLayer::GameViewResolutionPreset::Free;
+    }
+    static std::string GameViewAspectToString(EditorLayer::GameViewAspectPolicy p)
+    {
+        switch (p)
+        {
+        case EditorLayer::GameViewAspectPolicy::Fill:        return "fill";
+        case EditorLayer::GameViewAspectPolicy::PixelPerfect:return "pixel_perfect";
+        default:                                              return "fit";
+        }
+    }
+    static EditorLayer::GameViewAspectPolicy GameViewAspectFromString(const std::string& s)
+    {
+        const std::string n = ToLowerCopy(s);
+        if (n == "fill")         return EditorLayer::GameViewAspectPolicy::Fill;
+        if (n == "pixel_perfect")return EditorLayer::GameViewAspectPolicy::PixelPerfect;
+        return EditorLayer::GameViewAspectPolicy::Fit;
+    }
+    static std::string GameViewScaleToString(EditorLayer::GameViewScalePolicy p)
+    {
+        switch (p)
+        {
+        case EditorLayer::GameViewScalePolicy::Scale1x: return "1x";
+        case EditorLayer::GameViewScalePolicy::Scale2x: return "2x";
+        case EditorLayer::GameViewScalePolicy::Scale3x: return "3x";
+        default:                                         return "auto_fit";
+        }
+    }
+    static EditorLayer::GameViewScalePolicy GameViewScaleFromString(const std::string& s)
+    {
+        const std::string n = ToLowerCopy(s);
+        if (n == "1x") return EditorLayer::GameViewScalePolicy::Scale1x;
+        if (n == "2x") return EditorLayer::GameViewScalePolicy::Scale2x;
+        if (n == "3x") return EditorLayer::GameViewScalePolicy::Scale3x;
+        return EditorLayer::GameViewScalePolicy::AutoFit;
+    }
+
+    json HandleGameViewGetState(EngineKernel& kernel)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        const auto sz = ed.GetGameViewSize();
+        return {
+            { "resolution",   GameViewResolutionToString(ed.GetGameViewResolutionPreset()) },
+            { "aspectPolicy", GameViewAspectToString(ed.GetGameViewAspectPolicy())         },
+            { "scalePolicy",  GameViewScaleToString(ed.GetGameViewScalePolicy())           },
+            { "width",        sz.x },
+            { "height",       sz.y },
+            { "overlay", {
+                { "safeArea",   ed.GetGameViewShowSafeArea()    },
+                { "stats",      ed.GetGameViewShowStats()       },
+                { "uiOverlay",  ed.GetGameViewShowUIOverlay()   },
+                { "2dOverlay",  ed.GetGameViewShow2DOverlay()   }
+            } }
+        };
+    }
+
+    json HandleGameViewSetResolution(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("resolution"))
+            ed.SetGameViewResolutionPreset(GameViewResolutionFromString(params["resolution"].get<std::string>()));
+        if (params.contains("aspectPolicy"))
+            ed.SetGameViewAspectPolicy(GameViewAspectFromString(params["aspectPolicy"].get<std::string>()));
+        if (params.contains("scalePolicy"))
+            ed.SetGameViewScalePolicy(GameViewScaleFromString(params["scalePolicy"].get<std::string>()));
+        return HandleGameViewGetState(kernel);
+    }
+
+    json HandleGameViewSetOverlay(EngineKernel& kernel, const json& params)
+    {
+        auto& ed = RequireEditorLayer(kernel);
+        if (params.contains("safeArea"))  ed.SetGameViewShowSafeArea(params["safeArea"].get<bool>());
+        if (params.contains("stats"))     ed.SetGameViewShowStats(params["stats"].get<bool>());
+        if (params.contains("uiOverlay")) ed.SetGameViewShowUIOverlay(params["uiOverlay"].get<bool>());
+        if (params.contains("2dOverlay")) ed.SetGameViewShow2DOverlay(params["2dOverlay"].get<bool>());
+        return HandleGameViewGetState(kernel);
+    }
+
+    // =========================================================
+    // model_serializer.build
+    // =========================================================
+
+    json HandleModelSerializerBuild(EngineKernel& kernel, const json& params)
+    {
+        if (!params.contains("sourcePath"))
+            throw MakeError("missing_param", "'sourcePath' is required.", {});
+        if (!params.contains("outputPath"))
+            throw MakeError("missing_param", "'outputPath' is required.", {});
+
+        const std::string src = params["sourcePath"].get<std::string>();
+        const std::string dst = params["outputPath"].get<std::string>();
+
+        ModelSerializerSettings settings;
+        if (params.contains("scaling"))               settings.scaling               = params["scaling"].get<float>();
+        if (params.contains("enableSimplification"))  settings.enableSimplification  = params["enableSimplification"].get<bool>();
+        if (params.contains("targetTriangleRatio"))   settings.targetTriangleRatio   = params["targetTriangleRatio"].get<float>();
+        if (params.contains("targetError"))           settings.targetError           = params["targetError"].get<float>();
+        if (params.contains("lockBorder"))            settings.lockBorder            = params["lockBorder"].get<bool>();
+        if (params.contains("optimizeVertexCache"))   settings.optimizeVertexCache   = params["optimizeVertexCache"].get<bool>();
+        if (params.contains("optimizeOverdraw"))      settings.optimizeOverdraw      = params["optimizeOverdraw"].get<bool>();
+        if (params.contains("overdrawThreshold"))     settings.overdrawThreshold     = params["overdrawThreshold"].get<float>();
+        if (params.contains("optimizeVertexFetch"))   settings.optimizeVertexFetch   = params["optimizeVertexFetch"].get<bool>();
+
+        const ModelSerializerResult result = ModelAssetSerializer::Build(src, dst, settings);
+
+        return {
+            { "success",                     result.success                     },
+            { "sourcePath",                  result.sourcePath                  },
+            { "outputPath",                  result.outputPath                  },
+            { "message",                     result.message                     },
+            { "processedMeshCount",          result.processedMeshCount          },
+            { "simplifiedMeshCount",         result.simplifiedMeshCount         },
+            { "skippedSimplificationMeshCount", result.skippedSimplificationMeshCount },
+            { "sourceVertexCount",           result.sourceVertexCount           },
+            { "sourceIndexCount",            result.sourceIndexCount            },
+            { "outputVertexCount",           result.outputVertexCount           },
+            { "outputIndexCount",            result.outputIndexCount            }
+        };
+    }
+
+    // =========================================================
+
     json DispatchCommand(EngineKernel& kernel, const json& command)
     {
         const std::string name = command.value("command", std::string{});
@@ -3807,6 +6999,57 @@ namespace
         if (name == "terrain.load") {
             return HandleTerrainSaveLoad(*registry, params, false);
         }
+        if (name == "terrain.get") {
+            return HandleTerrainGet(*registry, params);
+        }
+        if (name == "terrain.set_dimensions") {
+            return HandleTerrainSetDimensions(*registry, params);
+        }
+        if (name == "terrain.set_noise") {
+            return HandleTerrainSetNoise(*registry, params);
+        }
+        if (name == "terrain.set_erosion") {
+            return HandleTerrainSetErosion(*registry, params);
+        }
+        if (name == "terrain.run_erosion") {
+            return HandleTerrainRunErosion(*registry, params);
+        }
+        if (name == "terrain.set_auto_splat") {
+            return HandleTerrainSetAutoSplat(*registry, params);
+        }
+        if (name == "terrain.set_water") {
+            return HandleTerrainSetWater(*registry, params);
+        }
+        if (name == "terrain.fit_water") {
+            return HandleTerrainFitWater(*registry, params);
+        }
+        if (name == "terrain.apply_preset") {
+            return HandleTerrainApplyPreset(*registry, params);
+        }
+        if (name == "terrain.regenerate") {
+            return HandleTerrainRegenerate(*registry, params);
+        }
+        if (name == "terrain.set_layer") {
+            return HandleTerrainSetLayer(*registry, params);
+        }
+        if (name == "terrain.get_foliage") {
+            return HandleTerrainGetFoliage(*registry, params);
+        }
+        if (name == "terrain.set_foliage") {
+            return HandleTerrainSetFoliage(*registry, params);
+        }
+        if (name == "terrain.add_foliage_layer") {
+            return HandleTerrainAddFoliageLayer(*registry, params);
+        }
+        if (name == "terrain.set_foliage_layer") {
+            return HandleTerrainSetFoliageLayer(*registry, params);
+        }
+        if (name == "terrain.delete_foliage_layer") {
+            return HandleTerrainDeleteFoliageLayer(*registry, params);
+        }
+        if (name == "terrain.reset_foliage") {
+            return HandleTerrainResetFoliage(*registry, params);
+        }
         if (name == "effect_editor.preview_spawn") {
             return HandleEffectPreviewSpawn(*registry, params);
         }
@@ -3815,6 +7058,12 @@ namespace
         }
         if (name == "load_scene") {
             return HandleLoadScene(kernel, params);
+        }
+        if (name == "terrain.open") {
+            return HandleTerrainOpen(kernel, params);
+        }
+        if (name == "terrain.set_brush") {
+            return HandleTerrainSetBrush(kernel, params);
         }
         if (name == "play") {
             kernel.Play();
@@ -3832,6 +7081,238 @@ namespace
             kernel.Step();
             return { { "mode", ModeToString(kernel.GetMode()) } };
         }
+        if (name == "player_editor.open") {
+            return HandlePlayerEditorOpen(kernel, params);
+        }
+        if (name == "player_editor.get_status") {
+            return HandlePlayerEditorGetStatus(kernel);
+        }
+        if (name == "player_editor.load_model") {
+            return HandlePlayerEditorLoadModel(kernel, params);
+        }
+        if (name == "player_editor.get_state_machine") {
+            return HandlePlayerEditorGetStateMachine(kernel);
+        }
+        if (name == "player_editor.add_state") {
+            return HandlePlayerEditorAddState(kernel, params);
+        }
+        if (name == "player_editor.set_state") {
+            return HandlePlayerEditorSetState(kernel, params);
+        }
+        if (name == "player_editor.delete_state") {
+            return HandlePlayerEditorDeleteState(kernel, params);
+        }
+        if (name == "player_editor.add_transition") {
+            return HandlePlayerEditorAddTransition(kernel, params);
+        }
+        if (name == "player_editor.set_transition") {
+            return HandlePlayerEditorSetTransition(kernel, params);
+        }
+        if (name == "player_editor.delete_transition") {
+            return HandlePlayerEditorDeleteTransition(kernel, params);
+        }
+        if (name == "player_editor.select") {
+            return HandlePlayerEditorSelect(kernel, params);
+        }
+        if (name == "player_editor.set_default_state") {
+            return HandlePlayerEditorSetDefaultState(kernel, params);
+        }
+        if (name == "player_editor.get_timeline") {
+            return HandlePlayerEditorGetTimeline(kernel);
+        }
+        if (name == "player_editor.add_track") {
+            return HandlePlayerEditorAddTrack(kernel, params);
+        }
+        if (name == "player_editor.delete_track") {
+            return HandlePlayerEditorDeleteTrack(kernel, params);
+        }
+        if (name == "player_editor.set_playhead") {
+            return HandlePlayerEditorSetPlayhead(kernel, params);
+        }
+        if (name == "player_editor.timeline_play") {
+            return HandlePlayerEditorTimelinePlay(kernel, params);
+        }
+        if (name == "player_editor.save_prefab") {
+            return HandlePlayerEditorSavePrefab(kernel, params);
+        }
+        if (name == "game_loop_editor.open") {
+            return HandleGameLoopEditorOpen(kernel, params);
+        }
+        if (name == "game_loop_editor.get_status") {
+            return HandleGameLoopEditorGetStatus(kernel);
+        }
+        if (name == "game_loop_editor.get_asset") {
+            return HandleGameLoopEditorGetAsset(kernel);
+        }
+        if (name == "game_loop_editor.load") {
+            return HandleGameLoopEditorLoad(kernel, params);
+        }
+        if (name == "game_loop_editor.save") {
+            return HandleGameLoopEditorSave(kernel);
+        }
+        if (name == "game_loop_editor.validate") {
+            return HandleGameLoopEditorValidate(kernel);
+        }
+        if (name == "game_loop_editor.add_node") {
+            return HandleGameLoopEditorAddNode(kernel, params);
+        }
+        if (name == "game_loop_editor.set_node") {
+            return HandleGameLoopEditorSetNode(kernel, params);
+        }
+        if (name == "game_loop_editor.delete_node") {
+            return HandleGameLoopEditorDeleteNode(kernel, params);
+        }
+        if (name == "game_loop_editor.add_transition") {
+            return HandleGameLoopEditorAddTransition(kernel, params);
+        }
+        if (name == "game_loop_editor.set_transition") {
+            return HandleGameLoopEditorSetTransition(kernel, params);
+        }
+        if (name == "game_loop_editor.delete_transition") {
+            return HandleGameLoopEditorDeleteTransition(kernel, params);
+        }
+        if (name == "game_loop_editor.select") {
+            return HandleGameLoopEditorSelect(kernel, params);
+        }
+        if (name == "game_loop_editor.set_start_node") {
+            return HandleGameLoopEditorSetStartNode(kernel, params);
+        }
+        if (name == "game_loop_editor.reverse_transition") {
+            return HandleGameLoopEditorReverseTransition(kernel, params);
+        }
+        if (name == "game_loop_editor.fit_graph") {
+            return HandleGameLoopEditorFitGraph(kernel);
+        }
+        if (name == "player_editor.get_sockets") {
+            return HandlePlayerEditorGetSockets(kernel);
+        }
+        if (name == "player_editor.add_socket") {
+            return HandlePlayerEditorAddSocket(kernel, params);
+        }
+        if (name == "player_editor.set_socket") {
+            return HandlePlayerEditorSetSocket(kernel, params);
+        }
+        if (name == "player_editor.delete_socket") {
+            return HandlePlayerEditorDeleteSocket(kernel, params);
+        }
+        if (name == "player_editor.get_colliders") {
+            return HandlePlayerEditorGetColliders(kernel);
+        }
+        if (name == "player_editor.add_collider") {
+            return HandlePlayerEditorAddCollider(kernel, params);
+        }
+        if (name == "player_editor.set_collider") {
+            return HandlePlayerEditorSetCollider(kernel, params);
+        }
+        if (name == "player_editor.delete_collider") {
+            return HandlePlayerEditorDeleteCollider(kernel, params);
+        }
+        if (name == "player_editor.get_animations") {
+            return HandlePlayerEditorGetAnimations(kernel);
+        }
+        if (name == "player_editor.set_animator") {
+            return HandlePlayerEditorSetAnimator(kernel, params);
+        }
+        if (name == "player_editor.get_input_map") {
+            return HandlePlayerEditorGetInputMap(kernel);
+        }
+        if (name == "player_editor.add_action_binding") {
+            return HandlePlayerEditorAddActionBinding(kernel, params);
+        }
+        if (name == "player_editor.set_action_binding") {
+            return HandlePlayerEditorSetActionBinding(kernel, params);
+        }
+        if (name == "player_editor.delete_action_binding") {
+            return HandlePlayerEditorDeleteActionBinding(kernel, params);
+        }
+        if (name == "player_editor.add_axis_binding") {
+            return HandlePlayerEditorAddAxisBinding(kernel, params);
+        }
+        if (name == "player_editor.set_axis_binding") {
+            return HandlePlayerEditorSetAxisBinding(kernel, params);
+        }
+        if (name == "player_editor.delete_axis_binding") {
+            return HandlePlayerEditorDeleteAxisBinding(kernel, params);
+        }
+
+        // ---- Scene View ----
+        if (name == "scene_view.get_state")           { return HandleSceneViewGetState(kernel); }
+        if (name == "scene_view.set_camera")          { return HandleSceneViewSetCamera(kernel, params); }
+        if (name == "scene_view.set_look_at")         { return HandleSceneViewSetLookAt(kernel, params); }
+        if (name == "scene_view.set_gizmo_operation") { return HandleSceneViewSetGizmoOperation(kernel, params); }
+        if (name == "scene_view.set_gizmo_space")     { return HandleSceneViewSetGizmoSpace(kernel, params); }
+        if (name == "scene_view.set_shading_mode")    { return HandleSceneViewSetShadingMode(kernel, params); }
+        if (name == "scene_view.set_mode")            { return HandleSceneViewSetMode(kernel, params); }
+        if (name == "scene_view.set_visibility")      { return HandleSceneViewSetVisibility(kernel, params); }
+        if (name == "scene_view.save_bookmark")       { return HandleSceneViewBookmark(kernel, params, true); }
+        if (name == "scene_view.load_bookmark")       { return HandleSceneViewBookmark(kernel, params, false); }
+        // ---- Lighting ----
+        if (name == "lighting.open")                  { return HandleLightingOpen(kernel); }
+        if (name == "lighting.get") {
+            Registry* reg = kernel.GetGameRegistry();
+            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            return HandleLightingGet(*reg);
+        }
+        if (name == "lighting.set_environment") {
+            Registry* reg = kernel.GetGameRegistry();
+            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            return HandleLightingSetEnvironment(*reg, params);
+        }
+        if (name == "lighting.set_post_effects") {
+            Registry* reg = kernel.GetGameRegistry();
+            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            return HandleLightingSetPostEffects(*reg, params);
+        }
+        // ---- UI Editor ----
+        if (name == "ui_editor.open")             { return HandleUIEditorOpen(kernel); }
+        if (name == "ui_editor.get_state")        { return HandleUIEditorGetState(kernel); }
+        if (name == "ui_editor.select")           { return HandleUIEditorSelect(kernel, params); }
+        if (name == "ui_editor.create_canvas")    { return HandleUIEditorCreateCanvas(kernel); }
+        if (name == "ui_editor.create_template")  { return HandleUIEditorCreateTemplate(kernel, params); }
+        if (name == "ui_editor.create_part")      { return HandleUIEditorCreatePart(kernel, params); }
+        if (name == "ui_editor.save_prefab")      { return HandleUIEditorPrefab(kernel, params, "save"); }
+        if (name == "ui_editor.apply_prefab")     { return HandleUIEditorPrefab(kernel, params, "apply"); }
+        if (name == "ui_editor.revert_prefab")    { return HandleUIEditorPrefab(kernel, params, "revert"); }
+        if (name == "ui_editor.unpack_prefab")    { return HandleUIEditorPrefab(kernel, params, "unpack"); }
+        if (name == "ui_editor.set_view")         { return HandleUIEditorSetView(kernel, params); }
+        // ---- Sequencer ----
+        if (name == "sequencer.open")             { return HandleSequencerOpen(kernel); }
+        if (name == "sequencer.new")              { return HandleSequencerNew(kernel); }
+        if (name == "sequencer.load")             { return HandleSequencerLoad(kernel, params); }
+        if (name == "sequencer.save")             { return HandleSequencerSave(kernel, params); }
+        if (name == "sequencer.get")              { return HandleSequencerGet(kernel); }
+        if (name == "sequencer.set_playback")     { return HandleSequencerSetPlayback(kernel, params); }
+        if (name == "sequencer.add_binding")      { return HandleSequencerAddBinding(kernel, params); }
+        if (name == "sequencer.add_track")        { return HandleSequencerAddTrack(kernel, params); }
+        if (name == "sequencer.add_master_track") { return HandleSequencerAddMasterTrack(kernel, params); }
+        if (name == "sequencer.add_section")      { return HandleSequencerAddSection(kernel, params); }
+        if (name == "sequencer.select")           { return HandleSequencerSelect(kernel, params); }
+        if (name == "sequencer.set_params")       { return HandleSequencerSetSequenceParams(kernel, params); }
+
+        // ---- scene.new ----
+        if (name == "scene.new")                  { return HandleSceneNew(kernel, params); }
+
+        // ---- editor.* ----
+        if (name == "editor.undo")                { return HandleEditorUndo(kernel); }
+        if (name == "editor.redo")                { return HandleEditorRedo(kernel); }
+        if (name == "editor.focus_panel")         { return HandleEditorFocusPanel(kernel, params); }
+        if (name == "editor.get_panels")          { return HandleEditorGetPanels(kernel); }
+        if (name == "editor.show_panel")          { return HandleEditorShowPanel(kernel, params); }
+
+        // ---- scene_view snap / grid / 2D ----
+        if (name == "scene_view.get_snap")        { return HandleSceneViewGetSnap(kernel); }
+        if (name == "scene_view.set_snap")        { return HandleSceneViewSetSnap(kernel, params); }
+        if (name == "scene_view.set_grid")        { return HandleSceneViewSetGrid(kernel, params); }
+        if (name == "scene_view.set_2d_view")     { return HandleSceneViewSet2DView(kernel, params); }
+        if (name == "scene_view.align_camera")    { return HandleSceneViewAlignCamera(kernel); }
+
+        // ---- game_view.* ----
+        if (name == "game_view.get_state")        { return HandleGameViewGetState(kernel); }
+        if (name == "game_view.set_resolution")   { return HandleGameViewSetResolution(kernel, params); }
+        if (name == "game_view.set_overlay")      { return HandleGameViewSetOverlay(kernel, params); }
+
+        // ---- model_serializer.* ----
+        if (name == "model_serializer.build")     { return HandleModelSerializerBuild(kernel, params); }
 
         throw MakeError("unknown_command", "Unknown AI automation command.", { { "command", name } });
     }

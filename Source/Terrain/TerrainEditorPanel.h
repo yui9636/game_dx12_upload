@@ -14,6 +14,12 @@ public:
     void ApplyBrush(Registry& registry, EntityID entity,
                     float worldHitX, float worldHitZ);
 
+    // ---- Automation API ----
+    const TerrainBrush& GetBrush()    const { return m_brush; }
+    TerrainBrush&       GetBrushMutable()   { return m_brush; }
+    bool  IsSceneBrushEnabled()       const { return m_sceneBrushEnabled; }
+    void  SetSceneBrushEnabled(bool v)      { m_sceneBrushEnabled = v; }
+
 private:
     TerrainBrush m_brush;
     bool         m_sceneBrushEnabled = false;
