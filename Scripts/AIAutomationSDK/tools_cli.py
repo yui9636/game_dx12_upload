@@ -9,6 +9,8 @@ from typing import Any, Mapping, Optional
 from autonomy_runner import AutonomyValidationError
 from engine_client import DEFAULT_TIMEOUT, DEFAULT_URL, EngineClient
 from engine_client import EngineCommandError, EngineConnectionError
+from llm_bridge import EngineLLMBridge
+from qa_runner import QualityGateRunner
 from tools import EngineTools
 from verification_runner import VerificationValidationError
 from workflow_runner import WorkflowValidationError
@@ -63,6 +65,25 @@ def run_coverage(args: argparse.Namespace) -> int:
     engine = EngineClient(args.url, timeout=args.timeout)
     print_json(EngineTools(engine).coverage_report())
     return 0
+
+
+def run_llm_schema(args: argparse.Namespace) -> int:
+    bridge = EngineLLMBridge(args.url)
+    if args.output:
+        print_json(bridge.export_schema(args.output))
+    else:
+        print_json(bridge.tool_schema())
+    return 0
+
+
+def run_qa(args: argparse.Namespace) -> int:
+    result = QualityGateRunner(url=args.url).run(
+        require_engine=args.require_engine,
+        run_python_compile=not args.skip_python_compile,
+        report_path=args.report,
+    )
+    print_json(result)
+    return 0 if result.get("summary", {}).get("ok", False) else 2
 
 
 def run_preflight(args: argparse.Namespace) -> int:
@@ -429,6 +450,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     coverage = sub.add_parser("coverage", help="Report Phase 3 command-family coverage.")
     coverage.set_defaults(func=run_coverage)
+
+    llm_schema = sub.add_parser("llm-schema", help="Print or export the LLM engine_command tool schema.")
+    llm_schema.add_argument("--output", help="Optional JSON file path.")
+    llm_schema.set_defaults(func=run_llm_schema)
+
+    qa = sub.add_parser("qa", help="Run the Phase 7 AI foundation quality gate.")
+    qa.add_argument("--require-engine", action="store_true")
+    qa.add_argument("--skip-python-compile", action="store_true")
+    qa.add_argument("--report", default="Saved/AI/qa/ai_foundation_quality_gate_latest.json")
+    qa.set_defaults(func=run_qa)
 
     preflight = sub.add_parser("preflight", help="Run Phase 4-6 preflight checks.")
     preflight.set_defaults(func=run_preflight)

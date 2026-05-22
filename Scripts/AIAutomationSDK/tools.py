@@ -109,6 +109,56 @@ class AssetTools:
             params["type"] = type_filter
         return self.engine.asset_browser_search(params)
 
+
+class SessionTools:
+    """AI authoring session control and audit helpers."""
+
+    def __init__(self, root: "EngineTools"):
+        self.root = root
+        self.engine = root.engine
+
+    def begin(
+        self,
+        name: str = "AI Session",
+        *,
+        goal: str = "",
+        session_id: Optional[str] = None,
+        force: bool = False,
+        auto_capture_after_command: bool = False,
+        capture_targets: Optional[Sequence[str]] = None,
+        backup_files: bool = True,
+        backup_roots: Optional[Sequence[str]] = None,
+        backup_extensions: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "name": name,
+            "goal": goal,
+            "force": bool(force),
+            "autoCaptureAfterCommand": bool(auto_capture_after_command),
+            "backupFiles": bool(backup_files),
+        }
+        if session_id:
+            params["sessionId"] = session_id
+        if capture_targets:
+            params["captureTargets"] = list(capture_targets)
+        if backup_roots:
+            params["backupRoots"] = list(backup_roots)
+        if backup_extensions:
+            params["backupExtensions"] = list(backup_extensions)
+        return self.engine.ai_session_begin(params)
+
+    def status(self) -> Dict[str, Any]:
+        return self.engine.ai_session_status()
+
+    def rollback(self, *, undo_steps: Optional[int] = None, restore_files: bool = True) -> Dict[str, Any]:
+        params: Dict[str, Any] = {"restoreFiles": bool(restore_files)}
+        if undo_steps is not None:
+            params["undoSteps"] = int(undo_steps)
+        return self.engine.ai_session_rollback(params)
+
+    def end(self, *, success: bool = True, notes: str = "") -> Dict[str, Any]:
+        return self.engine.ai_session_end(success=success, notes=notes)
+
     def find_one(self, query: str, *, root: str = "Data", type_filter: str = "", limit: int = 100) -> Optional[Mapping[str, Any]]:
         results = _entries(self.search(query, root=root, type_filter=type_filter, limit=limit), "results")
         return results[0] if results else None
@@ -552,6 +602,15 @@ class EditorTools:
     def engine_state(self) -> Dict[str, Any]:
         return self.engine.get_engine_state()
 
+    def recovery_state(self, *, refresh: bool = False) -> Dict[str, Any]:
+        return self.engine.editor_recovery_get_state(refresh=refresh)
+
+    def recover_autosave(self) -> Dict[str, Any]:
+        return self.engine.editor_recovery_restore()
+
+    def dismiss_recovery(self) -> Dict[str, Any]:
+        return self.engine.editor_recovery_dismiss()
+
     def configure_scene_view(
         self,
         *,
@@ -677,14 +736,26 @@ class EffectEditorTools:
     def create_asset(self, path: str, **fields: Any) -> Dict[str, Any]:
         return self.engine.effect_editor_create_asset(_merge(path=path, **fields))
 
+    def apply_preset(self, path: str, preset: str, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_apply_preset(_merge(path=path, preset=preset, **params))
+
     def open(self, path: str) -> Dict[str, Any]:
         return self.engine.effect_editor_open_workspace(path=path)
+
+    def set_preview_view(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_set_preview_view(dict(params))
+
+    def state(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_get_state(dict(params))
 
     def get(self) -> Dict[str, Any]:
         return self.engine.effect_editor_get_asset()
 
     def set_asset(self, fields: Mapping[str, Any]) -> Dict[str, Any]:
         return self.engine.effect_editor_set_asset(dict(fields))
+
+    def set_semantic_params(self, path: str, **semantic: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_set_semantic_params(path=path, semantic=semantic)
 
     def add_node(
         self,
@@ -713,11 +784,35 @@ class EffectEditorTools:
     def preview_spawn(self, position: Vector3 = (0.0, 0.0, 0.0)) -> Dict[str, Any]:
         return self.engine.effect_editor_preview_spawn(position=_vec3(position))
 
-    def timeline_play(self) -> Dict[str, Any]:
-        return self.engine.effect_editor_timeline_play()
+    def timeline_play(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_timeline_play(dict(params))
+
+    def timeline_seek(self, time: float, *, paused: bool = True, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_timeline_seek(_merge(time=float(time), paused=paused, **params))
+
+    def timeline_step(self, delta_time: float, *, paused: bool = True, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_timeline_step(_merge(deltaTime=float(delta_time), paused=paused, **params))
 
     def timeline_stop(self) -> Dict[str, Any]:
         return self.engine.effect_editor_timeline_stop()
+
+    def select_node(self, node_id: int, *, node_mode: bool = False) -> Dict[str, Any]:
+        return self.engine.effect_editor_select_node(nodeId=int(node_id), nodeMode=node_mode)
+
+    def focus_node(self, node_id: int) -> Dict[str, Any]:
+        return self.engine.effect_editor_focus_node(nodeId=int(node_id))
+
+    def assert_preview_visible(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_assert_preview_visible(dict(params))
+
+    def capture_review_set(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_capture_review_set(dict(params))
+
+    def capture_multi_time_review(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.effect_editor_capture_multi_time_review(dict(params))
+
+    def evaluate_capture(self, target: str = "effect_editor", **params: Any) -> Dict[str, Any]:
+        return self.engine.visual_evaluate_capture(_merge(target=target, **params))
 
 
 class PlayerEditorTools:
@@ -1037,6 +1132,82 @@ class RuntimeTools:
     def step(self) -> Dict[str, Any]:
         return self.engine.step()
 
+    def game_play(self) -> Dict[str, Any]:
+        return self.engine.game_play()
+
+    def game_stop(self) -> Dict[str, Any]:
+        return self.engine.game_stop()
+
+    def game_pause(self) -> Dict[str, Any]:
+        return self.engine.game_pause()
+
+    def step_frames(self, frames: int = 1) -> Dict[str, Any]:
+        return self.engine.game_step_frames(frames=int(frames))
+
+    def set_time_scale(self, time_scale: float) -> Dict[str, Any]:
+        return self.engine.game_set_time_scale(timeScale=float(time_scale))
+
+
+class GameplayTools:
+    """Gameplay observation, event log, and input injection helpers."""
+
+    def __init__(self, root: "EngineTools"):
+        self.root = root
+        self.engine = root.engine
+
+    def state(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.gameplay_get_state(dict(params))
+
+    def events(self, *, clear: bool = False, **params: Any) -> Dict[str, Any]:
+        result = self.engine.gameplay_get_events(dict(params))
+        if clear:
+            result = {"events": result, "clear": self.engine.gameplay_clear_events()}
+        return result
+
+    def clear_events(self) -> Dict[str, Any]:
+        return self.engine.gameplay_clear_events()
+
+    def press(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.game_input_press(dict(params))
+
+    def release(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.game_input_release(dict(params))
+
+    def tap(self, **params: Any) -> Dict[str, Any]:
+        return self.engine.game_input_tap(dict(params))
+
+    def axis(self, axis: str, value: float, **params: Any) -> Dict[str, Any]:
+        return self.engine.game_input_axis(_merge(axis=axis, value=float(value), **params))
+
+    def mouse_move(self, dx: float = 0.0, dy: float = 0.0, **params: Any) -> Dict[str, Any]:
+        return self.engine.game_input_mouse_move(_merge(dx=float(dx), dy=float(dy), **params))
+
+    def run_input_script(self, script: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+        steps: List[Dict[str, Any]] = []
+        for index, raw in enumerate(script):
+            step = dict(raw)
+            action = str(step.pop("action", step.pop("type", "")))
+            if action == "press":
+                result = self.press(**step)
+            elif action == "release":
+                result = self.release(**step)
+            elif action == "tap":
+                result = self.tap(**step)
+            elif action == "axis":
+                axis = str(step.pop("axis"))
+                value = float(step.pop("value", 0.0))
+                result = self.axis(axis, value, **step)
+            elif action == "mouse_move":
+                result = self.mouse_move(float(step.pop("dx", 0.0)), float(step.pop("dy", 0.0)), **step)
+            elif action == "step_frames":
+                result = self.root.runtime.step_frames(int(step.pop("frames", 1)))
+            elif action == "wait":
+                result = self.root.runtime.step_frames(int(step.pop("frames", 1)))
+            else:
+                raise ValueError(f"Unsupported input script action at {index}: {action!r}")
+            steps.append({"index": index, "action": action, "result": result})
+        return {"steps": steps, "state": self.state()}
+
 
 class VerificationTools:
     """Phase 5 verification entry point."""
@@ -1294,6 +1465,7 @@ class EngineTools:
 
     def __init__(self, engine: EngineClient):
         self.engine = engine
+        self.session = SessionTools(self)
         self.assets = AssetTools(self)
         self.entities = EntityTools(self)
         self.materials = MaterialTools(self)
@@ -1307,14 +1479,20 @@ class EngineTools:
         self.game_loop = GameLoopTools(self)
         self.serializer = SerializerTools(self)
         self.runtime = RuntimeTools(self)
+        self.gameplay = GameplayTools(self)
         self.verify = VerificationTools(self)
         self.autonomy = AutonomyTools(self)
         self.workflow = WorkflowTools(self)
 
     def coverage_report(self) -> Dict[str, Any]:
         groups: Dict[str, List[str]] = {
-            "core": ["ping", "play", "stop", "pause", "step"],
+            "core": ["ping", "batch", "play", "stop", "pause", "step", "game.play", "game.stop", "game.pause", "game.step_frames", "game.set_time_scale"],
+            "session": [c for c in COMMANDS if c.startswith("ai_session.")],
             "inspection": ["get_engine_state", "get_visual_state", "get_component_schema", "capture_screenshot"],
+            "ecs": [c for c in COMMANDS if c.startswith("ecs.")],
+            "visual": [c for c in COMMANDS if c.startswith("visual.") or c in {"camera.frame_entities"}],
+            "input": [c for c in COMMANDS if c.startswith("game.input.")],
+            "gameplay": [c for c in COMMANDS if c.startswith("gameplay.") or c.startswith("coingame.") or c in {"fire_ui_button", "push_flow_event", "gameflow.register"}],
             "assets": [c for c in COMMANDS if c.startswith("asset_browser.")],
             "entities": [
                 "list_entities", "get_entity", "get_component", "select_entity",
@@ -1331,7 +1509,7 @@ class EngineTools:
             "player": [c for c in COMMANDS if c.startswith("player_editor.")],
             "ui": [c for c in COMMANDS if c.startswith("ui_editor.")],
             "sequencer": [c for c in COMMANDS if c.startswith("sequencer.")],
-            "game_loop": [c for c in COMMANDS if c.startswith("game_loop_editor.")],
+            "game_loop": [c for c in COMMANDS if c.startswith("game_loop_editor.") or c.startswith("gameloop_editor.")],
             "editor": [c for c in COMMANDS if c.startswith("editor.") or c.startswith("scene_view.") or c.startswith("game_view.") or c in {"scene.new", "save_scene", "load_scene"}],
             "serializer": [c for c in COMMANDS if c.startswith("model_serializer.")],
         }

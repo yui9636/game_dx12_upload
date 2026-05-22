@@ -29,10 +29,25 @@ public:
     void SetViewportTexture(ITexture* texture) { m_viewportTexture = texture; }
     void SetSelectedContext(EntityID entity, const std::string& meshPath);
     bool OpenDocumentFromAutomation(const std::string& path);
+    bool CompileFromAutomation();
     bool PlayTimelineFromAutomation(Registry* registry, float startTime = 0.0f, bool paused = false);
+    bool SeekTimelineFromAutomation(Registry* registry, float time, bool paused = true);
+    bool StepTimelineFromAutomation(Registry* registry, float deltaTime, bool paused = true);
     bool StopTimelineFromAutomation();
+    bool SelectNodeFromAutomation(uint32_t nodeId, bool nodeMode = false);
+    bool FocusNodeFromAutomation(uint32_t nodeId);
+    void SetPreviewCameraAutomation(const DirectX::XMFLOAT3& target, float yaw, float pitch, float distance, float fovY);
+    void SetPreviewEnvironmentAutomation(const DirectX::XMFLOAT4& clearColor, bool useSkybox);
     EntityID GetPreviewEntity() const { return m_previewEntity; }
     const std::string& GetDocumentPath() const { return m_documentPath; }
+    const EffectGraphAsset& GetAssetForAutomation() const { return m_asset; }
+    std::shared_ptr<CompiledEffectAsset> GetCompiledForAutomation() const { return m_compiled; }
+    bool IsCompileDirtyForAutomation() const { return m_compileDirty; }
+    uint32_t GetSelectedNodeIdForAutomation() const { return m_selectedNodeId; }
+    uint32_t GetSelectedLinkIdForAutomation() const { return m_selectedLinkId; }
+    const char* GetAuthoringModeForAutomation() const;
+    DirectX::XMFLOAT4 GetWorkspaceRectForAutomation() const { return m_workspaceRect; }
+    DirectX::XMFLOAT4 GetPreviewRectForAutomation() const { return m_previewRect; }
     DirectX::XMFLOAT2 GetPreviewRenderSize() const { return m_previewRenderSize; }
     DirectX::XMFLOAT3 GetPreviewCameraPosition() const;
     DirectX::XMFLOAT3 GetPreviewCameraTarget() const { return m_previewAnchor; }
@@ -105,6 +120,8 @@ private:
 
     Registry* m_registry = nullptr;
     ITexture* m_viewportTexture = nullptr;
+    DirectX::XMFLOAT4 m_workspaceRect = { 0.0f, 0.0f, 0.0f, 0.0f };
+    DirectX::XMFLOAT4 m_previewRect = { 0.0f, 0.0f, 0.0f, 0.0f };
     EntityID m_selectedEntity = Entity::NULL_ID;
     std::string m_selectedMeshPath;
     EntityID m_previewEntity = Entity::NULL_ID;

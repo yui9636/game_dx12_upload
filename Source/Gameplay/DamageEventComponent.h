@@ -36,6 +36,10 @@ public:
     static void Push(const Event& event)
     {
         Events().push_back(event);
+        RecentEvents().push_back(event);
+        if (RecentEvents().size() > 128) {
+            RecentEvents().erase(RecentEvents().begin(), RecentEvents().begin() + (RecentEvents().size() - 128));
+        }
     }
 
     static const std::vector<Event>& GetAll()
@@ -43,13 +47,29 @@ public:
         return Events();
     }
 
+    static const std::vector<Event>& GetRecent()
+    {
+        return RecentEvents();
+    }
+
     static void Clear()
     {
         Events().clear();
     }
 
+    static void ClearRecent()
+    {
+        RecentEvents().clear();
+    }
+
 private:
     static std::vector<Event>& Events()
+    {
+        static std::vector<Event> events;
+        return events;
+    }
+
+    static std::vector<Event>& RecentEvents()
     {
         static std::vector<Event> events;
         return events;

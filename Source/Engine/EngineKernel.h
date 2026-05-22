@@ -61,6 +61,9 @@ public:
     // Pause 状態から 1 フレームだけ進める。
     void Step();
 
+    // 実行時間スケールを変更する。
+    void SetTimeScale(float scale) { time.timeScale = scale; }
+
     // シーン切り替え時に描画関連の状態を安全にリセットする。
     void ResetRenderStateForSceneChange();
 
@@ -114,6 +117,9 @@ public:
 
     // 1 フレームで収集された入力イベントキューを取得する。
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
+
+    // AI / automation から仮想入力イベントを現在フレームの入力キューへ注入する。
+    void InjectInputEvent(const InputEvent& event) { m_inputQueue.Push(event); }
 
     // GameFlowEditor の Load を経由して実行用 GameLoop を登録する。
     void RegisterGameLoopAssetFromEditor(const GameLoopAsset& asset, const std::filesystem::path& path);

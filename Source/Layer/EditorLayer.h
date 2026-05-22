@@ -240,12 +240,22 @@ public:
 
     // AI automation から現在シーンを保存する。空 path の場合は現在の保存先を使う。
     bool SaveSceneFromAutomation(const std::filesystem::path& scenePath = {});
+    void CheckRecoveryCandidateFromAutomation();
+    bool HasRecoveryCandidateForAutomation() const { return !m_pendingRecoveryAutosavePath.empty(); }
+    const std::filesystem::path& GetRecoveryAutosavePathForAutomation() const { return m_pendingRecoveryAutosavePath; }
+    const std::filesystem::path& GetRecoveryScenePathForAutomation() const { return m_pendingRecoveryScenePath; }
+    bool RecoverAutosaveFromAutomation();
+    bool DismissAutosaveRecoveryFromAutomation();
     bool OpenEffectEditorFromAutomation(const std::filesystem::path& effectGraphPath = {});
     bool PlayEffectTimelineFromAutomation(const std::filesystem::path& effectGraphPath = {}, float startTime = 0.0f, bool paused = false);
     bool StopEffectTimelineFromAutomation();
     EntityID GetEffectPreviewEntity() const { return m_effectEditorPanel.GetPreviewEntity(); }
     bool IsEffectEditorWorkspaceActive() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }
     const std::string& GetEffectEditorDocumentPath() const { return m_effectEditorPanel.GetDocumentPath(); }
+    DirectX::XMFLOAT4 GetEffectEditorRect() const { return m_effectEditorPanel.GetWorkspaceRectForAutomation(); }
+    DirectX::XMFLOAT4 GetEffectPreviewRect() const { return m_effectEditorPanel.GetPreviewRectForAutomation(); }
+    EffectEditorPanel& GetEffectEditorPanel() { return m_effectEditorPanel; }
+    const EffectEditorPanel& GetEffectEditorPanel() const { return m_effectEditorPanel; }
 
     bool OpenPlayerEditorFromAutomation(const std::filesystem::path& modelPath = {});
 
