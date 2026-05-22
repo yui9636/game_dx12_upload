@@ -415,3 +415,42 @@ bool EditorLayer::SaveSceneFromAutomation(const std::filesystem::path& scenePath
     }
     return SaveCurrentScene();
 }
+
+void EditorLayer::CheckRecoveryCandidateFromAutomation()
+{
+    m_hasCheckedRecovery = false;
+    CheckRecoveryCandidate();
+}
+
+bool EditorLayer::RecoverAutosaveFromAutomation()
+{
+    const std::filesystem::path autosavePath = m_pendingRecoveryAutosavePath;
+    const std::filesystem::path scenePath = m_pendingRecoveryScenePath;
+    if (autosavePath.empty()) {
+        return false;
+    }
+
+    const bool loaded = LoadSceneFromPath(autosavePath);
+    if (loaded) {
+        m_sceneSavePath = scenePath.empty() ? autosavePath.string() : scenePath.string();
+        MarkSceneSaved();
+        LOG_INFO("[Editor] Recovered autosave from automation: %s", autosavePath.string().c_str());
+    }
+    m_pendingRecoveryAutosavePath.clear();
+    m_pendingRecoveryScenePath.clear();
+    m_pendingRecoveredSceneSavePath.clear();
+    m_openRecoveryPopup = false;
+    m_hasCheckedRecovery = true;
+    return loaded;
+}
+
+bool EditorLayer::DismissAutosaveRecoveryFromAutomation()
+{
+    const bool hadCandidate = !m_pendingRecoveryAutosavePath.empty();
+    m_pendingRecoveryAutosavePath.clear();
+    m_pendingRecoveryScenePath.clear();
+    m_pendingRecoveredSceneSavePath.clear();
+    m_openRecoveryPopup = false;
+    m_hasCheckedRecovery = true;
+    return hadCandidate;
+}

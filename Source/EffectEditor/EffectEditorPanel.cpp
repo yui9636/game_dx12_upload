@@ -364,6 +364,11 @@ void EffectEditorPanel::SetSelectedContext(EntityID entity, const std::string& m
     m_selectedMeshPath = meshPath;
 }
 
+const char* EffectEditorPanel::GetAuthoringModeForAutomation() const
+{
+    return m_authoringMode == AuthoringMode::Node ? "Node" : "Stack";
+}
+
 DirectX::XMFLOAT3 EffectEditorPanel::GetPreviewCameraPosition() const
 {
     const float cosPitch = std::cos(m_previewPitch);
@@ -441,6 +446,9 @@ void EffectEditorPanel::DrawWorkspace(Registry* registry, bool* outFocused)
     if (outFocused) {
         *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     }
+    const ImVec2 workspaceMin = ImGui::GetWindowPos();
+    const ImVec2 workspaceSize = ImGui::GetWindowSize();
+    m_workspaceRect = { workspaceMin.x, workspaceMin.y, workspaceSize.x, workspaceSize.y };
 
     DrawToolbar();
 
@@ -987,6 +995,7 @@ void EffectEditorPanel::DrawPreviewPanel()
 
     const ImVec2 surfaceMin = ImGui::GetCursorScreenPos();
     const ImVec2 surfaceMax(surfaceMin.x + previewSize.x, surfaceMin.y + previewSize.y);
+    m_previewRect = { surfaceMin.x, surfaceMin.y, previewSize.x, previewSize.y };
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     drawList->AddRectFilled(surfaceMin, surfaceMax, IM_COL32(54, 54, 58, 255), 5.0f);
     drawList->AddRect(surfaceMin, surfaceMax, IM_COL32(80, 82, 88, 255), 5.0f);

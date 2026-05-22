@@ -14,10 +14,12 @@
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -29,6 +31,7 @@
 #include "Archetype/Archetype.h"
 #include "Asset/PrefabSystem.h"
 #include "Asset/AssetManager.h"
+#include "Camera/Camera2DUtils.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/EffectAssetComponent.h"
 #include "Component/EffectPlaybackComponent.h"
@@ -44,6 +47,7 @@
 #include "EffectRuntime/EffectCompiler.h"
 #include "EffectRuntime/EffectGraphAsset.h"
 #include "EffectRuntime/EffectGraphSerializer.h"
+#include "EffectEditor/EffectEditorPanelInternal.h"
 #include "Generated/ComponentMeta.generated.h"
 #include "Hierarchy/HierarchySystem.h"
 #include "Layer/EditorLayer.h"
@@ -1547,6 +1551,293 @@ namespace
         return true;
     }
 
+    bool ProjectWorldToRect(const DirectX::XMFLOAT4& rect,
+                            const DirectX::XMFLOAT4X4& viewFloat,
+                            const DirectX::XMFLOAT4X4& projectionFloat,
+                            const DirectX::XMFLOAT3& worldPosition,
+                            json& outScreen)
+    {
+        if (rect.z <= 1.0f || rect.w <= 1.0f) {
+            return false;
+        }
+
+        const DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&viewFloat);
+        const DirectX::XMMATRIX projection = DirectX::XMLoadFloat4x4(&projectionFloat);
+        const DirectX::XMVECTOR world =
+            DirectX::XMVectorSet(worldPosition.x, worldPosition.y, worldPosition.z, 1.0f);
+        const DirectX::XMVECTOR clip = DirectX::XMVector4Transform(world, view * projection);
+
+        DirectX::XMFLOAT4 clipFloat{};
+        DirectX::XMStoreFloat4(&clipFloat, clip);
+        if (clipFloat.w <= 0.0001f) {
+            return false;
+        }
+
+        const float ndcX = clipFloat.x / clipFloat.w;
+        const float ndcY = clipFloat.y / clipFloat.w;
+        const bool visible = ndcX >= -1.0f && ndcX <= 1.0f && ndcY >= -1.0f && ndcY <= 1.0f;
+        outScreen = {
+            { "x", rect.x + (ndcX * 0.5f + 0.5f) * rect.z },
+            { "y", rect.y + (-ndcY * 0.5f + 0.5f) * rect.w },
+            { "ndc", json::array({ ndcX, ndcY }) },
+            { "visible", visible }
+        };
+        return true;
+    }
+
+    bool ProjectBoundsToRect(const DirectX::XMFLOAT4& rect,
+                             const DirectX::XMFLOAT4X4& viewFloat,
+                             const DirectX::XMFLOAT4X4& projectionFloat,
+                             const DirectX::XMFLOAT3& center,
+                             float radius,
+                             json& outBounds)
+    {
+        const float r = (std::max)(radius, 0.05f);
+        const std::array<DirectX::XMFLOAT3, 8> points = {
+            DirectX::XMFLOAT3{ center.x - r, center.y - r, center.z - r },
+            DirectX::XMFLOAT3{ center.x - r, center.y - r, center.z + r },
+            DirectX::XMFLOAT3{ center.x - r, center.y + r, center.z - r },
+            DirectX::XMFLOAT3{ center.x - r, center.y + r, center.z + r },
+            DirectX::XMFLOAT3{ center.x + r, center.y - r, center.z - r },
+            DirectX::XMFLOAT3{ center.x + r, center.y - r, center.z + r },
+            DirectX::XMFLOAT3{ center.x + r, center.y + r, center.z - r },
+            DirectX::XMFLOAT3{ center.x + r, center.y + r, center.z + r }
+        };
+
+        bool hasPoint = false;
+        bool allProjected = true;
+        bool allVisible = true;
+        float minX = (std::numeric_limits<float>::max)();
+        float minY = (std::numeric_limits<float>::max)();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+
+        for (const DirectX::XMFLOAT3& point : points) {
+            json screen;
+            if (!ProjectWorldToRect(rect, viewFloat, projectionFloat, point, screen)) {
+                allProjected = false;
+                allVisible = false;
+                continue;
+            }
+            hasPoint = true;
+            const float x = screen.value("x", 0.0f);
+            const float y = screen.value("y", 0.0f);
+            minX = (std::min)(minX, x);
+            minY = (std::min)(minY, y);
+            maxX = (std::max)(maxX, x);
+            maxY = (std::max)(maxY, y);
+            allVisible = allVisible && screen.value("visible", false);
+        }
+
+        if (!hasPoint) {
+            return false;
+        }
+
+        const float leftMargin = minX - rect.x;
+        const float topMargin = minY - rect.y;
+        const float rightMargin = (rect.x + rect.z) - maxX;
+        const float bottomMargin = (rect.y + rect.w) - maxY;
+        const float minMargin = (std::min)((std::min)(leftMargin, rightMargin), (std::min)(topMargin, bottomMargin));
+        const float fillX = rect.z > 0.0f ? (maxX - minX) / rect.z : 0.0f;
+        const float fillY = rect.w > 0.0f ? (maxY - minY) / rect.w : 0.0f;
+        outBounds = {
+            { "min", json::array({ minX, minY }) },
+            { "max", json::array({ maxX, maxY }) },
+            { "size", json::array({ maxX - minX, maxY - minY }) },
+            { "margins", {
+                { "left", leftMargin },
+                { "top", topMargin },
+                { "right", rightMargin },
+                { "bottom", bottomMargin },
+                { "min", minMargin }
+            } },
+            { "fill", json::array({ fillX, fillY }) },
+            { "maxFill", (std::max)(fillX, fillY) },
+            { "allProjected", allProjected },
+            { "fullyVisible", allProjected && allVisible && minMargin >= 0.0f }
+        };
+        return true;
+    }
+
+    template<typename T>
+    json ComponentToJson(const T& component);
+
+    template<typename T>
+    void AppendComponentDataIfPresent(Registry& registry, EntityID entity, json& components)
+    {
+        if (const T* component = registry.GetComponent<T>(entity)) {
+            components[std::string(ComponentMeta<T>::Name)] = ComponentToJson(*component);
+        }
+    }
+
+    json BuildAllComponentData(Registry& registry, EntityID entity)
+    {
+        json components = json::object();
+        std::apply(
+            [&](auto... component) {
+                (AppendComponentDataIfPresent<std::decay_t<decltype(component)>>(registry, entity, components), ...);
+            },
+            AllComponentTypes{});
+        return components;
+    }
+
+    json EntityObservationRecord(Registry& registry, EntityID entity)
+    {
+        const auto signature = FindEntitySignature(registry, entity);
+        json out = EntitySummary(registry, entity, signature.value_or(Signature{}));
+        out["componentData"] = BuildAllComponentData(registry, entity);
+        return out;
+    }
+
+    bool SignatureHasComponentName(const Signature& signature, const std::string& componentName)
+    {
+        bool matched = false;
+        std::apply(
+            [&](auto... component) {
+                ((ComponentNameEquals<std::decay_t<decltype(component)>>(componentName)
+                    ? (matched = signature.test(TypeManager::GetComponentTypeID<std::decay_t<decltype(component)>>()), true)
+                    : false), ...);
+            },
+            AllComponentTypes{});
+        return matched;
+    }
+
+    std::vector<std::string> JsonStringList(const json& params, const char* key)
+    {
+        std::vector<std::string> values;
+        if (!params.contains(key)) {
+            return values;
+        }
+        const json& in = params[key];
+        if (in.is_string()) {
+            values.push_back(in.get<std::string>());
+            return values;
+        }
+        if (!in.is_array()) {
+            throw MakeError("invalid_param", std::string(key) + " must be a string or string array.");
+        }
+        for (const json& item : in) {
+            if (!item.is_string()) {
+                throw MakeError("invalid_param", std::string(key) + " must contain only strings.");
+            }
+            values.push_back(item.get<std::string>());
+        }
+        return values;
+    }
+
+    bool EntityMatchesNameFilter(Registry& registry, EntityID entity, const std::string& filter)
+    {
+        if (filter.empty()) {
+            return true;
+        }
+        std::string name = "Entity " + std::to_string(Entity::GetIndex(entity));
+        if (auto* nameComponent = registry.GetComponent<NameComponent>(entity)) {
+            name = nameComponent->name;
+        }
+        return ToLowerCopy(name).find(ToLowerCopy(filter)) != std::string::npos;
+    }
+
+    bool EntityMatchesQuery(Registry& registry,
+                            EntityID entity,
+                            const Signature& signature,
+                            const std::vector<std::string>& hasComponents,
+                            const std::vector<std::string>& missingComponents,
+                            const std::string& nameContains,
+                            bool activeOnly,
+                            bool rootsOnly)
+    {
+        if (!EntityMatchesNameFilter(registry, entity, nameContains)) {
+            return false;
+        }
+        for (const std::string& component : hasComponents) {
+            if (!SignatureHasComponentName(signature, component)) {
+                return false;
+            }
+        }
+        for (const std::string& component : missingComponents) {
+            if (SignatureHasComponentName(signature, component)) {
+                return false;
+            }
+        }
+        if (activeOnly) {
+            if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
+                if (!hierarchy->isActive) {
+                    return false;
+                }
+            }
+        }
+        if (rootsOnly && !Entity::IsNull(GetEntityParent(registry, entity))) {
+            return false;
+        }
+        return true;
+    }
+
+    std::unordered_map<std::string, json> BuildECSObservationSnapshot(Registry& registry)
+    {
+        std::unordered_map<std::string, json> snapshot;
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (registry.IsAlive(entity)) {
+                    snapshot.emplace(EntityToString(entity), EntityObservationRecord(registry, entity));
+                }
+            }
+        }
+        return snapshot;
+    }
+
+    json BuildRelationshipNode(Registry& registry, EntityID entity, bool includeComponents, int depth, int maxDepth)
+    {
+        const auto signature = FindEntitySignature(registry, entity);
+        json node = EntitySummary(registry, entity, signature.value_or(Signature{}));
+        if (!includeComponents) {
+            node.erase("components");
+        }
+
+        node["children"] = json::array();
+        if (depth >= maxDepth) {
+            node["truncated"] = true;
+            return node;
+        }
+
+        if (auto* hierarchy = registry.GetComponent<HierarchyComponent>(entity)) {
+            EntityID child = hierarchy->firstChild;
+            while (!Entity::IsNull(child)) {
+                if (registry.IsAlive(child)) {
+                    node["children"].push_back(BuildRelationshipNode(registry, child, includeComponents, depth + 1, maxDepth));
+                }
+                auto* childHierarchy = registry.GetComponent<HierarchyComponent>(child);
+                child = childHierarchy ? childHierarchy->nextSibling : Entity::NULL_ID;
+            }
+        }
+        return node;
+    }
+
+    json BuildReferenceSummary(Registry& registry, EntityID entity)
+    {
+        json refs = json::object();
+        if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
+            refs["mesh"] = {
+                { "modelFilePath", mesh->modelFilePath },
+                { "hasModel", mesh->model != nullptr },
+                { "isVisible", mesh->isVisible }
+            };
+        }
+        if (auto* material = registry.GetComponent<MaterialComponent>(entity)) {
+            refs["material"] = ComponentToJson(*material);
+        }
+        if (auto* prefab = registry.GetComponent<PrefabInstanceComponent>(entity)) {
+            refs["prefab"] = ComponentToJson(*prefab);
+        }
+        if (auto* effect = registry.GetComponent<EffectAssetComponent>(entity)) {
+            refs["effect"] = ComponentToJson(*effect);
+        }
+        if (auto* light = registry.GetComponent<LightComponent>(entity)) {
+            refs["light"] = ComponentToJson(*light);
+        }
+        return refs;
+    }
+
     json BuildVisualState(EngineKernel& kernel)
     {
         json out;
@@ -2084,6 +2375,1544 @@ namespace
     json HandleGetVisualState(EngineKernel& kernel)
     {
         return BuildVisualState(kernel);
+    }
+
+    json HandleECSQuery(Registry& registry, const json& params)
+    {
+        const std::vector<std::string> hasComponents = JsonStringList(params, "hasComponents");
+        const std::vector<std::string> missingComponents = JsonStringList(params, "missingComponents");
+        const std::string nameContains = params.value("nameContains", std::string{});
+        const bool activeOnly = params.value("activeOnly", false);
+        const bool rootsOnly = params.value("rootsOnly", false);
+        const bool includeDetails = params.value("includeDetails", false);
+        const int limit = (std::max)(0, params.value("limit", 0));
+
+        json matches = json::array();
+        int totalMatched = 0;
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const Signature signature = archetype->GetSignature();
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+                if (!EntityMatchesQuery(registry, entity, signature, hasComponents, missingComponents, nameContains, activeOnly, rootsOnly)) {
+                    continue;
+                }
+
+                ++totalMatched;
+                if (limit > 0 && static_cast<int>(matches.size()) >= limit) {
+                    continue;
+                }
+                matches.push_back(includeDetails
+                    ? EntityObservationRecord(registry, entity)
+                    : EntitySummary(registry, entity, signature));
+            }
+        }
+
+        return {
+            { "entities", std::move(matches) },
+            { "count", totalMatched },
+            { "truncated", limit > 0 && totalMatched > limit }
+        };
+    }
+
+    json HandleECSHierarchy(Registry& registry, const json& params)
+    {
+        const bool includeComponents = params.value("includeComponents", true);
+        const bool includeReferences = params.value("includeReferences", true);
+        const int maxDepth = (std::max)(0, params.value("maxDepth", 64));
+
+        json roots = json::array();
+        json references = json::object();
+        const EntityID requestedRoot = EntityFromJson(params.value("root", json(nullptr)));
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+                if (!Entity::IsNull(requestedRoot)) {
+                    if (entity == requestedRoot) {
+                        roots.push_back(BuildRelationshipNode(registry, entity, includeComponents, 0, maxDepth));
+                    }
+                }
+                else if (Entity::IsNull(GetEntityParent(registry, entity))) {
+                    roots.push_back(BuildRelationshipNode(registry, entity, includeComponents, 0, maxDepth));
+                }
+
+                if (includeReferences) {
+                    json refs = BuildReferenceSummary(registry, entity);
+                    if (!refs.empty()) {
+                        references[EntityToString(entity)] = std::move(refs);
+                    }
+                }
+            }
+        }
+
+        if (!Entity::IsNull(requestedRoot) && roots.empty()) {
+            throw MakeError("entity_not_found", "Root entity is not alive.", { { "root", params.value("root", json(nullptr)) } });
+        }
+
+        return {
+            { "roots", std::move(roots) },
+            { "references", std::move(references) }
+        };
+    }
+
+    json HandleECSDiff(Registry& registry, const json& params)
+    {
+        static std::unordered_map<std::string, json> previousSnapshot;
+        static uint64_t revision = 0;
+
+        const bool reset = params.value("reset", false);
+        const bool includeBeforeAfter = params.value("includeBeforeAfter", true);
+        std::unordered_map<std::string, json> current = BuildECSObservationSnapshot(registry);
+
+        json added = json::array();
+        json removed = json::array();
+        json changed = json::array();
+
+        if (!reset && !previousSnapshot.empty()) {
+            for (const auto& [entity, currentRecord] : current) {
+                auto it = previousSnapshot.find(entity);
+                if (it == previousSnapshot.end()) {
+                    added.push_back(currentRecord);
+                }
+                else if (it->second != currentRecord) {
+                    json item = {
+                        { "entity", entity },
+                        { "name", currentRecord.value("name", std::string{}) }
+                    };
+                    if (includeBeforeAfter) {
+                        item["before"] = it->second;
+                        item["after"] = currentRecord;
+                    }
+                    changed.push_back(std::move(item));
+                }
+            }
+
+            for (const auto& [entity, previousRecord] : previousSnapshot) {
+                if (current.find(entity) == current.end()) {
+                    removed.push_back(previousRecord);
+                }
+            }
+        }
+
+        previousSnapshot = std::move(current);
+        ++revision;
+
+        return {
+            { "revision", revision },
+            { "baselineReset", reset || revision == 1 },
+            { "added", std::move(added) },
+            { "removed", std::move(removed) },
+            { "changed", std::move(changed) }
+        };
+    }
+
+    std::string EntityDisplayName(Registry& registry, EntityID entity);
+    bool IsGameplayActor(Registry& registry, EntityID entity);
+    json HandleGameplayGetState(EngineKernel& kernel, Registry& registry, const json& params);
+    json HandleCaptureScreenshot(EngineKernel& kernel, const json& params, const std::filesystem::path& defaultPath);
+    json HandleRecoveryGetState(EngineKernel& kernel, const json& params);
+    json HandleRecoveryRestore(EngineKernel& kernel);
+    json HandleRecoveryDismiss(EngineKernel& kernel);
+    json AnalyzeImageBuffer(const ImageBuffer& image);
+    ImageBuffer CaptureAutomationTargetImage(EngineKernel& kernel, const std::string& target);
+
+    json HandleVisualVerifyEntity(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        json out;
+        out["entity"] = EntityToString(entity);
+        out["name"] = "Entity " + std::to_string(Entity::GetIndex(entity));
+        if (auto* name = registry.GetComponent<NameComponent>(entity)) {
+            out["name"] = name->name;
+        }
+        out["selected"] = EditorSelection::Instance().IsEntitySelected(entity);
+        out["sceneViewMode"] = SceneViewModeToString(editor->GetSceneViewMode());
+
+        DirectX::XMFLOAT3 center{};
+        float radius = 0.0f;
+        const bool hasBounds = BuildEntityFocusBounds(registry, entity, center, radius);
+        out["hasBounds"] = hasBounds;
+        if (hasBounds) {
+            out["boundsCenter"] = Float3ToJson(center);
+            out["boundsRadius"] = radius;
+            json screen;
+            if (ProjectToSceneView(*editor, center, screen)) {
+                out["sceneView"] = std::move(screen);
+            }
+            else {
+                out["sceneView"] = nullptr;
+            }
+            const DirectX::XMFLOAT4 rect = editor->GetSceneViewRect();
+            if (rect.z > 1.0f && rect.w > 1.0f) {
+                const float aspect = rect.z / rect.w;
+                const DirectX::XMFLOAT4X4 view = editor->GetEditorViewMatrix();
+                const DirectX::XMFLOAT4X4 projection = editor->BuildEditorProjectionMatrix(aspect);
+                json projectedBounds;
+                if (ProjectBoundsToRect(rect, view, projection, center, radius, projectedBounds)) {
+                    out["sceneViewBounds"] = std::move(projectedBounds);
+                }
+            }
+        }
+        else if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+            out["worldPosition"] = Float3ToJson(transform->worldPosition);
+            json screen;
+            if (ProjectToSceneView(*editor, transform->worldPosition, screen)) {
+                out["sceneView"] = std::move(screen);
+            }
+            else {
+                out["sceneView"] = nullptr;
+            }
+        }
+        else {
+            out["sceneView"] = nullptr;
+        }
+
+        if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
+            out["renderable"] = {
+                { "meshComponent", true },
+                { "isVisible", mesh->isVisible },
+                { "hasModel", mesh->model != nullptr },
+                { "modelFilePath", mesh->modelFilePath }
+            };
+        }
+        else {
+            out["renderable"] = {
+                { "meshComponent", false }
+            };
+        }
+        out["references"] = BuildReferenceSummary(registry, entity);
+        return out;
+    }
+
+    bool TryBuildGameViewProjection(EngineKernel& kernel,
+                                    Registry& registry,
+                                    DirectX::XMFLOAT4X4& outView,
+                                    DirectX::XMFLOAT4X4& outProjection,
+                                    EntityID& outCameraEntity,
+                                    std::string& outCameraKind)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            return false;
+        }
+
+        const DirectX::XMFLOAT4 gameRect = editor->GetGameViewRect();
+        if (editor->GetSceneViewMode() == EditorLayer::SceneViewMode::Mode2D) {
+            if (Camera2DUtils::TryBuildActiveViewProjection(registry, gameRect, outView, outProjection)) {
+                const Camera2DUtils::ActiveCamera2D active = Camera2DUtils::FindActiveCamera2D(registry);
+                outCameraEntity = active.entity;
+                outCameraKind = "Camera2D";
+                return true;
+            }
+            if (editor->TryBuildGameView2DPreviewViewProjection(outView, outProjection)) {
+                outCameraEntity = Entity::NULL_ID;
+                outCameraKind = "SceneView2DFallback";
+                return true;
+            }
+            return false;
+        }
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<CameraMainTagComponent>()) ||
+                !signature.test(TypeManager::GetComponentTypeID<CameraMatricesComponent>())) {
+                continue;
+            }
+            auto* matricesColumn = archetype->GetColumn(TypeManager::GetComponentTypeID<CameraMatricesComponent>());
+            const auto& entities = archetype->GetEntities();
+            for (size_t i = 0; i < archetype->GetEntityCount(); ++i) {
+                auto* matrices = static_cast<CameraMatricesComponent*>(matricesColumn->Get(i));
+                if (!matrices) {
+                    continue;
+                }
+                outView = matrices->view;
+                outProjection = matrices->projection;
+                outCameraEntity = entities[i];
+                outCameraKind = "Camera3D";
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    json HandleVisualVerifyEntityGameView(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        DirectX::XMFLOAT3 point{};
+        float radius = 0.0f;
+        bool hasPoint = BuildEntityFocusBounds(registry, entity, point, radius);
+        if (!hasPoint) {
+            if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                point = transform->worldPosition;
+                hasPoint = true;
+            }
+        }
+        if (!hasPoint) {
+            throw MakeError("operation_not_allowed", "Entity has no transform or focus bounds.", { { "entity", EntityToString(entity) } });
+        }
+
+        DirectX::XMFLOAT4X4 view{};
+        DirectX::XMFLOAT4X4 projection{};
+        EntityID cameraEntity = Entity::NULL_ID;
+        std::string cameraKind;
+        if (!TryBuildGameViewProjection(kernel, registry, view, projection, cameraEntity, cameraKind)) {
+            throw MakeError("camera_not_found", "Could not build Game View projection.");
+        }
+
+        json screen;
+        const DirectX::XMFLOAT4 gameRect = editor->GetGameViewRect();
+        const bool projected = ProjectWorldToRect(gameRect, view, projection, point, screen);
+        const bool visible = projected && screen.value("visible", false);
+        json projectedBounds = nullptr;
+        if (hasPoint) {
+            json bounds;
+            if (ProjectBoundsToRect(gameRect, view, projection, point, radius, bounds)) {
+                projectedBounds = std::move(bounds);
+            }
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "name", EntityDisplayName(registry, entity) },
+            { "point", Float3ToJson(point) },
+            { "boundsRadius", radius },
+            { "gameViewRect", json::array({ gameRect.x, gameRect.y, gameRect.z, gameRect.w }) },
+            { "camera", {
+                { "kind", cameraKind },
+                { "entity", Entity::IsNull(cameraEntity) ? json(nullptr) : json(EntityToString(cameraEntity)) }
+            } },
+            { "gameView", projected ? std::move(screen) : json(nullptr) },
+            { "gameViewBounds", std::move(projectedBounds) },
+            { "visibleInGameView", visible }
+        };
+    }
+
+    std::vector<EntityID> ResolveEntityListParam(Registry& registry, const json& params, bool defaultToAllGameplay = false)
+    {
+        std::vector<EntityID> entities;
+        if (params.contains("entities")) {
+            const json& in = params["entities"];
+            if (!in.is_array()) {
+                throw MakeError("invalid_param", "entities must be an array.");
+            }
+            for (const json& item : in) {
+                const EntityID entity = EntityFromJson(item);
+                if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                    throw MakeError("entity_not_found", "Entity in entities is not alive.", { { "entity", item } });
+                }
+                entities.push_back(entity);
+            }
+        }
+        else if (params.contains("entity")) {
+            const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            }
+            entities.push_back(entity);
+        }
+        else if (defaultToAllGameplay) {
+            for (Archetype* archetype : registry.GetAllArchetypes()) {
+                const auto& archetypeEntities = archetype->GetEntities();
+                for (EntityID entity : archetypeEntities) {
+                    if (registry.IsAlive(entity) && IsGameplayActor(registry, entity)) {
+                        entities.push_back(entity);
+                    }
+                }
+            }
+        }
+
+        if (entities.empty()) {
+            for (EntityID selected : EditorSelection::Instance().GetSelectedEntities()) {
+                if (!Entity::IsNull(selected) && registry.IsAlive(selected)) {
+                    entities.push_back(selected);
+                }
+            }
+        }
+        return entities;
+    }
+
+    bool ComputeEntityListBounds(Registry& registry,
+                                 const std::vector<EntityID>& entities,
+                                 DirectX::XMFLOAT3& outCenter,
+                                 float& outRadius)
+    {
+        bool hasAny = false;
+        DirectX::BoundingSphere merged{};
+        for (EntityID entity : entities) {
+            DirectX::XMFLOAT3 center{};
+            float radius = 0.0f;
+            if (!BuildEntityFocusBounds(registry, entity, center, radius)) {
+                if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                    center = transform->worldPosition;
+                    radius = 1.0f;
+                }
+                else {
+                    continue;
+                }
+            }
+
+            DirectX::BoundingSphere sphere(center, (std::max)(radius, 0.5f));
+            if (!hasAny) {
+                merged = sphere;
+                hasAny = true;
+            }
+            else {
+                DirectX::BoundingSphere::CreateMerged(merged, merged, sphere);
+            }
+        }
+
+        if (!hasAny) {
+            return false;
+        }
+        outCenter = merged.Center;
+        outRadius = merged.Radius;
+        return true;
+    }
+
+    json FrameEntitiesResult(const std::vector<EntityID>& entities,
+                             const DirectX::XMFLOAT3& center,
+                             float radius,
+                             const DirectX::XMFLOAT3& cameraPosition)
+    {
+        json entityIds = json::array();
+        for (EntityID entity : entities) {
+            entityIds.push_back(EntityToString(entity));
+        }
+        return {
+            { "entities", std::move(entityIds) },
+            { "center", Float3ToJson(center) },
+            { "radius", radius },
+            { "cameraPosition", Float3ToJson(cameraPosition) }
+        };
+    }
+
+    json HandleSceneViewFrameEntities(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        std::vector<EntityID> entities = ResolveEntityListParam(registry, params, true);
+        if (entities.empty()) {
+            throw MakeError("entity_not_found", "No entities were available to frame.");
+        }
+
+        DirectX::XMFLOAT3 center{};
+        float radius = 1.0f;
+        if (!ComputeEntityListBounds(registry, entities, center, radius)) {
+            throw MakeError("operation_not_allowed", "Could not compute bounds for requested entities.");
+        }
+
+        const float yawDegrees = params.value("yawDegrees", 35.0f);
+        const float pitchDegrees = params.value("pitchDegrees", 28.0f);
+        const float padding = params.value("padding", 2.4f);
+        const float distance = params.value("distance", ComputeFocusDistanceForRadius(radius * padding, editor->GetEditorCameraFovY()));
+        const float yaw = DirectX::XMConvertToRadians(yawDegrees);
+        const float pitch = DirectX::XMConvertToRadians(pitchDegrees);
+        const DirectX::XMFLOAT3 direction = {
+            std::sin(yaw) * std::cos(pitch),
+            -std::sin(pitch),
+            std::cos(yaw) * std::cos(pitch)
+        };
+        const DirectX::XMFLOAT3 cameraPosition = {
+            center.x - direction.x * distance,
+            center.y - direction.y * distance,
+            center.z - direction.z * distance
+        };
+
+        editor->SetSceneViewMode(EditorLayer::SceneViewMode::Mode3D);
+        editor->SetEditorCameraLookAt(cameraPosition, center);
+        json result = FrameEntitiesResult(entities, center, radius, cameraPosition);
+        result["view"] = "scene_view";
+        return result;
+    }
+
+    json HandleSceneViewFrameAll(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        json frameParams = params;
+        json entities = json::array();
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& archetypeEntities = archetype->GetEntities();
+            for (EntityID entity : archetypeEntities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+                if (registry.GetComponent<TransformComponent>(entity) ||
+                    registry.GetComponent<MeshComponent>(entity) ||
+                    registry.GetComponent<TerrainComponent>(entity)) {
+                    entities.push_back(EntityToString(entity));
+                }
+            }
+        }
+        frameParams["entities"] = std::move(entities);
+        return HandleSceneViewFrameEntities(kernel, registry, frameParams);
+    }
+
+    EntityID FindMainCamera3D(Registry& registry)
+    {
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& signature = archetype->GetSignature();
+            if (!signature.test(TypeManager::GetComponentTypeID<CameraMainTagComponent>()) ||
+                !signature.test(TypeManager::GetComponentTypeID<TransformComponent>())) {
+                continue;
+            }
+            const auto& entities = archetype->GetEntities();
+            if (!entities.empty()) {
+                return entities.front();
+            }
+        }
+        return Entity::NULL_ID;
+    }
+
+    void SetTransformLookAtWorld(Registry& registry,
+                                 EntityID entity,
+                                 TransformComponent& transform,
+                                 const DirectX::XMFLOAT3& position,
+                                 const DirectX::XMFLOAT3& target)
+    {
+        using namespace DirectX;
+        XMMATRIX cameraWorld = XMMatrixInverse(
+            nullptr,
+            XMMatrixLookAtLH(XMLoadFloat3(&position), XMLoadFloat3(&target), XMVectorSet(0, 1, 0, 0)));
+
+        XMVECTOR scale{};
+        XMVECTOR rotation{};
+        XMVECTOR translation{};
+        if (!XMMatrixDecompose(&scale, &rotation, &translation, cameraWorld)) {
+            throw MakeError("operation_not_allowed", "Failed to compute camera transform.");
+        }
+
+        if (!Entity::IsNull(GetEntityParent(registry, entity))) {
+            if (auto* parentTransform = registry.GetComponent<TransformComponent>(GetEntityParent(registry, entity))) {
+                const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
+                cameraWorld = cameraWorld * XMMatrixInverse(nullptr, parentWorld);
+                if (!XMMatrixDecompose(&scale, &rotation, &translation, cameraWorld)) {
+                    throw MakeError("operation_not_allowed", "Failed to compute local camera transform.");
+                }
+            }
+        }
+
+        XMStoreFloat3(&transform.localPosition, translation);
+        XMStoreFloat4(&transform.localRotation, XMQuaternionNormalize(rotation));
+        transform.isDirty = true;
+        HierarchySystem::MarkDirtyRecursive(entity, registry);
+        PrefabSystem::MarkPrefabOverride(entity, registry);
+    }
+
+    json HandleCameraFrameEntities(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        std::vector<EntityID> entities = ResolveEntityListParam(registry, params, true);
+        if (entities.empty()) {
+            throw MakeError("entity_not_found", "No entities were available to frame.");
+        }
+        DirectX::XMFLOAT3 center{};
+        float radius = 1.0f;
+        if (!ComputeEntityListBounds(registry, entities, center, radius)) {
+            throw MakeError("operation_not_allowed", "Could not compute bounds for requested entities.");
+        }
+
+        EntityID cameraEntity = EntityFromJson(params.value("camera", json(nullptr)));
+        if (Entity::IsNull(cameraEntity)) {
+            cameraEntity = FindMainCamera3D(registry);
+        }
+        if (Entity::IsNull(cameraEntity) || !registry.IsAlive(cameraEntity)) {
+            throw MakeError("camera_not_found", "No live main camera was found.");
+        }
+        auto* transform = registry.GetComponent<TransformComponent>(cameraEntity);
+        if (!transform) {
+            throw MakeError("component_not_found", "Camera has no TransformComponent.", { { "camera", EntityToString(cameraEntity) } });
+        }
+
+        const float yawDegrees = params.value("yawDegrees", 0.0f);
+        const float pitchDegrees = params.value("pitchDegrees", 16.0f);
+        const float padding = params.value("padding", 2.8f);
+        const float fovY = registry.GetComponent<CameraLensComponent>(cameraEntity)
+            ? registry.GetComponent<CameraLensComponent>(cameraEntity)->fovY
+            : 0.785398f;
+        const float distance = params.value("distance", ComputeFocusDistanceForRadius(radius * padding, fovY));
+        const float yaw = DirectX::XMConvertToRadians(yawDegrees);
+        const float pitch = DirectX::XMConvertToRadians(pitchDegrees);
+        const DirectX::XMFLOAT3 direction = {
+            std::sin(yaw) * std::cos(pitch),
+            -std::sin(pitch),
+            std::cos(yaw) * std::cos(pitch)
+        };
+        const DirectX::XMFLOAT3 cameraPosition = {
+            center.x - direction.x * distance,
+            center.y - direction.y * distance,
+            center.z - direction.z * distance
+        };
+
+        SetTransformLookAtWorld(registry, cameraEntity, *transform, cameraPosition, center);
+        json result = FrameEntitiesResult(entities, center, radius, cameraPosition);
+        result["view"] = "game_view";
+        result["camera"] = EntityToString(cameraEntity);
+        return result;
+    }
+
+    json HandleVisualAssertEntitiesVisible(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const std::string view = params.value("view", std::string("game_view"));
+        const float minVisibleRatio = params.value("minVisibleRatio", 1.0f);
+        const bool requireAll = params.value("requireAll", true);
+        const bool defaultToAllGameplay = params.value("defaultToAllGameplay", true);
+        const bool requireBoundsFullyVisible = params.value("requireBoundsFullyVisible", true);
+        const float minMarginPixels = params.value("minMarginPixels", 8.0f);
+        const float maxFillRatio = params.value("maxFillRatio", 0.88f);
+        std::vector<EntityID> entities = ResolveEntityListParam(registry, params, defaultToAllGameplay);
+        if (entities.empty()) {
+            throw MakeError("entity_not_found", "No entities were available to assert visibility.");
+        }
+
+        int visibleCount = 0;
+        json items = json::array();
+        for (EntityID entity : entities) {
+            json verifyParams = { { "entity", EntityToString(entity) } };
+            json item = (view == "scene_view")
+                ? HandleVisualVerifyEntity(kernel, registry, verifyParams)
+                : HandleVisualVerifyEntityGameView(kernel, registry, verifyParams);
+            const bool visible = view == "scene_view"
+                ? (item.contains("sceneView") && !item["sceneView"].is_null() && item["sceneView"].value("visibleInSceneView", false))
+                : item.value("visibleInGameView", false);
+            const char* boundsKey = view == "scene_view" ? "sceneViewBounds" : "gameViewBounds";
+            bool boundsOk = true;
+            if (requireBoundsFullyVisible) {
+                boundsOk = false;
+                if (item.contains(boundsKey) && !item[boundsKey].is_null()) {
+                    const json& bounds = item[boundsKey];
+                    const float margin = bounds.contains("margins") ? bounds["margins"].value("min", -1.0f) : -1.0f;
+                    const float fill = bounds.value("maxFill", 1.0f);
+                    boundsOk = bounds.value("fullyVisible", false) &&
+                        margin >= minMarginPixels &&
+                        (maxFillRatio <= 0.0f || fill <= maxFillRatio);
+                }
+            }
+            const bool reviewVisible = visible && boundsOk;
+            item["visible"] = reviewVisible;
+            item["centerVisible"] = visible;
+            item["boundsRequirement"] = {
+                { "enabled", requireBoundsFullyVisible },
+                { "minMarginPixels", minMarginPixels },
+                { "maxFillRatio", maxFillRatio },
+                { "ok", boundsOk }
+            };
+            if (reviewVisible) {
+                ++visibleCount;
+            }
+            items.push_back(std::move(item));
+        }
+
+        const float ratio = entities.empty() ? 0.0f : static_cast<float>(visibleCount) / static_cast<float>(entities.size());
+        const bool ok = requireAll ? (visibleCount == static_cast<int>(entities.size())) : (ratio >= minVisibleRatio);
+        return {
+            { "ok", ok },
+            { "view", view },
+            { "visibleCount", visibleCount },
+            { "total", entities.size() },
+            { "visibleRatio", ratio },
+            { "requiredRatio", minVisibleRatio },
+            { "items", std::move(items) }
+        };
+    }
+
+    json HandleVisualCaptureReviewSet(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const std::string stem = params.value("stem", std::string("review"));
+        const std::filesystem::path dir = params.value("dir", std::string("Saved/AI/screenshots/review"));
+        const std::string format = params.value("format", std::string("bmp"));
+        const std::vector<std::string> targets = params.contains("targets")
+            ? JsonStringList(params, "targets")
+            : std::vector<std::string>{ "scene_view", "game_view", "window" };
+
+        if (params.value("frameSceneView", false)) {
+            HandleSceneViewFrameEntities(kernel, registry, params);
+        }
+        if (params.value("frameGameCamera", false)) {
+            HandleCameraFrameEntities(kernel, registry, params);
+        }
+
+        json screenshots = json::array();
+        for (const std::string& target : targets) {
+            const std::filesystem::path path = dir / (stem + "_" + target + "." + format);
+            json captureParams = {
+                { "target", target },
+                { "path", path.generic_string() },
+                { "format", format },
+                { "inline", params.value("inline", false) }
+            };
+            json shot = HandleCaptureScreenshot(kernel, captureParams, path);
+            if (params.value("includeMetrics", true)) {
+                shot["metrics"] = AnalyzeImageBuffer(CaptureAutomationTargetImage(kernel, target));
+            }
+            screenshots.push_back(std::move(shot));
+        }
+
+        json assertions = nullptr;
+        if (params.value("assertVisible", true)) {
+            json assertParams = params;
+            assertParams["view"] = params.value("assertView", std::string("game_view"));
+            assertions = HandleVisualAssertEntitiesVisible(kernel, registry, assertParams);
+        }
+
+        return {
+            { "screenshots", std::move(screenshots) },
+            { "assertions", std::move(assertions) },
+            { "engineState", HandleGetEngineState(kernel) },
+            { "gameplay", HandleGameplayGetState(kernel, registry, json{ { "includeVisual", false }, { "includeInput", false }, { "includeDamageEvents", false } }) }
+        };
+    }
+
+    const char* CharacterStateToString(CharacterState state)
+    {
+        switch (state) {
+        case CharacterState::Locomotion: return "Locomotion";
+        case CharacterState::Action: return "Action";
+        case CharacterState::Dodge: return "Dodge";
+        case CharacterState::Jump: return "Jump";
+        case CharacterState::Damage: return "Damage";
+        case CharacterState::Dead: return "Dead";
+        default: return "Unknown";
+        }
+    }
+
+    const char* BattlePhaseToString(BattleFlowComponent::Phase phase)
+    {
+        switch (phase) {
+        case BattleFlowComponent::Phase::Idle: return "Idle";
+        case BattleFlowComponent::Phase::Encounter: return "Encounter";
+        case BattleFlowComponent::Phase::Combat: return "Combat";
+        case BattleFlowComponent::Phase::Victory: return "Victory";
+        case BattleFlowComponent::Phase::Defeat: return "Defeat";
+        case BattleFlowComponent::Phase::Draw: return "Draw";
+        default: return "Unknown";
+        }
+    }
+
+    std::string EntityDisplayName(Registry& registry, EntityID entity)
+    {
+        if (auto* name = registry.GetComponent<NameComponent>(entity)) {
+            return name->name;
+        }
+        return "Entity " + std::to_string(Entity::GetIndex(entity));
+    }
+
+    json AnimatorLayerToJson(const AnimatorComponent::LayerState& layer)
+    {
+        return {
+            { "currentAnimIndex", layer.currentAnimIndex },
+            { "currentTime", layer.currentTime },
+            { "currentSpeed", layer.currentSpeed },
+            { "isLoop", layer.isLoop },
+            { "weight", layer.weight },
+            { "isFullBody", layer.isFullBody },
+            { "prevAnimIndex", layer.prevAnimIndex },
+            { "prevAnimTime", layer.prevAnimTime },
+            { "blendDuration", layer.blendDuration },
+            { "blendTimer", layer.blendTimer },
+            { "isBlending", layer.isBlending }
+        };
+    }
+
+    json HitboxTrackingToJson(const HitboxTrackingComponent& hitbox)
+    {
+        json hitEntities = json::array();
+        const int count = (std::min)(static_cast<int>(hitbox.hitEntityCount), 16);
+        for (int i = 0; i < count; ++i) {
+            if (!Entity::IsNull(hitbox.hitEntities[i])) {
+                hitEntities.push_back(EntityToString(hitbox.hitEntities[i]));
+            }
+        }
+        return {
+            { "lastHitboxStart", hitbox.lastHitboxStart },
+            { "hitEntityCount", hitbox.hitEntityCount },
+            { "hitEntities", std::move(hitEntities) }
+        };
+    }
+
+    json ResolvedInputToJson(const ResolvedInputStateComponent& input)
+    {
+        json actions = json::array();
+        const int actionCount = (std::min)(static_cast<int>(input.actionCount), ResolvedInputStateComponent::MAX_ACTIONS);
+        for (int i = 0; i < actionCount; ++i) {
+            const auto& action = input.actions[i];
+            actions.push_back({
+                { "index", i },
+                { "pressed", action.pressed },
+                { "held", action.held },
+                { "released", action.released },
+                { "value", action.value },
+                { "framesSincePressed", action.framesSincePressed },
+                { "framesSinceReleased", action.framesSinceReleased }
+            });
+        }
+
+        json axes = json::array();
+        const int axisCount = (std::min)(static_cast<int>(input.axisCount), ResolvedInputStateComponent::MAX_AXES);
+        for (int i = 0; i < axisCount; ++i) {
+            axes.push_back({ { "index", i }, { "value", input.axes[i] } });
+        }
+
+        return {
+            { "actions", std::move(actions) },
+            { "axes", std::move(axes) },
+            { "pointer", {
+                { "x", input.pointerX },
+                { "y", input.pointerY },
+                { "deltaX", input.deltaX },
+                { "deltaY", input.deltaY },
+                { "scrollX", input.scrollX },
+                { "scrollY", input.scrollY }
+            } },
+            { "lastDeviceType", static_cast<int>(input.lastDeviceType) }
+        };
+    }
+
+    json StateMachineParamsToJson(const StateMachineParamsComponent& stateMachine)
+    {
+        json params = json::array();
+        const int count = (std::min)(static_cast<int>(stateMachine.paramCount), StateMachineParamsComponent::MAX_PARAMS);
+        for (int i = 0; i < count; ++i) {
+            params.push_back({
+                { "name", std::string(stateMachine.params[i].name) },
+                { "value", stateMachine.params[i].value }
+            });
+        }
+        return {
+            { "currentStateId", stateMachine.currentStateId },
+            { "stateTimer", stateMachine.stateTimer },
+            { "animFinished", stateMachine.animFinished },
+            { "params", std::move(params) }
+        };
+    }
+
+    json DamageEventToJson(const DamageEventComponent::Event& event)
+    {
+        return {
+            { "attacker", Entity::IsNull(event.attacker) ? json(nullptr) : json(EntityToString(event.attacker)) },
+            { "victim", Entity::IsNull(event.victim) ? json(nullptr) : json(EntityToString(event.victim)) },
+            { "amount", event.amount },
+            { "hitPoint", Float3ToJson(event.hitPoint) },
+            { "knockbackDir", Float3ToJson(event.knockbackDir) },
+            { "knockbackPower", event.knockbackPower },
+            { "hitStopSec", event.hitStopSec },
+            { "reactionKind", event.reactionKind },
+            { "hitVfxPath", event.hitVfxPath },
+            { "hitSfxPath", event.hitSfxPath }
+        };
+    }
+
+    bool IsGameplayActor(Registry& registry, EntityID entity)
+    {
+        return registry.GetComponent<PlayerTagComponent>(entity) ||
+            registry.GetComponent<EnemyTagComponent>(entity) ||
+            registry.GetComponent<HealthComponent>(entity) ||
+            registry.GetComponent<ActionStateComponent>(entity) ||
+            registry.GetComponent<LocomotionStateComponent>(entity) ||
+            registry.GetComponent<TeamComponent>(entity) ||
+            registry.GetComponent<StaminaComponent>(entity);
+    }
+
+    json GameplayActorToJson(EngineKernel& kernel, Registry& registry, EntityID entity, bool includeVisual)
+    {
+        json actor;
+        actor["entity"] = EntityToString(entity);
+        actor["name"] = EntityDisplayName(registry, entity);
+        actor["role"] = "Actor";
+
+        if (auto* player = registry.GetComponent<PlayerTagComponent>(entity)) {
+            actor["role"] = "Player";
+            actor["playerId"] = player->playerId;
+        }
+        if (auto* enemy = registry.GetComponent<EnemyTagComponent>(entity)) {
+            actor["role"] = "Enemy";
+            actor["enemyKindId"] = enemy->enemyKindId;
+        }
+        if (auto* team = registry.GetComponent<TeamComponent>(entity)) {
+            actor["team"] = team->teamId;
+        }
+        if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+            actor["position"] = Float3ToJson(transform->worldPosition);
+            actor["localPosition"] = Float3ToJson(transform->localPosition);
+        }
+        if (auto* health = registry.GetComponent<HealthComponent>(entity)) {
+            actor["health"] = {
+                { "current", health->health },
+                { "max", health->maxHealth },
+                { "ratio", health->maxHealth > 0 ? static_cast<float>(health->health) / static_cast<float>(health->maxHealth) : 0.0f },
+                { "isDead", health->isDead },
+                { "isInvincible", health->isInvincible },
+                { "invincibleTimer", health->invincibleTimer },
+                { "lastDamage", health->lastDamage }
+            };
+        }
+        if (auto* stamina = registry.GetComponent<StaminaComponent>(entity)) {
+            actor["stamina"] = {
+                { "current", stamina->current },
+                { "max", stamina->max },
+                { "ratio", stamina->max > 0.0f ? stamina->current / stamina->max : 0.0f },
+                { "recoveryTimer", stamina->recoveryTimer }
+            };
+        }
+        if (auto* action = registry.GetComponent<ActionStateComponent>(entity)) {
+            actor["action"] = {
+                { "state", CharacterStateToString(action->state) },
+                { "currentNodeIndex", action->currentNodeIndex },
+                { "reservedNodeIndex", action->reservedNodeIndex },
+                { "stateTimer", action->stateTimer },
+                { "comboCount", action->comboCount },
+                { "comboTimer", action->comboTimer }
+            };
+        }
+        if (auto* locomotion = registry.GetComponent<LocomotionStateComponent>(entity)) {
+            actor["locomotion"] = ComponentToJson(*locomotion);
+        }
+        if (auto* physics = registry.GetComponent<CharacterPhysicsComponent>(entity)) {
+            actor["physics"] = ComponentToJson(*physics);
+        }
+        if (auto* animator = registry.GetComponent<AnimatorComponent>(entity)) {
+            actor["animator"] = {
+                { "baseLayer", AnimatorLayerToJson(animator->baseLayer) },
+                { "actionLayer", AnimatorLayerToJson(animator->actionLayer) },
+                { "enableRootMotion", animator->enableRootMotion },
+                { "rootMotionDelta", Float3ToJson(animator->rootMotionDelta) },
+                { "driverConnected", animator->driverConnected },
+                { "driverOverrideAnimIndex", animator->driverOverrideAnimIndex },
+                { "driverTime", animator->driverTime }
+            };
+        }
+        if (auto* playback = registry.GetComponent<PlaybackComponent>(entity)) {
+            actor["playback"] = ComponentToJson(*playback);
+        }
+        if (auto* timeline = registry.GetComponent<TimelineComponent>(entity)) {
+            actor["timeline"] = ComponentToJson(*timeline);
+        }
+        if (auto* stateMachine = registry.GetComponent<StateMachineParamsComponent>(entity)) {
+            actor["stateMachine"] = StateMachineParamsToJson(*stateMachine);
+        }
+        if (auto* lockOn = registry.GetComponent<LockOnTargetComponent>(entity)) {
+            actor["lockOn"] = {
+                { "currentTarget", Entity::IsNull(lockOn->currentTarget) ? json(nullptr) : json(EntityToString(lockOn->currentTarget)) },
+                { "targetAlive", !Entity::IsNull(lockOn->currentTarget) && registry.IsAlive(lockOn->currentTarget) },
+                { "maxRange", lockOn->maxRange },
+                { "fovRadians", lockOn->fovRadians },
+                { "sticky", lockOn->sticky }
+            };
+        }
+        if (auto* hitbox = registry.GetComponent<HitboxTrackingComponent>(entity)) {
+            actor["hitbox"] = HitboxTrackingToJson(*hitbox);
+        }
+        if (auto* input = registry.GetComponent<ResolvedInputStateComponent>(entity)) {
+            actor["input"] = ResolvedInputToJson(*input);
+        }
+        if (includeVisual) {
+            json verifyParams = { { "entity", EntityToString(entity) } };
+            actor["visual"] = HandleVisualVerifyEntity(kernel, registry, verifyParams);
+        }
+        return actor;
+    }
+
+    json BuildBattleFlowJson(Registry& registry, EntityID entity, const BattleFlowComponent& flow)
+    {
+        return {
+            { "entity", EntityToString(entity) },
+            { "name", EntityDisplayName(registry, entity) },
+            { "phase", BattlePhaseToString(flow.phase) },
+            { "phaseTimer", flow.phaseTimer },
+            { "playerEntity", Entity::IsNull(flow.playerEntity) ? json(nullptr) : json(EntityToString(flow.playerEntity)) },
+            { "bossEntity", Entity::IsNull(flow.bossEntity) ? json(nullptr) : json(EntityToString(flow.bossEntity)) },
+            { "arenaEntity", Entity::IsNull(flow.arenaEntity) ? json(nullptr) : json(EntityToString(flow.arenaEntity)) },
+            { "encounterRadius", flow.encounterRadius },
+            { "introDuration", flow.introDuration },
+            { "battleId", flow.battleId },
+            { "autoStartOnPlayerEnter", flow.autoStartOnPlayerEnter }
+        };
+    }
+
+    json HandleGameplayGetState(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const bool includeVisual = params.value("includeVisual", true);
+        const bool includeInput = params.value("includeInput", true);
+        const bool includeDamageEvents = params.value("includeDamageEvents", true);
+        const int eventLimit = (std::max)(0, params.value("eventLimit", 32));
+
+        json actors = json::array();
+        json battleFlows = json::array();
+        json battleRules = json::array();
+        json projectiles = json::array();
+        json damageEvents = json::array();
+
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+                if (IsGameplayActor(registry, entity)) {
+                    json actor = GameplayActorToJson(kernel, registry, entity, includeVisual);
+                    if (!includeInput) {
+                        actor.erase("input");
+                    }
+                    actors.push_back(std::move(actor));
+                }
+                if (auto* flow = registry.GetComponent<BattleFlowComponent>(entity)) {
+                    battleFlows.push_back(BuildBattleFlowJson(registry, entity, *flow));
+                }
+                if (auto* rules = registry.GetComponent<BattleRulesComponent>(entity)) {
+                    battleRules.push_back({
+                        { "entity", EntityToString(entity) },
+                        { "name", EntityDisplayName(registry, entity) },
+                        { "fields", ComponentToJson(*rules) }
+                    });
+                }
+                if (auto* projectile = registry.GetComponent<ProjectileComponent>(entity)) {
+                    json item = {
+                        { "entity", EntityToString(entity) },
+                        { "name", EntityDisplayName(registry, entity) },
+                        { "velocity", Float3ToJson(projectile->velocity) },
+                        { "lifetime", projectile->lifetime },
+                        { "damage", projectile->damage },
+                        { "radius", projectile->radius },
+                        { "owner", Entity::IsNull(projectile->owner) ? json(nullptr) : json(EntityToString(projectile->owner)) },
+                        { "targetsPlayer", projectile->targetsPlayer }
+                    };
+                    if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                        item["position"] = Float3ToJson(transform->worldPosition);
+                    }
+                    projectiles.push_back(std::move(item));
+                }
+                if (includeDamageEvents) {
+                    if (auto* queue = registry.GetComponent<DamageEventComponent>(entity)) {
+                        for (const auto& event : queue->events) {
+                            if (eventLimit > 0 && static_cast<int>(damageEvents.size()) >= eventLimit) {
+                                break;
+                            }
+                            damageEvents.push_back(DamageEventToJson(event));
+                        }
+                    }
+                }
+            }
+        }
+
+        if (includeDamageEvents && (eventLimit == 0 || static_cast<int>(damageEvents.size()) < eventLimit)) {
+            for (const auto& event : DamageEventRuntimeQueue::GetAll()) {
+                if (eventLimit > 0 && static_cast<int>(damageEvents.size()) >= eventLimit) {
+                    break;
+                }
+                damageEvents.push_back(DamageEventToJson(event));
+            }
+        }
+
+        return {
+            { "mode", ModeToString(kernel.GetMode()) },
+            { "frameCount", kernel.GetTime().frameCount },
+            { "timeScale", kernel.GetTime().timeScale },
+            { "actors", std::move(actors) },
+            { "battle", {
+                { "flows", std::move(battleFlows) },
+                { "rules", std::move(battleRules) }
+            } },
+            { "projectiles", std::move(projectiles) },
+            { "damageEvents", std::move(damageEvents) }
+        };
+    }
+
+    uint64_t InputTimestampNow()
+    {
+        const auto now = std::chrono::steady_clock::now().time_since_epoch();
+        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+    }
+
+    InputEvent MakeKeyInputEvent(InputEventType type, uint32_t scancode, uint32_t keycode = 0)
+    {
+        InputEvent event;
+        event.type = type;
+        event.timestamp = InputTimestampNow();
+        event.key.scancode = scancode;
+        event.key.keycode = keycode;
+        event.key.repeat = false;
+        return event;
+    }
+
+    InputEvent MakeMouseButtonInputEvent(InputEventType type, uint8_t button, float x = 0.0f, float y = 0.0f)
+    {
+        InputEvent event;
+        event.type = type;
+        event.timestamp = InputTimestampNow();
+        event.mouseButton.button = button;
+        event.mouseButton.x = x;
+        event.mouseButton.y = y;
+        return event;
+    }
+
+    InputEvent MakeGamepadButtonInputEvent(InputEventType type, uint8_t button, uint32_t deviceId = 0)
+    {
+        InputEvent event;
+        event.type = type;
+        event.timestamp = InputTimestampNow();
+        event.deviceId = deviceId;
+        event.gamepadButton.button = button;
+        return event;
+    }
+
+    InputEvent MakeGamepadAxisInputEvent(uint8_t axis, float value, uint32_t deviceId = 0)
+    {
+        InputEvent event;
+        event.type = InputEventType::GamepadAxis;
+        event.timestamp = InputTimestampNow();
+        event.deviceId = deviceId;
+        event.gamepadAxis.axis = axis;
+        event.gamepadAxis.value = (std::clamp)(value, -1.0f, 1.0f);
+        return event;
+    }
+
+    InputEvent MakeMouseMoveInputEvent(float x, float y, float dx, float dy)
+    {
+        InputEvent event;
+        event.type = InputEventType::MouseMove;
+        event.timestamp = InputTimestampNow();
+        event.mouseMove.x = x;
+        event.mouseMove.y = y;
+        event.mouseMove.dx = dx;
+        event.mouseMove.dy = dy;
+        return event;
+    }
+
+    struct PendingInjectedInput
+    {
+        uint64_t releaseFrame = 0;
+        InputEvent event;
+    };
+
+    std::vector<PendingInjectedInput>& PendingInjectedInputs()
+    {
+        static std::vector<PendingInjectedInput> pending;
+        return pending;
+    }
+
+    uint32_t& PendingStepFrameCount()
+    {
+        static uint32_t pending = 0;
+        return pending;
+    }
+
+    void ProcessPendingInjectedInputs(EngineKernel& kernel)
+    {
+        auto& pending = PendingInjectedInputs();
+        const uint64_t frame = kernel.GetTime().frameCount;
+        size_t write = 0;
+        for (size_t i = 0; i < pending.size(); ++i) {
+            if (pending[i].releaseFrame <= frame) {
+                kernel.InjectInputEvent(pending[i].event);
+            }
+            else {
+                if (write != i) {
+                    pending[write] = pending[i];
+                }
+                ++write;
+            }
+        }
+        pending.resize(write);
+
+        uint32_t& pendingSteps = PendingStepFrameCount();
+        if (pendingSteps > 0) {
+            if (kernel.GetMode() != EngineMode::Pause) {
+                if (kernel.GetMode() == EngineMode::Editor) {
+                    kernel.Play();
+                }
+                if (kernel.GetMode() == EngineMode::Play) {
+                    kernel.Pause();
+                }
+            }
+            kernel.Step();
+            --pendingSteps;
+        }
+    }
+
+    const InputActionMapComponent* FindInputActionMapForAutomation(Registry& registry, const json& params)
+    {
+        if (params.contains("entity")) {
+            const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                throw MakeError("entity_not_found", "Input target entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            }
+            const auto* map = registry.GetComponent<InputActionMapComponent>(entity);
+            if (!map) {
+                throw MakeError("component_not_found", "Input target does not have InputActionMapComponent.", { { "entity", EntityToString(entity) } });
+            }
+            return map;
+        }
+
+        const int requestedPlayerId = params.value("playerId", params.value("player", -1));
+        const std::string targetName = params.value("targetName", std::string{});
+        const InputActionMapComponent* fallback = nullptr;
+        for (Archetype* archetype : registry.GetAllArchetypes()) {
+            const auto& entities = archetype->GetEntities();
+            for (EntityID entity : entities) {
+                if (!registry.IsAlive(entity)) {
+                    continue;
+                }
+                const auto* map = registry.GetComponent<InputActionMapComponent>(entity);
+                if (!map) {
+                    continue;
+                }
+                if (!fallback) {
+                    fallback = map;
+                }
+                if (requestedPlayerId >= 0) {
+                    if (auto* player = registry.GetComponent<PlayerTagComponent>(entity)) {
+                        if (player->playerId == requestedPlayerId) {
+                            return map;
+                        }
+                    }
+                }
+                if (!targetName.empty() && EntityDisplayName(registry, entity) == targetName) {
+                    return map;
+                }
+            }
+        }
+        if (!fallback) {
+            throw MakeError("input_map_not_found", "No InputActionMapComponent was found.");
+        }
+        return fallback;
+    }
+
+    const ActionBinding* FindActionBindingForAutomation(Registry& registry, const json& params)
+    {
+        const std::string actionName = params.value("action", params.value("actionName", std::string{}));
+        if (actionName.empty()) {
+            return nullptr;
+        }
+        const InputActionMapComponent* map = FindInputActionMapForAutomation(registry, params);
+        for (const ActionBinding& action : map->asset.actions) {
+            if (action.actionName == actionName) {
+                return &action;
+            }
+        }
+        throw MakeError("input_action_not_found", "Action was not found in the target InputActionMapComponent.", { { "action", actionName } });
+    }
+
+    const AxisBinding* FindAxisBindingForAutomation(Registry& registry, const json& params)
+    {
+        const std::string axisName = params.value("axis", params.value("axisName", std::string{}));
+        if (axisName.empty()) {
+            return nullptr;
+        }
+        const InputActionMapComponent* map = FindInputActionMapForAutomation(registry, params);
+        for (const AxisBinding& axis : map->asset.axes) {
+            if (axis.axisName == axisName) {
+                return &axis;
+            }
+        }
+        throw MakeError("input_axis_not_found", "Axis was not found in the target InputActionMapComponent.", { { "axis", axisName } });
+    }
+
+    json InjectActionBindingEvent(EngineKernel& kernel, const ActionBinding& binding, bool pressed, uint32_t deviceId)
+    {
+        if (binding.scancode != 0) {
+            kernel.InjectInputEvent(MakeKeyInputEvent(pressed ? InputEventType::KeyDown : InputEventType::KeyUp, binding.scancode));
+            return { { "source", "keyboard" }, { "scancode", binding.scancode }, { "pressed", pressed } };
+        }
+        if (binding.mouseButton != 0) {
+            kernel.InjectInputEvent(MakeMouseButtonInputEvent(pressed ? InputEventType::MouseButtonDown : InputEventType::MouseButtonUp, binding.mouseButton));
+            return { { "source", "mouse" }, { "button", binding.mouseButton }, { "pressed", pressed } };
+        }
+        if (binding.gamepadButton != 0xFF) {
+            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(pressed ? InputEventType::GamepadButtonDown : InputEventType::GamepadButtonUp, binding.gamepadButton, deviceId));
+            return { { "source", "gamepad_button" }, { "button", binding.gamepadButton }, { "pressed", pressed }, { "deviceId", deviceId } };
+        }
+        if (binding.gamepadAxis != 0xFF) {
+            kernel.InjectInputEvent(MakeGamepadAxisInputEvent(binding.gamepadAxis, pressed ? binding.axisDirection : 0.0f, deviceId));
+            return { { "source", "gamepad_axis" }, { "axis", binding.gamepadAxis }, { "value", pressed ? binding.axisDirection : 0.0f }, { "deviceId", deviceId } };
+        }
+        throw MakeError("input_binding_unassigned", "Action binding has no keyboard, mouse, or gamepad source.", { { "action", binding.actionName } });
+    }
+
+    json HandleGameInputPress(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const uint32_t deviceId = params.value("deviceId", 0u);
+        if (const ActionBinding* action = FindActionBindingForAutomation(registry, params)) {
+            json result = InjectActionBindingEvent(kernel, *action, true, deviceId);
+            result["action"] = action->actionName;
+            return result;
+        }
+        if (params.contains("scancode")) {
+            const uint32_t scancode = params["scancode"].get<uint32_t>();
+            kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyDown, scancode, params.value("keycode", 0u)));
+            return { { "source", "keyboard" }, { "scancode", scancode }, { "pressed", true } };
+        }
+        if (params.contains("mouseButton")) {
+            const uint8_t button = params["mouseButton"].get<uint8_t>();
+            kernel.InjectInputEvent(MakeMouseButtonInputEvent(InputEventType::MouseButtonDown, button, params.value("x", 0.0f), params.value("y", 0.0f)));
+            return { { "source", "mouse" }, { "button", button }, { "pressed", true } };
+        }
+        if (params.contains("gamepadButton")) {
+            const uint8_t button = params["gamepadButton"].get<uint8_t>();
+            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(InputEventType::GamepadButtonDown, button, deviceId));
+            return { { "source", "gamepad_button" }, { "button", button }, { "pressed", true }, { "deviceId", deviceId } };
+        }
+        throw MakeError("missing_param", "game.input.press requires action, scancode, mouseButton, or gamepadButton.");
+    }
+
+    json HandleGameInputRelease(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const uint32_t deviceId = params.value("deviceId", 0u);
+        if (const ActionBinding* action = FindActionBindingForAutomation(registry, params)) {
+            json result = InjectActionBindingEvent(kernel, *action, false, deviceId);
+            result["action"] = action->actionName;
+            return result;
+        }
+        if (params.contains("scancode")) {
+            const uint32_t scancode = params["scancode"].get<uint32_t>();
+            kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, scancode, params.value("keycode", 0u)));
+            return { { "source", "keyboard" }, { "scancode", scancode }, { "pressed", false } };
+        }
+        if (params.contains("mouseButton")) {
+            const uint8_t button = params["mouseButton"].get<uint8_t>();
+            kernel.InjectInputEvent(MakeMouseButtonInputEvent(InputEventType::MouseButtonUp, button, params.value("x", 0.0f), params.value("y", 0.0f)));
+            return { { "source", "mouse" }, { "button", button }, { "pressed", false } };
+        }
+        if (params.contains("gamepadButton")) {
+            const uint8_t button = params["gamepadButton"].get<uint8_t>();
+            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(InputEventType::GamepadButtonUp, button, deviceId));
+            return { { "source", "gamepad_button" }, { "button", button }, { "pressed", false }, { "deviceId", deviceId } };
+        }
+        throw MakeError("missing_param", "game.input.release requires action, scancode, mouseButton, or gamepadButton.");
+    }
+
+    json HandleGameInputTap(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const uint64_t releaseFrame = kernel.GetTime().frameCount + (std::max)(1, params.value("holdFrames", 1));
+        const uint32_t deviceId = params.value("deviceId", 0u);
+        json pressResult = HandleGameInputPress(kernel, registry, params);
+
+        InputEvent releaseEvent;
+        bool hasRelease = true;
+        if (const ActionBinding* action = FindActionBindingForAutomation(registry, params)) {
+            if (action->scancode != 0) {
+                releaseEvent = MakeKeyInputEvent(InputEventType::KeyUp, action->scancode);
+            }
+            else if (action->mouseButton != 0) {
+                releaseEvent = MakeMouseButtonInputEvent(InputEventType::MouseButtonUp, action->mouseButton);
+            }
+            else if (action->gamepadButton != 0xFF) {
+                releaseEvent = MakeGamepadButtonInputEvent(InputEventType::GamepadButtonUp, action->gamepadButton, deviceId);
+            }
+            else if (action->gamepadAxis != 0xFF) {
+                releaseEvent = MakeGamepadAxisInputEvent(action->gamepadAxis, 0.0f, deviceId);
+            }
+            else {
+                hasRelease = false;
+            }
+        }
+        else if (params.contains("scancode")) {
+            releaseEvent = MakeKeyInputEvent(InputEventType::KeyUp, params["scancode"].get<uint32_t>(), params.value("keycode", 0u));
+        }
+        else if (params.contains("mouseButton")) {
+            releaseEvent = MakeMouseButtonInputEvent(InputEventType::MouseButtonUp, params["mouseButton"].get<uint8_t>(), params.value("x", 0.0f), params.value("y", 0.0f));
+        }
+        else if (params.contains("gamepadButton")) {
+            releaseEvent = MakeGamepadButtonInputEvent(InputEventType::GamepadButtonUp, params["gamepadButton"].get<uint8_t>(), deviceId);
+        }
+        else {
+            hasRelease = false;
+        }
+
+        if (hasRelease) {
+            PendingInjectedInputs().push_back({ releaseFrame, releaseEvent });
+        }
+        pressResult["tap"] = true;
+        pressResult["releaseFrame"] = releaseFrame;
+        return pressResult;
+    }
+
+    json HandleGameInputAxis(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        const float value = (std::clamp)(params.value("value", 0.0f), -1.0f, 1.0f);
+        const uint32_t deviceId = params.value("deviceId", 0u);
+
+        if (const AxisBinding* axis = FindAxisBindingForAutomation(registry, params)) {
+            if (axis->gamepadAxis != 0xFF) {
+                kernel.InjectInputEvent(MakeGamepadAxisInputEvent(axis->gamepadAxis, value, deviceId));
+                return { { "source", "gamepad_axis" }, { "axisName", axis->axisName }, { "axis", axis->gamepadAxis }, { "value", value }, { "deviceId", deviceId } };
+            }
+            const uint32_t pressKey = value >= 0.0f ? axis->positiveKey : axis->negativeKey;
+            const uint32_t releaseKey = value >= 0.0f ? axis->negativeKey : axis->positiveKey;
+            if (releaseKey != 0) {
+                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, releaseKey));
+            }
+            if (pressKey != 0 && std::fabs(value) > 0.001f) {
+                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyDown, pressKey));
+            }
+            else if (axis->positiveKey != 0) {
+                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, axis->positiveKey));
+            }
+            if (std::fabs(value) <= 0.001f && axis->negativeKey != 0) {
+                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, axis->negativeKey));
+            }
+            return { { "source", "keyboard_axis" }, { "axisName", axis->axisName }, { "value", value } };
+        }
+
+        if (params.contains("gamepadAxis")) {
+            const uint8_t axis = params["gamepadAxis"].get<uint8_t>();
+            kernel.InjectInputEvent(MakeGamepadAxisInputEvent(axis, value, deviceId));
+            return { { "source", "gamepad_axis" }, { "axis", axis }, { "value", value }, { "deviceId", deviceId } };
+        }
+        throw MakeError("missing_param", "game.input.axis requires axis or gamepadAxis.");
+    }
+
+    json HandleGameInputMouseMove(EngineKernel& kernel, const json& params)
+    {
+        kernel.InjectInputEvent(MakeMouseMoveInputEvent(
+            params.value("x", 0.0f),
+            params.value("y", 0.0f),
+            params.value("dx", 0.0f),
+            params.value("dy", 0.0f)));
+        return {
+            { "x", params.value("x", 0.0f) },
+            { "y", params.value("y", 0.0f) },
+            { "dx", params.value("dx", 0.0f) },
+            { "dy", params.value("dy", 0.0f) }
+        };
+    }
+
+    json EngineModeResult(EngineKernel& kernel)
+    {
+        return {
+            { "mode", ModeToString(kernel.GetMode()) },
+            { "frameCount", kernel.GetTime().frameCount },
+            { "timeScale", kernel.GetTime().timeScale },
+            { "pendingStepFrames", PendingStepFrameCount() }
+        };
+    }
+
+    json HandleGamePlay(EngineKernel& kernel)
+    {
+        if (kernel.GetMode() != EngineMode::Play) {
+            kernel.Play();
+        }
+        return EngineModeResult(kernel);
+    }
+
+    json HandleGamePause(EngineKernel& kernel)
+    {
+        if (kernel.GetMode() == EngineMode::Play) {
+            kernel.Pause();
+        }
+        else if (kernel.GetMode() == EngineMode::Editor) {
+            kernel.Play();
+            if (kernel.GetMode() == EngineMode::Play) {
+                kernel.Pause();
+            }
+        }
+        return EngineModeResult(kernel);
+    }
+
+    json HandleGameStop(EngineKernel& kernel)
+    {
+        PendingStepFrameCount() = 0;
+        if (kernel.GetMode() != EngineMode::Editor) {
+            kernel.Stop();
+        }
+        return EngineModeResult(kernel);
+    }
+
+    json HandleGameStepFrames(EngineKernel& kernel, const json& params)
+    {
+        const uint32_t frames = (std::max)(1, params.value("frames", 1));
+        PendingStepFrameCount() += frames;
+        if (kernel.GetMode() == EngineMode::Editor) {
+            kernel.Play();
+        }
+        if (kernel.GetMode() == EngineMode::Play) {
+            kernel.Pause();
+        }
+        return EngineModeResult(kernel);
+    }
+
+    json HandleGameSetTimeScale(EngineKernel& kernel, const json& params)
+    {
+        const float scale = (std::max)(0.0f, params.value("timeScale", params.value("scale", 1.0f)));
+        kernel.SetTimeScale(scale);
+        return EngineModeResult(kernel);
+    }
+
+    json FlowEventToJson(const FlowEvent& event, int index)
+    {
+        return {
+            { "index", index },
+            { "name", event.name },
+            { "value", event.value }
+        };
+    }
+
+    json HandleGameplayGetEvents(EngineKernel& kernel, const json& params)
+    {
+        const bool clear = params.value("clear", false);
+        const bool includeFlow = params.value("includeFlow", true);
+        const bool includeDamage = params.value("includeDamage", true);
+        const int limit = (std::max)(0, params.value("limit", 64));
+        json flow = json::array();
+        json damage = json::array();
+
+        if (includeFlow) {
+            const auto& recent = kernel.GetFlowEventQueue().GetRecentEvents();
+            const int start = (limit > 0 && static_cast<int>(recent.size()) > limit)
+                ? static_cast<int>(recent.size()) - limit
+                : 0;
+            for (int i = start; i < static_cast<int>(recent.size()); ++i) {
+                flow.push_back(FlowEventToJson(recent[static_cast<size_t>(i)], i));
+            }
+        }
+
+        if (includeDamage) {
+            const auto& recentDamage = DamageEventRuntimeQueue::GetRecent();
+            const int start = (limit > 0 && static_cast<int>(recentDamage.size()) > limit)
+                ? static_cast<int>(recentDamage.size()) - limit
+                : 0;
+            for (int i = start; i < static_cast<int>(recentDamage.size()); ++i) {
+                damage.push_back(DamageEventToJson(recentDamage[static_cast<size_t>(i)]));
+            }
+        }
+
+        if (clear) {
+            DamageEventRuntimeQueue::ClearRecent();
+        }
+
+        return {
+            { "frameCount", kernel.GetTime().frameCount },
+            { "flowEvents", std::move(flow) },
+            { "damageEvents", std::move(damage) }
+        };
+    }
+
+    json HandleGameplayClearEvents()
+    {
+        DamageEventRuntimeQueue::ClearRecent();
+        return { { "ok", true } };
     }
 
     json HandleListEntities(Registry& registry)
@@ -3932,6 +5761,171 @@ namespace
         };
     }
 
+    json EffectEditorStateToJson(EditorLayer& editor, Registry* registry, bool includeGraph);
+
+    EffectGraphNode* EnsureEffectNodeForAutomation(EffectGraphAsset& asset, EffectGraphNodeType type)
+    {
+        for (auto& node : asset.nodes) {
+            if (node.type == type) {
+                return &node;
+            }
+        }
+        return &AddEffectGraphNode(asset, type, { 120.0f + static_cast<float>(asset.nodes.size()) * 48.0f, 120.0f });
+    }
+
+    EffectGraphNode* FindEffectNodeForAutomation(EffectGraphAsset& asset, EffectGraphNodeType type)
+    {
+        for (auto& node : asset.nodes) {
+            if (node.type == type) {
+                return &node;
+            }
+        }
+        return nullptr;
+    }
+
+    void ApplyEffectSemanticParamsToAsset(EffectGraphAsset& asset, const json& fields)
+    {
+        if (!fields.is_object()) {
+            throw MakeError("invalid_param", "semantic fields must be an object.");
+        }
+
+        auto* lifetime = EnsureEffectNodeForAutomation(asset, EffectGraphNodeType::Lifetime);
+        auto* emitter = EnsureEffectNodeForAutomation(asset, EffectGraphNodeType::ParticleEmitter);
+        auto* color = EnsureEffectNodeForAutomation(asset, EffectGraphNodeType::Color);
+        auto* sprite = EnsureEffectNodeForAutomation(asset, EffectGraphNodeType::SpriteRenderer);
+
+        if (fields.contains("name")) {
+            asset.name = fields["name"].get<std::string>();
+        }
+        if (fields.contains("duration")) {
+            const float duration = fields["duration"].get<float>();
+            asset.previewDefaults.duration = duration;
+            lifetime->scalar = duration;
+        }
+        if (fields.contains("seed")) {
+            asset.previewDefaults.seed = fields["seed"].get<uint32_t>();
+        }
+        if (fields.contains("spawnRate")) emitter->scalar = fields["spawnRate"].get<float>();
+        if (fields.contains("burstCount")) emitter->scalar2 = static_cast<float>(fields["burstCount"].get<uint32_t>());
+        if (fields.contains("maxParticles")) emitter->intValue = fields["maxParticles"].get<int>();
+        if (fields.contains("particleLifetime")) emitter->vectorValue.x = fields["particleLifetime"].get<float>();
+        if (fields.contains("startSize")) emitter->vectorValue.y = fields["startSize"].get<float>();
+        if (fields.contains("endSize")) emitter->vectorValue.z = fields["endSize"].get<float>();
+        if (fields.contains("speed")) emitter->vectorValue.w = fields["speed"].get<float>();
+        if (fields.contains("acceleration") && fields["acceleration"].is_array()) {
+            DirectX::XMFLOAT3 v{};
+            if (ReadFloat3(fields["acceleration"], v)) {
+                emitter->vectorValue2.x = v.x;
+                emitter->vectorValue2.y = v.y;
+                emitter->vectorValue2.z = v.z;
+            }
+        }
+        if (fields.contains("drag")) emitter->vectorValue2.w = fields["drag"].get<float>();
+        if (fields.contains("shape")) {
+            const std::string shape = ToLowerCopy(fields["shape"].get<std::string>());
+            if (shape == "box") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Box);
+            else if (shape == "cone") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Cone);
+            else if (shape == "circle") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Circle);
+            else if (shape == "line") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Line);
+            else emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Sphere);
+        }
+        if (fields.contains("shapeParams") && fields["shapeParams"].is_array()) {
+            DirectX::XMFLOAT3 v{};
+            if (ReadFloat3(fields["shapeParams"], v)) {
+                emitter->vectorValue3.x = v.x;
+                emitter->vectorValue3.y = v.y;
+                emitter->vectorValue3.z = v.z;
+            }
+        }
+        if (fields.contains("spinRate")) emitter->vectorValue3.w = fields["spinRate"].get<float>();
+        if (fields.contains("curlNoiseStrength")) emitter->vectorValue4.x = fields["curlNoiseStrength"].get<float>();
+        if (fields.contains("curlNoiseScale")) emitter->vectorValue4.y = fields["curlNoiseScale"].get<float>();
+        if (fields.contains("curlNoiseScroll")) emitter->vectorValue4.z = fields["curlNoiseScroll"].get<float>();
+        if (fields.contains("vortexStrength")) emitter->vectorValue4.w = fields["vortexStrength"].get<float>();
+
+        if (fields.contains("startColor")) {
+            ReadFloat4(fields["startColor"], color->vectorValue);
+            sprite->vectorValue = color->vectorValue;
+        }
+        if (fields.contains("endColor")) {
+            ReadFloat4(fields["endColor"], color->vectorValue2);
+        }
+        if (fields.contains("texture")) {
+            sprite->stringValue = fields["texture"].get<std::string>();
+        }
+        if (fields.contains("drawMode")) {
+            const std::string drawMode = ToLowerCopy(fields["drawMode"].get<std::string>());
+            if (drawMode == "ribbon") sprite->intValue = static_cast<int>(EffectParticleDrawMode::Ribbon);
+            else if (drawMode == "mesh") sprite->intValue = static_cast<int>(EffectParticleDrawMode::Mesh);
+            else sprite->intValue = static_cast<int>(EffectParticleDrawMode::Billboard);
+        }
+        if (fields.contains("ribbonWidth")) sprite->vectorValue2.x = fields["ribbonWidth"].get<float>();
+        if (fields.contains("ribbonStretch")) sprite->vectorValue2.y = fields["ribbonStretch"].get<float>();
+        if (fields.contains("alphaScale")) sprite->vectorValue2.z = fields["alphaScale"].get<float>();
+        if (fields.contains("flipbookFps")) sprite->vectorValue2.w = fields["flipbookFps"].get<float>();
+        if (fields.contains("sizeCurveBias")) sprite->vectorValue3.x = fields["sizeCurveBias"].get<float>();
+        if (fields.contains("alphaCurveBias")) sprite->vectorValue3.y = fields["alphaCurveBias"].get<float>();
+        if (fields.contains("subUvColumns")) sprite->vectorValue3.z = static_cast<float>(fields["subUvColumns"].get<int>());
+        if (fields.contains("subUvRows")) sprite->vectorValue3.w = static_cast<float>(fields["subUvRows"].get<int>());
+
+        EffectEditorInternal::EnsureGuiAuthoringLinks(asset);
+        EffectEditorInternal::SanitizeGraphAsset(asset);
+    }
+
+    void ApplyNamedEffectPreset(EffectGraphAsset& asset, const std::string& preset)
+    {
+        const std::string p = ToLowerCopy(preset);
+        if (p == "smoke" || p == "smoke_plume") {
+            ApplyEffectSemanticParamsToAsset(asset, {
+                { "name", "Smoke Plume" }, { "duration", 6.0f }, { "spawnRate", 24000.0f },
+                { "particleLifetime", 4.2f }, { "startSize", 0.18f }, { "endSize", 1.55f },
+                { "speed", 0.95f }, { "shape", "sphere" }, { "shapeParams", json::array({ 0.65f, 0.65f, 0.65f }) },
+                { "acceleration", json::array({ 0.0f, 0.18f, 0.0f }) }, { "drag", 0.12f },
+                { "curlNoiseStrength", 0.75f }, { "curlNoiseScale", 0.10f }, { "curlNoiseScroll", 0.07f }, { "vortexStrength", 0.28f },
+                { "startColor", json::array({ 0.42f, 0.43f, 0.45f, 0.82f }) },
+                { "endColor", json::array({ 0.10f, 0.10f, 0.10f, 0.0f }) },
+                { "texture", "Data/Effect/particle/smoke_03.png" }
+            });
+            return;
+        }
+        if (p == "slash" || p == "ribbon" || p == "ribbon_trail") {
+            ApplyEffectSemanticParamsToAsset(asset, {
+                { "name", "Ribbon Trail" }, { "duration", 2.8f }, { "spawnRate", 3000.0f },
+                { "particleLifetime", 1.20f }, { "startSize", 0.08f }, { "endSize", 0.025f },
+                { "speed", 1.9f }, { "shape", "line" }, { "shapeParams", json::array({ 0.40f, 0.0f, 0.0f }) },
+                { "spinRate", 3.0f }, { "drawMode", "ribbon" }, { "ribbonWidth", 0.12f }, { "ribbonStretch", 1.75f },
+                { "curlNoiseStrength", 0.16f }, { "curlNoiseScale", 0.22f }, { "curlNoiseScroll", 0.24f }, { "vortexStrength", 2.10f },
+                { "startColor", json::array({ 0.30f, 0.95f, 1.00f, 0.95f }) },
+                { "endColor", json::array({ 0.08f, 0.28f, 1.00f, 0.0f }) },
+                { "texture", "Data/Effect/particle/trace_03.png" }
+            });
+            return;
+        }
+        if (p == "magic" || p == "magic_burst") {
+            ApplyEffectSemanticParamsToAsset(asset, {
+                { "name", "Magic Burst" }, { "duration", 2.1f }, { "spawnRate", 90000.0f },
+                { "particleLifetime", 1.10f }, { "startSize", 0.14f }, { "endSize", 0.028f },
+                { "speed", 7.8f }, { "shape", "sphere" }, { "shapeParams", json::array({ 0.22f, 0.22f, 0.22f }) },
+                { "acceleration", json::array({ 0.0f, -0.55f, 0.0f }) }, { "spinRate", 22.0f },
+                { "curlNoiseStrength", 0.55f }, { "curlNoiseScale", 0.26f }, { "curlNoiseScroll", 0.40f }, { "vortexStrength", 1.65f },
+                { "startColor", json::array({ 0.95f, 0.45f, 1.00f, 1.0f }) },
+                { "endColor", json::array({ 0.35f, 0.15f, 1.00f, 0.0f }) },
+                { "texture", "Data/Effect/particle/magic_03.png" }
+            });
+            return;
+        }
+        ApplyEffectSemanticParamsToAsset(asset, {
+            { "name", "Spark Fountain" }, { "duration", 3.2f }, { "spawnRate", 70000.0f },
+            { "particleLifetime", 1.45f }, { "startSize", 0.08f }, { "endSize", 0.025f },
+            { "speed", 4.2f }, { "shape", "sphere" }, { "shapeParams", json::array({ 0.26f, 0.26f, 0.26f }) },
+            { "acceleration", json::array({ 0.0f, -2.2f, 0.0f }) }, { "drag", 0.02f }, { "spinRate", 13.0f },
+            { "curlNoiseStrength", 0.30f }, { "curlNoiseScale", 0.35f }, { "curlNoiseScroll", 0.30f },
+            { "startColor", json::array({ 0.65f, 0.95f, 1.00f, 1.0f }) },
+            { "endColor", json::array({ 0.15f, 0.75f, 1.00f, 0.0f }) },
+            { "texture", "Data/Effect/particle/spark_03.png" }
+        });
+    }
+
     json HandleEffectListNodeTypes()
     {
         json types = json::array();
@@ -3988,6 +5982,66 @@ namespace
         SaveEffectGraphAssetOrThrow(path, asset);
         RevealEffectEditorChange(kernel, params, path);
         return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectApplyPreset(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::WriteAsset, false);
+        EffectGraphAsset asset;
+        if (std::filesystem::exists(path)) {
+            if (!EffectGraphSerializer::Load(path.string(), asset)) {
+                throw MakeError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+            }
+        }
+        else {
+            asset = CreateDefaultEffectGraphAsset();
+        }
+
+        ApplyNamedEffectPreset(asset, params.value("preset", std::string("spark")));
+        if (params.contains("semantic")) {
+            ApplyEffectSemanticParamsToAsset(asset, params["semantic"]);
+        }
+        if (params.contains("name")) asset.name = params["name"].get<std::string>();
+        if (params.contains("graphId")) asset.graphId = params["graphId"].get<std::string>();
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectSetSemanticParams(EngineKernel& kernel, const json& params)
+    {
+        std::filesystem::path path;
+        EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
+        const json fields = params.contains("semantic") ? params["semantic"] : params.value("fields", json::object());
+        ApplyEffectSemanticParamsToAsset(asset, fields);
+        SaveEffectGraphAssetOrThrow(path, asset);
+        RevealEffectEditorChange(kernel, params, path);
+        return { { "asset", EffectGraphSummaryToJson(asset, path) } };
+    }
+
+    json HandleEffectSetPreviewView(EngineKernel& kernel, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        DirectX::XMFLOAT3 target = editor->GetEffectEditorPanel().GetPreviewCameraTarget();
+        if (params.contains("target")) {
+            ReadFloat3(params["target"], target);
+        }
+        const float yaw = params.value("yaw", 0.85f);
+        const float pitch = params.value("pitch", -0.18f);
+        const float distance = params.value("distance", 4.5f);
+        const float fovY = params.value("fovY", editor->GetEffectEditorPanel().GetPreviewCameraFovY());
+        editor->GetEffectEditorPanel().SetPreviewCameraAutomation(target, yaw, pitch, distance, fovY);
+        if (params.contains("clearColor") || params.contains("useSkybox")) {
+            DirectX::XMFLOAT4 clear = editor->GetEffectEditorPanel().GetPreviewClearColor();
+            if (params.contains("clearColor")) {
+                ReadFloat4(params["clearColor"], clear);
+            }
+            editor->GetEffectEditorPanel().SetPreviewEnvironmentAutomation(clear, params.value("useSkybox", editor->GetEffectEditorPanel().ShouldPreviewUseSkybox()));
+        }
+        return { { "state", EffectEditorStateToJson(*editor, kernel.GetGameRegistry(), false) } };
     }
 
     json HandleEffectAddNode(EngineKernel& kernel, const json& params)
@@ -4201,6 +6255,457 @@ namespace
         };
     }
 
+    json EffectPreviewPlaybackToJson(Registry* registry, EntityID previewEntity)
+    {
+        if (!registry || Entity::IsNull(previewEntity) || !registry->IsAlive(previewEntity)) {
+            return nullptr;
+        }
+        auto* playback = registry->GetComponent<EffectPlaybackComponent>(previewEntity);
+        auto* asset = registry->GetComponent<EffectAssetComponent>(previewEntity);
+        json out = {
+            { "entity", EntityToString(previewEntity) },
+            { "hasPlayback", playback != nullptr },
+            { "hasAsset", asset != nullptr }
+        };
+        if (asset) {
+            out["assetPath"] = asset->assetPath;
+            out["autoPlay"] = asset->autoPlay;
+            out["loop"] = asset->loop;
+        }
+        if (playback) {
+            out["isPlaying"] = playback->isPlaying;
+            out["isPaused"] = playback->isPaused;
+            out["currentTime"] = playback->currentTime;
+            out["duration"] = playback->duration;
+            out["seed"] = playback->seed;
+            out["runtimeInstanceId"] = playback->runtimeInstanceId;
+            out["stopRequested"] = playback->stopRequested;
+        }
+        return out;
+    }
+
+    json AnalyzeImageBuffer(const ImageBuffer& image)
+    {
+        if (image.width <= 0 || image.height <= 0 || image.bgra.empty()) {
+            return {
+                { "width", image.width },
+                { "height", image.height },
+                { "empty", true }
+            };
+        }
+
+        const auto samplePixel = [&](int x, int y) {
+            const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4u;
+            return std::array<float, 3>{
+                image.bgra[i + 2] / 255.0f,
+                image.bgra[i + 1] / 255.0f,
+                image.bgra[i + 0] / 255.0f
+            };
+        };
+
+        const std::array<std::array<float, 3>, 4> cornerSamples = {
+            samplePixel(0, 0),
+            samplePixel((std::max)(0, image.width - 1), 0),
+            samplePixel(0, (std::max)(0, image.height - 1)),
+            samplePixel((std::max)(0, image.width - 1), (std::max)(0, image.height - 1))
+        };
+        std::array<float, 3> bg{ 0.0f, 0.0f, 0.0f };
+        for (const auto& c : cornerSamples) {
+            bg[0] += c[0] * 0.25f;
+            bg[1] += c[1] * 0.25f;
+            bg[2] += c[2] * 0.25f;
+        }
+
+        double brightnessSum = 0.0;
+        double saturationSum = 0.0;
+        double redSum = 0.0;
+        double greenSum = 0.0;
+        double blueSum = 0.0;
+        double energySum = 0.0;
+        int brightPixels = 0;
+        int effectPixels = 0;
+        int minX = image.width;
+        int minY = image.height;
+        int maxX = -1;
+        int maxY = -1;
+        const int total = image.width * image.height;
+
+        for (int y = 0; y < image.height; ++y) {
+            for (int x = 0; x < image.width; ++x) {
+                const size_t i = (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4u;
+                const float b = image.bgra[i + 0] / 255.0f;
+                const float g = image.bgra[i + 1] / 255.0f;
+                const float r = image.bgra[i + 2] / 255.0f;
+                const float maxC = (std::max)(r, (std::max)(g, b));
+                const float minC = (std::min)(r, (std::min)(g, b));
+                const float brightness = (r + g + b) / 3.0f;
+                const float saturation = maxC > 0.0001f ? (maxC - minC) / maxC : 0.0f;
+                const float bgDiff = std::sqrt(
+                    (r - bg[0]) * (r - bg[0]) +
+                    (g - bg[1]) * (g - bg[1]) +
+                    (b - bg[2]) * (b - bg[2]));
+                brightnessSum += brightness;
+                saturationSum += saturation;
+                redSum += r;
+                greenSum += g;
+                blueSum += b;
+                energySum += maxC * maxC;
+                if (brightness > 0.65f || maxC > 0.85f) {
+                    ++brightPixels;
+                }
+                if (bgDiff > 0.18f || saturation > 0.35f || brightness > 0.72f) {
+                    ++effectPixels;
+                    minX = (std::min)(minX, x);
+                    minY = (std::min)(minY, y);
+                    maxX = (std::max)(maxX, x);
+                    maxY = (std::max)(maxY, y);
+                }
+            }
+        }
+
+        const double invTotal = total > 0 ? 1.0 / static_cast<double>(total) : 0.0;
+        json bbox = nullptr;
+        if (effectPixels > 0) {
+            bbox = {
+                { "min", json::array({ minX, minY }) },
+                { "max", json::array({ maxX, maxY }) },
+                { "size", json::array({ maxX - minX + 1, maxY - minY + 1 }) },
+                { "center", json::array({ (minX + maxX) * 0.5f, (minY + maxY) * 0.5f }) },
+                { "fill", json::array({
+                    static_cast<float>(maxX - minX + 1) / static_cast<float>((std::max)(1, image.width)),
+                    static_cast<float>(maxY - minY + 1) / static_cast<float>((std::max)(1, image.height))
+                }) }
+            };
+        }
+
+        return {
+            { "width", image.width },
+            { "height", image.height },
+            { "empty", false },
+            { "averageBrightness", brightnessSum * invTotal },
+            { "averageSaturation", saturationSum * invTotal },
+            { "energy", energySum * invTotal },
+            { "brightPixelRatio", static_cast<double>(brightPixels) * invTotal },
+            { "effectPixelRatio", static_cast<double>(effectPixels) * invTotal },
+            { "dominantColor", json::array({ redSum * invTotal, greenSum * invTotal, blueSum * invTotal }) },
+            { "estimatedBackgroundColor", json::array({ bg[0], bg[1], bg[2] }) },
+            { "effectBounds", std::move(bbox) }
+        };
+    }
+
+    ImageBuffer CaptureAutomationTargetImage(EngineKernel& kernel, const std::string& target)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        ImageBuffer clientImage;
+        if (!CaptureBackBuffer(clientImage) && !CaptureClientArea(Graphics::Instance().GetWindowHandle(), clientImage)) {
+            throw MakeError("capture_failed", "Failed to capture the engine window back buffer or client area.");
+        }
+
+        if (target == "scene_view") {
+            return CropImage(clientImage, editor->GetSceneViewRect());
+        }
+        if (target == "game_view") {
+            return CropImage(clientImage, editor->GetGameViewRect());
+        }
+        if (target == "effect_editor") {
+            return CropImage(clientImage, editor->GetEffectEditorRect());
+        }
+        if (target == "effect_preview") {
+            return CropImage(clientImage, editor->GetEffectPreviewRect());
+        }
+        if (target == "window" || target == "display" || target == "client") {
+            return clientImage;
+        }
+        throw MakeError("invalid_param", "target must be window, display, client, scene_view, game_view, effect_editor, or effect_preview.", {
+            { "target", target }
+        });
+    }
+
+    json EffectEditorStateToJson(EditorLayer& editor, Registry* registry, bool includeGraph)
+    {
+        EffectEditorPanel& panel = editor.GetEffectEditorPanel();
+        const std::shared_ptr<CompiledEffectAsset> compiled = panel.GetCompiledForAutomation();
+        json out = {
+            { "effectEditorActive", editor.IsEffectEditorWorkspaceActive() },
+            { "documentPath", panel.GetDocumentPath() },
+            { "workspaceRect", Float4ToJson(editor.GetEffectEditorRect()) },
+            { "previewRect", Float4ToJson(editor.GetEffectPreviewRect()) },
+            { "authoringMode", panel.GetAuthoringModeForAutomation() },
+            { "selectedNodeId", panel.GetSelectedNodeIdForAutomation() },
+            { "selectedLinkId", panel.GetSelectedLinkIdForAutomation() },
+            { "compileDirty", panel.IsCompileDirtyForAutomation() },
+            { "previewEntity", Entity::IsNull(panel.GetPreviewEntity()) ? json(nullptr) : json(EntityToString(panel.GetPreviewEntity())) },
+            { "previewPlayback", EffectPreviewPlaybackToJson(registry, panel.GetPreviewEntity()) },
+            { "compiled", compiled ? EffectCompileResultToJson(*compiled) : json(nullptr) }
+        };
+        if (includeGraph) {
+            out["asset"] = EffectGraphSummaryToJson(panel.GetAssetForAutomation(), std::filesystem::path(panel.GetDocumentPath()));
+        }
+        return out;
+    }
+
+    json HandleEffectGetState(EngineKernel& kernel, Registry* registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+            if (!editor->OpenEffectEditorFromAutomation(path)) {
+                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                    { "path", ToGenericProjectPath(path) }
+                });
+            }
+        }
+        if (params.value("compile", false) && !editor->GetEffectEditorPanel().CompileFromAutomation()) {
+            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.");
+        }
+        return { { "state", EffectEditorStateToJson(*editor, registry, params.value("includeGraph", true)) } };
+    }
+
+    json HandleEffectTimelineSeek(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+            if (!editor->OpenEffectEditorFromAutomation(path)) {
+                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                    { "path", ToGenericProjectPath(path) }
+                });
+            }
+        }
+        const float time = params.value("time", params.value("startTime", 0.0f));
+        const bool paused = params.value("paused", true);
+        if (!editor->GetEffectEditorPanel().SeekTimelineFromAutomation(&registry, time, paused)) {
+            throw MakeError("effect_timeline_seek_failed", "Failed to seek the Effect Editor timeline.", {
+                { "time", time },
+                { "paused", paused }
+            });
+        }
+        return { { "state", EffectEditorStateToJson(*editor, &registry, params.value("includeGraph", false)) } };
+    }
+
+    json HandleEffectTimelineStep(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const float deltaTime = params.value("deltaTime", params.value("seconds", 1.0f / 30.0f));
+        const bool paused = params.value("paused", true);
+        if (!editor->GetEffectEditorPanel().StepTimelineFromAutomation(&registry, deltaTime, paused)) {
+            throw MakeError("effect_timeline_step_failed", "Failed to step the Effect Editor timeline.", {
+                { "deltaTime", deltaTime },
+                { "paused", paused }
+            });
+        }
+        return { { "state", EffectEditorStateToJson(*editor, &registry, params.value("includeGraph", false)) } };
+    }
+
+    json HandleEffectSelectNode(EngineKernel& kernel, const json& params, bool focus)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const uint32_t nodeId = params.value("nodeId", 0u);
+        const bool ok = focus
+            ? editor->GetEffectEditorPanel().FocusNodeFromAutomation(nodeId)
+            : editor->GetEffectEditorPanel().SelectNodeFromAutomation(nodeId, params.value("nodeMode", false));
+        if (!ok) {
+            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+        }
+        editor->FocusPanelAutomation(EditorLayer::WindowFocusTarget::EffectEditor);
+        return { { "state", EffectEditorStateToJson(*editor, kernel.GetGameRegistry(), true) } };
+    }
+
+    json HandleEffectAssertPreviewVisible(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        EffectEditorPanel& panel = editor->GetEffectEditorPanel();
+        const EntityID previewEntity = panel.GetPreviewEntity();
+        const bool live = !Entity::IsNull(previewEntity) && registry.IsAlive(previewEntity);
+        const auto compiled = panel.GetCompiledForAutomation();
+        const bool compiledValid = compiled && compiled->valid;
+        const bool renderable = compiledValid && (compiled->meshRenderer.enabled || compiled->particleRenderer.enabled);
+        const auto* playback = live ? registry.GetComponent<EffectPlaybackComponent>(previewEntity) : nullptr;
+        const bool playbackOk = playback && !playback->stopRequested && (playback->isPlaying || playback->isPaused);
+        bool ok = live && compiledValid;
+        if (params.value("requireRenderable", true)) {
+            ok = ok && renderable;
+        }
+        if (params.value("requirePlayback", true)) {
+            ok = ok && playbackOk;
+        }
+
+        json projection = nullptr;
+        if (params.value("assertSceneVisible", false) && live) {
+            json assertParams = {
+                { "view", params.value("view", std::string("scene_view")) },
+                { "entities", json::array({ EntityToString(previewEntity) }) },
+                { "requireAll", true },
+                { "requireBoundsFullyVisible", params.value("requireBoundsFullyVisible", false) }
+            };
+            projection = HandleVisualAssertEntitiesVisible(kernel, registry, assertParams);
+            ok = ok && projection.value("ok", false);
+        }
+
+        return {
+            { "ok", ok },
+            { "previewEntity", live ? json(EntityToString(previewEntity)) : json(nullptr) },
+            { "live", live },
+            { "compiledValid", compiledValid },
+            { "renderable", renderable },
+            { "playbackOk", playbackOk },
+            { "playback", EffectPreviewPlaybackToJson(&registry, previewEntity) },
+            { "projection", std::move(projection) }
+        };
+    }
+
+    json HandleEffectCaptureReviewSet(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+            if (!editor->OpenEffectEditorFromAutomation(path)) {
+                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                    { "path", ToGenericProjectPath(path) }
+                });
+            }
+        }
+
+        EffectEditorPanel& panel = editor->GetEffectEditorPanel();
+        if (params.value("compile", true) && !panel.CompileFromAutomation()) {
+            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.", {
+                { "state", EffectEditorStateToJson(*editor, &registry, true) }
+            });
+        }
+
+        const float time = params.value("time", params.value("startTime", 0.0f));
+        const bool paused = params.value("paused", true);
+        if (params.value("play", true)) {
+            if (!panel.SeekTimelineFromAutomation(&registry, time, paused)) {
+                throw MakeError("effect_timeline_seek_failed", "Failed to prepare Effect Editor preview.", {
+                    { "time", time },
+                    { "paused", paused }
+                });
+            }
+        }
+
+        editor->FocusPanelAutomation(EditorLayer::WindowFocusTarget::EffectEditor);
+
+        const std::string stem = params.value("stem", std::string("effect_review"));
+        const std::filesystem::path dir = params.value("dir", std::string("Saved/AI/screenshots/effect_review"));
+        const std::string format = params.value("format", std::string("bmp"));
+        const std::vector<std::string> targets = params.contains("targets")
+            ? JsonStringList(params, "targets")
+            : std::vector<std::string>{ "effect_editor", "window" };
+
+        json screenshots = json::array();
+        for (const std::string& target : targets) {
+            const std::filesystem::path path = dir / (stem + "_" + target + "." + format);
+            json captureParams = {
+                { "target", target },
+                { "path", path.generic_string() },
+                { "format", format },
+                { "inline", params.value("inline", false) }
+            };
+            screenshots.push_back(HandleCaptureScreenshot(kernel, captureParams, path));
+        }
+
+        json assertions = nullptr;
+        if (params.value("assertPreview", true)) {
+            assertions = HandleEffectAssertPreviewVisible(kernel, registry, params);
+        }
+
+        return {
+            { "screenshots", std::move(screenshots) },
+            { "assertions", std::move(assertions) },
+            { "state", EffectEditorStateToJson(*editor, &registry, params.value("includeGraph", true)) },
+            { "note", "For exact visible-tab review, call editor.focus_panel(effect_editor), wait one rendered frame, then capture effect_editor again." }
+        };
+    }
+
+    json HandleEffectCaptureMultiTimeReview(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+            if (!editor->OpenEffectEditorFromAutomation(path)) {
+                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                    { "path", ToGenericProjectPath(path) }
+                });
+            }
+        }
+        EffectEditorPanel& panel = editor->GetEffectEditorPanel();
+        if (params.value("compile", true) && !panel.CompileFromAutomation()) {
+            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.");
+        }
+
+        std::vector<float> times;
+        if (params.contains("times") && params["times"].is_array()) {
+            for (const json& t : params["times"]) {
+                times.push_back(t.get<float>());
+            }
+        }
+        if (times.empty()) {
+            times = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+        }
+
+        const std::string stem = params.value("stem", std::string("effect_multi_review"));
+        const std::filesystem::path dir = params.value("dir", std::string("Saved/AI/screenshots/effect_review"));
+        const std::string format = params.value("format", std::string("bmp"));
+        const std::string target = params.value("target", std::string("effect_editor"));
+        json frames = json::array();
+
+        editor->FocusPanelAutomation(EditorLayer::WindowFocusTarget::EffectEditor);
+        for (size_t i = 0; i < times.size(); ++i) {
+            const float t = times[i];
+            if (!panel.SeekTimelineFromAutomation(&registry, t, params.value("paused", true))) {
+                throw MakeError("effect_timeline_seek_failed", "Failed to seek Effect Editor timeline.", { { "time", t } });
+            }
+            const std::filesystem::path path = dir / (stem + "_t" + std::to_string(i) + "." + format);
+            json captureParams = {
+                { "target", target },
+                { "path", path.generic_string() },
+                { "format", format },
+                { "inline", params.value("inline", false) }
+            };
+            json screenshot = HandleCaptureScreenshot(kernel, captureParams, path);
+            ImageBuffer image = CaptureAutomationTargetImage(kernel, target);
+            frames.push_back({
+                { "time", t },
+                { "screenshot", std::move(screenshot) },
+                { "metrics", AnalyzeImageBuffer(image) },
+                { "assertions", HandleEffectAssertPreviewVisible(kernel, registry, params) }
+            });
+        }
+
+        return {
+            { "frames", std::move(frames) },
+            { "state", EffectEditorStateToJson(*editor, &registry, params.value("includeGraph", false)) }
+        };
+    }
+
     json HandleEffectPreviewSpawn(Registry& registry, const json& params)
     {
         std::filesystem::path path;
@@ -4324,26 +6829,7 @@ namespace
 
         const std::filesystem::path safePath = ResolveProjectPath(path.string(), PathAccess::AutomationFile, false);
 
-        ImageBuffer clientImage;
-        if (!CaptureBackBuffer(clientImage) && !CaptureClientArea(Graphics::Instance().GetWindowHandle(), clientImage)) {
-            throw MakeError("capture_failed", "Failed to capture the engine window back buffer or client area.");
-        }
-
-        ImageBuffer outputImage = clientImage;
-        if (target == "scene_view") {
-            outputImage = CropImage(clientImage, editor->GetSceneViewRect());
-        }
-        else if (target == "game_view") {
-            outputImage = CropImage(clientImage, editor->GetGameViewRect());
-        }
-        else if (target == "window" || target == "display" || target == "client") {
-            outputImage = std::move(clientImage);
-        }
-        else {
-            throw MakeError("invalid_param", "target must be window, display, client, scene_view, or game_view.", {
-                { "target", target }
-            });
-        }
+        ImageBuffer outputImage = CaptureAutomationTargetImage(kernel, target);
 
         if (format == "png") {
             WritePng(safePath, outputImage);
@@ -4372,6 +6858,29 @@ namespace
         }
 
         return result;
+    }
+
+    json HandleVisualEvaluateCapture(EngineKernel& kernel, const json& params)
+    {
+        const std::string target = params.value("target", std::string("window"));
+        ImageBuffer image = CaptureAutomationTargetImage(kernel, target);
+        json out = {
+            { "target", target },
+            { "metrics", AnalyzeImageBuffer(image) }
+        };
+        if (params.value("save", false)) {
+            const std::string format = params.value("format", std::string("bmp"));
+            std::filesystem::path path = params.value("path", std::string("Saved/AI/screenshots/evaluation.bmp"));
+            const std::filesystem::path safePath = ResolveProjectPath(path.string(), PathAccess::AutomationFile, false);
+            if (format == "png") {
+                WritePng(safePath, image);
+            }
+            else {
+                WriteBmp24(safePath, image);
+            }
+            out["path"] = ToGenericProjectPath(safePath);
+        }
+        return out;
     }
 
     // =========================================================
@@ -7149,6 +9658,15 @@ namespace
         if (name == "get_visual_state") {
             return HandleGetVisualState(kernel);
         }
+        if (name == "editor.recovery.get_state") {
+            return HandleRecoveryGetState(kernel, params);
+        }
+        if (name == "editor.recovery.restore") {
+            return HandleRecoveryRestore(kernel);
+        }
+        if (name == "editor.recovery.dismiss") {
+            return HandleRecoveryDismiss(kernel);
+        }
         if (name == "get_component_schema") {
             return HandleGetComponentSchema(params);
         }
@@ -7188,8 +9706,17 @@ namespace
         if (name == "effect_editor.create_asset") {
             return HandleEffectCreateAsset(kernel, params);
         }
+        if (name == "effect_editor.apply_preset") {
+            return HandleEffectApplyPreset(kernel, params);
+        }
         if (name == "effect_editor.open_workspace") {
             return HandleEffectOpenWorkspace(kernel, params);
+        }
+        if (name == "effect_editor.set_preview_view") {
+            return HandleEffectSetPreviewView(kernel, params);
+        }
+        if (name == "effect_editor.get_state") {
+            return HandleEffectGetState(kernel, registry, params);
         }
         if (name == "effect_editor.timeline_play") {
             return HandleEffectTimelinePlay(kernel, params);
@@ -7197,11 +9724,20 @@ namespace
         if (name == "effect_editor.timeline_stop") {
             return HandleEffectTimelineStop(kernel);
         }
+        if (name == "effect_editor.select_node") {
+            return HandleEffectSelectNode(kernel, params, false);
+        }
+        if (name == "effect_editor.focus_node") {
+            return HandleEffectSelectNode(kernel, params, true);
+        }
         if (name == "effect_editor.get_asset") {
             return HandleEffectGetAsset(params);
         }
         if (name == "effect_editor.set_asset") {
             return HandleEffectSetAsset(kernel, params);
+        }
+        if (name == "effect_editor.set_semantic_params") {
+            return HandleEffectSetSemanticParams(kernel, params);
         }
         if (name == "effect_editor.add_node") {
             return HandleEffectAddNode(kernel, params);
@@ -7227,8 +9763,95 @@ namespace
                 (SanitizeFileStem(command.value("id", std::string("screenshot"))) + ".bmp");
             return HandleCaptureScreenshot(kernel, params, defaultPath);
         }
+        if (name == "visual.evaluate_capture") {
+            return HandleVisualEvaluateCapture(kernel, params);
+        }
         if (!registry) {
             throw MakeError("operation_not_allowed", "Game registry is not available.");
+        }
+        if (name == "ecs.query") {
+            return HandleECSQuery(*registry, params);
+        }
+        if (name == "ecs.hierarchy") {
+            return HandleECSHierarchy(*registry, params);
+        }
+        if (name == "ecs.diff") {
+            return HandleECSDiff(*registry, params);
+        }
+        if (name == "visual.verify_entity") {
+            return HandleVisualVerifyEntity(kernel, *registry, params);
+        }
+        if (name == "visual.verify_entity_game_view") {
+            return HandleVisualVerifyEntityGameView(kernel, *registry, params);
+        }
+        if (name == "scene_view.frame_entities") {
+            return HandleSceneViewFrameEntities(kernel, *registry, params);
+        }
+        if (name == "scene_view.frame_all") {
+            return HandleSceneViewFrameAll(kernel, *registry, params);
+        }
+        if (name == "camera.frame_entities") {
+            return HandleCameraFrameEntities(kernel, *registry, params);
+        }
+        if (name == "visual.assert_entities_visible") {
+            return HandleVisualAssertEntitiesVisible(kernel, *registry, params);
+        }
+        if (name == "visual.capture_review_set") {
+            return HandleVisualCaptureReviewSet(kernel, *registry, params);
+        }
+        if (name == "effect_editor.timeline_seek") {
+            return HandleEffectTimelineSeek(kernel, *registry, params);
+        }
+        if (name == "effect_editor.timeline_step") {
+            return HandleEffectTimelineStep(kernel, *registry, params);
+        }
+        if (name == "effect_editor.assert_preview_visible") {
+            return HandleEffectAssertPreviewVisible(kernel, *registry, params);
+        }
+        if (name == "effect_editor.capture_review_set") {
+            return HandleEffectCaptureReviewSet(kernel, *registry, params);
+        }
+        if (name == "effect_editor.capture_multi_time_review") {
+            return HandleEffectCaptureMultiTimeReview(kernel, *registry, params);
+        }
+        if (name == "gameplay.get_state") {
+            return HandleGameplayGetState(kernel, *registry, params);
+        }
+        if (name == "gameplay.get_events") {
+            return HandleGameplayGetEvents(kernel, params);
+        }
+        if (name == "gameplay.clear_events") {
+            return HandleGameplayClearEvents();
+        }
+        if (name == "game.play") {
+            return HandleGamePlay(kernel);
+        }
+        if (name == "game.pause") {
+            return HandleGamePause(kernel);
+        }
+        if (name == "game.stop") {
+            return HandleGameStop(kernel);
+        }
+        if (name == "game.step_frames") {
+            return HandleGameStepFrames(kernel, params);
+        }
+        if (name == "game.set_time_scale") {
+            return HandleGameSetTimeScale(kernel, params);
+        }
+        if (name == "game.input.press") {
+            return HandleGameInputPress(kernel, *registry, params);
+        }
+        if (name == "game.input.release") {
+            return HandleGameInputRelease(kernel, *registry, params);
+        }
+        if (name == "game.input.tap") {
+            return HandleGameInputTap(kernel, *registry, params);
+        }
+        if (name == "game.input.axis") {
+            return HandleGameInputAxis(kernel, *registry, params);
+        }
+        if (name == "game.input.mouse_move") {
+            return HandleGameInputMouseMove(kernel, params);
         }
         if (name == "list_entities") {
             return HandleListEntities(*registry);
@@ -7726,6 +10349,513 @@ namespace
         ofs << value.dump(2);
     }
 
+    void AppendJsonLine(const std::filesystem::path& path, const json& value)
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+        std::ofstream ofs(path, std::ios::binary | std::ios::app);
+        ofs << value.dump() << "\n";
+    }
+
+    struct AutomationSessionState
+    {
+        struct FileBackupRecord
+        {
+            std::filesystem::path path;
+            std::filesystem::path backupPath;
+        };
+
+        bool active = false;
+        std::string id;
+        std::string name;
+        std::string goal;
+        std::filesystem::path dir;
+        std::filesystem::path eventsPath;
+        std::filesystem::path manifestPath;
+        std::chrono::system_clock::time_point startedAt{};
+        uint64_t startFrame = 0;
+        uint64_t startEcsRevision = 0;
+        size_t startUndoCount = 0;
+        uint64_t commandCount = 0;
+        bool autoCaptureAfterCommand = false;
+        std::vector<std::string> captureTargets;
+        bool fileBackupEnabled = true;
+        std::vector<std::string> backupRoots;
+        std::vector<std::string> backupExtensions;
+        std::vector<FileBackupRecord> fileBackups;
+    };
+
+    AutomationSessionState g_automationSession;
+
+    bool IsSessionCommandName(const std::string& name)
+    {
+        return name == "ai_session.begin" ||
+               name == "ai_session.status" ||
+               name == "ai_session.end" ||
+               name == "ai_session.rollback";
+    }
+
+    std::string LowerCopy(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    }
+
+    bool SessionExtensionAllowed(const std::filesystem::path& path, const std::vector<std::string>& extensions)
+    {
+        const std::string ext = LowerCopy(path.extension().string());
+        for (const std::string& allowed : extensions) {
+            if (ext == LowerCopy(allowed)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::string SessionRelativePathKey(const std::filesystem::path& path)
+    {
+        std::error_code ec;
+        std::filesystem::path rel = std::filesystem::relative(path, std::filesystem::current_path(), ec);
+        if (ec) {
+            rel = path;
+        }
+        return rel.generic_string();
+    }
+
+    void BackupSessionFiles()
+    {
+        g_automationSession.fileBackups.clear();
+        if (!g_automationSession.fileBackupEnabled) {
+            return;
+        }
+
+        const std::filesystem::path backupRoot = g_automationSession.dir / "file_backups";
+        for (const std::string& rootText : g_automationSession.backupRoots) {
+            const std::filesystem::path root = rootText.empty() ? std::filesystem::path("Data") : std::filesystem::path(rootText);
+            std::error_code ec;
+            if (!std::filesystem::exists(root, ec)) {
+                continue;
+            }
+
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
+                if (ec) {
+                    break;
+                }
+                if (!entry.is_regular_file(ec)) {
+                    continue;
+                }
+                const std::filesystem::path source = entry.path();
+                if (!SessionExtensionAllowed(source, g_automationSession.backupExtensions)) {
+                    continue;
+                }
+                const std::string relKey = SessionRelativePathKey(source);
+                const std::filesystem::path backupPath = backupRoot / relKey;
+                std::filesystem::create_directories(backupPath.parent_path(), ec);
+                std::filesystem::copy_file(source, backupPath, std::filesystem::copy_options::overwrite_existing, ec);
+                if (!ec) {
+                    g_automationSession.fileBackups.push_back({ source, backupPath });
+                }
+            }
+        }
+    }
+
+    json RestoreSessionFiles()
+    {
+        json restored = json::array();
+        json deleted = json::array();
+        json errors = json::array();
+        if (!g_automationSession.fileBackupEnabled) {
+            return {
+                { "enabled", false },
+                { "restored", restored },
+                { "deletedCreated", deleted },
+                { "errors", errors }
+            };
+        }
+
+        std::unordered_map<std::string, std::filesystem::path> baseline;
+        for (const auto& record : g_automationSession.fileBackups) {
+            baseline[SessionRelativePathKey(record.path)] = record.path;
+        }
+
+        for (const std::string& rootText : g_automationSession.backupRoots) {
+            const std::filesystem::path root = rootText.empty() ? std::filesystem::path("Data") : std::filesystem::path(rootText);
+            std::error_code ec;
+            if (!std::filesystem::exists(root, ec)) {
+                continue;
+            }
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
+                if (ec) {
+                    break;
+                }
+                if (!entry.is_regular_file(ec)) {
+                    continue;
+                }
+                const std::filesystem::path current = entry.path();
+                if (!SessionExtensionAllowed(current, g_automationSession.backupExtensions)) {
+                    continue;
+                }
+                const std::string relKey = SessionRelativePathKey(current);
+                if (baseline.find(relKey) == baseline.end()) {
+                    std::filesystem::remove(current, ec);
+                    if (ec) {
+                        errors.push_back({ { "path", relKey }, { "error", ec.message() } });
+                        ec.clear();
+                    }
+                    else {
+                        deleted.push_back(relKey);
+                    }
+                }
+            }
+        }
+
+        for (const auto& record : g_automationSession.fileBackups) {
+            std::error_code ec;
+            std::filesystem::create_directories(record.path.parent_path(), ec);
+            std::filesystem::copy_file(record.backupPath, record.path, std::filesystem::copy_options::overwrite_existing, ec);
+            const std::string relKey = SessionRelativePathKey(record.path);
+            if (ec) {
+                errors.push_back({ { "path", relKey }, { "error", ec.message() } });
+            }
+            else {
+                restored.push_back(relKey);
+            }
+        }
+
+        return {
+            { "enabled", true },
+            { "restored", restored },
+            { "deletedCreated", deleted },
+            { "errors", errors }
+        };
+    }
+
+    json AutomationSessionManifest(EngineKernel& kernel)
+    {
+        json out = {
+            { "active", g_automationSession.active },
+            { "id", g_automationSession.id },
+            { "name", g_automationSession.name },
+            { "goal", g_automationSession.goal },
+            { "dir", g_automationSession.dir.empty() ? json(nullptr) : json(ToGenericProjectPath(g_automationSession.dir)) },
+            { "eventsPath", g_automationSession.eventsPath.empty() ? json(nullptr) : json(ToGenericProjectPath(g_automationSession.eventsPath)) },
+            { "startFrame", g_automationSession.startFrame },
+            { "startEcsRevision", g_automationSession.startEcsRevision },
+            { "startUndoCount", g_automationSession.startUndoCount },
+            { "currentEcsRevision", UndoSystem::Instance().GetECSRevision() },
+            { "currentUndoCount", UndoSystem::Instance().GetECSUndoCount() },
+            { "commandCount", g_automationSession.commandCount },
+            { "autoCaptureAfterCommand", g_automationSession.autoCaptureAfterCommand },
+            { "captureTargets", g_automationSession.captureTargets },
+            { "fileBackupEnabled", g_automationSession.fileBackupEnabled },
+            { "backupRoots", g_automationSession.backupRoots },
+            { "backupExtensions", g_automationSession.backupExtensions },
+            { "fileBackupCount", g_automationSession.fileBackups.size() }
+        };
+        out["engineState"] = HandleGetEngineState(kernel);
+        return out;
+    }
+
+    json HandleAISessionBegin(EngineKernel& kernel, const json& params)
+    {
+        if (g_automationSession.active && !params.value("force", false)) {
+            throw MakeError("session_active", "An AI automation session is already active.", {
+                { "sessionId", g_automationSession.id }
+            });
+        }
+
+        const std::string name = params.value("name", std::string("AI Session"));
+        const std::string goal = params.value("goal", std::string{});
+        const std::string explicitId = params.value("sessionId", std::string{});
+        const std::string sessionId = explicitId.empty()
+            ? SanitizeFileStem(name + "_" + MakeTimestampSuffix())
+            : SanitizeFileStem(explicitId);
+        const std::filesystem::path dir = std::filesystem::path("Saved") / "AI" / "sessions" / sessionId;
+
+        g_automationSession = AutomationSessionState{};
+        g_automationSession.active = true;
+        g_automationSession.id = sessionId;
+        g_automationSession.name = name;
+        g_automationSession.goal = goal;
+        g_automationSession.dir = dir;
+        g_automationSession.eventsPath = dir / "events.jsonl";
+        g_automationSession.manifestPath = dir / "session.json";
+        g_automationSession.startedAt = std::chrono::system_clock::now();
+        g_automationSession.startFrame = kernel.GetTime().frameCount;
+        g_automationSession.startEcsRevision = UndoSystem::Instance().GetECSRevision();
+        g_automationSession.startUndoCount = UndoSystem::Instance().GetECSUndoCount();
+        g_automationSession.autoCaptureAfterCommand = params.value("autoCaptureAfterCommand", false);
+        g_automationSession.captureTargets = JsonStringList(params, "captureTargets");
+        if (g_automationSession.captureTargets.empty()) {
+            g_automationSession.captureTargets = { "window" };
+        }
+        g_automationSession.fileBackupEnabled = params.value("backupFiles", true);
+        g_automationSession.backupRoots = JsonStringList(params, "backupRoots");
+        if (g_automationSession.backupRoots.empty()) {
+            g_automationSession.backupRoots = { "Data" };
+        }
+        g_automationSession.backupExtensions = JsonStringList(params, "backupExtensions");
+        if (g_automationSession.backupExtensions.empty()) {
+            g_automationSession.backupExtensions = {
+                ".scene",
+                ".prefab",
+                ".material",
+                ".mat",
+                ".terrain",
+                ".effectgraph",
+                ".json",
+                ".inputmap",
+                ".inputprofile",
+                ".gameflow"
+            };
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories(dir / "screenshots", ec);
+        std::filesystem::create_directories(dir / "file_backups", ec);
+        BackupSessionFiles();
+
+        json manifest = AutomationSessionManifest(kernel);
+        manifest["event"] = "begin";
+        manifest["createdAt"] = MakeTimestampSuffix();
+        WriteJsonFile(g_automationSession.manifestPath, manifest);
+        AppendJsonLine(g_automationSession.eventsPath, {
+            { "event", "begin" },
+            { "timestamp", MakeTimestampSuffix() },
+            { "manifest", manifest }
+        });
+        return manifest;
+    }
+
+    json HandleAISessionStatus(EngineKernel& kernel)
+    {
+        return AutomationSessionManifest(kernel);
+    }
+
+    json HandleAISessionRollback(EngineKernel& kernel, const json& params)
+    {
+        if (!g_automationSession.active) {
+            throw MakeError("session_not_active", "No AI automation session is active.");
+        }
+        Registry* registry = kernel.GetGameRegistry();
+        if (!registry) {
+            throw MakeError("operation_not_allowed", "No active registry is available for rollback.");
+        }
+
+        const size_t currentUndoCount = UndoSystem::Instance().GetECSUndoCount();
+        size_t undoSteps = 0;
+        if (currentUndoCount > g_automationSession.startUndoCount) {
+            undoSteps = currentUndoCount - g_automationSession.startUndoCount;
+        }
+        if (params.contains("undoSteps")) {
+            const int requested = (std::max)(0, params.value("undoSteps", 0));
+            undoSteps = (std::min)(undoSteps, static_cast<size_t>(requested));
+        }
+
+        for (size_t i = 0; i < undoSteps; ++i) {
+            UndoSystem::Instance().Undo(*registry);
+        }
+
+        std::vector<EntityID> aliveSelection;
+        for (EntityID selected : EditorSelection::Instance().GetSelectedEntities()) {
+            if (!Entity::IsNull(selected) && registry->IsAlive(selected)) {
+                aliveSelection.push_back(selected);
+            }
+        }
+        if (aliveSelection.empty()) {
+            EditorSelection::Instance().Clear();
+        }
+        else {
+            EditorSelection::Instance().SetEntitySelection(aliveSelection, aliveSelection.front());
+        }
+
+        json fileRestore = params.value("restoreFiles", true) ? RestoreSessionFiles() : json({ { "enabled", false } });
+
+        json result = {
+            { "sessionId", g_automationSession.id },
+            { "undone", undoSteps },
+            { "files", std::move(fileRestore) },
+            { "currentUndoCount", UndoSystem::Instance().GetECSUndoCount() },
+            { "currentEcsRevision", UndoSystem::Instance().GetECSRevision() },
+            { "state", HandleGetEngineState(kernel) }
+        };
+        AppendJsonLine(g_automationSession.eventsPath, {
+            { "event", "rollback" },
+            { "timestamp", MakeTimestampSuffix() },
+            { "result", result }
+        });
+        WriteJsonFile(g_automationSession.manifestPath, AutomationSessionManifest(kernel));
+        return result;
+    }
+
+    json HandleAISessionEnd(EngineKernel& kernel, const json& params)
+    {
+        if (!g_automationSession.active) {
+            throw MakeError("session_not_active", "No AI automation session is active.");
+        }
+
+        const bool success = params.value("success", true);
+        json result = AutomationSessionManifest(kernel);
+        result["event"] = "end";
+        result["success"] = success;
+        result["notes"] = params.value("notes", std::string{});
+        result["endedAt"] = MakeTimestampSuffix();
+        result["active"] = false;
+        AppendJsonLine(g_automationSession.eventsPath, {
+            { "event", "end" },
+            { "timestamp", MakeTimestampSuffix() },
+            { "result", result }
+        });
+        WriteJsonFile(g_automationSession.manifestPath, result);
+        g_automationSession.active = false;
+        return result;
+    }
+
+    json ExecuteSessionCommand(EngineKernel& kernel, const json& command)
+    {
+        const std::string name = command.value("command", std::string{});
+        const json params = command.value("params", json::object());
+        if (name == "ai_session.begin") {
+            return HandleAISessionBegin(kernel, params);
+        }
+        if (name == "ai_session.status") {
+            return HandleAISessionStatus(kernel);
+        }
+        if (name == "ai_session.rollback") {
+            return HandleAISessionRollback(kernel, params);
+        }
+        if (name == "ai_session.end") {
+            return HandleAISessionEnd(kernel, params);
+        }
+        throw MakeError("unknown_command", "Unknown AI session command.", { { "command", name } });
+    }
+
+    json RecoveryStateToJson(EditorLayer& editor)
+    {
+        return {
+            { "hasCandidate", editor.HasRecoveryCandidateForAutomation() },
+            { "autosavePath", editor.GetRecoveryAutosavePathForAutomation().empty()
+                ? json(nullptr)
+                : json(ToGenericProjectPath(editor.GetRecoveryAutosavePathForAutomation())) },
+            { "scenePath", editor.GetRecoveryScenePathForAutomation().empty()
+                ? json(nullptr)
+                : json(ToGenericProjectPath(editor.GetRecoveryScenePathForAutomation())) }
+        };
+    }
+
+    json HandleRecoveryGetState(EngineKernel& kernel, const json& params)
+    {
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (params.value("refresh", false)) {
+            editor->CheckRecoveryCandidateFromAutomation();
+        }
+        return RecoveryStateToJson(*editor);
+    }
+
+    json HandleRecoveryRestore(EngineKernel& kernel)
+    {
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const json before = RecoveryStateToJson(*editor);
+        const bool restored = editor->RecoverAutosaveFromAutomation();
+        return {
+            { "restored", restored },
+            { "before", before },
+            { "after", RecoveryStateToJson(*editor) },
+            { "engineState", HandleGetEngineState(kernel) }
+        };
+    }
+
+    json HandleRecoveryDismiss(EngineKernel& kernel)
+    {
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        const json before = RecoveryStateToJson(*editor);
+        const bool dismissed = editor->DismissAutosaveRecoveryFromAutomation();
+        return {
+            { "dismissed", dismissed },
+            { "before", before },
+            { "after", RecoveryStateToJson(*editor) }
+        };
+    }
+
+    void RecordAutomationSessionCommand(EngineKernel& kernel,
+                                        const json& command,
+                                        const json& response,
+                                        const json& beforeState,
+                                        uint64_t beforeRevision,
+                                        size_t beforeUndoCount)
+    {
+        if (!g_automationSession.active) {
+            return;
+        }
+
+        ++g_automationSession.commandCount;
+        json event = {
+            { "event", "command" },
+            { "index", g_automationSession.commandCount },
+            { "timestamp", MakeTimestampSuffix() },
+            { "command", command },
+            { "ok", response.value("ok", false) },
+            { "before", {
+                { "ecsRevision", beforeRevision },
+                { "undoCount", beforeUndoCount },
+                { "engineState", beforeState }
+            } },
+            { "after", {
+                { "ecsRevision", UndoSystem::Instance().GetECSRevision() },
+                { "undoCount", UndoSystem::Instance().GetECSUndoCount() },
+                { "engineState", HandleGetEngineState(kernel) }
+            } },
+            { "response", response }
+        };
+
+        if (g_automationSession.autoCaptureAfterCommand || !response.value("ok", false)) {
+            json shots = json::array();
+            for (const std::string& target : g_automationSession.captureTargets) {
+                try {
+                    const std::filesystem::path path =
+                        g_automationSession.dir / "screenshots" /
+                        (std::to_string(g_automationSession.commandCount) + "_" + SanitizeFileStem(target) + ".bmp");
+                    json captureParams = {
+                        { "target", target },
+                        { "path", path.generic_string() },
+                        { "format", "bmp" },
+                        { "inline", false }
+                    };
+                    shots.push_back(HandleCaptureScreenshot(kernel, captureParams, path));
+                }
+                catch (const std::exception& e) {
+                    shots.push_back({
+                        { "target", target },
+                        { "ok", false },
+                        { "error", e.what() }
+                    });
+                }
+                catch (...) {
+                    shots.push_back({
+                        { "target", target },
+                        { "ok", false },
+                        { "error", "unknown capture error" }
+                    });
+                }
+            }
+            event["screenshots"] = std::move(shots);
+        }
+
+        AppendJsonLine(g_automationSession.eventsPath, event);
+        WriteJsonFile(g_automationSession.manifestPath, AutomationSessionManifest(kernel));
+    }
+
     json ExecuteAutomationCommand(EngineKernel& kernel, const json& command)
     {
         if (!command.is_object()) {
@@ -7748,17 +10878,61 @@ namespace
         }
 
         try {
+            const std::string name = command.value("command", std::string{});
+            if (IsSessionCommandName(name)) {
+                json result = ExecuteSessionCommand(kernel, command);
+                return MakeResult(command, true, std::move(result), nullptr);
+            }
+
+            const bool recordSession = g_automationSession.active;
+            const uint64_t beforeRevision = UndoSystem::Instance().GetECSRevision();
+            const size_t beforeUndoCount = UndoSystem::Instance().GetECSUndoCount();
+            json beforeState = recordSession ? HandleGetEngineState(kernel) : json(nullptr);
             json result = DispatchCommand(kernel, command);
-            return MakeResult(command, true, std::move(result), nullptr);
+            json response = MakeResult(command, true, std::move(result), nullptr);
+            if (recordSession) {
+                RecordAutomationSessionCommand(kernel, command, response, beforeState, beforeRevision, beforeUndoCount);
+            }
+            return response;
         }
         catch (const json& jsonError) {
-            return MakeResult(command, false, nullptr, jsonError);
+            json response = MakeResult(command, false, nullptr, jsonError);
+            if (g_automationSession.active && !IsSessionCommandName(command.value("command", std::string{}))) {
+                RecordAutomationSessionCommand(
+                    kernel,
+                    command,
+                    response,
+                    HandleGetEngineState(kernel),
+                    UndoSystem::Instance().GetECSRevision(),
+                    UndoSystem::Instance().GetECSUndoCount());
+            }
+            return response;
         }
         catch (const std::exception& e) {
-            return MakeResult(command, false, nullptr, MakeError("internal_error", e.what()));
+            json response = MakeResult(command, false, nullptr, MakeError("internal_error", e.what()));
+            if (g_automationSession.active && !IsSessionCommandName(command.value("command", std::string{}))) {
+                RecordAutomationSessionCommand(
+                    kernel,
+                    command,
+                    response,
+                    HandleGetEngineState(kernel),
+                    UndoSystem::Instance().GetECSRevision(),
+                    UndoSystem::Instance().GetECSUndoCount());
+            }
+            return response;
         }
         catch (...) {
-            return MakeResult(command, false, nullptr, MakeError("internal_error", "Unknown exception."));
+            json response = MakeResult(command, false, nullptr, MakeError("internal_error", "Unknown exception."));
+            if (g_automationSession.active && !IsSessionCommandName(command.value("command", std::string{}))) {
+                RecordAutomationSessionCommand(
+                    kernel,
+                    command,
+                    response,
+                    HandleGetEngineState(kernel),
+                    UndoSystem::Instance().GetECSRevision(),
+                    UndoSystem::Instance().GetECSUndoCount());
+            }
+            return response;
         }
     }
 }
@@ -7802,8 +10976,195 @@ void AIAutomationService::Finalize()
     }
 }
 
+bool AIAutomationService::TryStartPendingEffectMultiTimeReview(EngineKernel& kernel, const json& command, const std::string& clientId)
+{
+    if (!command.is_object() || command.value("command", std::string{}) != "effect_editor.capture_multi_time_review") {
+        return false;
+    }
+
+    auto sendError = [&](const json& error) {
+        if (m_webSocketServer) {
+            m_webSocketServer->SendToClient(clientId, MakeResult(command, false, nullptr, error).dump());
+        }
+    };
+
+    try {
+        if (m_pendingEffectMultiTimeReview.active) {
+            sendError(MakeError("operation_busy", "An Effect Editor multi-time review is already running."));
+            return true;
+        }
+
+        int version = kProtocolVersion;
+        try {
+            version = command.value("version", kProtocolVersion);
+        }
+        catch (const std::exception& e) {
+            sendError(MakeError("invalid_command", "Command version must be an integer.", { { "reason", e.what() } }));
+            return true;
+        }
+        if (version != kProtocolVersion) {
+            sendError(MakeError("unsupported_version", "Unsupported command version."));
+            return true;
+        }
+
+        Registry* registry = kernel.GetGameRegistry();
+        if (!registry) {
+            sendError(MakeError("operation_not_allowed", "No active registry is available for Effect Editor review."));
+            return true;
+        }
+
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            sendError(MakeError("operation_not_allowed", "EditorLayer is not available."));
+            return true;
+        }
+
+        const json params = command.value("params", json::object());
+        if (params.contains("path") && !params.value("path", std::string{}).empty()) {
+            const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
+            if (!editor->OpenEffectEditorFromAutomation(path)) {
+                sendError(MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                    { "path", ToGenericProjectPath(path) }
+                }));
+                return true;
+            }
+        }
+
+        EffectEditorPanel& panel = editor->GetEffectEditorPanel();
+        if (params.value("compile", true) && !panel.CompileFromAutomation()) {
+            sendError(MakeError("effect_compile_failed", "Effect Editor document did not compile."));
+            return true;
+        }
+
+        std::vector<float> times;
+        if (params.contains("times") && params["times"].is_array()) {
+            for (const json& t : params["times"]) {
+                times.push_back(t.get<float>());
+            }
+        }
+        if (times.empty()) {
+            times = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
+        }
+
+        editor->FocusPanelAutomation(EditorLayer::WindowFocusTarget::EffectEditor);
+        if (!panel.SeekTimelineFromAutomation(registry, times.front(), params.value("paused", true))) {
+            sendError(MakeError("effect_timeline_seek_failed", "Failed to seek Effect Editor timeline.", { { "time", times.front() } }));
+            return true;
+        }
+
+        m_pendingEffectMultiTimeReview.active = true;
+        m_pendingEffectMultiTimeReview.clientId = clientId;
+        m_pendingEffectMultiTimeReview.command = command;
+        m_pendingEffectMultiTimeReview.params = params;
+        m_pendingEffectMultiTimeReview.frames = json::array();
+        m_pendingEffectMultiTimeReview.times = std::move(times);
+        m_pendingEffectMultiTimeReview.index = 0;
+        m_pendingEffectMultiTimeReview.waitFrames = (std::max)(3, params.value("settleFrames", 2));
+        m_pendingEffectMultiTimeReview.stem = params.value("stem", std::string("effect_multi_review"));
+        m_pendingEffectMultiTimeReview.dir = params.value("dir", std::string("Saved/AI/screenshots/effect_review"));
+        m_pendingEffectMultiTimeReview.format = params.value("format", std::string("bmp"));
+        m_pendingEffectMultiTimeReview.target = params.value("target", std::string("effect_editor"));
+        return true;
+    }
+    catch (const json& jsonError) {
+        sendError(jsonError);
+        return true;
+    }
+    catch (const std::exception& e) {
+        sendError(MakeError("internal_error", e.what()));
+        return true;
+    }
+    catch (...) {
+        sendError(MakeError("internal_error", "Unknown exception."));
+        return true;
+    }
+}
+
+void AIAutomationService::ProcessPendingEffectMultiTimeReview(EngineKernel& kernel)
+{
+    if (!m_pendingEffectMultiTimeReview.active || !m_webSocketServer) {
+        return;
+    }
+
+    PendingEffectMultiTimeReview& job = m_pendingEffectMultiTimeReview;
+    if (job.waitFrames > 0) {
+        --job.waitFrames;
+        if (job.waitFrames > 0) {
+            return;
+        }
+    }
+
+    auto finish = [&](bool ok, json result, json error) {
+        m_webSocketServer->SendToClient(job.clientId, MakeResult(job.command, ok, std::move(result), std::move(error)).dump());
+        job = PendingEffectMultiTimeReview{};
+    };
+
+    try {
+        Registry* registry = kernel.GetGameRegistry();
+        if (!registry) {
+            finish(false, nullptr, MakeError("operation_not_allowed", "No active registry is available for Effect Editor review."));
+            return;
+        }
+
+        EditorLayer* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            finish(false, nullptr, MakeError("operation_not_allowed", "EditorLayer is not available."));
+            return;
+        }
+
+        const float t = job.times[job.index];
+        const std::filesystem::path path = job.dir / (job.stem + "_t" + std::to_string(job.index) + "." + job.format);
+        json captureParams = {
+            { "target", job.target },
+            { "path", path.generic_string() },
+            { "format", job.format },
+            { "inline", job.params.value("inline", false) }
+        };
+        json screenshot = HandleCaptureScreenshot(kernel, captureParams, path);
+        ImageBuffer image = CaptureAutomationTargetImage(kernel, job.target);
+        job.frames.push_back({
+            { "time", t },
+            { "screenshot", std::move(screenshot) },
+            { "metrics", AnalyzeImageBuffer(image) },
+            { "assertions", HandleEffectAssertPreviewVisible(kernel, *registry, job.params) }
+        });
+
+        ++job.index;
+        if (job.index >= job.times.size()) {
+            json result = {
+                { "frames", std::move(job.frames) },
+                { "state", EffectEditorStateToJson(*editor, registry, job.params.value("includeGraph", false)) },
+                { "async", true },
+                { "settleFrames", (std::max)(2, job.params.value("settleFrames", 2)) }
+            };
+            finish(true, std::move(result), nullptr);
+            return;
+        }
+
+        const float nextTime = job.times[job.index];
+        EffectEditorPanel& panel = editor->GetEffectEditorPanel();
+        if (!panel.SeekTimelineFromAutomation(registry, nextTime, job.params.value("paused", true))) {
+            finish(false, nullptr, MakeError("effect_timeline_seek_failed", "Failed to seek Effect Editor timeline.", { { "time", nextTime } }));
+            return;
+        }
+        job.waitFrames = (std::max)(2, job.params.value("settleFrames", 2));
+    }
+    catch (const json& jsonError) {
+        finish(false, nullptr, jsonError);
+    }
+    catch (const std::exception& e) {
+        finish(false, nullptr, MakeError("internal_error", e.what()));
+    }
+    catch (...) {
+        finish(false, nullptr, MakeError("internal_error", "Unknown exception."));
+    }
+}
+
 void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
 {
+    ProcessPendingInjectedInputs(kernel);
+    ProcessPendingEffectMultiTimeReview(kernel);
+
     if (m_webSocketServer && m_webSocketServer->IsRunning()) {
         constexpr int kMaxWebSocketMessagesPerTick = 64;
         int processedMessages = 0;
@@ -7813,6 +11174,10 @@ void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
             json response;
             try {
                 const json command = json::parse(message.text);
+                if (TryStartPendingEffectMultiTimeReview(kernel, command, message.clientId)) {
+                    ++processedMessages;
+                    break;
+                }
                 response = ExecuteAutomationCommand(kernel, command);
             }
             catch (const std::exception& e) {

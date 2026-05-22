@@ -74,6 +74,16 @@ public:
         return !ecsRedoStack.empty();
     }
 
+    size_t GetECSUndoCount() const
+    {
+        return ecsUndoStack.size();
+    }
+
+    size_t GetECSRedoCount() const
+    {
+        return ecsRedoStack.size();
+    }
+
 private:
     std::vector<std::unique_ptr<IUndoAction>> ecsUndoStack;
     std::vector<std::unique_ptr<IUndoAction>> ecsRedoStack;

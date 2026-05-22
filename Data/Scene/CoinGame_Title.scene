@@ -1,0 +1,458 @@
+{
+  "editor": {
+    "sceneViewMode": "3D"
+  },
+  "nodes": [
+    {
+      "components": {
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
+        },
+        "CameraFreeControlComponent": {
+          "moveSpeed": 20.0,
+          "pitch": 0.0,
+          "rotateSpeed": 0.004999999888241291,
+          "yaw": 0.0
+        },
+        "CameraLensComponent": {
+          "aspect": 1.7777777910232544,
+          "farZ": 100000.0,
+          "fovY": 0.785398006439209,
+          "nearZ": 0.10000000149011612
+        },
+        "CameraMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Main Camera"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 2.0,
+            "z": -10.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "LightComponent": {
+          "castShadow": false,
+          "color": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "intensity": 1.0,
+          "range": 10.0,
+          "type": 0
+        },
+        "NameComponent": {
+          "name": "Directional Light"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 0.8535533547401428,
+            "x": 0.3535533845424652,
+            "y": 0.3535533845424652,
+            "z": -0.1464466005563736
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 1
+    },
+    {
+      "components": {
+        "NameComponent": {
+          "name": "Reflection Probe"
+        },
+        "ReflectionProbeComponent": {
+          "position": {
+            "x": 0.0,
+            "y": 1.5,
+            "z": 0.0
+          },
+          "radius": 20.0
+        }
+      },
+      "id": 2
+    },
+    {
+      "components": {
+        "EnvironmentComponent": {
+          "diffuseIBLPath": "Data/Texture/IBL/diffuse_iem.dds",
+          "enableSkybox": true,
+          "skyboxPath": "Data/Texture/IBL/Skybox.dds",
+          "specularIBLPath": "Data/Texture/IBL/specular_pmrem.dds"
+        },
+        "NameComponent": {
+          "name": "Environment"
+        }
+      },
+      "id": 3
+    },
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 4
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": false,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "TitleCanvas"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 1920.0,
+            "y": 1080.0
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 5
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": false,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "StartButton"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": -100.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 400.0,
+            "y": 80.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 0.20000000298023224,
+            "y": 1.0,
+            "z": 0.4000000059604645
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 48.0,
+          "lineSpacing": 1.0,
+          "text": "[ START GAME ]",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": -100.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        },
+        "UIButtonComponent": {
+          "buttonId": "StartGame",
+          "enabled": true
+        }
+      },
+      "id": 6,
+      "parent": 5
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": false,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "SubtitleText"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 30.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 800.0,
+            "y": 60.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 36.0,
+          "lineSpacing": 1.0,
+          "text": "Collect 10 coins in 10 minutes",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 30.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 7,
+      "parent": 5
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 0,
+          "pixelSnap": false,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "TitleText"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 150.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 900.0,
+            "y": 120.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 1.0,
+            "y": 0.8999999761581421,
+            "z": 0.20000000298023224
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 96.0,
+          "lineSpacing": 1.0,
+          "text": "COIN COLLECTOR",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 150.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 8,
+      "parent": 5
+    }
+  ],
+  "rootLocalIds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "type": "scene",
+  "version": 1
+}

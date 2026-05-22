@@ -111,6 +111,11 @@ Saved/AI/
     *.bmp
   state/
     latest_editor_state.json
+  sessions/
+    <session-id>/
+      session.json
+      events.jsonl
+      screenshots/
 ```
 
 `commands` に置かれたJSONをエンジンが読み、処理中は `processing` へ移動し、完了後に `results` へ結果JSONを書く。
@@ -406,7 +411,7 @@ AIが画面確認に使う画像を書き出す。
 
 Phase 2実装ではDX11/DX12 back buffer readbackを優先し、失敗時のみWin32 client captureにフォールバックする。
 エンジンウィンドウ全体から必要な領域を切り出してBMPを書き出す。
-`target` は `window`, `display`, `client`, `scene_view`, `game_view` を指定できる。
+`target` は `window`, `display`, `client`, `scene_view`, `game_view`, `effect_editor` を指定できる。
 `path` を省略した場合は `Saved/AI/screenshots/<command id>.bmp` に保存する。
 
 返す情報:
@@ -1235,11 +1240,22 @@ Commands:
 
 - `effect_editor.list_node_types`
 - `effect_editor.create_asset`
+- `effect_editor.apply_preset`
 - `effect_editor.open_workspace`
+- `effect_editor.set_preview_view`
+- `effect_editor.get_state`
 - `effect_editor.timeline_play`
+- `effect_editor.timeline_seek`
+- `effect_editor.timeline_step`
 - `effect_editor.timeline_stop`
+- `effect_editor.select_node`
+- `effect_editor.focus_node`
+- `effect_editor.assert_preview_visible`
+- `effect_editor.capture_review_set`
+- `effect_editor.capture_multi_time_review`
 - `effect_editor.get_asset`
 - `effect_editor.set_asset`
+- `effect_editor.set_semantic_params`
 - `effect_editor.add_node`
 - `effect_editor.set_node`
 - `effect_editor.delete_node`
@@ -1247,6 +1263,7 @@ Commands:
 - `effect_editor.disconnect`
 - `effect_editor.compile`
 - `effect_editor.preview_spawn`
+- `visual.evaluate_capture`
 
 Node types:
 
@@ -1336,14 +1353,546 @@ Node types:
 }
 ```
 
+`effect_editor.get_state` は現在のEffect Editor状態を返す。AIはこのコマンドで、開いているアセット、選択ノード、Stack/Nodeモード、compile dirty、compile結果、preview entity、timeline playbackを確認する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-state",
+  "command": "effect_editor.get_state",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "compile": true,
+    "includeGraph": true
+  }
+}
+```
+
+`effect_editor.apply_preset` は参考画像制作の初期値を高速に作る高水準API。`spark`, `smoke`, `magic`, `slash` を指定でき、`semantic` で上書きできる。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-preset",
+  "command": "effect_editor.apply_preset",
+  "params": {
+    "path": "Data/EffectGraph/AI/ReferenceMatch.effectgraph.json",
+    "preset": "slash",
+    "semantic": {
+      "startColor": [0.2, 0.85, 1.0, 1.0],
+      "endColor": [0.05, 0.15, 1.0, 0.0],
+      "ribbonWidth": 0.16,
+      "vortexStrength": 2.4
+    }
+  }
+}
+```
+
+`effect_editor.set_semantic_params` は低レベルの `vectorValueN` を直接触らず、意味名で調整する。代表キーは `duration`, `spawnRate`, `burstCount`, `particleLifetime`, `startSize`, `endSize`, `speed`, `acceleration`, `drag`, `shape`, `shapeParams`, `spinRate`, `curlNoiseStrength`, `curlNoiseScale`, `curlNoiseScroll`, `vortexStrength`, `startColor`, `endColor`, `texture`, `drawMode`, `ribbonWidth`, `ribbonStretch`, `alphaScale`, `flipbookFps`, `sizeCurveBias`, `alphaCurveBias`, `subUvColumns`, `subUvRows`。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-semantic",
+  "command": "effect_editor.set_semantic_params",
+  "params": {
+    "path": "Data/EffectGraph/AI/ReferenceMatch.effectgraph.json",
+    "semantic": {
+      "spawnRate": 65000.0,
+      "particleLifetime": 0.8,
+      "startSize": 0.22,
+      "endSize": 0.02,
+      "texture": "Data/Effect/particle/magic_03.png"
+    }
+  }
+}
+```
+
+`effect_editor.set_preview_view` は比較条件を固定する。参考画像と比較する時は、カメラ距離、背景色、skyboxの有無を固定してから撮る。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-preview-view",
+  "command": "effect_editor.set_preview_view",
+  "params": {
+    "target": [10000.0, 1.25, 10000.0],
+    "yaw": 0.85,
+    "pitch": -0.18,
+    "distance": 4.5,
+    "fovY": 0.785398,
+    "clearColor": [0.04, 0.045, 0.055, 1.0],
+    "useSkybox": false
+  }
+}
+```
+
+`effect_editor.timeline_seek` と `effect_editor.timeline_step` は、再生確認を時間軸で固定する。参考画像に近い一瞬を作る場合は、0.0秒、0.25秒、0.5秒、0.75秒のようにseekして撮影する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-seek",
+  "command": "effect_editor.timeline_seek",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "time": 0.35,
+    "paused": true
+  }
+}
+```
+
+`effect_editor.select_node` はDetailsに対象ノードを出し、`effect_editor.focus_node` はNodeモードへ切り替えてノード確認を優先する。AIが内部編集したノードを人間が見られる状態にするため、変更後は該当ノードを選択する。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-focus-node",
+  "command": "effect_editor.focus_node",
+  "params": {
+    "nodeId": 4
+  }
+}
+```
+
+`effect_editor.assert_preview_visible` は、Effect Editor管理下のpreview entity、compile結果、render descriptor、playback状態を確認する。必要な場合だけ `assertSceneVisible: true` を指定し、Scene View上の投影確認も組み合わせる。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-assert",
+  "command": "effect_editor.assert_preview_visible",
+  "params": {
+    "requireRenderable": true,
+    "requirePlayback": true
+  }
+}
+```
+
+`effect_editor.capture_review_set` はEffect Editor専用の視覚レビュー束を作る。対象アセットを開き、compileし、timelineを指定時刻へseekし、Effect Editor全体とwindowを撮影し、preview assertionと状態JSONを返す。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-review",
+  "command": "effect_editor.capture_review_set",
+  "params": {
+    "path": "Data/EffectGraph/AI/Slash.effectgraph.json",
+    "time": 0.35,
+    "paused": true,
+    "stem": "slash_iter_001",
+    "dir": "Saved/AI/screenshots/effect_review",
+    "targets": ["effect_editor", "window"],
+    "assertPreview": true
+  }
+}
+```
+
+`effect_editor.capture_multi_time_review` は開始、ピーク、減衰の複数時刻をまとめて撮影し、各フレームの画像メトリクスを返す。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-effect-multi-review",
+  "command": "effect_editor.capture_multi_time_review",
+  "params": {
+    "path": "Data/EffectGraph/AI/ReferenceMatch.effectgraph.json",
+    "times": [0.0, 0.25, 0.5, 0.9],
+    "target": "effect_editor",
+    "settleFrames": 2,
+    "stem": "reference_match_v003",
+    "dir": "Saved/AI/screenshots/effect_review"
+  }
+}
+```
+
+When called through WebSocket, `effect_editor.capture_multi_time_review` runs as a frame-crossing review job: it seeks the timeline, waits at least two rendered frames (`settleFrames`, minimum 2; the initial focus/open pass waits one extra frame), captures, then advances to the next requested time. This keeps the human-visible Effect Editor tab, timeline, and screenshot output in sync instead of reading the same stale backbuffer multiple times.
+
+`visual.evaluate_capture` は任意の撮影対象を画像解析し、平均明度、彩度、発光/明部比率、背景差分から推定したeffect bounds、dominant colorを返す。参考画像との完全比較そのものはAIの視覚判断で行うが、この数値は「暗すぎる」「画面を埋めすぎる」「色が違いすぎる」を検出する補助になる。
+
+```json
+{
+  "version": 1,
+  "id": "cmd-eval-effect",
+  "command": "visual.evaluate_capture",
+  "params": {
+    "target": "effect_editor",
+    "save": true,
+    "path": "Saved/AI/screenshots/effect_review/eval.bmp"
+  }
+}
+```
+
+正確に目視レビューする場合は、dock tabが前面化する1フレームを待つ。推奨ループは `effect_editor.open_workspace` または `effect_editor.timeline_seek`、`editor.focus_panel(effect_editor)`、1フレーム待機、`capture_screenshot(target:"effect_editor")`、画像確認、修正、再seek、再撮影である。
+
+参考画像からAIがエフェクトを作る時の制作ループ:
+
+1. 参考画像を観察し、形状、色、発光、粒子密度、動き、寿命、カメラ距離を言語化する。
+2. EffectGraphを作成または更新し、主要ノードを追加する。
+3. `effect_editor.focus_node` で編集箇所を人間に見える状態にする。
+4. `effect_editor.timeline_seek` で代表時刻へ固定する。
+5. `effect_editor.assert_preview_visible` と `capture_screenshot(target:"effect_editor")` を実行する。
+6. スクショを参考画像と比較し、色、サイズ、発生位置、速度、寿命、レンダラー設定を反復調整する。
+
 Phase 4C完了条件:
 
 - AIがEffectGraph assetを作成、読み取り、更新、保存できる。
 - AIがノード追加、ノード値変更、ノード削除、リンク接続、リンク解除を行える。
 - AIがEffectCompilerでコンパイル結果、warnings、errors、execution plan、mesh/particle descriptor概要を取得できる。
 - AIがコンパイル済みEffectGraphをプレビューEntityとしてSceneに生成できる。
+- AIがEffect Editorの状態、選択ノード、Timeline時刻、Preview再生状態を取得できる。
+- AIがEffect Editor画面を前面化し、Timelineタブとプレビューをスクショで確認できる。
+- AIがpreview entity、compile結果、render descriptor、playback状態をassertできる。
+- AIがプリセットと意味パラメータAPIで、参考画像に近い初期案を低レベルfield名なしに生成できる。
+- AIが複数時刻レビューと画像メトリクスで、開始、ピーク、減衰を反復確認できる。
+- AIがPreviewカメラ、背景、skybox条件を固定し、比較のブレを抑えられる。
 - すべてのEffectGraphファイル操作は `Data/` 配下に制限され、パストラバーサルを拒否する。
 - `Game.vcxproj` の Debug x64 ビルドが通り、実行中エンジンで代表コマンドの成功/失敗JSONを確認できる。
+
+### AI Observation Windows: ECS / Visual Verification
+
+These commands add AI-facing observation windows on top of the generic Entity/Component API.
+
+#### ecs.query
+
+Filter ECS entities without pulling the whole scene.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-ecs-query",
+  "command": "ecs.query",
+  "params": {
+    "hasComponents": ["TransformComponent", "MeshComponent"],
+    "missingComponents": ["PrefabInstanceComponent"],
+    "nameContains": "Player",
+    "activeOnly": true,
+    "rootsOnly": false,
+    "includeDetails": false,
+    "limit": 32
+  }
+}
+```
+
+Returns `entities`, `count`, and `truncated`. Set `includeDetails` to include reflected component field data.
+
+#### ecs.hierarchy
+
+Return a relationship tree for the whole scene or a specific root.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-ecs-hierarchy",
+  "command": "ecs.hierarchy",
+  "params": {
+    "root": null,
+    "maxDepth": 8,
+    "includeComponents": true,
+    "includeReferences": true
+  }
+}
+```
+
+Returns `roots` plus `references` for assets and authoring links such as mesh, material, prefab, effect, and light data.
+
+#### ecs.diff
+
+Compare the current ECS snapshot against the previous call.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-ecs-diff",
+  "command": "ecs.diff",
+  "params": {
+    "reset": false,
+    "includeBeforeAfter": true
+  }
+}
+```
+
+The first call or `reset: true` stores a baseline. Later calls return `added`, `removed`, and `changed` entities.
+
+#### visual.verify_entity
+
+Connect ECS identity to what the AI can verify in Scene View.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-visual-verify",
+  "command": "visual.verify_entity",
+  "params": {
+    "entity": "38654705664"
+  }
+}
+```
+
+Returns bounds, renderable flags, selected state, references, and Scene View screen projection. `sceneView.visibleInSceneView` tells whether the entity center is inside the current Scene View.
+
+#### gameplay.get_state
+
+Return a gameplay-focused observation window for action-game debugging. This is not a raw ECS dump; it summarizes actors, battle flow, projectiles, and recent damage events in the shape an AI needs for playability checks.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-gameplay-state",
+  "command": "gameplay.get_state",
+  "params": {
+    "includeVisual": true,
+    "includeInput": true,
+    "includeDamageEvents": true,
+    "eventLimit": 32
+  }
+}
+```
+
+The response includes:
+
+- `actors`: player/enemy/gameplay entities with HP, stamina, team, transform, action state, locomotion, physics, animator, timeline/playback, state machine, lock-on, hitbox, input, and optional visual verification.
+- `battle.flows`: BattleFlow phase, timer, player/boss/arena links, battle id, encounter radius, intro duration.
+- `battle.rules`: BattleRules authoring settings.
+- `projectiles`: active projectile owner, target side, damage, radius, lifetime, velocity, and position.
+- `damageEvents`: recent damage event data from legacy DamageEventComponent and the runtime damage queue.
+
+#### game.input.press / release / tap
+
+Inject virtual input into the same `InputEventQueue` used by SDL input. Prefer action names when a player/input entity has an `InputActionMapComponent`; raw scancode/mouse/gamepad inputs are also supported.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-input-attack",
+  "command": "game.input.tap",
+  "params": {
+    "playerId": 0,
+    "action": "Attack",
+    "holdFrames": 1
+  }
+}
+```
+
+Raw keyboard example:
+
+```json
+{
+  "version": 1,
+  "id": "cmd-input-key",
+  "command": "game.input.press",
+  "params": {
+    "scancode": 4
+  }
+}
+```
+
+`tap` injects press now and schedules release on a later frame. `press` and `release` can also target `mouseButton`, `gamepadButton`, or an `action`.
+
+#### game.input.axis / mouse_move
+
+Inject analog axis or mouse motion.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-input-move",
+  "command": "game.input.axis",
+  "params": {
+    "playerId": 0,
+    "axis": "MoveX",
+    "value": 1.0
+  }
+}
+```
+
+If the named axis has a gamepad binding, a virtual gamepad-axis event is injected. If the axis is keyboard-backed, the positive/negative key is pressed and the opposite key is released. Raw `gamepadAxis` is also supported.
+
+#### game.play / pause / stop / step_frames / set_time_scale
+
+Control Play mode and deterministic frame stepping for AI gameplay tests.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-play",
+  "command": "game.play",
+  "params": {}
+}
+```
+
+```json
+{
+  "version": 1,
+  "id": "cmd-step",
+  "command": "game.step_frames",
+  "params": {
+    "frames": 30
+  }
+}
+```
+
+`game.step_frames` schedules N paused-frame advances. The response includes `mode`, `frameCount`, `timeScale`, and `pendingStepFrames`.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-timescale",
+  "command": "game.set_time_scale",
+  "params": {
+    "timeScale": 0.5
+  }
+}
+```
+
+#### visual.verify_entity_game_view
+
+Verify whether an ECS entity is visible in the actual Game View camera projection.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-gameview-verify",
+  "command": "visual.verify_entity_game_view",
+  "params": {
+    "entity": "38654705664"
+  }
+}
+```
+
+The command returns `gameViewRect`, camera kind/entity, screen position, NDC, and `visibleInGameView`. It supports 3D `CameraMainTagComponent` cameras and 2D `Camera2DComponent` projections.
+
+#### scene_view.frame_entities / frame_all
+
+Move the visible Scene View camera before taking review screenshots. This is the first guard against the AI judging a level from a stale or useless camera angle.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-frame-scene",
+  "command": "scene_view.frame_entities",
+  "params": {
+    "entities": ["38654705664", "38654705665"],
+    "yawDegrees": 35.0,
+    "pitchDegrees": 28.0,
+    "padding": 1.35
+  }
+}
+```
+
+`scene_view.frame_all` collects renderable/transform/terrain entities and frames the whole authored level.
+
+#### camera.frame_entities
+
+Move the actual main 3D game camera so Game View can be visually reviewed from the intended gameplay angle.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-frame-game-camera",
+  "command": "camera.frame_entities",
+  "params": {
+    "entities": ["38654705664"],
+    "camera": null,
+    "yawDegrees": 0.0,
+    "pitchDegrees": 16.0,
+    "padding": 1.35
+  }
+}
+```
+
+If `camera` is omitted, the command uses the first live `CameraMainTagComponent` entity with a `TransformComponent`.
+
+#### visual.assert_entities_visible
+
+Batch-check that selected or gameplay entities are visible in `scene_view` or `game_view`.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-assert-visible",
+  "command": "visual.assert_entities_visible",
+  "params": {
+    "view": "game_view",
+    "entities": ["38654705664"],
+    "requireAll": true,
+    "minVisibleRatio": 1.0,
+    "requireBoundsFullyVisible": true,
+    "minMarginPixels": 8.0,
+    "maxFillRatio": 0.88
+  }
+}
+```
+
+Returns `ok`, `visibleCount`, `total`, `visibleRatio`, and per-entity projection details. By default the assertion requires the entity bounds, not only the center point, to fit inside the reviewed view with margin.
+
+#### visual.capture_review_set
+
+Capture the AI review bundle after optionally framing Scene View and the gameplay camera. This is the preferred command for visual QA loops because it returns screenshots, visibility assertions, engine state, and gameplay state in one response.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-review",
+  "command": "visual.capture_review_set",
+  "params": {
+    "stem": "arena_iteration_001",
+    "dir": "Saved/AI/screenshots/review",
+    "format": "bmp",
+    "targets": ["scene_view", "game_view", "window"],
+    "entities": ["38654705664"],
+    "frameSceneView": true,
+    "frameGameCamera": true,
+    "assertVisible": true,
+    "assertView": "game_view"
+  }
+}
+```
+
+The loop rule is: edit through normal editor/API commands, frame the review cameras, focus the exact panel to be reviewed with `editor.focus_panel`, wait at least one rendered frame, capture `scene_view` or `game_view`, assert visibility, inspect the screenshots, then adjust placement/camera/UI until both the numeric assertions and visual review pass.
+
+For exact screenshot review, do not assume a docked tab is active. Use this sequence:
+
+```json
+{ "version": 1, "id": "focus-game", "command": "editor.focus_panel", "params": { "panel": "game_view" } }
+```
+
+Wait one rendered frame, then:
+
+```json
+{
+  "version": 1,
+  "id": "capture-focused-game",
+  "command": "capture_screenshot",
+  "params": {
+    "target": "game_view",
+    "path": "Saved/AI/screenshots/review/focused_game_view.bmp",
+    "format": "bmp"
+  }
+}
+```
+
+Repeat the same pattern for `scene_view`. This avoids reviewing a stale dock tab or the wrong panel contents.
+
+#### gameplay.get_events / clear_events
+
+Read recent gameplay events for AI test assertions.
+
+```json
+{
+  "version": 1,
+  "id": "cmd-gameplay-events",
+  "command": "gameplay.get_events",
+  "params": {
+    "includeFlow": true,
+    "includeDamage": true,
+    "limit": 64,
+    "clear": false
+  }
+}
+```
+
+Returns `flowEvents` from the GameLoop flow event history and `damageEvents` from recent runtime damage events. `gameplay.clear_events` clears the retained damage event history.
 
 ### Phase 5: Live Protocol
 

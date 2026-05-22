@@ -4,6 +4,7 @@
 #include "EffectEditorPanel.h"
 #include "EffectEditorPanelInternal.h"
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 
@@ -73,6 +74,11 @@ bool EffectEditorPanel::OpenDocumentFromAutomation(const std::string& path)
     return LoadDocument();
 }
 
+bool EffectEditorPanel::CompileFromAutomation()
+{
+    return CompileDocument();
+}
+
 bool EffectEditorPanel::PlayTimelineFromAutomation(Registry* registry, float startTime, bool paused)
 {
     m_registry = registry;
@@ -100,11 +106,97 @@ bool EffectEditorPanel::PlayTimelineFromAutomation(Registry* registry, float sta
     return true;
 }
 
+bool EffectEditorPanel::SeekTimelineFromAutomation(Registry* registry, float time, bool paused)
+{
+    m_registry = registry;
+    if (!m_registry) {
+        return false;
+    }
+
+    if (m_compileDirty || !m_compiled || !m_compiled->valid) {
+        if (!CompileDocument()) {
+            return false;
+        }
+    }
+
+    QueuePreviewSpawnAt(time, true);
+    if (!Entity::IsNull(m_previewEntity) && m_registry->IsAlive(m_previewEntity)) {
+        if (auto* playback = m_registry->GetComponent<EffectPlaybackComponent>(m_previewEntity)) {
+            playback->currentTime = time;
+            playback->isPaused = paused;
+            playback->isPlaying = !paused;
+            playback->stopRequested = false;
+            if (playback->runtimeInstanceId != 0) {
+                if (auto* runtime = EffectRuntimeRegistry::Instance().GetRuntimeInstance(playback->runtimeInstanceId)) {
+                    runtime->time = time;
+                }
+            }
+        }
+    }
+
+    m_requestTimelineTabFocus = true;
+    return true;
+}
+
+bool EffectEditorPanel::StepTimelineFromAutomation(Registry* registry, float deltaTime, bool paused)
+{
+    float currentTime = 0.0f;
+    if (registry && !Entity::IsNull(m_previewEntity) && registry->IsAlive(m_previewEntity)) {
+        if (auto* playback = registry->GetComponent<EffectPlaybackComponent>(m_previewEntity)) {
+            currentTime = playback->currentTime;
+        }
+    }
+    return SeekTimelineFromAutomation(registry, (std::max)(0.0f, currentTime + deltaTime), paused);
+}
+
 bool EffectEditorPanel::StopTimelineFromAutomation()
 {
     StopPreview();
     m_requestTimelineTabFocus = true;
     return true;
+}
+
+bool EffectEditorPanel::SelectNodeFromAutomation(uint32_t nodeId, bool nodeMode)
+{
+    if (nodeId != 0 && !m_asset.FindNode(nodeId)) {
+        return false;
+    }
+    m_selectedNodeId = nodeId;
+    m_selectedLinkId = 0;
+    if (nodeMode) {
+        m_authoringMode = AuthoringMode::Node;
+    }
+    return true;
+}
+
+bool EffectEditorPanel::FocusNodeFromAutomation(uint32_t nodeId)
+{
+    if (!SelectNodeFromAutomation(nodeId, true)) {
+        return false;
+    }
+    m_syncNodePositions = true;
+    return true;
+}
+
+void EffectEditorPanel::SetPreviewCameraAutomation(const DirectX::XMFLOAT3& target,
+                                                   float yaw,
+                                                   float pitch,
+                                                   float distance,
+                                                   float fovY)
+{
+    m_previewAnchor = target;
+    m_previewYaw = yaw;
+    m_previewPitch = pitch;
+    m_previewDistance = (std::max)(0.25f, distance);
+    if (fovY > 0.01f) {
+        m_previewFovY = fovY;
+    }
+}
+
+void EffectEditorPanel::SetPreviewEnvironmentAutomation(const DirectX::XMFLOAT4& clearColor, bool useSkybox)
+{
+    m_previewClearColor = clearColor;
+    m_previewUseSkybox = useSkybox;
 }
 
 std::string EffectEditorPanel::BuildTransientAssetKey() const
