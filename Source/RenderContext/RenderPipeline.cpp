@@ -778,7 +778,10 @@ void RenderPipeline::ExecuteView(const RenderQueue& queue, RenderContext& baseRc
     baseRc.debugGBuffer1 = rc.debugGBuffer1;
     baseRc.debugGBuffer2 = rc.debugGBuffer2;
     baseRc.debugGBufferDepth = rc.debugGBufferDepth;
-    viewContext.sceneViewTexture = rc.sceneColorTexture;
+    // sceneColor は FrameGraph 実行前に取得した SceneColor テクスチャ。GBufferPass が
+    // rc.sceneColorTexture を GBuffer0 (黒) に上書きするため、実行後の rc を使うと
+    // エフェクトプレビューが常に黒になる。
+    viewContext.sceneViewTexture = sceneColor ? sceneColor : rc.sceneColorTexture;
     viewContext.prevSceneTexture = prevScene;
     viewContext.displayTexture = displayColor;
     viewContext.sceneDepthTexture = rc.sceneDepthTexture;

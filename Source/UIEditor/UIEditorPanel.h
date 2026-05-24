@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <string>
 
+#include <DirectXMath.h>
+
 #include "Entity/Entity.h"
 #include "UIEditor/UIEditorState.h"
 // Registry はこの機能の公開インターフェースを定義し、実装側が具体的な処理を行う。
@@ -16,6 +18,7 @@ public:
 
     // ---- Automation API ----
     void     SetRegistryForAutomation(Registry* registry)        { m_registry = registry; }
+    DirectX::XMFLOAT4 GetWorkspaceRectForAutomation()   const   { return m_workspaceRect; }
     EntityID GetSelectedEntityAutomation()               const   { return m_selectedEntity; }
     void     SelectEntityAutomation(EntityID entity)             { SelectEntity(entity); }
     EntityID FindCanvasAutomation()                      const   { return FindCanvas(); }
@@ -57,6 +60,7 @@ private:
     void SetStatusMessage(const std::string& message, bool success = true, float seconds = 4.0f);
 
     Registry* m_registry = nullptr;
+    DirectX::XMFLOAT4 m_workspaceRect = { 0.0f, 0.0f, 0.0f, 0.0f };
     EntityID m_selectedEntity = Entity::NULL_ID;
     EntityID m_selectedGaugeRoot = Entity::NULL_ID;
     EntityID m_treeExpandTarget = Entity::NULL_ID;

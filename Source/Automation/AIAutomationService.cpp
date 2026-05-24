@@ -4732,6 +4732,178 @@ namespace
         return result;
     }
 
+    // ---- light.get / light.set / light.list ----
+
+    json LightComponentToJson(const LightComponent& light)
+    {
+        return {
+            { "type",       LightTypeToStringValue(light.type) },
+            { "color",      Float3ToJson(light.color) },
+            { "intensity",  light.intensity },
+            { "range",      light.range },
+            { "castShadow", light.castShadow }
+        };
+    }
+
+    EntityID FindFirstEntityWithComponent(Registry& registry, ComponentTypeID typeId)
+    {
+        for (Archetype* arch : registry.GetAllArchetypes()) {
+            if (!arch->GetSignature().test(typeId)) { continue; }
+            for (EntityID e : arch->GetEntities()) {
+                if (registry.IsAlive(e)) { return e; }
+            }
+        }
+        return Entity::NULL_ID;
+    }
+
+    json HandleLightGet(Registry& registry, const json& params)
+    {
+        EntityID entity = Entity::NULL_ID;
+        if (params.contains("entity")) {
+            entity = EntityFromJson(params["entity"]);
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                throw MakeError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
+            }
+        }
+        else {
+            entity = FindFirstEntityWithComponent(registry, TypeManager::GetComponentTypeID<LightComponent>());
+            if (Entity::IsNull(entity)) {
+                throw MakeError("entity_not_found", "No entity with LightComponent found.");
+            }
+        }
+        const auto* light = registry.GetComponent<LightComponent>(entity);
+        if (!light) {
+            throw MakeError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
+        }
+        return { { "entity", EntityToString(entity) }, { "light", LightComponentToJson(*light) } };
+    }
+
+    json HandleLightSet(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "entity is required and must be a valid entity ID.");
+        }
+        auto* light = registry.GetComponent<LightComponent>(entity);
+        if (!light) {
+            throw MakeError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
+        }
+        if (params.contains("type"))      { light->type      = LightTypeFromString(params["type"].get<std::string>()); }
+        if (params.contains("color"))     { ReadFloat3(params["color"], light->color); }
+        if (params.contains("intensity")) { light->intensity  = params["intensity"].get<float>(); }
+        if (params.contains("range"))     { light->range      = params["range"].get<float>(); }
+        if (params.contains("castShadow")){ light->castShadow = params["castShadow"].get<bool>(); }
+        MarkEntityEdited(registry, entity);
+        return { { "entity", EntityToString(entity) }, { "light", LightComponentToJson(*light) } };
+    }
+
+    json HandleLightList(Registry& registry)
+    {
+        json lights = json::array();
+        const auto typeId = TypeManager::GetComponentTypeID<LightComponent>();
+        for (Archetype* arch : registry.GetAllArchetypes()) {
+            if (!arch->GetSignature().test(typeId)) { continue; }
+            auto* col = arch->GetColumn(typeId);
+            const auto& entities = arch->GetEntities();
+            for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                if (!registry.IsAlive(entities[i])) { continue; }
+                json entry = EntitySummary(registry, entities[i], arch->GetSignature());
+                entry["light"] = LightComponentToJson(*static_cast<const LightComponent*>(col->Get(i)));
+                lights.push_back(std::move(entry));
+            }
+        }
+        return { { "lights", std::move(lights) } };
+    }
+
+    // ---- camera.get / camera.set / camera.list ----
+
+    json CameraLensToJson(const CameraLensComponent& lens)
+    {
+        return {
+            { "fovY",   lens.fovY },
+            { "nearZ",  lens.nearZ },
+            { "farZ",   lens.farZ },
+            { "aspect", lens.aspect }
+        };
+    }
+
+    json HandleCameraGet(Registry& registry, const json& params)
+    {
+        EntityID entity = Entity::NULL_ID;
+        if (params.contains("entity")) {
+            entity = EntityFromJson(params["entity"]);
+            if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+                throw MakeError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
+            }
+        }
+        else {
+            entity = FindFirstEntityWithComponent(registry, TypeManager::GetComponentTypeID<CameraLensComponent>());
+            if (Entity::IsNull(entity)) {
+                throw MakeError("entity_not_found", "No entity with CameraLensComponent found.");
+            }
+        }
+        const auto* lens = registry.GetComponent<CameraLensComponent>(entity);
+        if (!lens) {
+            throw MakeError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "isMain", registry.GetComponent<CameraMainTagComponent>(entity) != nullptr },
+            { "camera", CameraLensToJson(*lens) }
+        };
+    }
+
+    json HandleCameraSet(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "entity is required and must be a valid entity ID.");
+        }
+        auto* lens = registry.GetComponent<CameraLensComponent>(entity);
+        if (!lens) {
+            throw MakeError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
+        }
+        if (params.contains("fovY"))   { lens->fovY   = params["fovY"].get<float>(); }
+        if (params.contains("nearZ"))  { lens->nearZ  = params["nearZ"].get<float>(); }
+        if (params.contains("farZ"))   { lens->farZ   = params["farZ"].get<float>(); }
+        if (params.contains("aspect")) { lens->aspect = params["aspect"].get<float>(); }
+        if (params.contains("main")) {
+            const bool wantMain = params["main"].get<bool>();
+            const bool isMain   = registry.GetComponent<CameraMainTagComponent>(entity) != nullptr;
+            if (wantMain && !isMain) {
+                registry.AddComponent<CameraMainTagComponent>(entity, CameraMainTagComponent{});
+            }
+            else if (!wantMain && isMain) {
+                registry.RemoveComponent<CameraMainTagComponent>(entity);
+            }
+        }
+        MarkEntityEdited(registry, entity);
+        return {
+            { "entity", EntityToString(entity) },
+            { "isMain", registry.GetComponent<CameraMainTagComponent>(entity) != nullptr },
+            { "camera", CameraLensToJson(*lens) }
+        };
+    }
+
+    json HandleCameraList(Registry& registry)
+    {
+        json cameras = json::array();
+        const auto typeId = TypeManager::GetComponentTypeID<CameraLensComponent>();
+        for (Archetype* arch : registry.GetAllArchetypes()) {
+            if (!arch->GetSignature().test(typeId)) { continue; }
+            auto* col = arch->GetColumn(typeId);
+            const auto& entities = arch->GetEntities();
+            for (size_t i = 0; i < arch->GetEntityCount(); ++i) {
+                if (!registry.IsAlive(entities[i])) { continue; }
+                json entry = EntitySummary(registry, entities[i], arch->GetSignature());
+                entry["isMain"] = registry.GetComponent<CameraMainTagComponent>(entities[i]) != nullptr;
+                entry["camera"] = CameraLensToJson(*static_cast<const CameraLensComponent*>(col->Get(i)));
+                cameras.push_back(std::move(entry));
+            }
+        }
+        return { { "cameras", std::move(cameras) } };
+    }
+
     EntityID FindTerrainEntity(Registry& registry, const json& params)
     {
         if (params.contains("entity")) {
@@ -5869,6 +6041,29 @@ namespace
         if (fields.contains("subUvRows")) sprite->vectorValue3.w = static_cast<float>(fields["subUvRows"].get<int>());
 
         EffectEditorInternal::EnsureGuiAuthoringLinks(asset);
+
+        // SpriteRenderer (パーティクル) チェーンが確立された後は、
+        // デフォルトグラフ由来の MeshRenderer / MeshSource ノードは不要になる。
+        // 残留させると "Mesh Renderer has an unconnected flow input." 警告が出続けるため除去する。
+        {
+            std::vector<uint32_t> removeNodeIds;
+            for (const auto& node : asset.nodes) {
+                if (node.type == EffectGraphNodeType::MeshRenderer ||
+                    node.type == EffectGraphNodeType::MeshSource) {
+                    removeNodeIds.push_back(node.id);
+                }
+            }
+            if (!removeNodeIds.empty()) {
+                auto isRemoved = [&](uint32_t id) {
+                    return std::find(removeNodeIds.begin(), removeNodeIds.end(), id) != removeNodeIds.end();
+                };
+                asset.nodes.erase(std::remove_if(asset.nodes.begin(), asset.nodes.end(),
+                    [&](const EffectGraphNode& n) { return isRemoved(n.id); }), asset.nodes.end());
+                asset.pins.erase(std::remove_if(asset.pins.begin(), asset.pins.end(),
+                    [&](const EffectGraphPin& p) { return isRemoved(p.nodeId); }), asset.pins.end());
+            }
+        }
+
         EffectEditorInternal::SanitizeGraphAsset(asset);
     }
 
@@ -6329,6 +6524,7 @@ namespace
         int maxX = -1;
         int maxY = -1;
         const int total = image.width * image.height;
+        std::unordered_map<uint32_t, int> colorBuckets;
 
         for (int y = 0; y < image.height; ++y) {
             for (int x = 0; x < image.width; ++x) {
@@ -6350,6 +6546,12 @@ namespace
                 greenSum += g;
                 blueSum += b;
                 energySum += maxC * maxC;
+                {
+                    const uint8_t qr = static_cast<uint8_t>(image.bgra[i + 2] >> 2);
+                    const uint8_t qg = static_cast<uint8_t>(image.bgra[i + 1] >> 2);
+                    const uint8_t qb = static_cast<uint8_t>(image.bgra[i + 0] >> 2);
+                    colorBuckets[(static_cast<uint32_t>(qr) << 12) | (static_cast<uint32_t>(qg) << 6) | qb]++;
+                }
                 if (brightness > 0.65f || maxC > 0.85f) {
                     ++brightPixels;
                 }
@@ -6389,6 +6591,7 @@ namespace
             { "effectPixelRatio", static_cast<double>(effectPixels) * invTotal },
             { "dominantColor", json::array({ redSum * invTotal, greenSum * invTotal, blueSum * invTotal }) },
             { "estimatedBackgroundColor", json::array({ bg[0], bg[1], bg[2] }) },
+            { "uniqueColors", static_cast<int>(colorBuckets.size()) },
             { "effectBounds", std::move(bbox) }
         };
     }
@@ -6417,10 +6620,13 @@ namespace
         if (target == "effect_preview") {
             return CropImage(clientImage, editor->GetEffectPreviewRect());
         }
+        if (target == "ui_editor") {
+            return CropImage(clientImage, editor->GetUIEditorRect());
+        }
         if (target == "window" || target == "display" || target == "client") {
             return clientImage;
         }
-        throw MakeError("invalid_param", "target must be window, display, client, scene_view, game_view, effect_editor, or effect_preview.", {
+        throw MakeError("invalid_param", "target must be window, display, client, scene_view, game_view, effect_editor, effect_preview, or ui_editor.", {
             { "target", target }
         });
     }
@@ -6831,6 +7037,18 @@ namespace
 
         ImageBuffer outputImage = CaptureAutomationTargetImage(kernel, target);
 
+        if (params.contains("region")) {
+            const json& reg = params["region"];
+            if (reg.is_array() && reg.size() == 4) {
+                const DirectX::XMFLOAT4 regionRect = {
+                    reg[0].get<float>(), reg[1].get<float>(),
+                    reg[2].get<float>(), reg[3].get<float>()
+                };
+                outputImage = CropImage(outputImage, regionRect);
+            }
+        }
+
+        std::vector<uint8_t> fileBytes;
         if (format == "png") {
             WritePng(safePath, outputImage);
         }
@@ -6847,11 +7065,10 @@ namespace
         };
 
         if (inlineResult) {
-            // Read the written file back and base64-encode it
             std::ifstream ifs(safePath, std::ios::binary);
             if (ifs.is_open()) {
-                const std::vector<uint8_t> fileBytes(
-                    (std::istreambuf_iterator<char>(ifs)),
+                fileBytes.assign(
+                    std::istreambuf_iterator<char>(ifs),
                     std::istreambuf_iterator<char>());
                 result["imageBase64"] = Base64Encode(fileBytes.data(), fileBytes.size());
             }
@@ -6864,11 +7081,26 @@ namespace
     {
         const std::string target = params.value("target", std::string("window"));
         ImageBuffer image = CaptureAutomationTargetImage(kernel, target);
+
+        if (params.contains("region")) {
+            const json& reg = params["region"];
+            if (reg.is_array() && reg.size() == 4) {
+                const DirectX::XMFLOAT4 regionRect = {
+                    reg[0].get<float>(), reg[1].get<float>(),
+                    reg[2].get<float>(), reg[3].get<float>()
+                };
+                image = CropImage(image, regionRect);
+            }
+        }
+
         json out = {
             { "target", target },
             { "metrics", AnalyzeImageBuffer(image) }
         };
-        if (params.value("save", false)) {
+
+        const bool wantSave   = params.value("save", false);
+        const bool wantInline = params.value("inline", false);
+        if (wantSave || wantInline) {
             const std::string format = params.value("format", std::string("bmp"));
             std::filesystem::path path = params.value("path", std::string("Saved/AI/screenshots/evaluation.bmp"));
             const std::filesystem::path safePath = ResolveProjectPath(path.string(), PathAccess::AutomationFile, false);
@@ -6879,6 +7111,15 @@ namespace
                 WriteBmp24(safePath, image);
             }
             out["path"] = ToGenericProjectPath(safePath);
+            if (wantInline) {
+                std::ifstream ifs(safePath, std::ios::binary);
+                if (ifs.is_open()) {
+                    const std::vector<uint8_t> fileBytes(
+                        (std::istreambuf_iterator<char>(ifs)),
+                        std::istreambuf_iterator<char>());
+                    out["imageBase64"] = Base64Encode(fileBytes.data(), fileBytes.size());
+                }
+            }
         }
         return out;
     }
@@ -9640,6 +9881,9 @@ namespace
         return { { "results", std::move(results) } };
     }
 
+    bool g_ecsWatchEnabled = false;
+    uint64_t g_lastBroadcastEcsRevision = UINT64_MAX;
+
     json DispatchCommand(EngineKernel& kernel, const json& command)
     {
         const std::string name = command.value("command", std::string{});
@@ -9765,6 +10009,10 @@ namespace
         }
         if (name == "visual.evaluate_capture") {
             return HandleVisualEvaluateCapture(kernel, params);
+        }
+        if (name == "ecs.watch") {
+            g_ecsWatchEnabled = params.value("enable", true);
+            return { { "enabled", g_ecsWatchEnabled } };
         }
         if (!registry) {
             throw MakeError("operation_not_allowed", "Game registry is not available.");
@@ -9922,8 +10170,26 @@ namespace
         if (name == "light.create") {
             return HandleLightCreate(*registry, params);
         }
+        if (name == "light.get") {
+            return HandleLightGet(*registry, params);
+        }
+        if (name == "light.set") {
+            return HandleLightSet(*registry, params);
+        }
+        if (name == "light.list") {
+            return HandleLightList(*registry);
+        }
         if (name == "camera.create") {
             return HandleCameraCreate(*registry, params);
+        }
+        if (name == "camera.get") {
+            return HandleCameraGet(*registry, params);
+        }
+        if (name == "camera.set") {
+            return HandleCameraSet(*registry, params);
+        }
+        if (name == "camera.list") {
+            return HandleCameraList(*registry);
         }
         if (name == "terrain.create") {
             return HandleTerrainCreate(*registry, params);
@@ -10710,6 +10976,8 @@ namespace
         });
         WriteJsonFile(g_automationSession.manifestPath, result);
         g_automationSession.active = false;
+        g_ecsWatchEnabled          = false;
+        g_lastBroadcastEcsRevision = UINT64_MAX;
         return result;
     }
 
@@ -10942,7 +11210,8 @@ AIAutomationService::~AIAutomationService() = default;
 
 void AIAutomationService::Initialize()
 {
-    m_lastStateWriteTime = {};
+    m_lastStateWriteTime    = {};
+    m_lastEcsBroadcastTime  = {};
     m_rootDir = std::filesystem::path("Saved") / "AI";
     m_commandsDir = m_rootDir / "commands";
     m_processingDir = m_rootDir / "processing";
@@ -11193,6 +11462,24 @@ void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
 
         if (processedMessages == kMaxWebSocketMessagesPerTick) {
             LOG_WARN("[AIAutomation] WebSocket command queue reached per-frame processing limit.");
+        }
+
+        if (g_ecsWatchEnabled && m_webSocketServer->GetConnectedClientCount() > 0) {
+            const uint64_t rev = UndoSystem::Instance().GetECSRevision();
+            if (rev != g_lastBroadcastEcsRevision) {
+                constexpr auto kEcsBroadcastInterval = std::chrono::milliseconds(100);
+                const auto ecsBroadcastNow = std::chrono::steady_clock::now();
+                if (ecsBroadcastNow - m_lastEcsBroadcastTime >= kEcsBroadcastInterval) {
+                    g_lastBroadcastEcsRevision = rev;
+                    m_lastEcsBroadcastTime = ecsBroadcastNow;
+                    const json evt = {
+                        { "event",       "ecs.changed" },
+                        { "ecsRevision", rev },
+                        { "timestamp",   MakeTimestampSuffix() }
+                    };
+                    m_webSocketServer->BroadcastEvent(evt.dump());
+                }
+            }
         }
     }
 

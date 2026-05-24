@@ -52,4 +52,5 @@ private:
     std::filesystem::path m_stateDir;
 
     std::chrono::steady_clock::time_point m_lastStateWriteTime;
+    std::chrono::steady_clock::time_point m_lastEcsBroadcastTime;
 };

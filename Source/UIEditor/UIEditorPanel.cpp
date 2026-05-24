@@ -375,6 +375,11 @@ void UIEditorPanel::DrawWorkspace(Registry* registry, bool* outFocused)
         ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     ImGui::Begin(ICON_FA_GAUGE_HIGH " UI Editor Workspace", nullptr, flags);
+    {
+        const ImVec2 p = ImGui::GetWindowPos();
+        const ImVec2 s = ImGui::GetWindowSize();
+        m_workspaceRect = { p.x, p.y, s.x, s.y };
+    }
     if (outFocused) {
         *outFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     }

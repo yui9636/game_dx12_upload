@@ -254,6 +254,7 @@ public:
     const std::string& GetEffectEditorDocumentPath() const { return m_effectEditorPanel.GetDocumentPath(); }
     DirectX::XMFLOAT4 GetEffectEditorRect() const { return m_effectEditorPanel.GetWorkspaceRectForAutomation(); }
     DirectX::XMFLOAT4 GetEffectPreviewRect() const { return m_effectEditorPanel.GetPreviewRectForAutomation(); }
+    DirectX::XMFLOAT4 GetUIEditorRect() const { return m_uiEditorPanel.GetWorkspaceRectForAutomation(); }
     EffectEditorPanel& GetEffectEditorPanel() { return m_effectEditorPanel; }
     const EffectEditorPanel& GetEffectEditorPanel() const { return m_effectEditorPanel; }
 

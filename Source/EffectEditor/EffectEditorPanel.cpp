@@ -271,6 +271,24 @@ namespace EffectEditorInternal
         auto* meshRendererNode = FindNodeOfType(asset, EffectGraphNodeType::MeshRenderer);
         auto* outputNode       = FindNodeOfType(asset, EffectGraphNodeType::Output);
 
+        // ParticleEmitter と MeshRenderer が共存する場合、パーティクルチェーンを優先する。
+        // Lifetime.Out(Flow) → MeshRenderer.In(Flow) の既存リンクを先に除去しないと、
+        // SanitizeGraphAsset の fan-out=1 チェックによって後から追加した
+        // Lifetime→ParticleEmitter リンクが刈り取られ、エミッターの Flow Input が
+        // 未接続になる ("Particle Emitter has an unconnected flow input." 警告の原因)。
+        if (lifetimeNode && meshRendererNode && emitterNode) {
+            auto* ltOut = FindNodePin(asset, lifetimeNode->id, EffectPinKind::Output, EffectValueType::Flow);
+            auto* mrIn  = FindNodePin(asset, meshRendererNode->id, EffectPinKind::Input, EffectValueType::Flow);
+            if (ltOut && mrIn) {
+                asset.links.erase(
+                    std::remove_if(asset.links.begin(), asset.links.end(),
+                        [&](const EffectGraphLink& link) {
+                            return link.startPinId == ltOut->id && link.endPinId == mrIn->id;
+                        }),
+                    asset.links.end());
+            }
+        }
+
         if (spawnNode && lifetimeNode) {
             if (auto* startPin = FindNodePin(asset, spawnNode->id, EffectPinKind::Output, EffectValueType::Flow)) {
                 if (auto* endPin = FindNodePin(asset, lifetimeNode->id, EffectPinKind::Input, EffectValueType::Flow)) {
