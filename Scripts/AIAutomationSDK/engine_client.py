@@ -13,10 +13,51 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from urllib.parse import urlparse
 
 
+# ── ARCHITECTURAL RULE — ALL EDITOR AUTOMATION ───────────────────────────────
+# AI automation MUST simulate UI-level editor operations. Never use commands
+# that bypass the editor's render-pass gate by writing internal state directly
+# (e.g. effect_editor.set_preview_view repositions a camera variable but does
+# NOT activate the render pass — the preview texture stays black if the Effect
+# Editor workspace is not currently the active tab).
+#
+# Safe pattern for every editor:
+#   1. Open / activate the target workspace  (e.g. effect_editor.open_workspace)
+#   2. Issue compile / play / build commands through the editor pipeline.
+#   3. Confirm via get_state that the pipeline is active before capturing.
+#   4. Avoid raw state-override commands unless you have verified the gate is open.
+# ─────────────────────────────────────────────────────────────────────────────
+
 PROTOCOL_VERSION = 1
 DEFAULT_URL = "ws://127.0.0.1:9876"
 DEFAULT_TIMEOUT = 5.0
 
+
+# ── ParticleEmitter ノード スロット マッピング (effect_editor.set_node 用) ─────
+# scalar          : spawnRate          [particles/sec]
+# scalar2         : burstCount         [particles, one-shot]
+# intValue        : maxParticles       (0 = 自動推定)
+# intValue2       : emitter shape type (int)
+#                     0 = "point"  : アンカー点にスポーン
+#                     1 = "sphere" : 球内にランダムにスポーン  (radius = vectorValue3.x)
+#                     2 = "box"    : AABB 内にランダムにスポーン (extents = vectorValue3.xyz)
+#                     3 = "cone"   : 円錐の底面〜側面 (angle=vv3.x, baseR=vv3.y, height=vv3.z)
+#                     4 = "circle" : XZ 平面の円盤上  (radius = vectorValue3.x)
+#                     5 = "line"   : X 軸上の線分     (halfLength = vectorValue3.x)
+#                     6 = "ring"   : XZ 平面の円周上  (radius = vectorValue3.x)
+#                                    vectorValue4.w (vortexStrength) が接線速度（旋回）を制御する。
+# vectorValue     : {lifetime, startSize, endSize, speed}
+# vectorValue2    : {accel.x, accel.y, accel.z, drag}
+# vectorValue3    : {shapeParam0, shapeParam1, shapeParam2, spinRate}
+# vectorValue4    : {curlNoiseStrength, curlNoiseScale, curlNoiseScrollSpeed, vortexStrength}
+# vectorValue5    : {attractor0.x, attractor0.y, attractor0.z, attractor0.strength}
+# vectorValue6    : {attractor1.x, attractor1.y, attractor1.z, attractor1.strength}
+# vectorValue7    : {attractorRadius0, attractorRadius1, attractorFalloff0, attractorFalloff1}
+# vectorValue8    : {collisionPlane.normal.xyz, collisionPlane.d}
+# vectorValue9    : {restitution, friction, reserved, reserved}
+#
+# effect_editor.apply_preset の "shape" フィールドに文字列で shape を指定できる:
+#   "point", "sphere", "box", "cone", "circle", "line", "ring"
+# ─────────────────────────────────────────────────────────────────────────────
 
 COMMANDS: List[str] = [
     "ping",
@@ -75,6 +116,34 @@ COMMANDS: List[str] = [
     "ecs.hierarchy",
     "ecs.diff",
     "ecs.watch",
+    "gameflow.get_runtime_state",
+    "collision.events.pull",
+    "bone.list",
+    "bone.get_world",
+    "bone.get_world_batch",
+    "log.tail",
+    "log.pull",
+    "log.clear",
+    # Phase 2
+    "animator.get_state",
+    "input.get_resolved_state",
+    "ecs.field.get",
+    "session.assert_invariant",
+    "gameflow.events.pull",
+    "gameflow.eval_conditions",
+    # Phase 3
+    "visual.find_text",
+    "editor.get_focus",
+    "asset.status",
+    "render.queue.snapshot",
+    "collision.raycast",
+    "collision.overlap_sphere",
+    "visual.get_pixel_at_screen",
+    "visual.compare_capture",
+    "editor.get_hierarchy_selection",
+    "session.record_macro",
+    "session.replay_macro",
+    "ecs.field.watch.pull",
     "list_entities",
     "get_entity",
     "get_component",
@@ -82,6 +151,10 @@ COMMANDS: List[str] = [
     "add_component",
     "remove_component",
     "set_component_fields",
+    "entity.add_collider_element",
+    "entity.set_collider_element",
+    "entity.delete_collider_element",
+    "entity.list_collider_elements",
     "create_empty",
     "create_model_entity",
     "set_transform",

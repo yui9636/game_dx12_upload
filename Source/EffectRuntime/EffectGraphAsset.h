@@ -86,10 +86,14 @@ enum class EffectSpawnShapeType : uint8_t
     Box,
     Cone,
     Circle,
-    Line
+    Line,
+    Ring   // 6: 環状エミッター。XZ 平面上の指定半径の円周上にスポーンし、
+           // vortexStrength に応じた接線速度（旋回速度）を初速に加える。
+           // shapeParams.x (vectorValue3.x) = リングの半径。
+           // vortexStrength (vectorValue4.w)  = 接線速度の符号付き強さ。
 };
 // パーティクル最大数まわりの定数
-inline constexpr uint32_t kEffectParticleDefaultMaxParticles = 5000000u;
+inline constexpr uint32_t kEffectParticleDefaultMaxParticles = 2000000u;  // 新規エミッターの初期最大粒子数
 inline constexpr uint32_t kEffectParticleMinSuggestedMaxParticles = 512u;
 inline constexpr uint32_t kEffectParticleHardMaxParticles = 1u << 23;
 
@@ -435,6 +439,32 @@ inline EffectGraphNode& AddEffectGraphNode(EffectGraphAsset& asset, EffectGraphN
         break;
 
     case EffectGraphNodeType::ParticleEmitter:
+        // ── ParticleEmitter スロット マッピング ──────────────────────────────────
+        // scalar          : spawnRate          [particles/sec]
+        // scalar2         : burstCount         [particles, one-shot]
+        // intValue        : maxParticles       (0 = 自動推定)
+        // intValue2       : EffectSpawnShapeType enum (下記)
+        //                     0 = Point    : アンカー点にスポーン
+        //                     1 = Sphere   : 球内にランダムにスポーン  (param: radius=vv3.x)
+        //                     2 = Box      : AABB 内にランダムにスポーン (param: extents=vv3.xyz)
+        //                     3 = Cone     : 円錐の底面〜側面 (param: angle=vv3.x, baseR=vv3.y, height=vv3.z)
+        //                     4 = Circle   : XZ 平面の円盤上  (param: radius=vv3.x)
+        //                     5 = Line     : X 軸上の線分    (param: halfLength=vv3.x)
+        //                     6 = Ring     : XZ 平面の円周上 (param: radius=vv3.x)
+        //                                   vortexStrength(vv4.w) が接線速度（旋回）を制御する。
+        //
+        // vectorValue     : {lifetime, startSize, endSize, speed}
+        // vectorValue2    : {accel.x, accel.y, accel.z, drag}
+        // vectorValue3    : {shapeParam0, shapeParam1, shapeParam2, spinRate}
+        //   ※ Ring では shapeParam0 = リング半径、shapeParam1/2 は未使用
+        // vectorValue4    : {curlNoiseStrength, curlNoiseScale, curlNoiseScrollSpeed, vortexStrength}
+        //   ※ Ring では vortexStrength が接線速度の符号付き強さとして機能する
+        // vectorValue5    : {attractor0.x, attractor0.y, attractor0.z, attractor0.strength}
+        // vectorValue6    : {attractor1.x, attractor1.y, attractor1.z, attractor1.strength}
+        // vectorValue7    : {attractorRadius0, attractorRadius1, attractorFalloff0, attractorFalloff1}
+        // vectorValue8    : {collisionPlane.normal.xyz, collisionPlane.d}
+        // vectorValue9    : {restitution, friction, reserved, reserved}
+        // ─────────────────────────────────────────────────────────────────────────
         node.scalar = 32.0f;
         node.scalar2 = 0.0f;
         node.intValue = static_cast<int>(kEffectParticleDefaultMaxParticles);
@@ -644,6 +674,12 @@ struct EffectParticleSimulationLayout
     float             meshAngularSpeed = 0.0f;        // 基準角速度を rad/s で保持する。
     DirectX::XMFLOAT3 meshAngularOrientRandom = { 0.0f, 0.0f, 0.0f }; // yaw/pitch/roll の ±範囲 (rad)
     float             meshAngularSpeedRandom = 0.0f;  // 0..1: 角速度の ±倍率
+
+    // Stretch billboard モード (drawMode == Billboard のときのみ有効)。
+    // stretchFactor > 0 のとき速度方向へスプライトを伸長する。0 は通常のカメラ正対ビルボード。
+    // SpriteRenderer ノードの vectorValue9.x に stretch factor、vectorValue9.y > 0 で有効化する。
+    bool  stretchBillboard = false;
+    float stretchFactor = 0.0f;  // 速度大きさ × stretchFactor が縦倍率増分。
 };
 
 // エフェクトグラフをコンパイルした最終成果物。

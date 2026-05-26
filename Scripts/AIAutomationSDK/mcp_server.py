@@ -1,3 +1,10 @@
+"""
+AI AGENT MANDATE: This MCP server exposes the engine's full observation layer.
+Use `visual.verify_entity_game_view`, `ecs.diff`, `ecs.query`, `ecs.watch`,
+`ai_session.status`, `get_engine_state` etc. — NOT a `capture_screenshot` +
+PNG-eyeball loop. See Scripts/AIAutomationSDK/README.md "MANDATE FOR AI AGENTS"
+and Scripts/AIAutomationSDK/llm_bridge.py module docstring.
+"""
 from __future__ import annotations
 
 import json
@@ -100,7 +107,11 @@ class MyEngineMCPServer:
 def main() -> int:
     server = MyEngineMCPServer()
     while True:
-        message = _read_message()
+        try:
+            message = _read_message()
+        except json.JSONDecodeError as exc:
+            _write({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": f"Parse error: {exc}"}})
+            continue
         if message is None:
             return 0
         if not message:

@@ -26,12 +26,22 @@
       "endPinId": 6,
       "id": 9,
       "startPinId": 4
+    },
+    {
+      "endPinId": 7,
+      "id": 10,
+      "startPinId": 16
+    },
+    {
+      "endPinId": 9,
+      "id": 11,
+      "startPinId": 15
     }
   ],
   "name": "Magic Burst",
-  "nextLinkId": 10,
-  "nextNodeId": 9,
-  "nextPinId": 16,
+  "nextLinkId": 12,
+  "nextNodeId": 10,
+  "nextPinId": 17,
   "nodes": [
     {
       "boolValue": false,
@@ -624,6 +634,80 @@
         "y": 0.0,
         "z": 0.0
       }
+    },
+    {
+      "boolValue": false,
+      "id": 9,
+      "intValue": 0,
+      "intValue2": 0,
+      "position": {
+        "x": 560.0,
+        "y": 350.0
+      },
+      "scalar": 0.0,
+      "scalar2": 0.0,
+      "stringValue": "",
+      "stringValue2": "",
+      "stringValue3": "",
+      "stringValue4": "",
+      "stringValue5": "",
+      "stringValue6": "",
+      "title": "Color",
+      "type": 9,
+      "vectorValue": {
+        "w": 1.0,
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "vectorValue2": {
+        "w": 0.0,
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "vectorValue3": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue4": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue5": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue6": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue7": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue8": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "vectorValue9": {
+        "w": 0.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0
+      }
     }
   ],
   "pins": [
@@ -731,6 +815,13 @@
       "name": "Out",
       "nodeId": 8,
       "valueType": 0
+    },
+    {
+      "id": 16,
+      "kind": 1,
+      "name": "Value",
+      "nodeId": 9,
+      "valueType": 3
     }
   ],
   "previewDefaults": {

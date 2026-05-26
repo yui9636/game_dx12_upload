@@ -1,3 +1,36 @@
+"""
+============================================================================
+AI AGENT MANDATE — READ BEFORE INVOKING ANY COMMAND
+============================================================================
+This bridge exposes the engine WebSocket API. The API contains a full
+observation layer. Use it. Do not fall back to the
+`list_entities + capture_screenshot + manual PNG inspection` loop.
+
+Pick the smallest observation window that answers the current question:
+
+  Question                         | Use this (NOT a screenshot)
+  ---------------------------------+---------------------------------
+  Is entity X on screen?           | visual.verify_entity_game_view
+  Did mutating X change Y too?     | ecs.diff (snapshot, mutate, diff)
+  Where are all the Players?       | ecs.query by component signature
+  Did the save actually persist?   | ai_session.status (file backup log)
+  What scene/mode are we in?       | get_engine_state
+  Stream of changes over time?     | ecs.watch (enable once, then read)
+  Bright/dark/empty render region? | visual.evaluate_capture
+  Editor stuck/degraded?           | editor.recovery.get_state
+  Need to undo a cascade?          | ai_session.rollback
+
+Before any mutation cascade:
+  1. ai_session.begin (if not already started)
+  2. ecs.watch enable=true
+  3. ecs.diff snapshot
+  4. ... mutate ...
+  5. ecs.diff against snapshot to verify ONLY intended changes happened
+  6. visual.verify_entity_game_view to confirm rendering matches intent
+
+See Scripts/AIAutomationSDK/README.md "MANDATE FOR AI AGENTS" section.
+============================================================================
+"""
 from __future__ import annotations
 
 import json

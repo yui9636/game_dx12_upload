@@ -10,6 +10,60 @@ ws://127.0.0.1:9876
 
 This SDK hides WebSocket and JSON envelopes behind Python functions. It uses only the Python standard library.
 
+---
+
+## ⚠️ MANDATE FOR AI AGENTS: USE THE FULL OBSERVATION LAYER
+
+**Do NOT default to `list_entities` + `capture_screenshot` + manual PNG inspection.**
+That loop is slow, noisy, and you WILL miss state changes between calls.
+
+Before you touch anything, plan which observation window fits the current question.
+Use them aggressively, in combination, and re-evaluate every time the question changes.
+
+### ECS observation
+- `ecs.query` — filter by component signature (e.g. all entities with `PlayerTagComponent + HealthComponent`).
+  Use this instead of `list_entities` whenever you care about a specific role/system.
+- `ecs.hierarchy` — full scene tree in one call. Use before/after `load_scene`, `instantiate_prefab`, `delete_entity`.
+- `ecs.diff` — snapshot/diff. Take a snapshot before any mutation (`set_transform`, `set_component_fields`,
+  `add_component`, `game.play`, gameflow transition), mutate, then diff. This is how you catch
+  "something else also changed" (physics drift, component dropouts, prefab side effects, etc.).
+- `ecs.watch` — enable once at session start. Keeps a running change log so you can correlate symptoms
+  with the actual mutation that caused them.
+
+### Visual observation (use BEFORE manual screenshots)
+- `visual.verify_entity` / `visual.verify_entity_game_view` — boolean "is this entity actually rendered
+  on screen right now". This replaces the "screenshot → eyeball → guess" loop for visibility checks.
+- `visual.assert_entities_visible` — batch check multiple entities at once.
+- `visual.evaluate_capture` — programmatic image analysis (brightness, regions, etc). Use this
+  instead of converting BMP→PNG and reading the pixels yourself.
+- `visual.capture_review_set` — captures + auto-evaluation packaged together.
+- `effect_editor.assert_preview_visible` — equivalent for the effect editor preview.
+
+### Session-level observation
+- `ai_session.status` — file backup diff, ECS revision count, command count since session start.
+  Run this whenever you're confused about "what did I actually change".
+- `ai_session.rollback` — safe rollback when a mutation cascade broke things. Cheaper than
+  reconstructing state by hand.
+- `editor.recovery.get_state` — engine-side recovery info if the editor entered a degraded state.
+
+### Engine state
+- `get_engine_state` — current scene path, play/edit mode, frame count, view rects. Cheap; call it
+  often when you suspect mode/path drift.
+- `get_visual_state` — camera + view geometry without touching the back buffer.
+
+### Decision rule
+- "Is this entity on screen?" → `visual.verify_entity_game_view`, NOT a screenshot.
+- "Did X change after Y?" → `ecs.diff`, NOT two `get_component` calls compared by eye.
+- "Where did all the Players go?" → `ecs.query` by `PlayerTagComponent`, NOT scrolling `list_entities`.
+- "Did I really save the scene?" → `ai_session.status` file backup list, NOT re-reading the file.
+- "Is the engine in Play mode and on the right scene?" → `get_engine_state`, NOT inferring from
+  the last command's response.
+
+If you find yourself reaching for `capture_screenshot` + PowerShell BMP conversion + `Read` on the PNG,
+**stop**. There is almost always a `visual.*` or `ecs.*` call that answers the same question in one step.
+
+---
+
 ## Quick Start
 
 Start the engine, then run:

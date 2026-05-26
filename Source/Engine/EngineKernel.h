@@ -118,6 +118,9 @@ public:
     // 1 フレームで収集された入力イベントキューを取得する。
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
+    // 前フレームに収集された RenderQueue (observation layer 用)。
+    const RenderQueue& GetRenderQueue() const { return m_renderQueue; }
+
     // AI / automation から仮想入力イベントを現在フレームの入力キューへ注入する。
     void InjectInputEvent(const InputEvent& event) { m_inputQueue.Push(event); }
 

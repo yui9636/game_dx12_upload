@@ -136,36 +136,10 @@ namespace EffectEditorInternal
                 }),
             asset.links.end());
 
-        // 防御策: side-effect node（Spawn/Lifetime/MeshRenderer/ParticleEmitter/SpriteRenderer）は
-        // 最大 1 本の Flow 出力だけを駆動できる。以前の template 切り替えで残った link があると、
-        // compile 時に「Side-effect nodes may drive only one flow output.」として表面化する。
-        // node ごとに最初の Flow 出力だけを残し、残りはログを出して削除する。
-        std::unordered_map<uint32_t, uint32_t> flowOutCount; // nodeId -> ここまでの検出数
-        std::vector<uint32_t> removedLinkIds;
-        for (auto it = asset.links.begin(); it != asset.links.end();) {
-            const EffectGraphPin* startPin = asset.FindPin(it->startPinId);
-            if (!startPin || startPin->valueType != EffectValueType::Flow) {
-                ++it;
-                continue;
-            }
-            const EffectGraphNode* startNode = asset.FindNode(startPin->nodeId);
-            if (!startNode || !IsEffectSideEffectNode(startNode->type)) {
-                ++it;
-                continue;
-            }
-            uint32_t& seen = flowOutCount[startNode->id];
-            if (seen >= 1) {
-                removedLinkIds.push_back(it->id);
-                it = asset.links.erase(it);
-                continue;
-            }
-            ++seen;
-            ++it;
-        }
-        if (!removedLinkIds.empty()) {
-            LOG_WARN("[EffectSanitize] Pruned %zu stray flow links from side-effect nodes (fan-out>1).",
-                removedLinkIds.size());
-        }
+        // Note: Flow fan-out from side-effect nodes (e.g. one Lifetime driving multiple
+        // downstream emitters) is permitted. The compiler will emit a warning when two
+        // downstream nodes write the same compiled output slot (last topo-order write wins),
+        // but the graph itself is valid and should not be sanitized away here.
     }
 
     void LogGraphStructure(const EffectGraphAsset& asset, const char* tag)
@@ -198,11 +172,12 @@ namespace EffectEditorInternal
         for (const auto& [nodeId, fan] : flowFan) {
             if (fan > 1) {
                 const EffectGraphNode* n = asset.FindNode(nodeId);
-                LOG_ERROR("[%s] side-effect flow fan-out>1: node id=%u type=%s fan=%u",
+                // fan-out > 1 is valid; log as info so the graph structure is visible.
+                LOG_INFO("[%s] side-effect flow fan-out=%u: node id=%u type=%s",
                     tag,
+                    fan,
                     nodeId,
-                    n ? EffectGraphNodeTypeToString(n->type) : "?",
-                    fan);
+                    n ? EffectGraphNodeTypeToString(n->type) : "?");
             }
         }
     }
@@ -572,7 +547,7 @@ void EffectEditorPanel::DrawGuiPanel()
         ImGui::TextDisabled("Inspector-style authoring");
         ImGui::Spacing();
 
-        const char* shapeItems[] = { "Point", "Sphere", "Box", "Cone", "Circle", "Line" };
+        const char* shapeItems[] = { "Point", "Sphere", "Box", "Cone", "Circle", "Line", "Ring" };
         const char* drawModes[] = { "Billboard", "Mesh", "Ribbon" };
         const char* sortModes[] = { "None", "Back To Front", "Front To Back" };
         const char* blendItems[] = { "Opaque", "Transparency", "Additive", "Subtraction", "Multiply", "Alpha" };
@@ -728,6 +703,12 @@ void EffectEditorPanel::DrawGuiPanel()
                     emitterNode->vectorValue3.x = 0.35f;
                     m_compileDirty = true;
                 }
+                ImGui::SameLine();
+                if (ImGui::Button("Ring")) {
+                    emitterNode->intValue2 = static_cast<int>(EffectSpawnShapeType::Ring);
+                    emitterNode->vectorValue3.x = 1.0f; // リング半径の初期値
+                    m_compileDirty = true;
+                }
 
                 int shapeType = emitterNode->intValue2;
                 if (ImGui::Combo("Shape", &shapeType, shapeItems, IM_ARRAYSIZE(shapeItems))) {
@@ -755,6 +736,12 @@ void EffectEditorPanel::DrawGuiPanel()
                     break;
                 case EffectSpawnShapeType::Line:
                     m_compileDirty |= ImGui::DragFloat("Half Length", &emitterNode->vectorValue3.x, 0.01f, 0.01f, 50.0f, "%.2f");
+                    break;
+                case EffectSpawnShapeType::Ring:
+                    // Ring: XZ 平面の円周上にスポーンし、Vortex Strength で旋回速度を制御する。
+                    // vectorValue3.x = リング半径、vectorValue4.w = 接線速度（旋回強さ）。
+                    m_compileDirty |= ImGui::DragFloat("Ring Radius", &emitterNode->vectorValue3.x, 0.01f, 0.05f, 50.0f, "%.2f");
+                    ImGui::TextDisabled("Set Vortex Strength (Velocity & Forces) for tangential spin.");
                     break;
                 default:
                     break;
@@ -1084,7 +1071,7 @@ void EffectEditorPanel::DrawDetailsPanel()
         switch (node->type) {
         case EffectGraphNodeType::ParticleEmitter:
             if (ImGui::CollapsingHeader("Emitter Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
-                const char* shapeItems[] = { "Point", "Sphere", "Box", "Cone", "Circle", "Line" };
+                const char* shapeItems[] = { "Point", "Sphere", "Box", "Cone", "Circle", "Line", "Ring" };
                 m_compileDirty |= ImGui::DragFloat("Spawn Rate", &node->scalar, 1.0f, 1.0f, 10000.0f);
                 int burstCount = static_cast<int>(node->scalar2);
             if (ImGui::DragInt("Burst Count", &burstCount, 1.0f, 0, 5000000)) {
@@ -1107,7 +1094,14 @@ void EffectEditorPanel::DrawDetailsPanel()
                     node->intValue2 = shapeType;
                     m_compileDirty = true;
                 }
-                m_compileDirty |= ImGui::DragFloat3("Shape Params", &node->vectorValue3.x, 0.01f, -50.0f, 50.0f, "%.2f");
+                // Ring shape: vectorValue3.x は半径として使用する。
+                // Ring 以外の形状では Shape Params xyz と Spin Rate w を表示する。
+                if (static_cast<EffectSpawnShapeType>(node->intValue2) == EffectSpawnShapeType::Ring) {
+                    m_compileDirty |= ImGui::DragFloat("Ring Radius", &node->vectorValue3.x, 0.01f, 0.05f, 50.0f, "%.2f");
+                    ImGui::TextDisabled("Vortex Strength controls tangential (circumferential) speed.");
+                } else {
+                    m_compileDirty |= ImGui::DragFloat3("Shape Params", &node->vectorValue3.x, 0.01f, -50.0f, 50.0f, "%.2f");
+                }
                 m_compileDirty |= ImGui::DragFloat("Spin Rate", &node->vectorValue3.w, 0.05f, -64.0f, 64.0f, "%.2f");
             }
             if (ImGui::CollapsingHeader("Attractor / Repeller")) {

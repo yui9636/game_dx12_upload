@@ -111,18 +111,25 @@ std::shared_ptr<CompiledEffectAsset> EffectCompiler::Compile(const EffectGraphAs
         adjacency[startNode].push_back(endNode);
         ++incomingEdgeCount[endNode];
 
-        // 副作用ノードの Flow 出力は 1 本だけ許可する。
+        // 副作用ノードの Flow 出力 fan-out 数を集計する（警告用）。
         const auto* startNodePtr = asset.FindNode(startNode);
         if (startPin->valueType == EffectValueType::Flow && startNodePtr && IsEffectSideEffectNode(startNodePtr->type)) {
             ++sideEffectFlowFanOut[startNode];
         }
     }
 
-    // 副作用ノードの fan-out 違反をチェックする。
+    // 副作用ノードの Flow fan-out を警告する。
+    // fan-out 自体は有効な DAG であり、エラーではない。ただし同じ出力スロット
+    // (meshRenderer / particleRenderer) を複数ノードが書く場合はトポロジカル順の
+    // 最後書き込みが有効になるため、ユーザーに注意を促す。
     for (const auto& [nodeId, fanOut] : sideEffectFlowFanOut) {
-        (void)nodeId;
         if (fanOut > 1) {
-            compiled->errors.push_back("Side-effect nodes may drive only one flow output.");
+            const auto* n = asset.FindNode(nodeId);
+            std::string label = n ? n->title : "Unknown";
+            compiled->warnings.push_back(
+                label + " drives " + std::to_string(fanOut) +
+                " downstream flow inputs. When downstream nodes write the same output slot, "
+                "only the last node in topological order takes effect.");
         }
     }
 
@@ -504,6 +511,16 @@ else if (node->type == EffectGraphNodeType::SpriteRenderer) {
                 }
             }
 
+            // Stretch billboard モード。
+            //   vectorValue9.x : stretch factor (0.0 = 無効、> 0 で速度方向へ伸長)。
+            //   vectorValue9.y : stretch enable flag (> 0 で有効)。
+            {
+                const float factor = node->vectorValue9.x;
+                const bool  enable = node->vectorValue9.y > 0.0f;
+                compiled->particleRenderer.stretchBillboard = enable && (factor > 0.0f);
+                compiled->particleRenderer.stretchFactor    = enable ? (std::max)(0.0f, factor) : 0.0f;
+            }
+
             // MeshParticle Phase 2: Mesh draw mode の場合、SpriteRenderer ノードの mesh 用
             //   汎用スロットから descriptor を組み立てる。
             //     stringValue2  : meshAssetPath (空なら previewDefaults にフォールバック)
@@ -588,12 +605,9 @@ else if (node->type == EffectGraphNodeType::SpriteRenderer) {
             compiled->requiredAssetReferences.push_back(compiled->particleRenderer.meshAssetPath);
         }
 
-        // Billboard 方式で maxParticles が仕様下限より小さいなら warning を出す。
-        if (compiled->particleRenderer.drawMode == EffectParticleDrawMode::Billboard &&
-            compiled->particleRenderer.maxParticles < 5000000u) {
-            compiled->warnings.push_back(
-                "Billboard particle budget is below the 5,000,000 active minimum defined by the DX12 overhaul spec.");
-        }
+        // Billboard 方式の固定下限チェックは削除済み。
+        // maxParticles の妥当性は上流の IsEffectParticleMaxParticlesTooLow / ResolveEffectParticleMaxParticles
+        // によって spawn/lifetime ベースで個別に評価されるため、ここでの一律比較は不要。
     }
 
     // エラーが無ければ valid。

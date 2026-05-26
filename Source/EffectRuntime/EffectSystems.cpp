@@ -695,6 +695,8 @@ if (effectiveParticle.enabled) {
                 packet.vortexStrength = effectiveParticle.vortexStrength;
                 packet.softParticleEnabled = effectiveParticle.softParticleEnabled;
                 packet.softParticleScale = effectiveParticle.softParticleScale;
+                packet.stretchBillboard = effectiveParticle.stretchBillboard;
+                packet.stretchFactor = effectiveParticle.stretchFactor;
                 packet.blendMode = effectiveParticle.blendMode;
                 packet.randomSpeedRange = effectiveParticle.randomSpeedRange;
                 packet.randomSizeRange = effectiveParticle.randomSizeRange;

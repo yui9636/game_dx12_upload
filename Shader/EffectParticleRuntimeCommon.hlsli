@@ -211,6 +211,31 @@ float3 ComputeSpawnOffset(uint emitIndex, uint seed, uint shapeType, float3 shap
         const float halfLength = max(shapeParams.x, 0.05f);
         offset = float3(lerp(-halfLength, halfLength, rand0), 0.0f, 0.0f);
         direction = normalize(float3(0.0f, 1.0f, lerp(-0.35f, 0.35f, rand1)));
+    } else if (shapeType == 6u) {
+        // Ring エミッター: XZ 平面の固定半径の円周上にスポーンする。
+        // shapeParams.x = リングの半径。
+        // 接線速度は呼び出し側（CSMain）が vortexStrength を使って別途加算する。
+        // ここでは direction を接線方向（旋回方向）に向けておく。
+        // vortexStrength が正なら反時計回り（+Y 軸まわり）で旋回する。
+        const float ringRadius = max(shapeParams.x, 0.05f);
+        offset = float3(cos(angle) * ringRadius, 0.0f, sin(angle) * ringRadius);
+        // 接線ベクトル: 円周上の点を微分すると (-sin, 0, cos) になる。
+        const float3 tangent = float3(-sin(angle), 0.0f, cos(angle));
+        // vortexStrength の符号で旋回方向を決め、速度ベクトルに接線方向を合成する。
+        // direction はここでは「スポーン後の初速方向」として使われる。
+        // 放射状の拡散（外向き）と接線方向を混合し、純粋な環状フローにする。
+        const float vortex = gMotionParams.w; // vortexStrength
+        const float3 radial = normalize(float3(offset.x, 0.0f, offset.z));
+        if (abs(vortex) > 0.001f) {
+            // vortex が強いほど接線方向を優先する。saturate で 0-1 にクランプ。
+            const float tangentWeight = saturate(abs(vortex) / (abs(vortex) + 1.0f));
+            direction = normalize(lerp(radial + float3(0.0f, 0.5f, 0.0f),
+                                       tangent * sign(vortex) + float3(0.0f, 0.1f, 0.0f),
+                                       tangentWeight));
+        } else {
+            // vortex なし: 外向きに放射。
+            direction = normalize(radial + float3(0.0f, 0.35f, 0.0f));
+        }
     } else {
         const float radial = lerp(0.2f, 0.85f, rand1);
         const float lift = lerp(0.35f, 1.0f, rand2);

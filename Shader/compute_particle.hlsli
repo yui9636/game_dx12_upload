@@ -146,16 +146,23 @@ cbuffer CbScene : register(b0)
 
 cbuffer COMPUTE_PARTICLE_RENDER_CONSTANT_BUFFER : register(b2)
 {
-    uint enable_velocity_stretch; // 0 は off、1 は on。
-    float velocity_stretch_scale; // 速度→縦倍率への係数（例 0.05）
-    float velocity_stretch_max_aspect; // 縦横比の上限（例 8.0）
-    float velocity_stretch_min_speed; // これ以下の速度はストレッチしない（例 0.0）
-    
+    uint  enable_velocity_stretch;      // 0 は off、1 は on。
+    float velocity_stretch_scale;       // 速度→縦倍率への係数（例 0.05）
+    float velocity_stretch_max_aspect;  // 縦横比の上限（例 8.0）
+    float velocity_stretch_min_speed;   // これ以下の速度はストレッチしない（例 0.0）
+
     float global_alpha;
-    
-    float curl_noise_strength; // 強さ (0なら無効)
-    float curl_noise_scale; // ノイズの粗さ (座標スケール)
-    float curl_move_speed; // ノイズのスクロール速度
+    float curl_noise_strength;          // 強さ (0なら無効)
+    float curl_noise_scale;             // ノイズの粗さ (座標スケール)
+    float curl_move_speed;              // ノイズのスクロール速度
+
+    // Stretch billboard モード。
+    // stretch_billboard != 0 のとき速度ベクトル方向へ完全に orient する。
+    // velocity_stretch_scale がゼロになっても常に orient する点が通常 stretch と異なる。
+    uint  stretch_billboard;            // 0 = 通常ビルボード、1 = stretch モード。
+    float stretch_factor;               // 速度大きさ × stretch_factor が縦倍率増分。
+    float stretch_pad0;
+    float stretch_pad1;
 };
 
 

@@ -168,6 +168,13 @@ namespace
         float curlNoiseStrength = 0.0f;
         float curlNoiseScale = 0.1f;
         float curlMoveSpeed = 0.2f;
+        // Stretch billboard モード。
+        // stretchBillboard != 0 のとき速度方向へ伸長する完全な velocity-align モードで動作する。
+        // velocityStretchScale はこのモードでは stretchFactor として解釈される。
+        uint32_t stretchBillboard = 0;   // 0 = 通常ビルボード、1 = stretch モード。
+        float    stretchFactor = 0.0f;   // 速度大きさ × stretchFactor が縦倍率増分。
+        float    stretchPad0 = 0.0f;
+        float    stretchPad1 = 0.0f;
     };
 
     struct CoarseDepthConstants
@@ -186,6 +193,7 @@ namespace
     static_assert((sizeof(EffectParticleSortConstants) % 16) == 0, "EffectParticleSortConstants must stay 16-byte aligned");
     static_assert((sizeof(EffectParticleSceneConstants) % 16) == 0, "EffectParticleSceneConstants must stay 16-byte aligned");
     static_assert((sizeof(EffectParticleRenderConstants) % 16) == 0, "EffectParticleRenderConstants must stay 16-byte aligned");
+    static_assert(sizeof(EffectParticleRenderConstants) == 48, "EffectParticleRenderConstants size changed — update HLSL cbuffer accordingly");
 
     struct ParticleCounterSnapshot
     {
@@ -3020,10 +3028,22 @@ void EffectParticlePass::Execute(FrameGraphResources& resources, const RenderQue
             }
 
             EffectParticleRenderConstants renderConstants{};
-            renderConstants.enableVelocityStretch = 1;
-            renderConstants.velocityStretchScale = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? (std::max)(drawEntry.packet->ribbonVelocityStretch, 0.18f) : 0.08f;
-            renderConstants.velocityStretchMaxAspect = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? 14.0f : 4.0f;
-            renderConstants.velocityStretchMinSpeed = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? 0.0f : 0.05f;
+            if (drawEntry.packet->stretchBillboard) {
+                // Stretch billboard モード: 速度方向へ完全に orient し、stretchFactor で伸長する。
+                renderConstants.enableVelocityStretch = 1;
+                renderConstants.velocityStretchScale = (std::max)(drawEntry.packet->stretchFactor, 0.0f);
+                renderConstants.velocityStretchMaxAspect = 16.0f;   // 火炎リング向けに広めの上限。
+                renderConstants.velocityStretchMinSpeed = 0.0f;
+                renderConstants.stretchBillboard = 1;
+                renderConstants.stretchFactor = (std::max)(drawEntry.packet->stretchFactor, 0.0f);
+            } else {
+                renderConstants.enableVelocityStretch = 1;
+                renderConstants.velocityStretchScale = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? (std::max)(drawEntry.packet->ribbonVelocityStretch, 0.18f) : 0.08f;
+                renderConstants.velocityStretchMaxAspect = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? 14.0f : 4.0f;
+                renderConstants.velocityStretchMinSpeed = (drawEntry.packet->drawMode == EffectParticleDrawMode::Ribbon) ? 0.0f : 0.05f;
+                renderConstants.stretchBillboard = 0;
+                renderConstants.stretchFactor = 0.0f;
+            }
             renderConstants.globalAlpha = 1.0f;
             renderConstants.curlNoiseStrength = drawEntry.packet->softParticleEnabled ? (std::max)(drawEntry.packet->softParticleScale, 0.0f) : 0.0f;
             const auto renderAllocation = dx12CommandList->AllocateDynamicConstantBuffer(&renderConstants, static_cast<uint32_t>(sizeof(renderConstants)));

@@ -125,17 +125,18 @@ def main():
         time.sleep(0.3)
         smoke_entity  = build_effect(c, "smoke",  SMOKE_PATH, SMOKE_PARAMS, "smoke")
 
-        # --- リングを最前面に表示してプレビュー角度設定 ---
-        c.effect_editor_open_workspace({"path": RING_PATH})
-        c.effect_editor_set_preview_view({
-            "yaw":        0.0,
-            "pitch":     -0.55,
-            "distance":   3.8,
-            "clearColor": [0.05, 0.04, 0.06, 1.0],
-        })
-        c.effect_editor_compile({"path": RING_PATH})
+        # --- リングワークスペースに戻してタイムライン再生 ---
+        # timeline_play が内部で open_workspace + 必要なら自動コンパイルを実施する
         r = c.effect_editor_timeline_play({"path": RING_PATH, "loop": True})
         print(f"\n--- Main preview entity: {r.get('previewEntity')} ---")
+
+        # --- タイムライン開始後にカメラ角度を設定 ---
+        # set_preview_view はワークスペースを自動でアクティブ化してからカメラを書き換える
+        c.effect_editor_set_preview_view({
+            "yaw":      0.0,
+            "pitch":   -0.55,
+            "distance": 3.8,
+        })
 
         # --- パーティクルが溜まるまで待機 ---
         print("Waiting for particles to accumulate...")

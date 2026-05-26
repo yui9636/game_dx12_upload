@@ -211,6 +211,11 @@ public:
     void SetSceneViewMode(SceneViewMode mode) { m_sceneViewMode = mode; }
     float GetSceneGridCellSize() const { return m_sceneGridCellSize; }
     int GetSceneGridHalfLineCount() const { return m_sceneGridHalfLineCount; }
+    // [AI AUTOMATION WARNING] This is the gate for the effect preview render pass.
+    // m_viewportTexture (and SetEffectPreviewTexture) is only populated when this returns true.
+    // Both conditions must hold: the Effect Editor window must be open AND its tab must be the active workspace.
+    // AI automation that calls SetPreviewCameraAutomation / effect_editor.set_preview_view without
+    // ensuring this gate is open will always receive a black preview texture — not a rendering of the effect.
     bool ShouldRenderEffectPreview() const { return m_showEffectEditor && m_activeWorkspace == WorkspaceTab::EffectEditor; }
     DirectX::XMFLOAT2 GetEffectPreviewRenderSize() const { return m_effectEditorPanel.GetPreviewRenderSize(); }
     DirectX::XMFLOAT3 GetEffectPreviewCameraPosition() const { return m_effectEditorPanel.GetPreviewCameraPosition(); }

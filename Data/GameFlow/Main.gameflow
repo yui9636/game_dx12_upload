@@ -1,42 +1,153 @@
 {
-  "nextNodeId": 3,
-  "nextTransitionId": 2,
+  "nextNodeId": 5,
+  "nextTransitionId": 5,
   "nodes": [
     {
       "id": 1,
-      "name": "Titile",
-      "posX": -296.0,
-      "posY": -181.0,
-      "scenePath": "Data/Scene/Titile.scene",
+      "name": "Sandbag_Title",
+      "posX": 100.0,
+      "posY": 200.0,
+      "scenePath": "Data/Scene/Sandbag_Title.scene",
       "type": "Scene"
     },
     {
       "id": 2,
-      "name": "test",
-      "posX": 89.0,
-      "posY": -119.0,
-      "scenePath": "Data/Scene/test.scene",
+      "name": "Sandbag_Loading",
+      "posX": 300.0,
+      "posY": 200.0,
+      "scenePath": "Data/Scene/Sandbag_Loading.scene",
+      "type": "Scene"
+    },
+    {
+      "id": 3,
+      "name": "Battle",
+      "posX": 500.0,
+      "posY": 200.0,
+      "scenePath": "",
+      "type": "Battle"
+    },
+    {
+      "id": 4,
+      "name": "Sandbag_Result",
+      "posX": 700.0,
+      "posY": 200.0,
+      "scenePath": "Data/Scene/Sandbag_Result.scene",
       "type": "Scene"
     }
   ],
   "startNodeId": 1,
   "transitions": [
     {
-      "actions": [],
-      "conditionMode": "All",
+      "actions": [
+        {
+          "boolValue": true,
+          "target": "Data/Scene/Sandbag_Loading.scene",
+          "type": "LoadScene"
+        }
+      ],
+      "conditionMode": "Any",
       "conditions": [
         {
           "expectedFlagValue": true,
-          "keyboardScancode": 29,
-          "type": "InputAction"
+          "type": "InputAction",
+          "value": "Confirm"
+        },
+        {
+          "expectedFlagValue": true,
+          "type": "UIButtonClick",
+          "value": "StartGame"
         }
       ],
       "fromNodeId": 1,
       "id": 1,
-      "loadingScenePath": "Data/Scene/Loaghing.scene",
-      "name": "Transition",
+      "name": "Title_to_Loading",
       "priority": 0,
       "toNodeId": 2
+    },
+    {
+      "actions": [
+        {
+          "boolValue": true,
+          "target": "Data/Scene/Sandbag_Game.scene",
+          "type": "LoadScene"
+        },
+        {
+          "boolValue": true,
+          "target": "sandbag",
+          "type": "StartBattleFlow"
+        }
+      ],
+      "conditionMode": "All",
+      "conditions": [
+        {
+          "expectedFlagValue": true,
+          "seconds": 1.5,
+          "type": "TimerElapsed"
+        }
+      ],
+      "fromNodeId": 2,
+      "id": 2,
+      "name": "Loading_to_Battle",
+      "priority": 0,
+      "toNodeId": 3
+    },
+    {
+      "actions": [
+        {
+          "boolValue": true,
+          "target": "Data/Scene/Sandbag_Result.scene",
+          "type": "LoadScene"
+        },
+        {
+          "boolValue": true,
+          "type": "ResetBattleFlow"
+        }
+      ],
+      "conditionMode": "Any",
+      "conditions": [
+        {
+          "expectedFlagValue": true,
+          "type": "BattleResult",
+          "value": "victory"
+        },
+        {
+          "expectedFlagValue": true,
+          "type": "BattleResult",
+          "value": "defeat"
+        },
+        {
+          "expectedFlagValue": true,
+          "type": "BattleResult",
+          "value": "draw"
+        }
+      ],
+      "fromNodeId": 3,
+      "id": 3,
+      "name": "Battle_to_Result",
+      "priority": 0,
+      "toNodeId": 4
+    },
+    {
+      "actions": [
+        {
+          "boolValue": true,
+          "target": "Data/Scene/Sandbag_Title.scene",
+          "type": "LoadScene"
+        }
+      ],
+      "conditionMode": "Any",
+      "conditions": [
+        {
+          "expectedFlagValue": true,
+          "type": "InputAction",
+          "value": "Confirm"
+        }
+      ],
+      "fromNodeId": 4,
+      "id": 4,
+      "name": "Result_to_Title",
+      "priority": 0,
+      "toNodeId": 1
     }
   ],
   "version": 1

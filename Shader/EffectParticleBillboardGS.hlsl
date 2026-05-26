@@ -58,13 +58,34 @@ void main(point GS_IN gin[1], inout TriangleStream<PS_IN> output)
     billboard_matrix._41_42_43 = float3(0, 0, 0);
     billboard_matrix._44 = 1.0f;
 
-    // 速度ストレッチ
+    // 速度ストレッチ / Stretch billboard モード
     float additional_roll = 0.0f;
-    if (enable_velocity_stretch != 0)
+
+    if (stretch_billboard != 0)
     {
+        // Stretch billboard モード: スプライトを速度ベクトル方向へ完全に orient する。
+        // 速度の大きさ × stretch_factor が縦倍率増分となる（最小倍率 1.0 に加算）。
+        float speed = length(hot.velocity);
+        if (speed > 1e-5f)
+        {
+            // カメラ平面への速度投影角を使って roll を決める。
+            float3 camera_right = normalize(float3(billboard_matrix._11, billboard_matrix._12, billboard_matrix._13));
+            float3 camera_up    = normalize(float3(billboard_matrix._21, billboard_matrix._22, billboard_matrix._23));
+            float vx = dot(hot.velocity, camera_right);
+            float vy = dot(hot.velocity, camera_up);
+            additional_roll = atan2(vx, vy);
+        }
+        // 縦スケール = 1 + speed * stretch_factor。横スケールは変えない。
+        float longitudinalScale = 1.0f + speed * stretch_factor;
+        longitudinalScale = min(longitudinalScale, velocity_stretch_max_aspect);
+        scale.y *= longitudinalScale;
+    }
+    else if (enable_velocity_stretch != 0)
+    {
+        // 通常の速度ストレッチ（既存の camera-facing ビルボードに角度と縦倍率を加える）。
         float speed = length(hot.velocity);
         float3 camera_right = normalize(float3(billboard_matrix._11, billboard_matrix._12, billboard_matrix._13));
-        float3 camera_up = normalize(float3(billboard_matrix._21, billboard_matrix._22, billboard_matrix._23));
+        float3 camera_up    = normalize(float3(billboard_matrix._21, billboard_matrix._22, billboard_matrix._23));
         float vx = dot(hot.velocity, camera_right);
         float vy = dot(hot.velocity, camera_up);
         additional_roll = (abs(vx) + abs(vy) > 1e-6f) ? atan2(vx, vy) : 0.0f;

@@ -42,6 +42,21 @@
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
 #include "Duplicate/DuplicateSystem.h"
+#include "Gameplay/BattleFlowSystem.h"
+#include "Gameplay/DamageEventComponent.h"
+#include "Gameplay/AnimatorComponent.h"
+#include "GameLoop/FlowEventQueue.h"
+#include "Input/ResolvedInputStateComponent.h"
+#include "Input/InputActionMapComponent.h"
+#include "Component/TextComponent.h"
+#include "Component/ColliderComponent.h"
+#include "System/Query.h"
+#include "Physics/PhysicsManager.h"
+#include "RenderContext/RenderQueue.h"
+#include <regex>
+#include <algorithm>
+#include <cctype>
+#include <fstream>
 #include "Engine/EditorSelection.h"
 #include "Engine/EngineKernel.h"
 #include "EffectRuntime/EffectCompiler.h"
@@ -2463,21 +2478,69 @@ namespace
 
     json HandleECSDiff(Registry& registry, const json& params)
     {
-        static std::unordered_map<std::string, json> previousSnapshot;
+        // implicit baseline (action未指定 / "diff") は revision を1つ進める従来挙動。
+        // "snapshot" は baseline 上書きのみ、"reset" は baseline 破棄、"list" は保存済み名前一覧。
+        // name 付きの場合はその名前空間に baseline を保存し、diff/snapshot/reset を独立に扱う。
+        static std::unordered_map<std::string, json> implicitSnapshot;
+        static std::unordered_map<std::string, std::unordered_map<std::string, json>> namedSnapshots;
         static uint64_t revision = 0;
 
-        const bool reset = params.value("reset", false);
+        const std::string action = ToLowerCopy(params.value("action", std::string("diff")));
+        const std::string name = params.value("name", std::string{});
+        const bool reset = params.value("reset", false) || action == "reset";
         const bool includeBeforeAfter = params.value("includeBeforeAfter", true);
+
+        if (action == "list") {
+            json names = json::array();
+            for (const auto& [n, _] : namedSnapshots) {
+                names.push_back(n);
+            }
+            return {
+                { "snapshots", std::move(names) },
+                { "hasImplicit", !implicitSnapshot.empty() },
+                { "revision", revision }
+            };
+        }
+
         std::unordered_map<std::string, json> current = BuildECSObservationSnapshot(registry);
 
+        auto& baseline = name.empty() ? implicitSnapshot : namedSnapshots[name];
+
+        if (action == "snapshot") {
+            // baseline 上書きのみ、diff 計算しない。
+            baseline = std::move(current);
+            return {
+                { "action", "snapshot" },
+                { "name", name },
+                { "entityCount", static_cast<int>(baseline.size()) },
+                { "baselineReset", true }
+            };
+        }
+
+        if (reset) {
+            // baseline 破棄。
+            if (name.empty()) {
+                implicitSnapshot.clear();
+            }
+            else {
+                namedSnapshots.erase(name);
+            }
+            return {
+                { "action", "reset" },
+                { "name", name },
+                { "baselineReset", true }
+            };
+        }
+
+        // ここから diff 本体。
         json added = json::array();
         json removed = json::array();
         json changed = json::array();
 
-        if (!reset && !previousSnapshot.empty()) {
+        if (!baseline.empty()) {
             for (const auto& [entity, currentRecord] : current) {
-                auto it = previousSnapshot.find(entity);
-                if (it == previousSnapshot.end()) {
+                auto it = baseline.find(entity);
+                if (it == baseline.end()) {
                     added.push_back(currentRecord);
                 }
                 else if (it->second != currentRecord) {
@@ -2493,19 +2556,25 @@ namespace
                 }
             }
 
-            for (const auto& [entity, previousRecord] : previousSnapshot) {
+            for (const auto& [entity, previousRecord] : baseline) {
                 if (current.find(entity) == current.end()) {
                     removed.push_back(previousRecord);
                 }
             }
         }
 
-        previousSnapshot = std::move(current);
-        ++revision;
+        // 名前なし diff は従来通り baseline を更新。
+        // 名前付き diff は baseline を据え置く (繰り返し同じ基準点と比較できる)。
+        if (name.empty()) {
+            baseline = std::move(current);
+            ++revision;
+        }
 
         return {
+            { "action", "diff" },
+            { "name", name },
             { "revision", revision },
-            { "baselineReset", reset || revision == 1 },
+            { "baselineReset", baseline.empty() && name.empty() },
             { "added", std::move(added) },
             { "removed", std::move(removed) },
             { "changed", std::move(changed) }
@@ -5999,6 +6068,9 @@ namespace
             else if (shape == "cone") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Cone);
             else if (shape == "circle") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Circle);
             else if (shape == "line") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Line);
+            else if (shape == "ring") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Ring);
+            // "point" は 0 なので、未知の文字列は sphere (1) にフォールバックする。
+            else if (shape == "point") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Point);
             else emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Sphere);
         }
         if (fields.contains("shapeParams") && fields["shapeParams"].is_array()) {
@@ -6214,11 +6286,20 @@ namespace
         return { { "asset", EffectGraphSummaryToJson(asset, path) } };
     }
 
+    // effect_editor.set_preview_view routes here.
+    // Requires the Effect Editor workspace to already be active (ShouldRenderEffectPreview() == true).
+    // Use effect_editor.open_workspace or effect_editor.timeline_play first to activate it.
+    // This function only writes camera member variables; it does NOT touch workspace state.
     json HandleEffectSetPreviewView(EngineKernel& kernel, const json& params)
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
             throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+        }
+        if (!editor->IsEffectEditorWorkspaceActive()) {
+            throw MakeError("operation_not_allowed",
+                "Effect Editor workspace is not active. Call effect_editor.open_workspace or "
+                "effect_editor.timeline_play first to activate it before setting the preview view.");
         }
         DirectX::XMFLOAT3 target = editor->GetEffectEditorPanel().GetPreviewCameraTarget();
         if (params.contains("target")) {
@@ -6259,12 +6340,19 @@ namespace
     {
         std::filesystem::path path;
         EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
-        const uint32_t nodeId = params.value("nodeId", 0u);
+        // Accept both "nodeId" and "id" for the node identifier.
+        const uint32_t nodeId = params.contains("nodeId")
+            ? params.value("nodeId", 0u)
+            : params.value("id", 0u);
         EffectGraphNode* node = asset.FindNode(nodeId);
         if (!node) {
             throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
         }
-        ApplyEffectNodeFields(*node, params.value("fields", json::object()));
+        // Support two calling conventions:
+        //   (a) Nested: params["fields"] contains the field map (used by the JSON sample files).
+        //   (b) Flat:   scalar, vectorValue, etc. are passed directly in params (used by the SDK).
+        const json& fields = params.contains("fields") ? params["fields"] : params;
+        ApplyEffectNodeFields(*node, fields);
         const json nodeJson = EffectNodeToJson(*node);
         SaveEffectGraphAssetOrThrow(path, asset);
         RevealEffectEditorChange(kernel, params, path);
@@ -7614,6 +7702,58 @@ namespace
             panel.SelectTrack(id);
             return { { "selectedTrackId", id } };
         }
+        if (params.contains("colliderIndex")) {
+            const int idx = params["colliderIndex"].get<int>();
+            ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+            const int count = comp ? static_cast<int>(comp->elements.size()) : 0;
+            if (idx < -1 || idx >= count) {
+                throw MakeError("out_of_range", "Collider index out of range.", {
+                    { "colliderIndex", idx },
+                    { "elementCount", count }
+                });
+            }
+            panel.SelectColliderAutomation(idx);
+            return { { "selectedColliderIndex", idx } };
+        }
+        if (params.contains("socketIndex")) {
+            const int idx = params["socketIndex"].get<int>();
+            const int count = static_cast<int>(panel.GetSockets().size());
+            if (idx < -1 || idx >= count) {
+                throw MakeError("out_of_range", "Socket index out of range.", {
+                    { "socketIndex", idx },
+                    { "socketCount", count }
+                });
+            }
+            panel.SelectSocket(idx);
+            return { { "selectedSocketIndex", idx } };
+        }
+        // 後方互換: selection 文字列ヒントを受け取った場合は index と組み合わせて解決する。
+        if (params.contains("selection")) {
+            const std::string sel = ToLowerCopy(params["selection"].get<std::string>());
+            if (sel == "collider" && params.contains("index")) {
+                const int idx = params["index"].get<int>();
+                ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
+                const int count = comp ? static_cast<int>(comp->elements.size()) : 0;
+                if (idx < -1 || idx >= count) {
+                    throw MakeError("out_of_range", "Collider index out of range.", {
+                        { "index", idx }, { "elementCount", count }
+                    });
+                }
+                panel.SelectColliderAutomation(idx);
+                return { { "selectedColliderIndex", idx } };
+            }
+            if (sel == "socket" && params.contains("index")) {
+                const int idx = params["index"].get<int>();
+                const int count = static_cast<int>(panel.GetSockets().size());
+                if (idx < -1 || idx >= count) {
+                    throw MakeError("out_of_range", "Socket index out of range.", {
+                        { "index", idx }, { "socketCount", count }
+                    });
+                }
+                panel.SelectSocket(idx);
+                return { { "selectedSocketIndex", idx } };
+            }
+        }
 
         panel.ClearEditorSelection();
         return { { "cleared", true } };
@@ -8549,6 +8689,138 @@ namespace
         panel.ClearEditorSelection();
 
         return { { "deleted", idx }, { "remaining", static_cast<int>(comp->elements.size()) } };
+    }
+
+    // =========================================================
+    // 任意エンティティの ColliderComponent 操作。
+    // set_component_fields は std::vector<ColliderElement> をサポートしないので、
+    // ランタイム/Play scene 上の Player/Enemy 等の collider 編集には専用 API が必要。
+    // =========================================================
+
+    json HandleEntityAddColliderElement(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
+        if (!comp) {
+            registry.AddComponent(entity, ColliderComponent{});
+            comp = registry.GetComponent<ColliderComponent>(entity);
+        }
+        if (!comp) {
+            throw MakeError("component_add_failed", "Failed to add ColliderComponent.");
+        }
+
+        ColliderComponent::Element e;
+        if (params.contains("attribute"))   e.attribute = ColliderAttributeFromString(params["attribute"].get<std::string>());
+        if (params.contains("type"))        e.type      = ColliderShapeFromString(params["type"].get<std::string>());
+        if (params.contains("nodeIndex"))   e.nodeIndex = params["nodeIndex"].get<int>();
+        if (params.contains("radius"))      e.radius    = params["radius"].get<float>();
+        if (params.contains("height"))      e.height    = params["height"].get<float>();
+        if (params.contains("enabled"))     e.enabled   = params["enabled"].get<bool>();
+        if (params.contains("hitVfxPath"))  e.hitVfxPath = params["hitVfxPath"].get<std::string>();
+        if (params.contains("hitSfxPath"))  e.hitSfxPath = params["hitSfxPath"].get<std::string>();
+        if (params.contains("offsetLocal")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["offsetLocal"], v);
+            e.offsetLocal = { v.x, v.y, v.z };
+        }
+        if (params.contains("size")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["size"], v);
+            e.size = { v.x, v.y, v.z };
+        }
+        if (params.contains("color")) {
+            DirectX::XMFLOAT4 c{};
+            ReadFloat4(params["color"], c);
+            e.color = { c.x, c.y, c.z, c.w };
+        }
+        comp->elements.push_back(e);
+        const int newIdx = static_cast<int>(comp->elements.size()) - 1;
+        return ColliderElementToJson(newIdx, comp->elements[newIdx]);
+    }
+
+    json HandleEntitySetColliderElement(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
+        if (!comp) {
+            throw MakeError("not_found", "No ColliderComponent on this entity.");
+        }
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
+            throw MakeError("out_of_range", "Collider index out of range.", {
+                { "index", idx }, { "elementCount", static_cast<int>(comp->elements.size()) }
+            });
+        }
+        auto& e = comp->elements[idx];
+        if (params.contains("attribute"))   e.attribute = ColliderAttributeFromString(params["attribute"].get<std::string>());
+        if (params.contains("type"))        e.type      = ColliderShapeFromString(params["type"].get<std::string>());
+        if (params.contains("nodeIndex"))   e.nodeIndex = params["nodeIndex"].get<int>();
+        if (params.contains("radius"))      e.radius    = params["radius"].get<float>();
+        if (params.contains("height"))      e.height    = params["height"].get<float>();
+        if (params.contains("enabled"))     e.enabled   = params["enabled"].get<bool>();
+        if (params.contains("hitVfxPath"))  e.hitVfxPath = params["hitVfxPath"].get<std::string>();
+        if (params.contains("hitSfxPath"))  e.hitSfxPath = params["hitSfxPath"].get<std::string>();
+        if (params.contains("offsetLocal")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["offsetLocal"], v);
+            e.offsetLocal = { v.x, v.y, v.z };
+        }
+        if (params.contains("size")) {
+            DirectX::XMFLOAT3 v{};
+            ReadFloat3(params["size"], v);
+            e.size = { v.x, v.y, v.z };
+        }
+        if (params.contains("color")) {
+            DirectX::XMFLOAT4 c{};
+            ReadFloat4(params["color"], c);
+            e.color = { c.x, c.y, c.z, c.w };
+        }
+        return ColliderElementToJson(idx, e);
+    }
+
+    json HandleEntityDeleteColliderElement(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
+        if (!comp) {
+            throw MakeError("not_found", "No ColliderComponent on this entity.");
+        }
+        const int idx = params.value("index", -1);
+        if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
+            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+        }
+        comp->elements.erase(comp->elements.begin() + idx);
+        return { { "deleted", idx }, { "remaining", static_cast<int>(comp->elements.size()) } };
+    }
+
+    json HandleEntityListColliderElements(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
+        json list = json::array();
+        if (comp) {
+            for (int i = 0; i < static_cast<int>(comp->elements.size()); ++i) {
+                list.push_back(ColliderElementToJson(i, comp->elements[i]));
+            }
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "elements", std::move(list) },
+            { "drawGizmo", comp ? comp->drawGizmo : false },
+            { "enabled",   comp ? comp->enabled   : false }
+        };
     }
 
     // =========================================================
@@ -9884,6 +10156,1199 @@ namespace
     bool g_ecsWatchEnabled = false;
     uint64_t g_lastBroadcastEcsRevision = UINT64_MAX;
 
+    // ecs.watch を request-response 経路から読むための pull バッファ。
+    // 各呼び出しで現在の ECS revision と前回 pull した revision の差分件数を返す。
+    // 名前ごとに独立 cursor を持つので複数の購読者が同じ stream を消費できる。
+    std::unordered_map<std::string, uint64_t> g_ecsWatchPullCursors;
+    uint64_t g_lastPullSnapshotRev = 0;
+
+    // collision.events.pull / log.tail.pull 用の cursor 管理。
+    // queue 側 (DamageEventRuntimeQueue / Logger) は監視時点での累積件数で位置決め。
+    std::unordered_map<std::string, size_t> g_collisionPullCursors;
+    std::unordered_map<std::string, size_t> g_logPullCursors;
+
+    // =========================================================
+    // Phase 1: Observation layer extensions
+    // =========================================================
+
+    // ---- 1) gameflow.get_runtime_state ----
+    json HandleGameFlowGetRuntimeState(EngineKernel& kernel, Registry& gameRegistry)
+    {
+        const GameLoopRuntime& rt = kernel.GetGameLoopRuntime();
+        const GameLoopAsset& asset = kernel.GetGameLoopAsset();
+        const bool registered = kernel.IsGameLoopAssetRegistered();
+
+        auto findNodeName = [&](uint32_t id) -> std::string {
+            for (const auto& n : asset.nodes) if (n.id == id) return n.name;
+            return std::string{};
+        };
+        auto findNodeType = [&](uint32_t id) -> std::string {
+            for (const auto& n : asset.nodes) if (n.id == id) return GameLoopNodeTypeToString(n.type);
+            return std::string{};
+        };
+
+        // 現在ノードから出ていく transition の condition 評価結果を返す。
+        // GameLoopSystem の IsConditionSatisfied は private なのでここでは
+        // flowEvent 内容を直接照合する簡易版を使う（観測用途）。
+        const FlowEventQueue& flowEvents = kernel.GetFlowEventQueue();
+        json pendingTransitions = json::array();
+        for (const auto& t : asset.transitions) {
+            if (t.fromNodeId != rt.currentNodeId) continue;
+            json conds = json::array();
+            for (size_t ci = 0; ci < t.conditions.size(); ++ci) {
+                const auto& c = t.conditions[ci];
+                bool satisfied = false;
+                switch (c.type) {
+                case GameFlowConditionType::Event:
+                    satisfied = flowEvents.Contains(c.name, c.value); break;
+                case GameFlowConditionType::InputAction:
+                    if (c.keyboardScancode != 0)
+                        satisfied = flowEvents.Contains("input.keyboard.down", std::to_string(c.keyboardScancode));
+                    if (!satisfied && !c.value.empty())
+                        satisfied = flowEvents.Contains("input.action.pressed", c.value);
+                    break;
+                case GameFlowConditionType::UIButtonClick:
+                    satisfied = flowEvents.Contains("ui.button.clicked", c.value); break;
+                case GameFlowConditionType::TimerElapsed:
+                    satisfied = rt.nodeTimer >= c.seconds; break;
+                case GameFlowConditionType::FlagEquals: {
+                    auto it = rt.flags.find(c.name);
+                    const bool current = (it != rt.flags.end()) && it->second;
+                    satisfied = (current == c.expectedFlagValue);
+                    break;
+                }
+                case GameFlowConditionType::BattleResult:
+                    satisfied = flowEvents.Contains("battle.ended", c.value) ||
+                                flowEvents.Contains("battle.result", c.value);
+                    break;
+                case GameFlowConditionType::SceneLoaded:
+                    satisfied = flowEvents.Contains("scene.loaded", c.value); break;
+                }
+                conds.push_back({
+                    { "index", static_cast<int>(ci) },
+                    { "type", GameFlowConditionTypeToString(c.type) },
+                    { "name", c.name },
+                    { "value", c.value },
+                    { "seconds", c.seconds },
+                    { "expectedFlagValue", c.expectedFlagValue },
+                    { "keyboardScancode", c.keyboardScancode },
+                    { "satisfied", satisfied }
+                });
+            }
+            pendingTransitions.push_back({
+                { "transitionId", t.id },
+                { "name", t.name },
+                { "fromNodeId", t.fromNodeId },
+                { "toNodeId", t.toNodeId },
+                { "toNodeName", findNodeName(t.toNodeId) },
+                { "priority", t.priority },
+                { "conditionMode", t.conditionMode == GameFlowConditionMode::Any ? "Any" : "All" },
+                { "conditions", std::move(conds) }
+            });
+        }
+
+        json flagsJson = json::object();
+        for (const auto& [k, v] : rt.flags) flagsJson[k] = v;
+
+        return {
+            { "registered", registered },
+            { "isActive", rt.isActive },
+            { "currentNodeId", rt.currentNodeId },
+            { "currentNodeName", findNodeName(rt.currentNodeId) },
+            { "currentNodeType", findNodeType(rt.currentNodeId) },
+            { "previousNodeId", rt.previousNodeId },
+            { "pendingNodeId", rt.pendingNodeId },
+            { "currentScenePath", rt.currentScenePath },
+            { "pendingScenePath", rt.pendingScenePath },
+            { "sceneTransitionRequested", rt.sceneTransitionRequested },
+            { "waitingSceneLoad", rt.waitingSceneLoad },
+            { "forceReload", rt.forceReload },
+            { "nodeTimer", rt.nodeTimer },
+            { "pendingActionCount", static_cast<int>(rt.pendingActions.size()) },
+            { "actionWaitRemaining", rt.actionWaitRemaining },
+            { "fadeRemaining", rt.fadeRemaining },
+            { "loadingOverlayVisible", rt.loadingOverlayVisible },
+            { "flags", std::move(flagsJson) },
+            { "pendingTransitions", std::move(pendingTransitions) },
+            { "battleFlow", {
+                { "phase", BattleFlowSystem::GetPhase() },
+                { "remainingTime", BattleFlowSystem::GetRemainingTime() }
+            } }
+        };
+        (void)gameRegistry;
+    }
+
+    // ---- 2) collision.events.pull ----
+    json HandleCollisionEventsPull(Registry& gameRegistry, const json& params)
+    {
+        (void)gameRegistry;
+        const std::string cursorName = params.value("cursorName", std::string("default"));
+        const int maxEvents = params.value("maxEvents", 64);
+        const bool peek = params.value("peek", false);
+        const auto& recent = DamageEventRuntimeQueue::GetRecent();
+        const size_t total = recent.size();
+
+        // cursor 戦略: DamageEventRuntimeQueue は ring buffer (capacity 128) なので、
+        // 連続番号は保証されない。cursor は「直近 N 件のうち、前回 pull 時点での 'queue end' 位置」を保存し、
+        // 次回 pull で size が増えた分だけ返す方式にする。
+        size_t prev = 0;
+        auto it = g_collisionPullCursors.find(cursorName);
+        if (it != g_collisionPullCursors.end()) prev = it->second;
+
+        size_t startIdx = 0;
+        if (prev < total) startIdx = total - (total - prev);
+        else startIdx = total; // 何も新しいものはない
+
+        size_t newCount = (total > prev) ? (total - prev) : 0;
+        if (static_cast<int>(newCount) > maxEvents) {
+            startIdx = total - maxEvents;
+            newCount = maxEvents;
+        }
+
+        json events = json::array();
+        for (size_t i = startIdx; i < total; ++i) {
+            const auto& ev = recent[i];
+            events.push_back({
+                { "attackerEntity", EntityToString(ev.attacker) },
+                { "victimEntity", EntityToString(ev.victim) },
+                { "damageAmount", ev.amount },
+                { "hitPoint", json::array({ ev.hitPoint.x, ev.hitPoint.y, ev.hitPoint.z }) },
+                { "knockbackDir", json::array({ ev.knockbackDir.x, ev.knockbackDir.y, ev.knockbackDir.z }) },
+                { "knockbackPower", ev.knockbackPower },
+                { "hitStopSec", ev.hitStopSec },
+                { "reactionKind", static_cast<int>(ev.reactionKind) },
+                { "hitVfxPath", ev.hitVfxPath },
+                { "hitSfxPath", ev.hitSfxPath }
+            });
+        }
+
+        if (!peek) {
+            g_collisionPullCursors[cursorName] = total;
+        }
+
+        return {
+            { "cursorName", cursorName },
+            { "previousCursor", static_cast<int>(prev) },
+            { "currentCursor", static_cast<int>(total) },
+            { "newEventCount", static_cast<int>(newCount) },
+            { "events", std::move(events) },
+            { "truncated", newCount > static_cast<size_t>(maxEvents) }
+        };
+    }
+
+    // ---- 3) bone.list / bone.get_world / bone.get_world_batch ----
+    static const Model* GetEntityModel(Registry& registry, EntityID entity)
+    {
+        auto* mesh = registry.GetComponent<MeshComponent>(entity);
+        if (!mesh || !mesh->model) return nullptr;
+        return mesh->model.get();
+    }
+
+    json HandleBoneList(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        if (!model) {
+            return { { "entity", EntityToString(entity) }, { "bones", json::array() },
+                     { "note", "Entity has no MeshComponent.model" } };
+        }
+        const auto& nodes = model->GetNodes();
+        json bones = json::array();
+        for (size_t i = 0; i < nodes.size(); ++i) {
+            const auto& n = nodes[i];
+            bones.push_back({
+                { "index", static_cast<int>(i) },
+                { "name", n.name },
+                { "parentIndex", n.parentIndex }
+            });
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "boneCount", static_cast<int>(nodes.size()) },
+            { "bones", std::move(bones) }
+        };
+    }
+
+    json HandleBoneGetWorld(Registry& registry, const json& params)
+    {
+        using namespace DirectX;
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        if (!model) {
+            throw MakeError("no_model", "Entity has no MeshComponent.model.");
+        }
+        auto* transform = registry.GetComponent<TransformComponent>(entity);
+        if (!transform) {
+            throw MakeError("no_transform", "Entity has no TransformComponent.");
+        }
+        const auto& nodes = model->GetNodes();
+        int boneIndex = -1;
+        if (params.contains("boneIndex")) {
+            boneIndex = params["boneIndex"].get<int>();
+        } else if (params.contains("boneName")) {
+            const std::string name = params["boneName"].get<std::string>();
+            for (size_t i = 0; i < nodes.size(); ++i) {
+                if (nodes[i].name == name) { boneIndex = static_cast<int>(i); break; }
+            }
+            if (boneIndex < 0) {
+                throw MakeError("bone_not_found", "Bone name not found in model.", { { "boneName", name } });
+            }
+        } else {
+            throw MakeError("missing_param", "boneIndex or boneName is required.");
+        }
+        if (boneIndex < 0 || static_cast<size_t>(boneIndex) >= nodes.size()) {
+            throw MakeError("out_of_range", "Bone index out of range.", { { "boneIndex", boneIndex }, { "count", static_cast<int>(nodes.size()) } });
+        }
+
+        DirectX::XMFLOAT3 offsetLocal{ 0.0f, 0.0f, 0.0f };
+        if (params.contains("offsetLocal")) ReadFloat3(params["offsetLocal"], offsetLocal);
+
+        const auto& node = nodes[boneIndex];
+        XMMATRIX entityWorld = XMLoadFloat4x4(&transform->worldMatrix);
+        XMMATRIX boneLocalWorld = XMLoadFloat4x4(&node.worldTransform); // model-space
+        XMMATRIX boneFinalWorld = boneLocalWorld * entityWorld;
+
+        XMVECTOR worldPos = XMVector3TransformCoord(XMLoadFloat3(&offsetLocal), boneFinalWorld);
+        XMFLOAT3 worldPosF{};
+        XMStoreFloat3(&worldPosF, worldPos);
+
+        XMVECTOR scale, rot, trans;
+        XMMatrixDecompose(&scale, &rot, &trans, boneFinalWorld);
+        XMFLOAT4 rotF{}; XMStoreFloat4(&rotF, rot);
+        XMFLOAT3 transF{}; XMStoreFloat3(&transF, trans);
+        XMFLOAT3 scaleF{}; XMStoreFloat3(&scaleF, scale);
+
+        return {
+            { "entity", EntityToString(entity) },
+            { "boneIndex", boneIndex },
+            { "boneName", node.name },
+            { "parentIndex", node.parentIndex },
+            { "worldPosition", json::array({ worldPosF.x, worldPosF.y, worldPosF.z }) },
+            { "worldRotation", json::array({ rotF.x, rotF.y, rotF.z, rotF.w }) },
+            { "worldScale", json::array({ scaleF.x, scaleF.y, scaleF.z }) },
+            { "bonePivotWorld", json::array({ transF.x, transF.y, transF.z }) },
+            { "offsetLocal", json::array({ offsetLocal.x, offsetLocal.y, offsetLocal.z }) }
+        };
+    }
+
+    json HandleBoneGetWorldBatch(Registry& registry, const json& params)
+    {
+        json results = json::array();
+        if (!params.contains("queries") || !params["queries"].is_array()) {
+            throw MakeError("missing_param", "queries[] is required.");
+        }
+        for (const auto& q : params["queries"]) {
+            json item;
+            try {
+                item = HandleBoneGetWorld(registry, q);
+                item["ok"] = true;
+            } catch (const json& e) {
+                item = { { "ok", false }, { "error", e } };
+            }
+            results.push_back(std::move(item));
+        }
+        return { { "results", std::move(results) } };
+    }
+
+    // ---- 4) log.tail / log.pull / log.clear ----
+    static std::string LogLevelToString(LogLevel level)
+    {
+        switch (level) {
+        case LogLevel::Info: return "Info";
+        case LogLevel::Warning: return "Warning";
+        case LogLevel::Error: return "Error";
+        }
+        return "Unknown";
+    }
+    static bool LogLevelMeetsMin(LogLevel level, const std::string& minStr)
+    {
+        const std::string m = ToLowerCopy(minStr);
+        int levelN = (level == LogLevel::Error) ? 2 : (level == LogLevel::Warning ? 1 : 0);
+        int minN = 0;
+        if (m == "warning" || m == "warn") minN = 1;
+        else if (m == "error") minN = 2;
+        return levelN >= minN;
+    }
+
+    json HandleLogTail(const json& params)
+    {
+        const int lines = params.value("lines", 50);
+        const std::string minSeverity = params.value("minSeverity", std::string("info"));
+        const std::string filter = params.value("filterRegex", std::string{});
+
+        const auto& logs = Logger::Instance().GetLogs();
+        const size_t total = logs.size();
+        std::vector<json> matched;
+        matched.reserve(std::min<size_t>(total, 256));
+
+        std::regex re;
+        bool useRegex = false;
+        if (!filter.empty()) {
+            try { re = std::regex(filter); useRegex = true; }
+            catch (...) { /* ignore bad regex, no filter */ }
+        }
+
+        for (size_t i = 0; i < total; ++i) {
+            const auto& e = logs[i];
+            if (!LogLevelMeetsMin(e.level, minSeverity)) continue;
+            if (useRegex && !std::regex_search(e.message, re)) continue;
+            matched.push_back({
+                { "index", static_cast<int>(i) },
+                { "severity", LogLevelToString(e.level) },
+                { "message", e.message }
+            });
+        }
+        // 末尾 N 件
+        const size_t take = (lines > 0 && static_cast<size_t>(lines) < matched.size())
+            ? static_cast<size_t>(lines) : matched.size();
+        json out = json::array();
+        for (size_t i = matched.size() - take; i < matched.size(); ++i) {
+            out.push_back(matched[i]);
+        }
+        return {
+            { "totalLogCount", static_cast<int>(total) },
+            { "matchedCount", static_cast<int>(matched.size()) },
+            { "returnedCount", static_cast<int>(take) },
+            { "lines", std::move(out) }
+        };
+    }
+
+    json HandleLogPull(const json& params)
+    {
+        const std::string cursorName = params.value("cursorName", std::string("default"));
+        const std::string minSeverity = params.value("minSeverity", std::string("info"));
+        const int maxLines = params.value("maxLines", 256);
+        const bool peek = params.value("peek", false);
+
+        const auto& logs = Logger::Instance().GetLogs();
+        const size_t total = logs.size();
+        size_t prev = 0;
+        auto it = g_logPullCursors.find(cursorName);
+        if (it != g_logPullCursors.end()) prev = it->second;
+
+        if (prev > total) prev = 0;
+
+        json out = json::array();
+        size_t emitted = 0;
+        for (size_t i = prev; i < total && emitted < static_cast<size_t>(maxLines); ++i) {
+            const auto& e = logs[i];
+            if (!LogLevelMeetsMin(e.level, minSeverity)) continue;
+            out.push_back({
+                { "index", static_cast<int>(i) },
+                { "severity", LogLevelToString(e.level) },
+                { "message", e.message }
+            });
+            ++emitted;
+        }
+
+        if (!peek) g_logPullCursors[cursorName] = total;
+
+        return {
+            { "cursorName", cursorName },
+            { "previousCursor", static_cast<int>(prev) },
+            { "currentCursor", static_cast<int>(total) },
+            { "returnedCount", static_cast<int>(out.size()) },
+            { "lines", std::move(out) }
+        };
+    }
+
+    json HandleLogClear()
+    {
+        Logger::Instance().ClearLogs();
+        g_logPullCursors.clear();
+        return { { "cleared", true } };
+    }
+
+    // =========================================================
+    // Phase 2: 中核観測 API
+    // =========================================================
+
+    // ---- animator.get_state ----
+    static json AnimatorLayerToJson(const AnimatorComponent::LayerState& l, const Model* model)
+    {
+        std::string animName = "";
+        float secondsLength = 0.0f;
+        if (model && l.currentAnimIndex >= 0) {
+            const auto& anims = model->GetAnimations();
+            if (l.currentAnimIndex < static_cast<int>(anims.size())) {
+                animName = anims[l.currentAnimIndex].name;
+                secondsLength = anims[l.currentAnimIndex].secondsLength;
+            }
+        }
+        const float progress = (secondsLength > 0.0f)
+            ? ((std::min)(1.0f, (std::max)(0.0f, l.currentTime / secondsLength)))
+            : 0.0f;
+        return {
+            { "currentAnimIndex", l.currentAnimIndex },
+            { "currentAnimName", animName },
+            { "currentTime", l.currentTime },
+            { "secondsLength", secondsLength },
+            { "progress", progress },
+            { "currentSpeed", l.currentSpeed },
+            { "isLoop", l.isLoop },
+            { "weight", l.weight },
+            { "isFullBody", l.isFullBody },
+            { "prevAnimIndex", l.prevAnimIndex },
+            { "blendDuration", l.blendDuration },
+            { "blendTimer", l.blendTimer },
+            { "isBlending", l.isBlending }
+        };
+    }
+    json HandleAnimatorGetState(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        auto* anim = registry.GetComponent<AnimatorComponent>(entity);
+        if (!anim) {
+            throw MakeError("no_animator", "Entity has no AnimatorComponent.");
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        return {
+            { "entity", EntityToString(entity) },
+            { "baseLayer", AnimatorLayerToJson(anim->baseLayer, model) },
+            { "actionLayer", AnimatorLayerToJson(anim->actionLayer, model) },
+            { "enableRootMotion", anim->enableRootMotion },
+            { "bakeRootMotionY", anim->bakeRootMotionY },
+            { "rootMotionScale", anim->rootMotionScale },
+            { "rootMotionDelta", json::array({ anim->rootMotionDelta.x, anim->rootMotionDelta.y, anim->rootMotionDelta.z }) },
+            { "driverConnected", anim->driverConnected },
+            { "driverOverrideAnimIndex", anim->driverOverrideAnimIndex }
+        };
+    }
+
+    // ---- input.get_resolved_state ----
+    json HandleInputGetResolvedState(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        auto* resolved = registry.GetComponent<ResolvedInputStateComponent>(entity);
+        auto* actionMap = registry.GetComponent<InputActionMapComponent>(entity);
+        if (!resolved) {
+            throw MakeError("no_resolved_input", "Entity has no ResolvedInputStateComponent.");
+        }
+        json actions = json::array();
+        const int actionCount = (std::min)(static_cast<int>(resolved->actionCount),
+            actionMap ? static_cast<int>(actionMap->asset.actions.size()) : static_cast<int>(resolved->actionCount));
+        for (int i = 0; i < actionCount; ++i) {
+            const auto& s = resolved->actions[i];
+            std::string name = (actionMap && i < static_cast<int>(actionMap->asset.actions.size()))
+                ? actionMap->asset.actions[i].actionName : std::string{};
+            actions.push_back({
+                { "index", i },
+                { "name", name },
+                { "pressed", s.pressed },
+                { "held", s.held },
+                { "released", s.released },
+                { "value", s.value },
+                { "framesSincePressed", s.framesSincePressed },
+                { "framesSinceReleased", s.framesSinceReleased }
+            });
+        }
+        json axes = json::array();
+        const int axisCount = (std::min)(static_cast<int>(resolved->axisCount),
+            actionMap ? static_cast<int>(actionMap->asset.axes.size()) : static_cast<int>(resolved->axisCount));
+        for (int i = 0; i < axisCount; ++i) {
+            std::string name = (actionMap && i < static_cast<int>(actionMap->asset.axes.size()))
+                ? actionMap->asset.axes[i].axisName : std::string{};
+            axes.push_back({
+                { "index", i },
+                { "name", name },
+                { "value", resolved->axes[i] }
+            });
+        }
+        return {
+            { "entity", EntityToString(entity) },
+            { "actions", std::move(actions) },
+            { "axes", std::move(axes) },
+            { "pointer", json::array({ resolved->pointerX, resolved->pointerY }) },
+            { "delta", json::array({ resolved->deltaX, resolved->deltaY }) },
+            { "scroll", json::array({ resolved->scrollX, resolved->scrollY }) },
+            { "lastDeviceType", static_cast<int>(resolved->lastDeviceType) }
+        };
+    }
+
+    // ---- ecs.field.get ----
+    // 単一 field を ComponentMeta 経由で取る。set_component_fields の get 版。
+    // FieldValueToJson が型分岐するので IsEditableFieldType 型のみ扱える。
+    template<typename Component, typename FieldT>
+    void TryGetSingleField(const Component& comp, const FieldT& field, const std::string& fieldName,
+                            json& outValue, std::string& outType, bool& found)
+    {
+        if (found) return;
+        if (std::string_view(field.name) != fieldName) return;
+        using FieldType = std::decay_t<decltype(comp.*field.ptr)>;
+        if constexpr (IsEditableFieldType<FieldType>()) {
+            outValue = FieldValueToJson(comp.*field.ptr);
+            outType = FieldTypeName<FieldType>();
+        } else {
+            outValue = nullptr;
+            outType = "unsupported";
+        }
+        found = true;
+    }
+
+    template<typename Component>
+    bool TryGetComponentFieldValue(const Component& comp, const std::string& fieldName, json& outValue, std::string& outType)
+    {
+        bool found = false;
+        std::apply(
+            [&](auto... field) {
+                (TryGetSingleField<Component>(comp, field, fieldName, outValue, outType, found), ...);
+            },
+            ComponentMeta<Component>::Fields);
+        return found;
+    }
+
+    json HandleECSFieldGet(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        const std::string compName = params.value("component", std::string{});
+        const std::string fieldName = params.value("field", std::string{});
+        if (compName.empty() || fieldName.empty()) {
+            throw MakeError("missing_param", "component and field are required.");
+        }
+        json result = {
+            { "entity", EntityToString(entity) },
+            { "component", compName },
+            { "field", fieldName },
+            { "found", false }
+        };
+
+        bool dispatched = false;
+        std::apply(
+            [&](auto... componentTag) {
+                ([&] {
+                    using Component = std::decay_t<decltype(componentTag)>;
+                    if (dispatched) return;
+                    if (std::string_view(ComponentMeta<Component>::Name) != compName) return;
+                    dispatched = true;
+                    auto* comp = registry.GetComponent<Component>(entity);
+                    if (!comp) {
+                        result["error"] = "component_not_present";
+                        return;
+                    }
+                    json value;
+                    std::string type;
+                    if (TryGetComponentFieldValue<Component>(*comp, fieldName, value, type)) {
+                        result["found"] = true;
+                        result["value"] = std::move(value);
+                        result["type"] = type;
+                    } else {
+                        result["error"] = "field_not_found";
+                    }
+                }(), ...);
+            },
+            AllComponentTypes{});
+        if (!dispatched) result["error"] = "component_not_registered";
+        return result;
+    }
+
+    // ---- session.assert_invariant ----
+    json HandleSessionAssertInvariant(EngineKernel& kernel, Registry& registry, const json& params)
+    {
+        if (!params.contains("checks") || !params["checks"].is_array()) {
+            throw MakeError("missing_param", "checks[] is required.");
+        }
+        json failures = json::array();
+        int passed = 0;
+        int total = 0;
+        for (const auto& chk : params["checks"]) {
+            ++total;
+            const std::string kind = chk.value("kind", std::string{});
+            bool ok = false;
+            std::string reason;
+            try {
+                if (kind == "entity_exists") {
+                    const EntityID e = EntityFromJson(chk.value("entity", json(nullptr)));
+                    ok = !Entity::IsNull(e) && registry.IsAlive(e);
+                    if (!ok) reason = "entity not alive";
+                    if (ok && chk.contains("name")) {
+                        auto* n = registry.GetComponent<NameComponent>(e);
+                        const std::string expectedName = chk["name"].get<std::string>();
+                        if (!n || n->name != expectedName) {
+                            ok = false;
+                            reason = "name mismatch: actual=" + (n ? n->name : std::string("(null)"));
+                        }
+                    }
+                }
+                else if (kind == "component_field") {
+                    json sub = { { "entity", chk.value("entity", json(nullptr)) },
+                                 { "component", chk.value("component", std::string{}) },
+                                 { "field", chk.value("field", std::string{}) } };
+                    json got = HandleECSFieldGet(registry, sub);
+                    if (!got.value("found", false)) {
+                        ok = false; reason = "field not found";
+                    } else {
+                        const std::string op = chk.value("op", std::string("eq"));
+                        const json expected = chk.value("value", json(nullptr));
+                        const json actual = got["value"];
+                        auto asNum = [](const json& j, double& out)->bool {
+                            if (j.is_number()) { out = j.get<double>(); return true; }
+                            return false;
+                        };
+                        double a, b;
+                        if (op == "eq") ok = (actual == expected);
+                        else if (op == "ne") ok = (actual != expected);
+                        else if (op == "gt" && asNum(actual,a) && asNum(expected,b)) ok = a > b;
+                        else if (op == "ge" && asNum(actual,a) && asNum(expected,b)) ok = a >= b;
+                        else if (op == "lt" && asNum(actual,a) && asNum(expected,b)) ok = a < b;
+                        else if (op == "le" && asNum(actual,a) && asNum(expected,b)) ok = a <= b;
+                        else ok = false;
+                        if (!ok) reason = "value: actual=" + actual.dump() + " op=" + op + " expected=" + expected.dump();
+                    }
+                }
+                else if (kind == "gameflow_node") {
+                    const GameLoopRuntime& rt = kernel.GetGameLoopRuntime();
+                    const GameLoopAsset& asset = kernel.GetGameLoopAsset();
+                    std::string nodeName;
+                    for (const auto& n : asset.nodes) if (n.id == rt.currentNodeId) { nodeName = n.name; break; }
+                    if (chk.contains("expectedNodeId")) ok = (rt.currentNodeId == chk["expectedNodeId"].get<uint32_t>());
+                    else if (chk.contains("expectedName")) ok = (nodeName == chk["expectedName"].get<std::string>());
+                    else { ok = false; reason = "no expectedNodeId or expectedName"; }
+                    if (!ok && reason.empty()) reason = "current node: id=" + std::to_string(rt.currentNodeId) + " name=" + nodeName;
+                }
+                else if (kind == "current_scene") {
+                    const std::string expected = chk.value("path", std::string{});
+                    auto* editor = kernel.GetEditorLayer();
+                    const std::string actual = editor ? editor->GetCurrentScenePath() : std::string{};
+                    // 末尾 match で OK にする (絶対/相対パス差吸収)
+                    ok = !expected.empty() && (actual.size() >= expected.size()) &&
+                         (actual.find(expected) != std::string::npos);
+                    if (!ok) reason = "scene: actual=" + actual + " expected~=" + expected;
+                }
+                else if (kind == "engine_mode") {
+                    const std::string expected = chk.value("mode", std::string{});
+                    const std::string actual = (kernel.GetMode() == EngineMode::Play) ? "Play"
+                        : (kernel.GetMode() == EngineMode::Pause) ? "Pause" : "Editor";
+                    ok = (actual == expected);
+                    if (!ok) reason = "mode: actual=" + actual + " expected=" + expected;
+                }
+                else {
+                    ok = false; reason = "unknown kind: " + kind;
+                }
+            } catch (const json& err) {
+                ok = false; reason = std::string("exception: ") + err.dump();
+            } catch (const std::exception& e) {
+                ok = false; reason = std::string("exception: ") + e.what();
+            }
+            if (ok) ++passed;
+            else failures.push_back({ { "kind", kind }, { "check", chk }, { "reason", reason } });
+        }
+        return {
+            { "total", total },
+            { "passed", passed },
+            { "failed", static_cast<int>(failures.size()) },
+            { "allPassed", failures.empty() },
+            { "failures", std::move(failures) }
+        };
+    }
+
+    // ---- gameflow.events.pull / gameflow.eval_conditions ----
+    // GameFlow には専用イベントログが無いので、FlowEventQueue の "battle.*"/"input.*" 等を覗く。
+    json HandleGameFlowEventsPull(EngineKernel& kernel, const json& /*params*/)
+    {
+        const FlowEventQueue& q = kernel.GetFlowEventQueue();
+        json events = json::array();
+        // FlowEventQueue は frame ごとに Clear されるので「累積」ではなく「今フレーム」の中身を返す。
+        // 詳細イテレートは internal API 次第。最低限 size を返す。
+        // 簡易: snapshot として既知のイベント名群を Contains で照会する。
+        const std::vector<std::string> watchNames = {
+            "input.keyboard.down","input.gamepad.down","input.action.pressed",
+            "ui.button.clicked","battle.ended","battle.result","scene.loaded"
+        };
+        for (const auto& n : watchNames) {
+            // 値なし Contains はサポート不明なので空 value で照会
+            // (ContainsAny 系が無いなら summary だけ)
+        }
+        events.push_back({ { "note", "FlowEventQueue is frame-scoped; use gameflow.get_runtime_state pendingTransitions.satisfied for current-frame condition state." } });
+        return { { "events", std::move(events) }, { "watchNames", watchNames } };
+    }
+
+    json HandleGameFlowEvalConditions(EngineKernel& kernel, const json& /*params*/)
+    {
+        // get_runtime_state.pendingTransitions と同じ評価結果だけ取り出す軽量版。
+        json full = HandleGameFlowGetRuntimeState(kernel, *kernel.GetGameRegistry());
+        return {
+            { "currentNodeId", full["currentNodeId"] },
+            { "currentNodeName", full["currentNodeName"] },
+            { "pendingTransitions", full["pendingTransitions"] }
+        };
+    }
+
+    // =========================================================
+    // Phase 3: 仕上げ API
+    // =========================================================
+
+    // ---- visual.find_text ----
+    json HandleVisualFindText(EngineKernel& kernel, const json& params)
+    {
+        const std::string needle = params.value("text", std::string{});
+        if (needle.empty()) throw MakeError("missing_param", "text is required.");
+        const bool caseSensitive = params.value("caseSensitive", false);
+
+        Registry* registry = kernel.GetGameRegistry();
+        if (!registry) {
+            return { { "found", false }, { "matches", json::array() }, { "note", "no registry" } };
+        }
+        json matches = json::array();
+        Query<TextComponent, NameComponent> q(*registry);
+        q.ForEachWithEntity([&](EntityID e, TextComponent& tc, NameComponent& name) {
+            std::string hay = tc.text;
+            std::string n = needle;
+            if (!caseSensitive) {
+                std::transform(hay.begin(), hay.end(), hay.begin(), [](unsigned char c){ return std::tolower(c); });
+                std::transform(n.begin(), n.end(), n.begin(), [](unsigned char c){ return std::tolower(c); });
+            }
+            if (hay.find(n) != std::string::npos) {
+                matches.push_back({
+                    { "entity", EntityToString(e) },
+                    { "name", name.name },
+                    { "text", tc.text },
+                    { "fontSize", tc.fontSize },
+                    { "fontAssetPath", tc.fontAssetPath }
+                });
+            }
+        });
+        return {
+            { "found", !matches.empty() },
+            { "matchCount", static_cast<int>(matches.size()) },
+            { "matches", std::move(matches) }
+        };
+    }
+
+    // ---- editor.get_focus ----
+    json HandleEditorGetFocus(EngineKernel& kernel)
+    {
+        auto* editor = kernel.GetEditorLayer();
+        if (!editor) {
+            return { { "available", false } };
+        }
+        auto& sel = EditorSelection::Instance();
+        json selectedEntities = json::array();
+        for (EntityID e : sel.GetSelectedEntities()) {
+            selectedEntities.push_back(EntityToString(e));
+        }
+        const EntityID primary = sel.GetPrimaryEntity();
+        return {
+            { "available", true },
+            { "currentScenePath", editor->GetCurrentScenePath() },
+            { "sceneViewSize", json::array({ editor->GetSceneViewSize().x, editor->GetSceneViewSize().y }) },
+            { "gameViewSize", json::array({ editor->GetGameViewSize().x, editor->GetGameViewSize().y }) },
+            { "sceneViewRect", Float4ToJson(editor->GetSceneViewRect()) },
+            { "gameViewRect", Float4ToJson(editor->GetGameViewRect()) },
+            { "selectedEntities", std::move(selectedEntities) },
+            { "selectedCount", static_cast<int>(sel.GetSelectedEntities().size()) },
+            { "primarySelected", Entity::IsNull(primary) ? json(nullptr) : json(EntityToString(primary)) }
+        };
+    }
+
+    // ---- asset.status / asset.list_loaded ----
+    json HandleAssetStatus(const json& params)
+    {
+        const std::string path = params.value("path", std::string{});
+        if (path.empty()) throw MakeError("missing_param", "path is required.");
+        // ResourceManager に has/get_status 系の公開 API が無いので、最低限の試行 get で判定。
+        auto& rm = ResourceManager::Instance();
+        bool modelLoaded = false, textureLoaded = false, materialLoaded = false;
+        try { auto m = rm.GetModel(path); modelLoaded = (m != nullptr); } catch (...) {}
+        try { auto t = rm.GetTexture(path); textureLoaded = (t != nullptr); } catch (...) {}
+        try { auto m = rm.GetMaterial(path); materialLoaded = (m != nullptr); } catch (...) {}
+        return {
+            { "path", path },
+            { "modelLoaded", modelLoaded },
+            { "textureLoaded", textureLoaded },
+            { "materialLoaded", materialLoaded },
+            { "anyLoaded", modelLoaded || textureLoaded || materialLoaded }
+        };
+    }
+
+    // ---- render.queue.snapshot ----
+    // EngineKernel 側に accessor を追加することで前フレームの packet 数を返す。
+    json HandleRenderQueueSnapshot(EngineKernel& kernel)
+    {
+        const RenderQueue& q = kernel.GetRenderQueue();
+        return {
+            { "opaquePackets", static_cast<int>(q.opaquePackets.size()) },
+            { "transparentPackets", static_cast<int>(q.transparentPackets.size()) },
+            { "ui2DTextPackets", static_cast<int>(q.ui2DTextPackets.size()) },
+            { "ui2DLayoutNodes", static_cast<int>(q.ui2DLayoutNodes.size()) },
+            { "totalDrawables", static_cast<int>(q.opaquePackets.size() + q.transparentPackets.size() + q.ui2DTextPackets.size()) },
+            { "frameCount", kernel.GetTime().frameCount }
+        };
+    }
+
+    // ---- collision.raycast ----
+    json HandleCollisionRaycast(const json& params)
+    {
+        DirectX::XMFLOAT3 origin{ 0.0f, 0.0f, 0.0f };
+        DirectX::XMFLOAT3 direction{ 0.0f, 0.0f, 1.0f };
+        if (params.contains("origin"))    ReadFloat3(params["origin"], origin);
+        if (params.contains("direction")) ReadFloat3(params["direction"], direction);
+        const float maxDistance = params.value("maxDistance", 1000.0f);
+
+        if (!PhysicsManager::Instance().IsInitialized()) {
+            return { { "hit", false }, { "note", "PhysicsManager not initialized." } };
+        }
+        const PhysicsRaycastResult r = PhysicsManager::Instance().CastRay(origin, direction, maxDistance);
+        json out = {
+            { "hit", r.hasHit },
+            { "entity", r.hasHit ? json(std::to_string(r.entityID)) : json(nullptr) },
+            { "distance", r.distance }
+        };
+        if (r.hasHit) {
+            out["position"] = json::array({ r.position.x, r.position.y, r.position.z });
+            out["normal"]   = json::array({ r.normal.x,   r.normal.y,   r.normal.z });
+        }
+        return out;
+    }
+
+    // ---- collision.overlap_sphere ----
+    // ECS の ColliderComponent.elements を直接走査して球と距離テスト。
+    // Phase 1 で導入した entity 単位の Body/Attack に対応。
+    json HandleCollisionOverlapSphere(Registry& registry, const json& params)
+    {
+        DirectX::XMFLOAT3 center{ 0.0f, 0.0f, 0.0f };
+        if (params.contains("center")) ReadFloat3(params["center"], center);
+        const float radius = params.value("radius", 1.0f);
+        const std::string filterAttr = ToLowerCopy(params.value("attribute", std::string{}));
+        const std::string excludeEntityStr = params.value("excludeEntity", std::string{});
+        EntityID excludeEntity = Entity::NULL_ID;
+        if (!excludeEntityStr.empty()) {
+            excludeEntity = EntityFromJson(excludeEntityStr);
+        }
+        const float r2 = radius * radius;
+
+        json hits = json::array();
+        Query<TransformComponent, ColliderComponent> q(registry);
+        q.ForEachWithEntity([&](EntityID e, TransformComponent& tr, ColliderComponent& cc) {
+            if (e == excludeEntity) return;
+            if (!cc.enabled) return;
+            for (int i = 0; i < static_cast<int>(cc.elements.size()); ++i) {
+                const auto& el = cc.elements[i];
+                if (!el.enabled) continue;
+                if (!filterAttr.empty()) {
+                    const std::string attrStr = (el.attribute == ColliderAttribute::Attack) ? "attack" : "body";
+                    if (attrStr != filterAttr) continue;
+                }
+                // World position は entityWorld * boneLocalWorld * offsetLocal の近似。
+                // 簡略: bone 無視で entity 位置に offsetLocal を加算 (将来 hand_r 等への対応は bone.get_world と同等にする)。
+                DirectX::XMFLOAT3 pos = tr.worldPosition;
+                pos.x += el.offsetLocal.x;
+                pos.y += el.offsetLocal.y;
+                pos.z += el.offsetLocal.z;
+                const float dx = pos.x - center.x;
+                const float dy = pos.y - center.y;
+                const float dz = pos.z - center.z;
+                const float d2 = dx*dx + dy*dy + dz*dz;
+                const float effectiveR = el.radius;
+                const float touchR = radius + effectiveR;
+                if (d2 <= touchR * touchR) {
+                    hits.push_back({
+                        { "entity", EntityToString(e) },
+                        { "colliderIndex", i },
+                        { "attribute", (el.attribute == ColliderAttribute::Attack) ? "Attack" : "Body" },
+                        { "type", (el.type == ColliderShape::Sphere) ? "Sphere"
+                                  : (el.type == ColliderShape::Capsule) ? "Capsule" : "Box" },
+                        { "colliderRadius", el.radius },
+                        { "worldPosition", json::array({ pos.x, pos.y, pos.z }) },
+                        { "distance", std::sqrt(d2) }
+                    });
+                }
+            }
+        });
+        return {
+            { "center", json::array({ center.x, center.y, center.z }) },
+            { "radius", radius },
+            { "hitCount", static_cast<int>(hits.size()) },
+            { "hits", std::move(hits) }
+        };
+    }
+
+    // ---- visual.get_pixel_at_screen ----
+    json HandleVisualGetPixelAtScreen(EngineKernel& kernel, const json& params)
+    {
+        const int x = params.value("x", -1);
+        const int y = params.value("y", -1);
+        if (x < 0 || y < 0) throw MakeError("missing_param", "x and y required.");
+        const std::string target = params.value("target", std::string("window"));
+        ImageBuffer img = CaptureAutomationTargetImage(kernel, target);
+        if (x >= static_cast<int>(img.width) || y >= static_cast<int>(img.height)) {
+            throw MakeError("out_of_range", "Pixel coordinates exceed image bounds.", {
+                { "x", x }, { "y", y },
+                { "width", static_cast<int>(img.width) }, { "height", static_cast<int>(img.height) }
+            });
+        }
+        const size_t idx = (static_cast<size_t>(y) * img.width + x) * 4;
+        // ImageBuffer は BGRA レイアウト。
+        const uint8_t b = img.bgra[idx + 0];
+        const uint8_t g = img.bgra[idx + 1];
+        const uint8_t r = img.bgra[idx + 2];
+        const uint8_t a = img.bgra[idx + 3];
+        return {
+            { "x", x }, { "y", y },
+            { "target", target },
+            { "rgba", json::array({ r, g, b, a }) },
+            { "hex", [&]{ char buf[16]; std::snprintf(buf, sizeof(buf), "#%02X%02X%02X%02X", r, g, b, a); return std::string(buf); }() },
+            { "brightness", (r + g + b) / 3.0f / 255.0f }
+        };
+    }
+
+    // ---- visual.compare_capture ----
+    json HandleVisualCompareCapture(const json& params)
+    {
+        const std::string pathA = params.value("pathA", std::string{});
+        const std::string pathB = params.value("pathB", std::string{});
+        if (pathA.empty() || pathB.empty()) throw MakeError("missing_param", "pathA and pathB required.");
+        const int threshold = params.value("threshold", 16);
+
+        auto resolvePath = [](const std::string& p) -> std::filesystem::path {
+            std::filesystem::path candidate(p);
+            if (candidate.is_absolute() && std::filesystem::exists(candidate)) return candidate;
+            return PathResolver::Resolve(p);
+        };
+        auto loadBMP = [](const std::filesystem::path& path, uint32_t& w, uint32_t& h, std::vector<uint8_t>& rgb) -> bool {
+            std::ifstream f(path, std::ios::binary);
+            if (!f.is_open()) return false;
+            std::vector<char> buf((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+            if (buf.size() < 54) return false;
+            uint32_t offset = *reinterpret_cast<uint32_t*>(&buf[10]);
+            w = *reinterpret_cast<uint32_t*>(&buf[18]);
+            h = std::abs(*reinterpret_cast<int32_t*>(&buf[22]));
+            uint16_t bpp = *reinterpret_cast<uint16_t*>(&buf[28]);
+            if (bpp != 24 && bpp != 32) return false;
+            const uint32_t bytesPP = bpp / 8;
+            const uint32_t stride = ((w * bytesPP + 3) / 4) * 4;
+            rgb.resize(w * h * 3);
+            for (uint32_t y = 0; y < h; ++y) {
+                for (uint32_t x = 0; x < w; ++x) {
+                    const size_t src = offset + (h - 1 - y) * stride + x * bytesPP;
+                    const size_t dst = (y * w + x) * 3;
+                    rgb[dst + 0] = static_cast<uint8_t>(buf[src + 2]); // R
+                    rgb[dst + 1] = static_cast<uint8_t>(buf[src + 1]); // G
+                    rgb[dst + 2] = static_cast<uint8_t>(buf[src + 0]); // B
+                }
+            }
+            return true;
+        };
+
+        uint32_t wa = 0, ha = 0, wb = 0, hb = 0;
+        std::vector<uint8_t> rgba, rgbb;
+        if (!loadBMP(resolvePath(pathA), wa, ha, rgba)) {
+            throw MakeError("load_failed", "Failed to load pathA.", { { "path", pathA } });
+        }
+        if (!loadBMP(resolvePath(pathB), wb, hb, rgbb)) {
+            throw MakeError("load_failed", "Failed to load pathB.", { { "path", pathB } });
+        }
+        if (wa != wb || ha != hb) {
+            return {
+                { "match", false },
+                { "sizeMismatch", true },
+                { "sizeA", json::array({ wa, ha }) },
+                { "sizeB", json::array({ wb, hb }) }
+            };
+        }
+        const size_t pixels = static_cast<size_t>(wa) * ha;
+        size_t diffPixels = 0;
+        double totalDelta = 0.0;
+        for (size_t i = 0; i < pixels; ++i) {
+            const int dr = std::abs(int(rgba[i * 3 + 0]) - int(rgbb[i * 3 + 0]));
+            const int dg = std::abs(int(rgba[i * 3 + 1]) - int(rgbb[i * 3 + 1]));
+            const int db = std::abs(int(rgba[i * 3 + 2]) - int(rgbb[i * 3 + 2]));
+            const int maxd = (std::max)(dr, (std::max)(dg, db));
+            totalDelta += maxd;
+            if (maxd > threshold) ++diffPixels;
+        }
+        const double percentDiff = (100.0 * diffPixels) / static_cast<double>(pixels);
+        return {
+            { "match", diffPixels == 0 },
+            { "size", json::array({ wa, ha }) },
+            { "totalPixels", static_cast<int>(pixels) },
+            { "diffPixels", static_cast<int>(diffPixels) },
+            { "percentDiff", percentDiff },
+            { "avgChannelDelta", totalDelta / static_cast<double>(pixels) },
+            { "threshold", threshold }
+        };
+    }
+
+    // ---- editor.get_hierarchy_selection ----
+    json HandleEditorGetHierarchySelection(EngineKernel& kernel)
+    {
+        Registry* registry = kernel.GetGameRegistry();
+        auto& sel = EditorSelection::Instance();
+        json selected = json::array();
+        for (EntityID e : sel.GetSelectedEntities()) {
+            json item = { { "entity", EntityToString(e) } };
+            if (registry && registry->IsAlive(e)) {
+                if (auto* n = registry->GetComponent<NameComponent>(e)) item["name"] = n->name;
+                if (auto* t = registry->GetComponent<TransformComponent>(e)) {
+                    item["position"] = json::array({ t->localPosition.x, t->localPosition.y, t->localPosition.z });
+                }
+            }
+            selected.push_back(item);
+        }
+        const EntityID primary = sel.GetPrimaryEntity();
+        return {
+            { "selected", std::move(selected) },
+            { "selectedCount", static_cast<int>(sel.GetSelectedEntities().size()) },
+            { "primaryEntity", Entity::IsNull(primary) ? json(nullptr) : json(EntityToString(primary)) }
+        };
+    }
+
+    // ---- session.record_macro / replay_macro ----
+    // 直近 N コマンドを記録し、後で順次再実行できる。
+    struct MacroEntry {
+        std::string name;
+        json params;
+    };
+    std::unordered_map<std::string, std::vector<MacroEntry>> g_macros;
+    std::string g_currentRecordingMacro;
+
+    json HandleSessionRecordMacro(const json& params)
+    {
+        const std::string action = ToLowerCopy(params.value("action", std::string("start")));
+        const std::string macroName = params.value("name", std::string("default"));
+        if (action == "start") {
+            g_macros[macroName].clear();
+            g_currentRecordingMacro = macroName;
+            return { { "action", "start" }, { "name", macroName }, { "recording", true } };
+        }
+        if (action == "stop") {
+            const std::string was = g_currentRecordingMacro;
+            g_currentRecordingMacro.clear();
+            const auto& entries = g_macros[was];
+            return {
+                { "action", "stop" },
+                { "name", was },
+                { "recording", false },
+                { "commandCount", static_cast<int>(entries.size()) }
+            };
+        }
+        if (action == "list") {
+            json names = json::array();
+            for (const auto& [n, _] : g_macros) names.push_back(n);
+            return {
+                { "action", "list" },
+                { "macros", std::move(names) },
+                { "currentRecording", g_currentRecordingMacro }
+            };
+        }
+        if (action == "clear") {
+            g_macros.erase(macroName);
+            return { { "action", "clear" }, { "name", macroName } };
+        }
+        if (action == "get") {
+            json entries = json::array();
+            auto it = g_macros.find(macroName);
+            if (it != g_macros.end()) {
+                for (const auto& e : it->second) {
+                    entries.push_back({ { "name", e.name }, { "params", e.params } });
+                }
+            }
+            return { { "action", "get" }, { "name", macroName }, { "entries", std::move(entries) } };
+        }
+        throw MakeError("invalid_param", "action must be start/stop/list/clear/get.");
+    }
+
+    json HandleSessionReplayMacro(EngineKernel& kernel, const json& params)
+    {
+        const std::string macroName = params.value("name", std::string{});
+        if (macroName.empty()) throw MakeError("missing_param", "name required.");
+        auto it = g_macros.find(macroName);
+        if (it == g_macros.end()) throw MakeError("not_found", "Macro not found.", { { "name", macroName } });
+        const auto& entries = it->second;
+        json results = json::array();
+        int okCount = 0, failCount = 0;
+        for (const auto& e : entries) {
+            json entry = { { "command", e.name }, { "params", e.params } };
+            try {
+                json result = DispatchCommand(kernel, { { "name", e.name }, { "params", e.params } });
+                entry["ok"] = true;
+                entry["result"] = std::move(result);
+                ++okCount;
+            } catch (const json& err) {
+                entry["ok"] = false; entry["error"] = err; ++failCount;
+            } catch (const std::exception& ex) {
+                entry["ok"] = false; entry["error"] = ex.what(); ++failCount;
+            }
+            results.push_back(std::move(entry));
+        }
+        return {
+            { "name", macroName },
+            { "total", static_cast<int>(entries.size()) },
+            { "ok", okCount },
+            { "failed", failCount },
+            { "results", std::move(results) }
+        };
+    }
+
+    // ---- ecs.field.watch.pull ----
+    // 単一 field の前回 pull 時点との変化を返す。cursor は (entity,component,field,cursorName) で正規化。
+    std::unordered_map<std::string, json> g_fieldWatchCache;
+
+    json HandleECSFieldWatchPull(Registry& registry, const json& params)
+    {
+        const std::string cursorName = params.value("cursorName", std::string("default"));
+        const std::string compName = params.value("component", std::string{});
+        const std::string fieldName = params.value("field", std::string{});
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || compName.empty() || fieldName.empty()) {
+            throw MakeError("missing_param", "entity/component/field required.");
+        }
+        const std::string key = cursorName + "|" + EntityToString(entity) + "|" + compName + "|" + fieldName;
+
+        // 現在値取得 (ecs.field.get と同じロジックを再利用)
+        json getParams = { { "entity", EntityToString(entity) }, { "component", compName }, { "field", fieldName } };
+        json current = HandleECSFieldGet(registry, getParams);
+        json currentValue = current.value("value", json(nullptr));
+
+        auto it = g_fieldWatchCache.find(key);
+        bool changed = false;
+        json prevValue = nullptr;
+        if (it != g_fieldWatchCache.end()) {
+            prevValue = it->second;
+            changed = (prevValue != currentValue);
+        } else {
+            // 初回 pull は changed=false (baseline)
+            changed = false;
+        }
+        g_fieldWatchCache[key] = currentValue;
+
+        return {
+            { "cursorName", cursorName },
+            { "entity", EntityToString(entity) },
+            { "component", compName },
+            { "field", fieldName },
+            { "changed", changed },
+            { "currentValue", currentValue },
+            { "previousValue", prevValue },
+            { "type", current.value("type", std::string{}) }
+        };
+    }
+
+    // --- ARCHITECTURAL RULE (all editors) ---
+    // Every command that passes through here MUST go via the editor's UI-level API.
+    // Do NOT add shortcuts that directly write editor member variables
+    // (camera fields, transform overrides, color buffers, etc.) to avoid the
+    // render-pass gate. Each editor exposes a ShouldRender*() predicate; if it
+    // returns false the output texture is never updated, so any direct state write
+    // is silently lost and subsequent screenshots will be black/stale.
+    //
+    // Before adding a new "Automation" setter: ask whether the render gate is open.
+    // If it is not guaranteed, route the operation through the proper open/compile/
+    // play pipeline so the gate opens first, then read back state to verify.
     json DispatchCommand(EngineKernel& kernel, const json& command)
     {
         const std::string name = command.value("command", std::string{});
@@ -10010,8 +11475,118 @@ namespace
         if (name == "visual.evaluate_capture") {
             return HandleVisualEvaluateCapture(kernel, params);
         }
+        if (name == "gameflow.get_runtime_state") {
+            return HandleGameFlowGetRuntimeState(kernel, *registry);
+        }
+        if (name == "collision.events.pull") {
+            return HandleCollisionEventsPull(*registry, params);
+        }
+        if (name == "bone.list") {
+            return HandleBoneList(*registry, params);
+        }
+        if (name == "bone.get_world") {
+            return HandleBoneGetWorld(*registry, params);
+        }
+        if (name == "bone.get_world_batch") {
+            return HandleBoneGetWorldBatch(*registry, params);
+        }
+        if (name == "log.tail") {
+            return HandleLogTail(params);
+        }
+        if (name == "log.pull") {
+            return HandleLogPull(params);
+        }
+        if (name == "log.clear") {
+            return HandleLogClear();
+        }
+        // Phase 2
+        if (name == "animator.get_state") {
+            return HandleAnimatorGetState(*registry, params);
+        }
+        if (name == "input.get_resolved_state") {
+            return HandleInputGetResolvedState(*registry, params);
+        }
+        if (name == "ecs.field.get") {
+            return HandleECSFieldGet(*registry, params);
+        }
+        if (name == "session.assert_invariant") {
+            return HandleSessionAssertInvariant(kernel, *registry, params);
+        }
+        if (name == "gameflow.events.pull") {
+            return HandleGameFlowEventsPull(kernel, params);
+        }
+        if (name == "gameflow.eval_conditions") {
+            return HandleGameFlowEvalConditions(kernel, params);
+        }
+        // Phase 3
+        if (name == "visual.find_text") {
+            return HandleVisualFindText(kernel, params);
+        }
+        if (name == "editor.get_focus") {
+            return HandleEditorGetFocus(kernel);
+        }
+        if (name == "asset.status") {
+            return HandleAssetStatus(params);
+        }
+        if (name == "render.queue.snapshot") {
+            return HandleRenderQueueSnapshot(kernel);
+        }
+        if (name == "collision.raycast") {
+            return HandleCollisionRaycast(params);
+        }
+        if (name == "collision.overlap_sphere") {
+            return HandleCollisionOverlapSphere(*registry, params);
+        }
+        if (name == "visual.get_pixel_at_screen") {
+            return HandleVisualGetPixelAtScreen(kernel, params);
+        }
+        if (name == "visual.compare_capture") {
+            return HandleVisualCompareCapture(params);
+        }
+        if (name == "editor.get_hierarchy_selection") {
+            return HandleEditorGetHierarchySelection(kernel);
+        }
+        if (name == "session.record_macro") {
+            return HandleSessionRecordMacro(params);
+        }
+        if (name == "session.replay_macro") {
+            return HandleSessionReplayMacro(kernel, params);
+        }
+        if (name == "ecs.field.watch.pull") {
+            return HandleECSFieldWatchPull(*registry, params);
+        }
         if (name == "ecs.watch") {
-            g_ecsWatchEnabled = params.value("enable", true);
+            // 後方互換: enable のみで broadcast を on/off。
+            // 追加: action="pull" で前回呼出からの ECS revision delta を返す (request-response 経路)。
+            //       action="status" で現在の watch 状態だけ返す。
+            const std::string action = ToLowerCopy(params.value("action", std::string{}));
+            if (action == "pull") {
+                const std::string cursorName = params.value("name", std::string("default"));
+                const uint64_t currentRev = UndoSystem::Instance().GetECSRevision();
+                const uint64_t prevRev = g_ecsWatchPullCursors.count(cursorName)
+                    ? g_ecsWatchPullCursors[cursorName] : 0;
+                const uint64_t delta = (currentRev > prevRev) ? (currentRev - prevRev) : 0;
+                g_ecsWatchPullCursors[cursorName] = currentRev;
+                return {
+                    { "action", "pull" },
+                    { "name", cursorName },
+                    { "ecsRevision", currentRev },
+                    { "previousRevision", prevRev },
+                    { "delta", delta },
+                    { "watchEnabled", g_ecsWatchEnabled }
+                };
+            }
+            if (action == "status") {
+                return {
+                    { "action", "status" },
+                    { "enabled", g_ecsWatchEnabled },
+                    { "ecsRevision", UndoSystem::Instance().GetECSRevision() },
+                    { "cursorCount", static_cast<int>(g_ecsWatchPullCursors.size()) }
+                };
+            }
+            if (params.contains("enable")) {
+                g_ecsWatchEnabled = params["enable"].get<bool>();
+            }
             return { { "enabled", g_ecsWatchEnabled } };
         }
         if (!registry) {
@@ -10121,6 +11696,18 @@ namespace
         }
         if (name == "set_component_fields") {
             return HandleSetComponentFields(*registry, params);
+        }
+        if (name == "entity.add_collider_element") {
+            return HandleEntityAddColliderElement(*registry, params);
+        }
+        if (name == "entity.set_collider_element") {
+            return HandleEntitySetColliderElement(*registry, params);
+        }
+        if (name == "entity.delete_collider_element") {
+            return HandleEntityDeleteColliderElement(*registry, params);
+        }
+        if (name == "entity.list_collider_elements") {
+            return HandleEntityListColliderElements(*registry, params);
         }
         if (name == "create_empty") {
             return HandleCreateEmpty(*registry, params);

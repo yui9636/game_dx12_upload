@@ -231,6 +231,10 @@ struct EffectParticlePacket {
     float             meshAngularSpeed = 0.0f;
     DirectX::XMFLOAT3 meshAngularOrientRandom = { 0.0f, 0.0f, 0.0f };
     float             meshAngularSpeedRandom = 0.0f;
+    // Stretch billboard モード (drawMode == Billboard のときのみ有効)。
+    // stretchFactor > 0 のとき速度方向へスプライトを伸長する。0 は通常のカメラ正対ビルボード。
+    bool  stretchBillboard = false;
+    float stretchFactor = 0.0f;
 };
 
 struct TrailVertex {

@@ -36,6 +36,11 @@ public:
     bool StopTimelineFromAutomation();
     bool SelectNodeFromAutomation(uint32_t nodeId, bool nodeMode = false);
     bool FocusNodeFromAutomation(uint32_t nodeId);
+    // Only writes camera member variables (m_previewYaw, m_previewPitch, m_previewDistance, etc.).
+    // The render pass runs ONLY when EditorLayer::ShouldRenderEffectPreview() is true.
+    // HandleEffectSetPreviewView (the sole call site) validates the workspace gate and throws
+    // an error if it is not active. Do NOT call this directly from new automation code --
+    // always go through effect_editor.set_preview_view which checks the gate first.
     void SetPreviewCameraAutomation(const DirectX::XMFLOAT3& target, float yaw, float pitch, float distance, float fovY);
     void SetPreviewEnvironmentAutomation(const DirectX::XMFLOAT4& clearColor, bool useSkybox);
     EntityID GetPreviewEntity() const { return m_previewEntity; }
