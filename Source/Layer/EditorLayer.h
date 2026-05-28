@@ -405,10 +405,11 @@ public:
     void AlignCameraToViewAutomation()      { AlignMainCameraEntityToEditorCamera(); }
 
     // ---- New Scene Automation ----
-    void RequestNewSceneAutomation(SceneViewMode mode = SceneViewMode::Mode3D)
+    void RequestNewSceneAutomation(SceneViewMode mode = SceneViewMode::Mode3D, bool cleanSlate = true)
     {
         m_pendingNewSceneRequest = true;
         m_pendingNewSceneMode    = mode;
+        m_pendingNewSceneCleanSlate = cleanSlate;
     }
 
 private:
@@ -553,13 +554,16 @@ private:
     void FocusEditorCameraOnTarget(const DirectX::XMFLOAT3& target, float radius);
     void SetEditorCameraDirection(const DirectX::XMFLOAT3& forward, const DirectX::XMFLOAT3& target, float distance);
     void ProcessDeferredEditorActions();
+public:
+    // automation 用に public へ昇格 (UIEditor / PlayerEditor の dirty observation で使う)。
     bool IsSceneDirty() const;
+private:
     void MarkSceneSaved();
     void UpdateAutosave(float deltaSeconds);
     void CheckRecoveryCandidate();
     void RequestSceneAction(PendingSceneAction action, std::filesystem::path scenePath = {});
     bool ExecutePendingSceneAction();
-    void NewScene(SceneViewMode mode);
+    void NewScene(SceneViewMode mode, bool cleanSlate = false);
     void DrawNewSceneModePopup();
     bool OpenScene();
     bool SaveCurrentScene();
@@ -575,6 +579,7 @@ private:
     // in-flight frame の command list に記録済みの参照が残る。
     bool m_pendingNewSceneRequest = false;
     SceneViewMode m_pendingNewSceneMode = SceneViewMode::Mode3D;
+    bool m_pendingNewSceneCleanSlate = false;
     GameViewResolutionPreset m_gameViewResolutionPreset = GameViewResolutionPreset::Free;
     GameViewAspectPolicy m_gameViewAspectPolicy = GameViewAspectPolicy::Fit;
     GameViewScalePolicy m_gameViewScalePolicy = GameViewScalePolicy::AutoFit;

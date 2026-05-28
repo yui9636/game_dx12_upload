@@ -19,6 +19,7 @@
 #include "Gameplay/LockOnTargetComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/PlayerTagComponent.h"
 #include "Component/ActorTypeComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
@@ -350,6 +351,27 @@ namespace
         return preview && preview->previewOnly;
     }
 
+    bool IsExplicitNonPlayerActor(Registry& registry, EntityID entity)
+    {
+        if (registry.GetComponent<EnemyTagComponent>(entity)) {
+            return true;
+        }
+
+        const auto* actorType = registry.GetComponent<ActorTypeComponent>(entity);
+        return actorType && actorType->type != ActorType::None && actorType->type != ActorType::Player;
+    }
+
+    void RemovePlayerControlledComponents(Registry& registry, EntityID entity)
+    {
+        registry.RemoveComponent<PlayerTagComponent>(entity);
+        registry.RemoveComponent<InputUserComponent>(entity);
+        registry.RemoveComponent<InputContextComponent>(entity);
+        registry.RemoveComponent<InputActionMapComponent>(entity);
+        registry.RemoveComponent<InputBindingComponent>(entity);
+        registry.RemoveComponent<ResolvedInputStateComponent>(entity);
+        registry.RemoveComponent<CameraTPVControlComponent>(entity);
+    }
+
     template<typename T>
     void CollectEntitiesWithComponent(Registry& registry, std::vector<EntityID>& entities)
     {
@@ -550,8 +572,11 @@ namespace PlayerRuntimeSetup
     {
         std::vector<EntityID> entities;
         CollectEntitiesWithComponent<PlayerTagComponent>(registry, entities);
-        CollectEntitiesWithComponent<StateMachineAssetComponent>(registry, entities);
-        CollectEntitiesWithComponent<TimelineLibraryComponent>(registry, entities);
+        CollectEntitiesWithComponent<ActorTypeComponent>(registry, entities);
+        CollectEntitiesWithComponent<InputActionMapComponent>(registry, entities);
+        CollectEntitiesWithComponent<InputBindingComponent>(registry, entities);
+        CollectEntitiesWithComponent<InputContextComponent>(registry, entities);
+        CollectEntitiesWithComponent<InputUserComponent>(registry, entities);
 
         for (EntityID entity : entities) {
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
@@ -559,6 +584,11 @@ namespace PlayerRuntimeSetup
             }
 
             if (IsPreviewOnlyEntity(registry, entity)) {
+                continue;
+            }
+
+            if (IsExplicitNonPlayerActor(registry, entity)) {
+                RemovePlayerControlledComponents(registry, entity);
                 continue;
             }
 
@@ -580,11 +610,14 @@ namespace PlayerRuntimeSetup
             return false;
         }
 
+        if (IsExplicitNonPlayerActor(registry, entity)) {
+            return false;
+        }
+
+        const auto* actorType = registry.GetComponent<ActorTypeComponent>(entity);
         return registry.GetComponent<PlayerTagComponent>(entity) != nullptr
-            || registry.GetComponent<StateMachineAssetComponent>(entity) != nullptr
-            || registry.GetComponent<TimelineLibraryComponent>(entity) != nullptr
+            || (actorType && actorType->type == ActorType::Player)
             || registry.GetComponent<InputActionMapComponent>(entity) != nullptr
-            || registry.GetComponent<StateMachineParamsComponent>(entity) != nullptr
             || registry.GetComponent<InputBindingComponent>(entity) != nullptr
             || registry.GetComponent<InputUserComponent>(entity) != nullptr;
     }

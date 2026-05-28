@@ -21,6 +21,7 @@ public:
     static bool SavePrefabDocumentToPath(PlayerEditorPanel& panel, const std::string& path);
 
     static void ApplyEditorBindingsToPreviewEntity(PlayerEditorPanel& panel);
+    static void ApplyActorEditorModeComponents(PlayerEditorPanel& panel);
     static void RebuildPreviewTimelineRuntimeData(PlayerEditorPanel& panel);
     static void SyncPreviewTimelinePlayback(PlayerEditorPanel& panel);
     static void SyncTimelineAssetSelection(PlayerEditorPanel& panel);

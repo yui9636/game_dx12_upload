@@ -19,6 +19,7 @@
 #include <memory>
 
 class AIAutomationService;
+struct AutomationObservationAccess;
 class GameLayer;
 class EditorLayer;
 
@@ -28,6 +29,8 @@ class EngineKernel
 {
     // Framework からのみ初期化と終了処理へアクセスさせる。
     friend class Framework;
+    // 観測 API は専用 service から private state を読む。新 API ごとに public getter を増やさない。
+    friend struct AutomationObservationAccess;
 
 private:
     // singleton 用なのでコンストラクタは private にする。
@@ -63,6 +66,13 @@ public:
 
     // 実行時間スケールを変更する。
     void SetTimeScale(float scale) { time.timeScale = scale; }
+
+    // Step (1 frame 進める) 時の dt を fixed 値で上書きする。
+    // 0 以下なら通常の rawDt を使う。テスト再現性のため automation から設定する。
+    void SetStepFixedDt(float dt) { m_stepFixedDt = (dt > 0.0f) ? dt : 0.0f; }
+
+    // 現在の Step fixed dt 値を返す (0 = 未設定)。
+    float GetStepFixedDt() const { return m_stepFixedDt; }
 
     // シーン切り替え時に描画関連の状態を安全にリセットする。
     void ResetRenderStateForSceneChange();
@@ -118,9 +128,6 @@ public:
     // 1 フレームで収集された入力イベントキューを取得する。
     const InputEventQueue& GetInputEventQueue() const { return m_inputQueue; }
 
-    // 前フレームに収集された RenderQueue (observation layer 用)。
-    const RenderQueue& GetRenderQueue() const { return m_renderQueue; }
-
     // AI / automation から仮想入力イベントを現在フレームの入力キューへ注入する。
     void InjectInputEvent(const InputEvent& event) { m_inputQueue.Push(event); }
 
@@ -160,6 +167,9 @@ private:
 
     // Pause 状態から 1 フレームだけ進めるためのフラグ。
     bool m_stepFrameRequested = false;
+
+    // Step フレーム時に rawDt を上書きする固定値。0 以下なら無効。
+    float m_stepFixedDt = 0.0f;
 
     // Stop が要求されたことを示すフラグ。
     bool m_stopRequested = false;

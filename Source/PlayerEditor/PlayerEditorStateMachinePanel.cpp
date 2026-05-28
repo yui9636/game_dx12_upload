@@ -955,6 +955,17 @@ void PlayerEditorPanel::ApplyFullPlayerPreset()
     m_selectedTransitionId = 0;
     m_stateMachineDirty = true;
 }
+
+void PlayerEditorPanel::ApplyFullPlayerPresetForAutomation()
+{
+    ApplyFullPlayerPreset();
+}
+
+void PlayerEditorPanel::ApplyAttackComboPresetForAutomation()
+{
+    ApplyAttackComboPreset();
+}
+
 // 実行時ステータスパネル（未選択時に Properties 内サイドバーへ表示）
 void PlayerEditorPanel::DrawStateMachineRuntimeStatus()
 {

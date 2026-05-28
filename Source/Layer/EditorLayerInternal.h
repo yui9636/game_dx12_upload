@@ -1162,7 +1162,7 @@ namespace {
         return adjusted;
     }
 
-    void ClearRegistryEntities(Registry& registry)
+    void ClearRegistryEntities(Registry& registry, bool preserveEditorPreview = true)
     {
         std::vector<EntityID> entities;
         for (Archetype* archetype : registry.GetAllArchetypes()) {
@@ -1180,11 +1180,13 @@ namespace {
             if (!registry.IsAlive(entity)) {
                 continue;
             }
-            if (registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
-                continue;
-            }
-            if (registry.GetComponent<EffectPreviewTagComponent>(entity)) {
-                continue;
+            if (preserveEditorPreview) {
+                if (registry.GetComponent<SequencerPreviewCameraComponent>(entity)) {
+                    continue;
+                }
+                if (registry.GetComponent<EffectPreviewTagComponent>(entity)) {
+                    continue;
+                }
             }
             registry.DestroyEntity(entity);
         }

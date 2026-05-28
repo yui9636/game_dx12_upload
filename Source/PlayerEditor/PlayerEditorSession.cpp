@@ -15,6 +15,8 @@
 #include "Asset/PrefabSystem.h"
 #include "Animator/AnimatorService.h"
 #include "Component/ColliderComponent.h"
+#include "Component/ActorTypeComponent.h"
+#include "Component/CameraBehaviorComponent.h"
 #include "Component/EffectPreviewTagComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/MeshComponent.h"
@@ -22,7 +24,12 @@
 #include "Component/NodeSocketComponent.h"
 #include "Component/PrefabInstanceComponent.h"
 #include "Component/TransformComponent.h"
+#include "AI/EnemyRuntimeSetup.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
+#include "Gameplay/HealthComponent.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/PlayerTagComponent.h"
 #include "Gameplay/PlaybackComponent.h"
 #include "Gameplay/RetargetedAnimationComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
@@ -35,6 +42,9 @@
 #include "Engine/EngineKernel.h"
 #include "Input/InputActionMapComponent.h"
 #include "Input/InputBindingComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputUserComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
 #include "Model/Model.h"
 #include "Registry/Registry.h"
 #include "System/Dialog.h"
@@ -75,6 +85,20 @@ namespace
 
     static constexpr const char* kPrefabFileFilter =
         "Prefab (*.prefab)\0*.prefab\0All Files (*.*)\0*.*\0";
+
+    void RemovePlayerControlledComponents(Registry& registry, EntityID entity, bool removeCharacterPhysics)
+    {
+        registry.RemoveComponent<PlayerTagComponent>(entity);
+        registry.RemoveComponent<InputUserComponent>(entity);
+        registry.RemoveComponent<InputContextComponent>(entity);
+        registry.RemoveComponent<InputActionMapComponent>(entity);
+        registry.RemoveComponent<InputBindingComponent>(entity);
+        registry.RemoveComponent<ResolvedInputStateComponent>(entity);
+        registry.RemoveComponent<CameraTPVControlComponent>(entity);
+        if (removeCharacterPhysics) {
+            registry.RemoveComponent<CharacterPhysicsComponent>(entity);
+        }
+    }
 
     static bool HasExtension(const std::string& path, std::initializer_list<const char*> extensions)
     {
@@ -275,6 +299,51 @@ namespace
         return distance > 0.8f ? distance : 0.8f;
     }
 
+}
+
+void PlayerEditorSession::ApplyActorEditorModeComponents(PlayerEditorPanel& panel)
+{
+    if (!panel.m_registry || Entity::IsNull(panel.m_previewEntity) || !panel.m_registry->IsAlive(panel.m_previewEntity)) {
+        return;
+    }
+
+    Registry& registry = *panel.m_registry;
+    const EntityID entity = panel.m_previewEntity;
+
+    switch (panel.m_actorEditorMode) {
+    case ActorEditorMode::Enemy:
+        RemovePlayerControlledComponents(registry, entity, false);
+        EnemyRuntimeSetup::EnsureEnemyRuntimeComponents(registry, entity);
+        EnemyRuntimeSetup::ResetEnemyRuntimeState(registry, entity);
+        registry.RemoveComponent<PlayerTagComponent>(entity);
+        registry.RemoveComponent<InputUserComponent>(entity);
+        registry.RemoveComponent<InputContextComponent>(entity);
+        registry.RemoveComponent<InputActionMapComponent>(entity);
+        registry.RemoveComponent<CameraTPVControlComponent>(entity);
+        break;
+    case ActorEditorMode::NPC:
+        RemovePlayerControlledComponents(registry, entity, true);
+        registry.RemoveComponent<EnemyTagComponent>(entity);
+        if (auto* actor = registry.GetComponent<ActorTypeComponent>(entity)) {
+            actor->type = ActorType::NPC;
+        }
+        else {
+            ActorTypeComponent actorComponent{};
+            actorComponent.type = ActorType::NPC;
+            registry.AddComponent(entity, actorComponent);
+        }
+        if (!registry.GetComponent<HealthComponent>(entity)) {
+            registry.AddComponent(entity, HealthComponent{});
+        }
+        break;
+    case ActorEditorMode::Player:
+    default:
+        registry.RemoveComponent<EnemyTagComponent>(entity);
+        PlayerRuntimeSetup::EnsurePlayerPersistentComponents(registry, entity);
+        PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(registry, entity);
+        PlayerRuntimeSetup::ResetPlayerRuntimeState(registry, entity);
+        break;
+    }
 }
 
 void PlayerEditorSession::Suspend(PlayerEditorPanel& panel)
@@ -553,7 +622,9 @@ bool PlayerEditorSession::OpenModelFromPath(PlayerEditorPanel& panel, const std:
     panel.m_colliderDirty = false;
     panel.m_timelineDirty = false;
     panel.m_timelineAsset = TimelineAsset{};
+    panel.m_stateMachineAsset = StateMachineAsset{};
     panel.m_stateMachineDirty = false;
+    panel.m_inputMappingTab.ClearEditingMap();
     EnsureOwnedPreviewEntity(panel);
     SyncTimelineAssetSelection(panel);
     const auto bounds = panel.m_model->GetWorldBounds();
@@ -582,11 +653,7 @@ bool PlayerEditorSession::SavePrefabDocument(PlayerEditorPanel& panel, bool save
 
     ExportSocketsToPreviewEntity(panel);
 
-    PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*panel.m_registry, panel.m_previewEntity);
-
-    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, panel.m_previewEntity);
-
-    PlayerRuntimeSetup::ResetPlayerRuntimeState(*panel.m_registry, panel.m_previewEntity);
+    ApplyActorEditorModeComponents(panel);
 
     std::string prefabPath;
 
@@ -652,9 +719,7 @@ bool PlayerEditorSession::SavePrefabDocumentToPath(PlayerEditorPanel& panel, con
     panel.RemoveBrokenTransitions();
     ApplyEditorBindingsToPreviewEntity(panel);
     ExportSocketsToPreviewEntity(panel);
-    PlayerRuntimeSetup::EnsurePlayerPersistentComponents(*panel.m_registry, panel.m_previewEntity);
-    PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(*panel.m_registry, panel.m_previewEntity);
-    PlayerRuntimeSetup::ResetPlayerRuntimeState(*panel.m_registry, panel.m_previewEntity);
+    ApplyActorEditorModeComponents(panel);
 
     TransformComponent* previewTransform = panel.m_registry->GetComponent<TransformComponent>(panel.m_previewEntity);
     const DirectX::XMFLOAT3 displayScale = previewTransform ? previewTransform->localScale : DirectX::XMFLOAT3{ 1.0f, 1.0f, 1.0f };

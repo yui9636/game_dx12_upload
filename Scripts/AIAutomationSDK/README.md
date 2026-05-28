@@ -27,8 +27,20 @@ Use them aggressively, in combination, and re-evaluate every time the question c
 - `ecs.diff` — snapshot/diff. Take a snapshot before any mutation (`set_transform`, `set_component_fields`,
   `add_component`, `game.play`, gameflow transition), mutate, then diff. This is how you catch
   "something else also changed" (physics drift, component dropouts, prefab side effects, etc.).
+  Use `ecs.diff(action="help")` when you need the baseline rules. Short version:
+  unnamed `diff` is rolling, named `snapshot` + named `diff` compares repeatedly against the same baseline.
 - `ecs.watch` — enable once at session start. Keeps a running change log so you can correlate symptoms
   with the actual mutation that caused them.
+- `component.vector.*` edits vector fields directly. Use it for `ColliderComponent.elements`,
+  `InputActionMapComponent.asset.actions`, and other reflected arrays when you only need one element change.
+- `automation.get_manifest(writePath="Saved/AI/automation_manifest.json")` generates the current
+  "what should I observe with?" table for agents and tools.
+- `render.queue.snapshot(includePackets=True, limit=32)` dumps packet fields for render/depth diagnosis,
+  not just queue counts.
+- `bone.stream.start(...); bone.stream.pull(...)` keeps bone-world probes inside the engine and avoids
+  one WebSocket round trip per bone per frame.
+- `log.tail(category="Camera2D")` and `log.pull(category="Camera2D")` use structured log category and
+  timestamp fields instead of external prefix parsing.
 
 ### Visual observation (use BEFORE manual screenshots)
 - `visual.verify_entity` / `visual.verify_entity_game_view` — boolean "is this entity actually rendered
@@ -49,6 +61,8 @@ Use them aggressively, in combination, and re-evaluate every time the question c
 ### Engine state
 - `get_engine_state` — current scene path, play/edit mode, frame count, view rects. Cheap; call it
   often when you suspect mode/path drift.
+- `input.events.pull` is a durable input-event cursor. Use it after `game.input.tap` when you need
+  the exact press/release frames and queue sequence.
 - `get_visual_state` — camera + view geometry without touching the back buffer.
 
 ### Decision rule
@@ -61,6 +75,107 @@ Use them aggressively, in combination, and re-evaluate every time the question c
 
 If you find yourself reaching for `capture_screenshot` + PowerShell BMP conversion + `Read` on the PNG,
 **stop**. There is almost always a `visual.*` or `ecs.*` call that answers the same question in one step.
+
+---
+
+## New observation APIs (Round 1–3 additions)
+
+### Cursor-based event streaming (idempotent with `peek=true`)
+- `gameflow.events.pull` — pull GameFlow events (scene loaded, transitions) since last cursor.
+- `collision.events.pull` — pull damage / hit events with `sequence` field (ring-buffer overflow safe).
+- `log.pull` — pull logger output since last cursor, filtered by `category`/`minSeverity`/`filterRegex`.
+- `ecs.field.watch.pull` — watch one component field across frames.
+
+### Live state inspection
+- `gameflow.get_runtime_state` — current node, transitions pending, battle phase, scene path, flags.
+- `gameflow.eval_conditions` — what would advance the current node? (lookahead diagnostic)
+- `animator.get_state` — playing state, blend, animation index.
+- `input.get_resolved_state` — what the input system actually resolved this frame.
+- `editor.get_focus` / `editor.get_hierarchy_selection` — which panel / entity has focus.
+- `asset.status` — load state of named asset path.
+
+### Geometry / collision
+- `bone.list` / `bone.get_world` / `bone.get_world_batch` — bone world transforms (1 or N at once).
+- `collision.raycast` / `collision.overlap_sphere` — physics queries via Jolt.
+- `collision.is_hitting` — per-frame "do these 2 entities overlap right now" with shape-aware overlap
+  (Sphere/Box OBB SAT, Capsule sphere-chain approx) plus bone attachment metadata.
+
+### Visual baselines (CI-friendly regression)
+- `visual.find_text` — find rendered text by string (no OCR, reads `TextComponent`).
+- `visual.get_pixel_at_screen` — read RGB at exact pixel.
+- `visual.compare_capture` — BMP-vs-BMP diff with `matchTolerancePercent`.
+- `visual.baseline.save` / `visual.baseline.list` / `visual.baseline.delete` / `visual.baseline.compare`
+  — managed baseline workflow under `Saved/Visual_Baselines/<name>.bmp`.
+
+### Mutation + assertion (atomic transactions)
+- `editor.mutate_and_assert` — run mutation + run assertions + auto-attach `_visualState`.
+  Optional `rollbackOnFail=true` reverts the mutation via UndoSystem when an assertion fails.
+  Optional `frameSync=N` runs Hierarchy → Transform → Animator → Camera systems N times
+  so world matrices, bone poses and view matrices are observable in the same call.
+  `stepFrames=N` + `assertAfterSteps=true` defers assertions until N game frames elapse
+  (call `game.poll_pending_steps` or `client.wait_for_steps_completed()` to await).
+- `session.assert_invariant` — batch check.
+  - Original form: `[{kind:"component_field", entity, component, field, op, value}]`
+  - **Shorthand (R2 unified with mutate_and_assert)**:
+    `[{op, lhs:{ecs:{entity,component,field}}|<literal>, rhs:..., tolerance?}]`
+  - Ops: `eq` / `ne` / `gt` / `ge` / `lt` / `le` / `approx` (vector-aware) / `contains` / `regex` / `in_range`
+
+### Render queue introspection
+- `render.queue.snapshot` — counts + per-packet (mesh, material, world matrix). Optional
+  `includeSummary=true` aggregates by `modelFilePath` and `materialPath` (stable keys for cross-session diff).
+  `includeMeshSources=true` adds the entity → modelFilePath reverse map.
+
+### Editor dirty / hints
+- `effect_editor.get_state` — `autoCompileIfDirty=true` recompiles silently. Top-level `hints.compileErrors`
+  surfaces compile failures without digging into `state.compiled.errors`.
+- `player_editor.get_status.dirty.*` — per-tab (stateMachine, timeline, socket, collider, modelAnimation).
+- `ui_editor.get_state.sceneDirty` — scene-level dirty flag for UI authoring.
+
+### Engine control with determinism
+- `game.step_frames` — `fixedDeltaTime=1.0/60.0` for deterministic dt during stepping.
+  After the step is consumed, `m_stepFixedDt` resets so subsequent steps use real-time dt unless
+  explicitly overridden again.
+- `game.poll_pending_steps` — counter of queued steps not yet consumed by the Update tick.
+  Python helper: `client.wait_for_steps_completed(timeout_sec, poll_interval_sec)`.
+
+### Session lifecycle
+- `ai_session.begin` — automatically clears all pull cursors so the new session sees fresh state.
+- `session.clear_cursors` — manual clear (collision / gameflow / logs).
+- `ai_session.rollback` — restore from session-start file backups + ECS revision.
+
+### Bulk operations
+- `entity.batch_create` — create N entities in one call (avoids N round-trips for test fixture setup).
+- `batch` — generic envelope: `{commands: [{command, params}, ...]}` runs sub-commands sequentially.
+
+### Naming aliases (R3 — both forms accepted)
+- `create_empty` ≡ `entity.create_empty` ≡ `entity.create`
+- `set_transform` ≡ `entity.set_transform`
+- `delete_entity` ≡ `entity.delete`
+- `duplicate_entity` ≡ `entity.duplicate`
+- `reparent_entity` ≡ `entity.reparent`
+- `get_component` ≡ `component.get`
+- `add_component` ≡ `component.add`
+- `remove_component` ≡ `component.remove`
+- `set_component_fields` ≡ `component.set_fields`
+- `list_entities` ≡ `entity.list`
+- `get_entity` ≡ `entity.get`
+- `select_entity` ≡ `entity.select`
+- `player_editor.set_actor_mode` ≡ `player_editor.set_actor_role`
+
+### Filesystem-mutation guard (R3)
+`editor.mutate_and_assert` blocks `scene.save`, `material.create`, `asset_browser.*`, `terrain.regenerate`,
+`player_editor.save_prefab`, etc. unless `allowFilesystemMutation=true`. These can't be rolled back.
+
+### Client-side resilience (Python SDK)
+- Auto-reconnect on socket loss with exponential backoff (`max_reconnect_attempts=3` default).
+- Safe-retry whitelist (`SAFE_RETRY_COMMANDS`) + cursor-advance commands with `peek=true` guard.
+- `HEAVY_COMMAND_TIMEOUTS` overrides default 5s timeout for known-slow ops (scene.new, terrain.*, etc.).
+
+### Codegen / discoverability
+- `Scripts/AIAutomationSDK/gen_command_list.py` — diff C++ `DispatchCommand` vs Python `COMMANDS`
+  to detect drift. Run with `--check` to fail CI on missing entries.
+- `Docs/API_REGISTRATION_CHECKLIST.md` — what to update when adding a new command.
+- `Docs/API_TEST_SPEC_TEMPLATE.md` — smoke / invariant / scenario test template.
 
 ---
 

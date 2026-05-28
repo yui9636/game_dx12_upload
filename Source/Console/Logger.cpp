@@ -1,9 +1,36 @@
 ﻿#include <windows.h>
 #include <stdio.h>
 #include <cstdarg>
+#include <chrono>
 #include <fstream>
+#include <utility>
 #include "Logger.h"
 #include "System/PathResolver.h"
+
+namespace
+{
+    int64_t NowUnixMilliseconds()
+    {
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+    }
+
+    std::string ExtractCategory(const std::string& message)
+    {
+        if (message.size() < 3 || message.front() != '[') {
+            return {};
+        }
+        const size_t close = message.find(']');
+        if (close == std::string::npos || close <= 1 || close > 64) {
+            return {};
+        }
+        const std::string category = message.substr(1, close - 1);
+        if (category == "INFO" || category == "WARN" || category == "ERROR") {
+            return {};
+        }
+        return category;
+    }
+}
 
 // ログ出力先ファイルのパスを返す。
 // プロジェクトルート配下の Saved/Logs/runtime.log を使う。
@@ -52,26 +79,42 @@ void Logger::Print(LogLevel level, const char* format, ...)
         break;
     }
 
-    // Visual Studio の出力ウィンドウへ送る。
+    // Visual Studio の出力ウィンドウへ送る (lock 外。OutputDebugString は thread-safe)。
     ::OutputDebugStringA(vsOutput.c_str());
 
-    // 複数スレッドから安全に書けるようロックする。
-    std::lock_guard<std::mutex> lock(m_mutex);
+    // メモリ上 entry の登録だけ短時間 lock で行う (Snapshot 系の競合を最小化)。
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        LogEntry entry;
+        entry.level = level;
+        entry.message = finalMessage;
+        entry.category = ExtractCategory(finalMessage);
+        entry.timestampMs = NowUnixMilliseconds();
+        entry.sequence = m_nextSequence++;
+        m_logs.push_back(std::move(entry));
 
-    // 初回だけログファイルを空にしてリセットする。
-    static bool fileReset = false;
-    const std::filesystem::path logFilePath = GetLogFilePath();
-    if (!fileReset) {
-        std::ofstream resetFile(logFilePath, std::ios::out | std::ios::trunc);
-        fileReset = true;
+        // Ring buffer cap で無制限増加を防ぐ。古い entry を先頭から落とす。
+        // この削除は SnapshotLogsSince の cursor 値より古いものを切り捨てる効果。
+        // 4096 件保持で、64 文字平均なら 256KB 程度。
+        constexpr size_t kMaxRetained = 4096;
+        if (m_logs.size() > kMaxRetained) {
+            m_logs.erase(m_logs.begin(),
+                         m_logs.begin() + (m_logs.size() - kMaxRetained));
+        }
     }
 
-    // 以降は追記モードでファイルへ書き込む。
-    std::ofstream file(logFilePath, std::ios::out | std::ios::app);
-    if (file.is_open()) {
-        file << vsOutput;
+    // ファイル I/O は別 mutex で直列化。SnapshotLogs を block しない。
+    {
+        std::lock_guard<std::mutex> fileLock(m_fileMutex);
+        static bool fileReset = false;
+        const std::filesystem::path logFilePath = GetLogFilePath();
+        if (!fileReset) {
+            std::ofstream resetFile(logFilePath, std::ios::out | std::ios::trunc);
+            fileReset = true;
+        }
+        std::ofstream file(logFilePath, std::ios::out | std::ios::app);
+        if (file.is_open()) {
+            file << vsOutput;
+        }
     }
-
-    // メモリ上のログ履歴にも保存する。
-    m_logs.push_back({ level, finalMessage });
 }

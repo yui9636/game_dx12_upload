@@ -36,6 +36,7 @@
 #include "Component/UIButtonComponent.h"
 #include "Component/ActorTypeComponent.h"
 #include "Gameplay/EnemyTagComponent.h"
+#include "AI/EnemyRuntimeSetup.h"
 #include "AI/BehaviorTreeAssetComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/TransformComponent.h"
@@ -2164,10 +2165,23 @@ EntityID PrefabSystem::InstantiatePrefab(const std::filesystem::path& prefabPath
 
     EntitySnapshot::RestoreResult restore = EntitySnapshot::RestoreSubtree(snapshot, registry);
 
-    if (!Entity::IsNull(restore.root) && PlayerRuntimeSetup::HasMinimumPlayerAuthoringComponents(registry, restore.root)) {
-        PlayerRuntimeSetup::EnsurePlayerPersistentComponents(registry, restore.root);
-        PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(registry, restore.root);
-        PlayerRuntimeSetup::ResetPlayerRuntimeState(registry, restore.root);
+    if (!Entity::IsNull(restore.root) && registry.IsAlive(restore.root)) {
+        const auto* actorType = registry.GetComponent<ActorTypeComponent>(restore.root);
+        const bool isEnemy = registry.GetComponent<EnemyTagComponent>(restore.root) != nullptr ||
+            (actorType && actorType->type == ActorType::Enemy);
+        const bool isNPC = actorType && actorType->type == ActorType::NPC;
+        if (isEnemy) {
+            EnemyRuntimeSetup::EnsureEnemyRuntimeComponents(registry, restore.root);
+            EnemyRuntimeSetup::ResetEnemyRuntimeState(registry, restore.root);
+        }
+        else if (isNPC) {
+            EnemyRuntimeSetup::EnsureNPCRuntimeComponents(registry, restore.root);
+        }
+        else if (PlayerRuntimeSetup::HasMinimumPlayerAuthoringComponents(registry, restore.root)) {
+            PlayerRuntimeSetup::EnsurePlayerPersistentComponents(registry, restore.root);
+            PlayerRuntimeSetup::EnsurePlayerRuntimeComponents(registry, restore.root);
+            PlayerRuntimeSetup::ResetPlayerRuntimeState(registry, restore.root);
+        }
     }
 
     return restore.root;

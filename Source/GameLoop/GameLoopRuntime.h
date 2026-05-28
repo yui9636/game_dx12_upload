@@ -41,6 +41,9 @@ struct GameLoopRuntime
     // 現在ノード開始からの時間（秒）。TimerElapsed で使う。
     float nodeTimer = 0.0f;
 
+    // Durable FlowEvent 履歴を読む条件が、現在ノードに入る前のイベントを拾わないための境界。
+    uint64_t nodeEventSequenceCursor = 0;
+
     // ActorMovedDistance: ノード開始時点の監視対象 actor 位置。
     DirectX::XMFLOAT3 observedActorStartPosition{ 0.0f, 0.0f, 0.0f };
     bool              observedActorPositionInitialized = false;

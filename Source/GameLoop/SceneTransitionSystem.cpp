@@ -5,6 +5,12 @@
 #include "Console/Logger.h"
 #include "GameLoopRuntime.h"
 #include "Registry/Registry.h"
+#include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/HealthComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
+#include "System/Query.h"
+#include "Component/NameComponent.h"
 
 namespace
 {
@@ -72,5 +78,31 @@ bool SceneTransitionSystem::UpdateEndOfFrame(
     }
 
     ApplySuccessfulTransition(runtime);
+
+    // Defensive check: gameflow auto-load 後に Player / Enemy entity が必須 component を
+    // 持っているか log。ユーザー報告の「PlayerTag/HealthComponent が落ちる」現象の早期検出。
+    {
+        int playerCount = 0;
+        int playerMissingHealth = 0;
+        int playerMissingState = 0;
+        Query<PlayerTagComponent, NameComponent> q(gameRegistry);
+        q.ForEachWithEntity([&](EntityID e, PlayerTagComponent& tag, NameComponent& name) {
+            (void)tag;
+            ++playerCount;
+            if (!gameRegistry.GetComponent<HealthComponent>(e)) {
+                ++playerMissingHealth;
+                LOG_WARN("[SceneTransition] Player entity %s ('%s') missing HealthComponent after scene load",
+                    std::to_string(e).c_str(), name.name.c_str());
+            }
+        });
+        if (playerCount == 0) {
+            LOG_INFO("[SceneTransition] Scene loaded but no PlayerTag entity found (may be intentional for non-battle scenes).");
+        } else if (playerMissingHealth > 0) {
+            LOG_WARN("[SceneTransition] %d/%d player entities are missing required runtime components. Re-running EnsureAllPlayerRuntimeComponents...",
+                playerMissingHealth, playerCount);
+            // 念のため再実行 (EngineKernel.cpp 側でも呼んでいるが、idempotent なので二重呼び OK)
+            PlayerRuntimeSetup::EnsureAllPlayerRuntimeComponents(gameRegistry, false);
+        }
+    }
     return true;
 }

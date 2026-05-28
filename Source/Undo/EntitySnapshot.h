@@ -17,6 +17,7 @@
 #include "Component/MaterialComponent.h"
 #include "Component/PhysicsComponent.h"
 #include "Component/ReflectionProbeComponent.h"
+#include "Console/Logger.h"
 #include "Entity/Entity.h"
 #include "Generated/ComponentMeta.generated.h"
 #include "Hierarchy/HierarchySystem.h"
@@ -137,6 +138,38 @@ namespace EntitySnapshot
                 (RestoreComponent<std::decay_t<decltype(component)>>(entity, registry, storage), ...);
             },
             AllComponentTypes{});
+    }
+
+    template<typename T>
+    inline bool EnsureRestoredComponent(EntityID entity, Registry& registry, const ComponentStorage& storage, std::vector<std::string>& repaired, std::vector<std::string>& missing)
+    {
+        const auto& value = std::get<std::optional<T>>(storage);
+        if (!value.has_value()) {
+            return true;
+        }
+        if (registry.GetComponent<T>(entity)) {
+            return true;
+        }
+
+        registry.AddComponent<T>(entity, *value);
+        if (registry.GetComponent<T>(entity)) {
+            repaired.push_back(std::string(ComponentMeta<T>::Name));
+            return true;
+        }
+
+        missing.push_back(std::string(ComponentMeta<T>::Name));
+        return false;
+    }
+
+    inline bool EnsureRestoredComponents(EntityID entity, Registry& registry, const ComponentStorage& storage, std::vector<std::string>& repaired, std::vector<std::string>& missing)
+    {
+        bool ok = true;
+        std::apply(
+            [&](auto... component) {
+                ((ok = EnsureRestoredComponent<std::decay_t<decltype(component)>>(entity, registry, storage, repaired, missing) && ok), ...);
+            },
+            AllComponentTypes{});
+        return ok;
     }
 
     inline Snapshot CaptureSubtree(EntityID root, Registry& registry)
@@ -289,6 +322,16 @@ namespace EntitySnapshot
             const EntityID entity = result.localToEntity[node.localID];
             RestoreAllComponents(entity, registry, node.components);
             SanitizeRuntimeState(entity, registry, sourceToLocal, result.localToEntity);
+            std::vector<std::string> repaired;
+            std::vector<std::string> missing;
+            EnsureRestoredComponents(entity, registry, node.components, repaired, missing);
+            if (!repaired.empty() || !missing.empty()) {
+                LOG_WARN("[EntitySnapshot] Restore component validation localId=%u entity=%llu repaired=%zu missing=%zu",
+                    node.localID,
+                    static_cast<unsigned long long>(entity),
+                    repaired.size(),
+                    missing.size());
+            }
         }
 
         for (const Node& node : snapshot.nodes) {

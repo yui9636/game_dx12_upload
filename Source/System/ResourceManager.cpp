@@ -486,3 +486,36 @@ std::shared_ptr<MaterialAsset> ResourceManager::GetDefaultMaterial() {
     }
     return m_defaultMaterial;
 }
+
+std::vector<std::string> ResourceManager::ListLoadedModelKeys() const
+{
+    std::vector<std::string> keys;
+    keys.reserve(modelMap.size());
+    for (const auto& [key, _] : modelMap) {
+        keys.push_back(key);
+    }
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}
+
+std::vector<std::string> ResourceManager::ListLoadedTextureKeys() const
+{
+    std::vector<std::string> keys;
+    keys.reserve(textureMap.size());
+    for (const auto& [key, _] : textureMap) {
+        keys.push_back(key);
+    }
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}
+
+std::vector<std::string> ResourceManager::ListLoadedMaterialKeys() const
+{
+    std::vector<std::string> keys;
+    keys.reserve(m_materials.size());
+    for (const auto& [key, _] : m_materials) {
+        keys.push_back(key);
+    }
+    std::sort(keys.begin(), keys.end());
+    return keys;
+}

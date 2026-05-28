@@ -1,0 +1,209 @@
+{
+  "nodes": [
+    {
+      "components": {
+        "ActionDatabaseComponent": {
+          "nodeCount": 3,
+          "nodes": [
+            {
+              "animIndex": 75,
+              "animSpeed": 1.0,
+              "cancelStart": 0.20000000298023224,
+              "comboStart": 0.4000000059604645,
+              "damageVal": 10,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            },
+            {
+              "animIndex": 76,
+              "animSpeed": 1.0,
+              "cancelStart": 0.20000000298023224,
+              "comboStart": 0.4000000059604645,
+              "damageVal": 12,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            },
+            {
+              "animIndex": 77,
+              "animSpeed": 1.0,
+              "cancelStart": 0.30000001192092896,
+              "comboStart": 0.5,
+              "damageVal": 18,
+              "inputEnd": 1.0,
+              "inputStart": 0.0,
+              "magnetismRange": 10.0,
+              "magnetismSpeed": 0.0,
+              "nextDodge": -1,
+              "nextHeavy": -1,
+              "nextLight": -1
+            }
+          ]
+        },
+        "ActorTypeComponent": {
+          "factionId": 0,
+          "type": 2
+        },
+        "CharacterPhysicsComponent": {
+          "acceleration": 0.0,
+          "friction": 999.0,
+          "gravity": -30.0,
+          "height": 1.7999999523162842,
+          "maxMoveSpeed": 0.0,
+          "stepOffset": 0.30000001192092896
+        },
+        "ColliderComponent": {
+          "drawGizmo": true,
+          "elements": [
+            {
+              "attribute": 0,
+              "color": {
+                "w": 0.3499999940395355,
+                "x": 0.20000000298023224,
+                "y": 0.8999999761581421,
+                "z": 0.3499999940395355
+              },
+              "enabled": true,
+              "height": 160.0,
+              "hitSfxPath": "",
+              "hitVfxPath": "Data/EffectGraph/NoCode_HitSlash.effectgraph.json",
+              "nodeIndex": -1,
+              "offsetLocal": {
+                "x": 0.0,
+                "y": 90.0,
+                "z": 0.0
+              },
+              "radius": 45.0,
+              "size": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+              },
+              "type": 1
+            }
+          ],
+          "enabled": true
+        },
+        "EnemyTagComponent": {
+          "enemyKindId": 0
+        },
+        "HealthComponent": {
+          "health": 50,
+          "maxHealth": 50
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "InputBindingComponent": {
+          "bindingProfilePath": "",
+          "runtimeOverrideProfilePath": ""
+        },
+        "MeshComponent": {
+          "castShadow": true,
+          "isDebugModel": false,
+          "isVisible": true,
+          "modelFilePath": "C:/Users/yuito/Documents/MyEngine_Workspace/game_dx12_upload/Data/Model/Actor/A5.gltf"
+        },
+        "NameComponent": {
+          "name": "Sandbag"
+        },
+        "NodeSocketComponent": {
+          "sockets": []
+        },
+        "StaminaComponent": {
+          "costPerUse": 250.0,
+          "current": 1000.0,
+          "max": 1000.0,
+          "recoveryDelay": 0.800000011920929,
+          "recoveryRate": 200.0
+        },
+        "StateMachineAssetComponent": {
+          "defaultStateId": 0,
+          "name": "",
+          "nextId": 1,
+          "parameters": [],
+          "states": [],
+          "transitions": []
+        },
+        "StateMachineParamsComponent": {
+          "params": [
+            {
+              "name": "Attack",
+              "value": 0.0
+            },
+            {
+              "name": "Dodge",
+              "value": 0.0
+            },
+            {
+              "name": "Damaged",
+              "value": 0.0
+            },
+            {
+              "name": "MoveX",
+              "value": 0.0
+            },
+            {
+              "name": "MoveY",
+              "value": 0.0
+            },
+            {
+              "name": "MoveMagnitude",
+              "value": 0.0
+            },
+            {
+              "name": "IsMoving",
+              "value": 0.0
+            },
+            {
+              "name": "Gait",
+              "value": 0.0
+            },
+            {
+              "name": "IsWalking",
+              "value": 0.0
+            },
+            {
+              "name": "IsRunning",
+              "value": 0.0
+            }
+          ]
+        },
+        "TimelineLibraryComponent": {
+          "assets": [],
+          "nextTimelineId": 1
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 1.5
+          },
+          "localRotation": {
+            "w": 0.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 1.0
+          },
+          "localScale": {
+            "x": 0.017999999225139618,
+            "y": 0.017999999225139618,
+            "z": 0.017999999225139618
+          }
+        }
+      },
+      "id": 0
+    }
+  ],
+  "rootLocalId": 0,
+  "version": 1
+}

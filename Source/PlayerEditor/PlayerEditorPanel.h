@@ -91,6 +91,13 @@ public:
     void MarkSocketDirty()        { m_socketDirty        = true; }
     void MarkColliderDirty()      { m_colliderDirty      = true; }
 
+    // 各 dirty フラグの観測 (automation 側で "保存忘れ" を検出するため)。
+    bool IsStateMachineDirtyForAutomation()  const { return m_stateMachineDirty; }
+    bool IsTimelineDirtyForAutomation()      const { return m_timelineDirty; }
+    bool IsSocketDirtyForAutomation()        const { return m_socketDirty; }
+    bool IsColliderDirtyForAutomation()      const { return m_colliderDirty; }
+    bool IsModelAnimationDirtyForAutomation() const { return m_modelAnimationDirty; }
+
     ActorEditorMode      GetActorEditorMode()    const { return m_actorEditorMode; }
     void                 SetActorEditorMode(ActorEditorMode m) { m_actorEditorMode = m; }
 
@@ -144,6 +151,10 @@ public:
     // ---- Automation: Input Mapping ----
     InputMappingTab&       GetInputMappingTab()       { return m_inputMappingTab; }
     const InputMappingTab& GetInputMappingTab() const { return m_inputMappingTab; }
+
+    // ---- Automation: Presets ----
+    void ApplyFullPlayerPresetForAutomation();
+    void ApplyAttackComboPresetForAutomation();
 
 private:
     friend class PlayerEditorSession;

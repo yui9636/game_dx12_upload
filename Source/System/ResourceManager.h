@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <vector>
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "Material/MaterialAsset.h"
@@ -30,6 +31,10 @@ public:
     std::shared_ptr<MaterialAsset> GetMaterial(const std::string& path);
 
     std::shared_ptr<MaterialAsset> GetDefaultMaterial();
+
+    std::vector<std::string> ListLoadedModelKeys() const;
+    std::vector<std::string> ListLoadedTextureKeys() const;
+    std::vector<std::string> ListLoadedMaterialKeys() const;
 private:
     ResourceManager() = default;
     ~ResourceManager() = default;

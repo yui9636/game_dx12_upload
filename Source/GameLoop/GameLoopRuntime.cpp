@@ -13,6 +13,7 @@ void GameLoopRuntime::Reset()
     waitingSceneLoad         = false;
     forceReload              = false;
     nodeTimer                = 0.0f;
+    nodeEventSequenceCursor  = 0;
     observedActorStartPosition = { 0.0f, 0.0f, 0.0f };
     observedActorPositionInitialized = false;
     flags.clear();

@@ -1310,7 +1310,11 @@ void EngineKernel::Update(float rawDt)
         m_editorLayer && m_editorLayer->GetPlayerEditorPanel().IsTestModeActive();
 
     if (mode == EngineMode::Play || stepThisFrame || playerEditorTestActive) {
-        time.dt = rawDt * time.timeScale;
+        // Step (1 frame だけ進める) 時に automation から fixed dt を要求されていれば、
+        // rawDt を上書きする (テスト再現性のため)。Play 中は無視。
+        const float effectiveRaw = (stepThisFrame && m_stepFixedDt > 0.0f) ? m_stepFixedDt : rawDt;
+        time.dt = effectiveRaw * time.timeScale;
+        time.unscaledDt = effectiveRaw;
     }
     else {
         time.dt = 0.0f;
@@ -1334,6 +1338,7 @@ void EngineKernel::Update(float rawDt)
         if (loaded) {
             // Scene を差し替えたフレームでは、旧 Scene の入力イベントを次のノードへ持ち越さない。
             m_flowEventQueue.Clear();
+            m_gameLoopRuntime.nodeEventSequenceCursor = m_flowEventQueue.GetLatestSequence();
             m_flowEventQueue.Push("scene.loaded", m_gameLoopRuntime.currentScenePath);
 
             if (m_editorLayer) {
@@ -1434,6 +1439,9 @@ void EngineKernel::Update(float rawDt)
 
     if (stepThisFrame) {
         m_stepFrameRequested = false;
+        // step 消化後は fixed dt を必ず reset。次の step 呼び出しで明示的に渡されなければ通常 dt に戻す。
+        // (副作用永続化バグの修正)
+        m_stepFixedDt = 0.0f;
         mode = EngineMode::Pause;
     }
 }
@@ -2256,7 +2264,7 @@ void EngineKernel::Play()
         // GameFlow を開始する。未登録なら現在シーンのまま Play する。
         GameLoopRuntime& rt = m_gameLoopRuntime;
         rt.Reset();
-        m_flowEventQueue.Clear();
+        m_flowEventQueue.ClearAll();
         BattleFlowSystem::Reset();
         CoinGameSystem::Reset();
 
@@ -2314,7 +2322,7 @@ void EngineKernel::StopImmediate()
         // GameFlow runtime をリセットする。
         m_gameLoopRuntime.Reset();
         m_uiButtonClickQueue.Clear();
-        m_flowEventQueue.Clear();
+        m_flowEventQueue.ClearAll();
         BattleFlowSystem::Reset();
         CoinGameSystem::Reset();
 
@@ -2344,7 +2352,7 @@ void EngineKernel::RegisterGameLoopAssetFromEditor(const GameLoopAsset& asset, c
     m_gameLoopAssetPath = path.lexically_normal();
     m_gameLoopRuntime.Reset();
     m_uiButtonClickQueue.Clear();
-    m_flowEventQueue.Clear();
+    m_flowEventQueue.ClearAll();
     LOG_INFO("[GameFlow] registered from editor: %s", m_gameLoopAssetPath.string().c_str());
 }
 
@@ -2355,7 +2363,7 @@ void EngineKernel::ClearGameLoopAssetRegistration()
     m_gameLoopAssetPath.clear();
     m_gameLoopRuntime.Reset();
     m_uiButtonClickQueue.Clear();
-    m_flowEventQueue.Clear();
+    m_flowEventQueue.ClearAll();
     LOG_INFO("[GameFlow] runtime registration cleared.");
 }
 

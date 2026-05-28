@@ -2,6 +2,7 @@
 #include "GameLoopSystem.h"
 
 #include <algorithm>
+#include <cctype>
 #include <string>
 
 #include "Engine/EngineKernel.h"
@@ -22,6 +23,40 @@ namespace
     std::string ToString(uint8_t value)
     {
         return std::to_string(static_cast<unsigned int>(value));
+    }
+
+    std::string ToLowerCopy(std::string value)
+    {
+        std::transform(value.begin(), value.end(), value.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return value;
+    }
+
+    bool FlowEventMatches(const FlowEvent& event, const std::string& name, const std::string& value)
+    {
+        if (event.name != name) return false;
+        return value.empty() || ToLowerCopy(event.value) == ToLowerCopy(value);
+    }
+
+    bool ContainsBattleResultEvent(
+        const FlowEventQueue& flowEvents,
+        uint64_t minExclusiveSequence,
+        const std::string& value)
+    {
+        for (const FlowEvent& event : flowEvents.GetEvents()) {
+            if (FlowEventMatches(event, "battle.ended", value) ||
+                FlowEventMatches(event, "battle.result", value)) {
+                return true;
+            }
+        }
+        for (const FlowEvent& event : flowEvents.GetRecentEvents()) {
+            if (event.sequence <= minExclusiveSequence) continue;
+            if (FlowEventMatches(event, "battle.ended", value) ||
+                FlowEventMatches(event, "battle.result", value)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     bool IsFlagSet(const GameLoopRuntime& runtime, const std::string& name)
@@ -64,8 +99,7 @@ namespace
             return IsFlagSet(runtime, condition.name) == condition.expectedFlagValue;
 
         case GameFlowConditionType::BattleResult:
-            return flowEvents.Contains("battle.ended", condition.value) ||
-                flowEvents.Contains("battle.result", condition.value);
+            return ContainsBattleResultEvent(flowEvents, runtime.nodeEventSequenceCursor, condition.value);
 
         case GameFlowConditionType::SceneLoaded:
             return flowEvents.Contains("scene.loaded", condition.value);
@@ -173,6 +207,7 @@ namespace
             runtime.previousNodeId = runtime.currentNodeId;
             runtime.currentNodeId = toNode.id;
             runtime.nodeTimer = 0.0f;
+            runtime.nodeEventSequenceCursor = flowEvents.GetLatestSequence();
             return ActionResult::Continue;
 
         case GameFlowActionType::EmitEvent:

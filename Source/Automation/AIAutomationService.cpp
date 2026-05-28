@@ -1,4 +1,4 @@
-#include "Automation/AIAutomationService.h"
+﻿#include "Automation/AIAutomationService.h"
 #include "Automation/WebSocketServer.h"
 
 #ifndef NOMINMAX
@@ -12,11 +12,14 @@
 #include <chrono>
 #include <cctype>
 #include <cstring>
+#include <cstddef>
+#include <deque>
 #include <fstream>
 #include <memory>
 #include <limits>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -31,7 +34,10 @@
 #include "Archetype/Archetype.h"
 #include "Asset/PrefabSystem.h"
 #include "Asset/AssetManager.h"
+#include "AI/EnemyRuntimeSetup.h"
 #include "Camera/Camera2DUtils.h"
+#include "Component/CanvasItemComponent.h"
+#include "Component/CameraBehaviorComponent.h"
 #include "Component/HierarchyComponent.h"
 #include "Component/EffectAssetComponent.h"
 #include "Component/EffectPlaybackComponent.h"
@@ -39,15 +45,24 @@
 #include "Component/EffectSpawnRequestComponent.h"
 #include "Component/MeshComponent.h"
 #include "Component/NameComponent.h"
+#include "Component/RectTransformComponent.h"
 #include "Component/TransformComponent.h"
 #include "Console/Logger.h"
+#include "Console/Profiler.h"
 #include "Duplicate/DuplicateSystem.h"
 #include "Gameplay/BattleFlowSystem.h"
+#include "Gameplay/CharacterPhysicsComponent.h"
 #include "Gameplay/DamageEventComponent.h"
+#include "Gameplay/EnemyTagComponent.h"
 #include "Gameplay/AnimatorComponent.h"
+#include "Gameplay/PlayerTagComponent.h"
+#include "Gameplay/StateMachineAssetComponent.h"
+#include "Gameplay/TimelineLibraryComponent.h"
 #include "GameLoop/FlowEventQueue.h"
 #include "Input/ResolvedInputStateComponent.h"
 #include "Input/InputActionMapComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputUserComponent.h"
 #include "Component/TextComponent.h"
 #include "Component/ColliderComponent.h"
 #include "System/Query.h"
@@ -68,6 +83,7 @@
 #include "Layer/EditorLayer.h"
 #include "Layer/GameLayer.h"
 #include "Model/Model.h"
+#include "Model/ModelResource.h"
 #include "Registry/Registry.h"
 #include "Render/Graphics.h"
 #include "RHI/DX11/DX11Texture.h"
@@ -77,6 +93,11 @@
 #include "Terrain/TerrainAssetIO.h"
 #include "Terrain/TerrainComponent.h"
 #include "Terrain/TerrainGpuPipeline.h"
+#include "Transform/TransformSystem.h"
+#include "Hierarchy/HierarchySystem.h"
+#include "UI/UIScreenSpaceOverlay.h"
+#include "Animator/AnimatorSystem.h"
+#include "Camera/CameraFinalizeSystem.h"
 #include "Vegetation/GrassComponent.h"
 #include "System/UndoSystem.h"
 #include "Undo/ComponentUndoAction.h"
@@ -95,11 +116,45 @@
 #include "Sequencer/CinematicSequenceAsset.h"
 #include "Asset/ModelAssetSerializer.h"
 
+struct AutomationObservationAccess
+{
+    static const RenderQueue& RenderQueueOf(const EngineKernel& kernel)
+    {
+        return kernel.m_renderQueue;
+    }
+};
+
 namespace
 {
     using json = nlohmann::json;
 
     constexpr int kProtocolVersion = 1;
+
+    // Forward declarations — these are defined later in the file but called from
+    // earlier helpers (e.g. EvalEcsValueFilters at ~line 3081 calls HandleECSFieldGet
+    // at ~line 12105 within the same anonymous namespace).
+    json HandleECSFieldGet(Registry& registry, const json& params);
+
+    // ResolvedColliderShape / ResolveColliderElementWorld は ~line 11491 で定義されるが、
+    // BuildEntityFocusBoundsEx (~line 1700) で参照されるため前方宣言が必要。
+    struct ResolvedColliderShape
+    {
+        DirectX::XMFLOAT3 worldCenter{ 0.0f, 0.0f, 0.0f };
+        float worldRadius = 0.5f;
+        DirectX::XMFLOAT3 worldExtents{ 0.5f, 0.5f, 0.5f };
+        DirectX::XMFLOAT4 worldOrientation{ 0.0f, 0.0f, 0.0f, 1.0f }; // quaternion
+        float height = 1.0f;       // Capsule 用 (sphere は radius*2)
+        ColliderShape shape = ColliderShape::Sphere;
+        bool boneAttached = false;
+        int resolvedNodeIndex = -1;
+    };
+    ResolvedColliderShape ResolveColliderElementWorld(Registry& registry,
+                                                      EntityID entity,
+                                                      const ColliderComponent::Element& elem);
+
+    // 形状を考慮した overlap 判定。Sphere/Box の SAT を DirectXCollision で正確に評価。
+    // Capsule は両端 sphere + 中央 box の近似 (Jolt 連携前の暫定)。
+    bool CollidersOverlap(const ResolvedColliderShape& a, const ResolvedColliderShape& b);
 
     enum class PathAccess
     {
@@ -211,6 +266,26 @@ namespace
         return error;
     }
 
+    class AutomationCommandError : public std::runtime_error
+    {
+    public:
+        explicit AutomationCommandError(json error)
+            : std::runtime_error(error.value("message", std::string("Automation command failed.")))
+            , m_error(std::move(error))
+        {
+        }
+
+        const json& Error() const noexcept { return m_error; }
+
+    private:
+        json m_error;
+    };
+
+    [[noreturn]] void ThrowError(const std::string& code, const std::string& message, json details = nullptr)
+    {
+        throw AutomationCommandError(MakeError(code, message, std::move(details)));
+    }
+
     bool IsPathUnder(const std::filesystem::path& path, const std::filesystem::path& root)
     {
         auto pIt = path.begin();
@@ -304,7 +379,7 @@ namespace
     std::filesystem::path ResolveProjectPath(const std::string& input, PathAccess access, bool mustExist)
     {
         if (input.empty()) {
-            throw MakeError("missing_param", "path is required.");
+            ThrowError("missing_param", "path is required.");
         }
 
         if (PathResolver::GetRootPath().empty()) {
@@ -343,7 +418,7 @@ namespace
             }
         }
         if (!allowed) {
-            throw MakeError("path_not_allowed", "Path is outside the allowed project roots.", {
+            ThrowError("path_not_allowed", "Path is outside the allowed project roots.", {
                 { "path", input },
                 { "resolvedPath", candidate.string() }
             });
@@ -352,7 +427,7 @@ namespace
         if (mustExist) {
             std::error_code ec;
             if (!std::filesystem::exists(candidate, ec)) {
-                throw MakeError("file_not_found", "Path does not exist.", {
+                ThrowError("file_not_found", "Path does not exist.", {
                     { "path", input },
                     { "resolvedPath", candidate.string() }
                 });
@@ -740,7 +815,7 @@ namespace
     void WriteBmp24(const std::filesystem::path& path, const ImageBuffer& image)
     {
         if (image.width <= 0 || image.height <= 0 || image.bgra.empty()) {
-            throw MakeError("capture_failed", "Captured image is empty.", { { "path", path.string() } });
+            ThrowError("capture_failed", "Captured image is empty.", { { "path", path.string() } });
         }
 
         const uint32_t rowStride = static_cast<uint32_t>((image.width * 3 + 3) & ~3);
@@ -751,7 +826,7 @@ namespace
         std::filesystem::create_directories(path.parent_path(), ec);
         std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
         if (!ofs.is_open()) {
-            throw MakeError("file_write_failed", "Failed to open screenshot output.", { { "path", path.string() } });
+            ThrowError("file_write_failed", "Failed to open screenshot output.", { { "path", path.string() } });
         }
 
         auto writeU16 = [&](uint16_t value) {
@@ -822,14 +897,14 @@ namespace
     void WritePng(const std::filesystem::path& path, const ImageBuffer& image)
     {
         if (image.width <= 0 || image.height <= 0 || image.bgra.empty()) {
-            throw MakeError("capture_failed", "Captured image is empty.", { { "path", path.string() } });
+            ThrowError("capture_failed", "Captured image is empty.", { { "path", path.string() } });
         }
 
         std::error_code ec;
         std::filesystem::create_directories(path.parent_path(), ec);
         std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
         if (!ofs.is_open()) {
-            throw MakeError("file_write_failed", "Failed to open PNG output.", { { "path", path.string() } });
+            ThrowError("file_write_failed", "Failed to open PNG output.", { { "path", path.string() } });
         }
 
         const int W = image.width;
@@ -1070,24 +1145,74 @@ namespace
     constexpr bool IsXMFLOAT4 = std::is_same_v<std::decay_t<T>, DirectX::XMFLOAT4>;
 
     template<typename T>
+    constexpr bool IsSimpleMathVector3 = std::is_same_v<std::decay_t<T>, DirectX::SimpleMath::Vector3>;
+
+    template<typename T>
+    constexpr bool IsSimpleMathVector4 = std::is_same_v<std::decay_t<T>, DirectX::SimpleMath::Vector4>;
+
+    template<typename T>
+    struct IsStdVector : std::false_type {};
+
+    template<typename T, typename Allocator>
+    struct IsStdVector<std::vector<T, Allocator>> : std::true_type {
+        using Element = T;
+    };
+
+    template<typename T>
+    constexpr bool IsKnownObjectFieldType()
+    {
+        using U = std::decay_t<T>;
+        return std::is_same_v<U, ColliderComponent::Element> ||
+            std::is_same_v<U, ActionBinding> ||
+            std::is_same_v<U, AxisBinding> ||
+            std::is_same_v<U, InputActionMapAsset> ||
+            std::is_same_v<U, NodeSocket>;
+    }
+
+    template<typename T>
     constexpr bool IsEditableFieldType()
     {
         using U = std::decay_t<T>;
-        return std::is_same_v<U, std::string> ||
-            std::is_same_v<U, bool> ||
-            std::is_integral_v<U> ||
-            std::is_floating_point_v<U> ||
-            std::is_enum_v<U> ||
-            IsXMFLOAT2<U> ||
-            IsXMFLOAT3<U> ||
-            IsXMFLOAT4<U>;
+        if constexpr (IsStdVector<U>::value) {
+            using Element = typename IsStdVector<U>::Element;
+            return IsEditableFieldType<Element>();
+        }
+        else {
+            return std::is_same_v<U, std::string> ||
+                std::is_same_v<U, bool> ||
+                std::is_integral_v<U> ||
+                std::is_floating_point_v<U> ||
+                std::is_enum_v<U> ||
+                IsXMFLOAT2<U> ||
+                IsXMFLOAT3<U> ||
+                IsXMFLOAT4<U> ||
+                IsSimpleMathVector3<U> ||
+                IsSimpleMathVector4<U> ||
+                IsKnownObjectFieldType<U>();
+        }
     }
 
     template<typename T>
     std::string FieldTypeName()
     {
         using U = std::decay_t<T>;
-        if constexpr (std::is_same_v<U, std::string>) {
+        if constexpr (IsStdVector<U>::value) {
+            using Element = typename IsStdVector<U>::Element;
+            return "array<" + FieldTypeName<Element>() + ">";
+        }
+        else if constexpr (std::is_same_v<U, ColliderComponent::Element>) {
+            return "collider_element";
+        }
+        else if constexpr (std::is_same_v<U, ActionBinding>) {
+            return "input_action_binding";
+        }
+        else if constexpr (std::is_same_v<U, AxisBinding>) {
+            return "input_axis_binding";
+        }
+        else if constexpr (std::is_same_v<U, InputActionMapAsset>) {
+            return "input_action_map_asset";
+        }
+        else if constexpr (std::is_same_v<U, std::string>) {
             return "string";
         }
         else if constexpr (std::is_same_v<U, bool>) {
@@ -1105,10 +1230,10 @@ namespace
         else if constexpr (IsXMFLOAT2<U>) {
             return "float2";
         }
-        else if constexpr (IsXMFLOAT3<U>) {
+        else if constexpr (IsXMFLOAT3<U> || IsSimpleMathVector3<U>) {
             return "float3";
         }
-        else if constexpr (IsXMFLOAT4<U>) {
+        else if constexpr (IsXMFLOAT4<U> || IsSimpleMathVector4<U>) {
             return "float4";
         }
         else {
@@ -1116,11 +1241,106 @@ namespace
         }
     }
 
+    std::string FieldColliderShapeToString(ColliderShape shape)
+    {
+        switch (shape) {
+        case ColliderShape::Capsule: return "Capsule";
+        case ColliderShape::Box: return "Box";
+        default: return "Sphere";
+        }
+    }
+
+    std::string FieldColliderAttributeToString(ColliderAttribute attribute)
+    {
+        return attribute == ColliderAttribute::Attack ? "Attack" : "Body";
+    }
+
+    std::string FieldActionTriggerToString(ActionTriggerType trigger)
+    {
+        switch (trigger) {
+        case ActionTriggerType::Released: return "Released";
+        case ActionTriggerType::Held: return "Held";
+        case ActionTriggerType::DoubleTap: return "DoubleTap";
+        default: return "Pressed";
+        }
+    }
+
+    json KnownFieldObjectToJson(const ColliderComponent::Element& element)
+    {
+        return {
+            { "type", FieldColliderShapeToString(element.type) },
+            { "enabled", element.enabled },
+            { "nodeIndex", element.nodeIndex },
+            { "offsetLocal", json::array({ element.offsetLocal.x, element.offsetLocal.y, element.offsetLocal.z }) },
+            { "radius", element.radius },
+            { "height", element.height },
+            { "size", json::array({ element.size.x, element.size.y, element.size.z }) },
+            { "color", json::array({ element.color.x, element.color.y, element.color.z, element.color.w }) },
+            { "attribute", FieldColliderAttributeToString(element.attribute) },
+            { "hitVfxPath", element.hitVfxPath },
+            { "hitSfxPath", element.hitSfxPath },
+            { "registeredId", element.registeredId },
+            { "runtimeTag", element.runtimeTag }
+        };
+    }
+
+    json KnownFieldObjectToJson(const ActionBinding& binding)
+    {
+        return {
+            { "actionName", binding.actionName },
+            { "scancode", binding.scancode },
+            { "mouseButton", binding.mouseButton },
+            { "gamepadButton", binding.gamepadButton },
+            { "gamepadAxis", binding.gamepadAxis },
+            { "axisDirection", binding.axisDirection },
+            { "trigger", FieldActionTriggerToString(binding.trigger) }
+        };
+    }
+
+    json KnownFieldObjectToJson(const AxisBinding& binding)
+    {
+        return {
+            { "axisName", binding.axisName },
+            { "positiveKey", binding.positiveKey },
+            { "negativeKey", binding.negativeKey },
+            { "gamepadAxis", binding.gamepadAxis },
+            { "deadzone", binding.deadzone },
+            { "sensitivity", binding.sensitivity }
+        };
+    }
+
+    json KnownFieldObjectToJson(const InputActionMapAsset& asset)
+    {
+        return InputActionMapAsset::ToJson(asset);
+    }
+
+    json KnownFieldObjectToJson(const NodeSocket& socket)
+    {
+        return {
+            { "name", socket.name },
+            { "parentBoneName", socket.parentBoneName },
+            { "offsetPos", Float3ToJson(socket.offsetPos) },
+            { "offsetRotDeg", Float3ToJson(socket.offsetRotDeg) },
+            { "offsetScale", Float3ToJson(socket.offsetScale) },
+            { "cachedBoneIndex", socket.cachedBoneIndex }
+        };
+    }
+
     template<typename T>
     json FieldValueToJson(const T& value)
     {
         using U = std::decay_t<T>;
-        if constexpr (std::is_same_v<U, std::string>) {
+        if constexpr (IsStdVector<U>::value) {
+            json array = json::array();
+            for (const auto& item : value) {
+                array.push_back(FieldValueToJson(item));
+            }
+            return array;
+        }
+        else if constexpr (IsKnownObjectFieldType<U>()) {
+            return KnownFieldObjectToJson(value);
+        }
+        else if constexpr (std::is_same_v<U, std::string>) {
             return value;
         }
         else if constexpr (std::is_same_v<U, bool>) {
@@ -1141,9 +1361,167 @@ namespace
         else if constexpr (IsXMFLOAT4<U>) {
             return Float4ToJson(value);
         }
+        else if constexpr (IsSimpleMathVector3<U>) {
+            return json::array({ value.x, value.y, value.z });
+        }
+        else if constexpr (IsSimpleMathVector4<U>) {
+            return json::array({ value.x, value.y, value.z, value.w });
+        }
         else {
             return nullptr;
         }
+    }
+
+    bool ReadFieldColliderShape(const json& in, ColliderShape& out)
+    {
+        if (in.is_string()) {
+            const std::string text = in.get<std::string>();
+            if (text == "Sphere") { out = ColliderShape::Sphere; return true; }
+            if (text == "Capsule") { out = ColliderShape::Capsule; return true; }
+            if (text == "Box") { out = ColliderShape::Box; return true; }
+            return false;
+        }
+        if (in.is_number_integer() || in.is_number_unsigned()) {
+            out = static_cast<ColliderShape>(in.get<uint8_t>());
+            return true;
+        }
+        return false;
+    }
+
+    bool ReadFieldColliderAttribute(const json& in, ColliderAttribute& out)
+    {
+        if (in.is_string()) {
+            const std::string text = in.get<std::string>();
+            if (text == "Body") { out = ColliderAttribute::Body; return true; }
+            if (text == "Attack") { out = ColliderAttribute::Attack; return true; }
+            return false;
+        }
+        if (in.is_number_integer() || in.is_number_unsigned()) {
+            out = static_cast<ColliderAttribute>(in.get<uint8_t>());
+            return true;
+        }
+        return false;
+    }
+
+    bool ReadFieldActionTrigger(const json& in, ActionTriggerType& out)
+    {
+        if (in.is_string()) {
+            const std::string text = in.get<std::string>();
+            if (text == "Pressed") { out = ActionTriggerType::Pressed; return true; }
+            if (text == "Released") { out = ActionTriggerType::Released; return true; }
+            if (text == "Held") { out = ActionTriggerType::Held; return true; }
+            if (text == "DoubleTap") { out = ActionTriggerType::DoubleTap; return true; }
+            return false;
+        }
+        if (in.is_number_integer() || in.is_number_unsigned()) {
+            out = static_cast<ActionTriggerType>(in.get<uint8_t>());
+            return true;
+        }
+        return false;
+    }
+
+    bool ReadKnownFieldObject(const json& in, ColliderComponent::Element& out)
+    {
+        if (!in.is_object()) {
+            return false;
+        }
+        ColliderComponent::Element next = out;
+        if (in.contains("type") && !ReadFieldColliderShape(in["type"], next.type)) return false;
+        if (in.contains("enabled")) next.enabled = in["enabled"].get<bool>();
+        if (in.contains("nodeIndex")) next.nodeIndex = in["nodeIndex"].get<int>();
+        if (in.contains("offsetLocal")) {
+            DirectX::XMFLOAT3 v{};
+            if (!ReadFloat3(in["offsetLocal"], v)) return false;
+            next.offsetLocal = { v.x, v.y, v.z };
+        }
+        if (in.contains("radius")) next.radius = in["radius"].get<float>();
+        if (in.contains("height")) next.height = in["height"].get<float>();
+        if (in.contains("size")) {
+            DirectX::XMFLOAT3 v{};
+            if (!ReadFloat3(in["size"], v)) return false;
+            next.size = { v.x, v.y, v.z };
+        }
+        if (in.contains("color")) {
+            DirectX::XMFLOAT4 v{};
+            if (!ReadFloat4(in["color"], v)) return false;
+            next.color = { v.x, v.y, v.z, v.w };
+        }
+        if (in.contains("attribute") && !ReadFieldColliderAttribute(in["attribute"], next.attribute)) return false;
+        if (in.contains("hitVfxPath")) next.hitVfxPath = in["hitVfxPath"].get<std::string>();
+        if (in.contains("hitSfxPath")) next.hitSfxPath = in["hitSfxPath"].get<std::string>();
+        if (in.contains("registeredId")) next.registeredId = in["registeredId"].get<uint32_t>();
+        if (in.contains("runtimeTag")) next.runtimeTag = in["runtimeTag"].get<int>();
+        out = next;
+        return true;
+    }
+
+    bool ReadKnownFieldObject(const json& in, ActionBinding& out)
+    {
+        if (!in.is_object()) {
+            return false;
+        }
+        ActionBinding next = out;
+        if (in.contains("actionName")) next.actionName = in["actionName"].get<std::string>();
+        if (in.contains("scancode")) next.scancode = in["scancode"].get<uint32_t>();
+        if (in.contains("mouseButton")) next.mouseButton = in["mouseButton"].get<uint8_t>();
+        if (in.contains("gamepadButton")) next.gamepadButton = in["gamepadButton"].get<uint8_t>();
+        if (in.contains("gamepadAxis")) next.gamepadAxis = in["gamepadAxis"].get<uint8_t>();
+        if (in.contains("axisDirection")) next.axisDirection = in["axisDirection"].get<float>();
+        if (in.contains("trigger") && !ReadFieldActionTrigger(in["trigger"], next.trigger)) return false;
+        out = next;
+        return true;
+    }
+
+    bool ReadKnownFieldObject(const json& in, AxisBinding& out)
+    {
+        if (!in.is_object()) {
+            return false;
+        }
+        AxisBinding next = out;
+        if (in.contains("axisName")) next.axisName = in["axisName"].get<std::string>();
+        if (in.contains("positiveKey")) next.positiveKey = in["positiveKey"].get<uint32_t>();
+        if (in.contains("negativeKey")) next.negativeKey = in["negativeKey"].get<uint32_t>();
+        if (in.contains("gamepadAxis")) next.gamepadAxis = in["gamepadAxis"].get<uint8_t>();
+        if (in.contains("deadzone")) next.deadzone = in["deadzone"].get<float>();
+        if (in.contains("sensitivity")) next.sensitivity = in["sensitivity"].get<float>();
+        out = next;
+        return true;
+    }
+
+    bool ReadKnownFieldObject(const json& in, NodeSocket& out)
+    {
+        if (!in.is_object()) return false;
+        NodeSocket next = out;
+        if (in.contains("name")) next.name = in["name"].get<std::string>();
+        if (in.contains("parentBoneName")) next.parentBoneName = in["parentBoneName"].get<std::string>();
+        if (in.contains("offsetPos")) {
+            DirectX::XMFLOAT3 v{};
+            if (!ReadFloat3(in["offsetPos"], v)) return false;
+            next.offsetPos = v;
+        }
+        if (in.contains("offsetRotDeg")) {
+            DirectX::XMFLOAT3 v{};
+            if (!ReadFloat3(in["offsetRotDeg"], v)) return false;
+            next.offsetRotDeg = v;
+        }
+        if (in.contains("offsetScale")) {
+            DirectX::XMFLOAT3 v{};
+            if (!ReadFloat3(in["offsetScale"], v)) return false;
+            next.offsetScale = v;
+        }
+        if (in.contains("cachedBoneIndex")) next.cachedBoneIndex = in["cachedBoneIndex"].get<int>();
+        out = next;
+        return true;
+    }
+
+    bool ReadKnownFieldObject(const json& in, InputActionMapAsset& out)
+    {
+        InputActionMapAsset next = out;
+        if (!InputActionMapAsset::FromJson(in, next)) {
+            return false;
+        }
+        out = std::move(next);
+        return true;
     }
 
     template<typename T>
@@ -1151,7 +1529,26 @@ namespace
     {
         using U = std::decay_t<T>;
         try {
-            if constexpr (std::is_same_v<U, std::string>) {
+            if constexpr (IsStdVector<U>::value) {
+                if (!in.is_array()) {
+                    return false;
+                }
+                U next;
+                next.reserve(in.size());
+                for (const json& item : in) {
+                    typename IsStdVector<U>::Element element{};
+                    if (!ReadFieldValue(item, element)) {
+                        return false;
+                    }
+                    next.push_back(std::move(element));
+                }
+                out = std::move(next);
+                return true;
+            }
+            else if constexpr (IsKnownObjectFieldType<U>()) {
+                return ReadKnownFieldObject(in, out);
+            }
+            else if constexpr (std::is_same_v<U, std::string>) {
                 if (!in.is_string()) {
                     return false;
                 }
@@ -1199,6 +1596,22 @@ namespace
             }
             else if constexpr (IsXMFLOAT4<U>) {
                 return ReadFloat4(in, out);
+            }
+            else if constexpr (IsSimpleMathVector3<U>) {
+                DirectX::XMFLOAT3 v{};
+                if (!ReadFloat3(in, v)) {
+                    return false;
+                }
+                out = { v.x, v.y, v.z };
+                return true;
+            }
+            else if constexpr (IsSimpleMathVector4<U>) {
+                DirectX::XMFLOAT4 v{};
+                if (!ReadFloat4(in, v)) {
+                    return false;
+                }
+                out = { v.x, v.y, v.z, v.w };
+                return true;
             }
             else {
                 return false;
@@ -1284,7 +1697,19 @@ namespace
         return Entity::NULL_ID;
     }
 
-    bool BuildEntityFocusBounds(Registry& registry, EntityID root, DirectX::XMFLOAT3& outCenter, float& outRadius)
+    // BuildEntityFocusBounds の挙動を切り替えるフラグ。
+    // includeNonMesh: true なら mesh / collider を持たない transform-only entity も bounds に含める。
+    //                 (空 placeholder anchor が遠くにあると bounds が膨れるので default は false。)
+    // includeCollider: true なら collider element の AABB も bounds に含める (attack 球 hand_r 等)。
+    struct FocusBoundsOptions
+    {
+        bool includeNonMesh = false;
+        bool includeCollider = true;
+    };
+
+    bool BuildEntityFocusBoundsEx(Registry& registry, EntityID root,
+                                  DirectX::XMFLOAT3& outCenter, float& outRadius,
+                                  const FocusBoundsOptions& opts)
     {
         bool hasBounds = false;
         DirectX::BoundingBox merged{};
@@ -1295,26 +1720,67 @@ namespace
             entities.push_back(root);
         }
 
+        auto mergeBox = [&](const DirectX::BoundingBox& box) {
+            if (!hasBounds) {
+                merged = box;
+                hasBounds = true;
+            }
+            else {
+                DirectX::BoundingBox::CreateMerged(merged, merged, box);
+            }
+        };
+
         for (EntityID entity : entities) {
+            bool consumedMesh = false;
             if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
                 if (mesh->model && mesh->isVisible) {
-                    const DirectX::BoundingBox& box = mesh->model->GetWorldBounds();
-                    if (!hasBounds) {
-                        merged = box;
-                        hasBounds = true;
+                    DirectX::BoundingBox box{};
+                    if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
+                        if (const std::shared_ptr<ModelResource> modelResource = mesh->model->GetModelResource()) {
+                            const DirectX::XMMATRIX world = DirectX::XMLoadFloat4x4(&transform->worldMatrix);
+                            modelResource->GetLocalBounds().Transform(box, world);
+                        }
+                        else {
+                            box = mesh->model->GetWorldBounds();
+                        }
                     }
                     else {
-                        DirectX::BoundingBox::CreateMerged(merged, merged, box);
+                        box = mesh->model->GetWorldBounds();
                     }
-                    continue;
+                    mergeBox(box);
+                    consumedMesh = true;
                 }
             }
 
-            if (!hasBounds) {
+            // collider のサイズも bounds に寄与させる。Player Editor の attack 球など、
+            // mesh の外側に出る hitbox を視界に含めるため。
+            // ResolveColliderElementWorld を使って bone 付き collider も正しい位置で計算する。
+            if (opts.includeCollider) {
+                if (auto* collider = registry.GetComponent<ColliderComponent>(entity)) {
+                    if (collider->enabled) {
+                        for (const auto& elem : collider->elements) {
+                            if (!elem.enabled) continue;
+                            ResolvedColliderShape rc = ResolveColliderElementWorld(registry, entity, elem);
+                            DirectX::BoundingBox box{};
+                            box.Center = rc.worldCenter;
+                            box.Extents = rc.worldExtents;
+                            mergeBox(box);
+                        }
+                    }
+                }
+            }
+
+            // 非 mesh / 非 collider の entity でも transform があれば、その位置を merge する。
+            // 旧実装は hasBounds=true 以降の非 mesh entity を完全に無視していたため、
+            // hierarchy の一部 (UI canvas 子要素 / placeholder transform など) が画面外に切れていた。
+            // ただし anchor / nav point など遠方の placeholder が bounds を膨らませる事故もあるため、
+            // includeNonMesh=true の時のみ含める (default は false)。
+            if (!consumedMesh && opts.includeNonMesh) {
                 if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
-                    merged.Center = transform->worldPosition;
-                    merged.Extents = { 0.5f, 0.5f, 0.5f };
-                    hasBounds = true;
+                    DirectX::BoundingBox box{};
+                    box.Center = transform->worldPosition;
+                    box.Extents = { 0.5f, 0.5f, 0.5f };
+                    mergeBox(box);
                 }
             }
         }
@@ -1329,6 +1795,16 @@ namespace
             merged.Extents.y * merged.Extents.y +
             merged.Extents.z * merged.Extents.z);
         return true;
+    }
+
+    // 旧シグネチャ互換 wrapper: 既存の呼び出しサイト (3 箇所) を変更せず includeNonMesh=false で動かす。
+    bool BuildEntityFocusBounds(Registry& registry, EntityID root,
+                                DirectX::XMFLOAT3& outCenter, float& outRadius)
+    {
+        FocusBoundsOptions opts;
+        opts.includeNonMesh = false;
+        opts.includeCollider = true;
+        return BuildEntityFocusBoundsEx(registry, root, outCenter, outRadius, opts);
     }
 
     float ComputeFocusDistanceForRadius(float radius, float fovY)
@@ -1354,7 +1830,7 @@ namespace
         if (params.contains("screenPosition")) {
             const json& p = params["screenPosition"];
             if (!p.is_array() || p.size() < 2) {
-                throw MakeError("invalid_param", "screenPosition must be [x, y].");
+                ThrowError("invalid_param", "screenPosition must be [x, y].");
             }
             screenX = p[0].get<float>();
             screenY = p[1].get<float>();
@@ -1362,7 +1838,7 @@ namespace
         else if (params.contains("normalizedPosition")) {
             const json& p = params["normalizedPosition"];
             if (!p.is_array() || p.size() < 2) {
-                throw MakeError("invalid_param", "normalizedPosition must be [x, y].");
+                ThrowError("invalid_param", "normalizedPosition must be [x, y].");
             }
             screenX = rect.x + p[0].get<float>() * rect.z;
             screenY = rect.y + p[1].get<float>() * rect.w;
@@ -1729,11 +2205,11 @@ namespace
             return values;
         }
         if (!in.is_array()) {
-            throw MakeError("invalid_param", std::string(key) + " must be a string or string array.");
+            ThrowError("invalid_param", std::string(key) + " must be a string or string array.");
         }
         for (const json& item : in) {
             if (!item.is_string()) {
-                throw MakeError("invalid_param", std::string(key) + " must contain only strings.");
+                ThrowError("invalid_param", std::string(key) + " must contain only strings.");
             }
             values.push_back(item.get<std::string>());
         }
@@ -2046,7 +2522,7 @@ namespace
             AllComponentTypes{});
 
         if (!found) {
-            throw MakeError("component_not_found", "Component type was not found.", { { "component", componentName } });
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
         }
 
         return { { "schema", std::move(schema) } };
@@ -2056,12 +2532,12 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         const std::string componentName = params.value("component", std::string{});
         if (componentName.empty()) {
-            throw MakeError("missing_param", "component is required.");
+            ThrowError("missing_param", "component is required.");
         }
 
         json componentJson;
@@ -2081,10 +2557,10 @@ namespace
             AllComponentTypes{});
 
         if (!foundType) {
-            throw MakeError("component_not_found", "Component type was not found.", { { "component", componentName } });
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
         }
         if (!hasComponent) {
-            throw MakeError("component_not_found", "Entity does not have the requested component.", {
+            ThrowError("component_not_found", "Entity does not have the requested component.", {
                 { "entity", EntityToString(entity) },
                 { "component", componentName }
             });
@@ -2101,12 +2577,12 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         const std::string componentName = params.value("component", std::string{});
         if (componentName.empty()) {
-            throw MakeError("missing_param", "component is required.");
+            ThrowError("missing_param", "component is required.");
         }
         const json fields = params.value("fields", json::object());
 
@@ -2119,7 +2595,7 @@ namespace
                         using Component = std::decay_t<decltype(component)>;
                         foundType = true;
                         if (registry.GetComponent<Component>(entity)) {
-                            throw MakeError("operation_not_allowed", "Entity already has the requested component.", {
+                            ThrowError("operation_not_allowed", "Entity already has the requested component.", {
                                 { "entity", EntityToString(entity) },
                                 { "component", componentName }
                             });
@@ -2129,7 +2605,7 @@ namespace
                         json applied = json::array();
                         json rejected = json::array();
                         if (!ApplyJsonFieldsToComponent(next, fields, applied, rejected)) {
-                            throw MakeError("component_field_not_supported", "One or more component fields could not be applied.", {
+                            ThrowError("component_field_not_supported", "One or more component fields could not be applied.", {
                                 { "component", componentName },
                                 { "rejected", rejected }
                             });
@@ -2162,7 +2638,7 @@ namespace
             AllComponentTypes{});
 
         if (!foundType) {
-            throw MakeError("component_not_found", "Component type was not found.", { { "component", componentName } });
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
         }
         return result;
     }
@@ -2171,12 +2647,12 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         const std::string componentName = params.value("component", std::string{});
         if (componentName.empty()) {
-            throw MakeError("missing_param", "component is required.");
+            ThrowError("missing_param", "component is required.");
         }
 
         bool foundType = false;
@@ -2189,7 +2665,7 @@ namespace
                         foundType = true;
                         Component* current = registry.GetComponent<Component>(entity);
                         if (!current) {
-                            throw MakeError("component_not_found", "Entity does not have the requested component.", {
+                            ThrowError("component_not_found", "Entity does not have the requested component.", {
                                 { "entity", EntityToString(entity) },
                                 { "component", componentName }
                             });
@@ -2215,7 +2691,7 @@ namespace
             AllComponentTypes{});
 
         if (!foundType) {
-            throw MakeError("component_not_found", "Component type was not found.", { { "component", componentName } });
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
         }
         return {
             { "entity", EntityToString(entity) },
@@ -2228,15 +2704,15 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         const std::string componentName = params.value("component", std::string{});
         if (componentName.empty()) {
-            throw MakeError("missing_param", "component is required.");
+            ThrowError("missing_param", "component is required.");
         }
         if (!params.contains("fields")) {
-            throw MakeError("missing_param", "fields is required.");
+            ThrowError("missing_param", "fields is required.");
         }
         const json& fields = params["fields"];
 
@@ -2250,7 +2726,7 @@ namespace
                         foundType = true;
                         Component* current = registry.GetComponent<Component>(entity);
                         if (!current) {
-                            throw MakeError("component_not_found", "Entity does not have the requested component.", {
+                            ThrowError("component_not_found", "Entity does not have the requested component.", {
                                 { "entity", EntityToString(entity) },
                                 { "component", componentName }
                             });
@@ -2261,7 +2737,7 @@ namespace
                         json applied = json::array();
                         json rejected = json::array();
                         if (!ApplyJsonFieldsToComponent(after, fields, applied, rejected)) {
-                            throw MakeError("component_field_not_supported", "One or more component fields could not be applied.", {
+                            ThrowError("component_field_not_supported", "One or more component fields could not be applied.", {
                                 { "component", componentName },
                                 { "rejected", rejected }
                             });
@@ -2290,7 +2766,264 @@ namespace
             AllComponentTypes{});
 
         if (!foundType) {
-            throw MakeError("component_not_found", "Component type was not found.", { { "component", componentName } });
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
+        }
+        return result;
+    }
+
+    template<typename Component, typename FieldInfo>
+    bool TryApplyVectorFieldOperation(Component& component,
+                                      const FieldInfo& field,
+                                      const std::string& fieldName,
+                                      const std::string& operation,
+                                      const json& params,
+                                      json& result,
+                                      json& rejected)
+    {
+        const std::string name(field.name);
+        if (name != fieldName) {
+            return false;
+        }
+
+        using FieldType = std::decay_t<decltype(component.*field.ptr)>;
+        if constexpr (!IsStdVector<FieldType>::value) {
+            rejected.push_back({
+                { "field", fieldName },
+                { "reason", "field_is_not_vector" },
+                { "type", FieldTypeName<FieldType>() }
+            });
+            return true;
+        }
+        else {
+            using Element = typename IsStdVector<FieldType>::Element;
+            auto& values = component.*field.ptr;
+            const int previousCount = static_cast<int>(values.size());
+
+            if (operation == "get") {
+                result = {
+                    { "field", fieldName },
+                    { "operation", operation },
+                    { "count", previousCount },
+                    { "value", FieldValueToJson(values) },
+                    { "type", FieldTypeName<FieldType>() }
+                };
+                return true;
+            }
+
+            if (operation == "insert" || operation == "push") {
+                if (!params.contains("value")) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "missing_value" } });
+                    return true;
+                }
+                Element element{};
+                if (!ReadFieldValue(params["value"], element)) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "invalid_value" }, { "elementType", FieldTypeName<Element>() } });
+                    return true;
+                }
+                int index = params.value("index", previousCount);
+                if (operation == "push") {
+                    index = previousCount;
+                }
+                if (index < 0 || index > previousCount) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "index_out_of_range" }, { "index", index }, { "count", previousCount } });
+                    return true;
+                }
+                values.insert(values.begin() + index, std::move(element));
+                result = {
+                    { "field", fieldName },
+                    { "operation", operation },
+                    { "index", index },
+                    { "previousCount", previousCount },
+                    { "count", static_cast<int>(values.size()) },
+                    { "value", FieldValueToJson(values) }
+                };
+                return true;
+            }
+
+            const int index = params.value("index", -1);
+            if (index < 0 || index >= previousCount) {
+                rejected.push_back({ { "field", fieldName }, { "reason", "index_out_of_range" }, { "index", index }, { "count", previousCount } });
+                return true;
+            }
+
+            if (operation == "remove" || operation == "delete") {
+                json removedValue = FieldValueToJson(values[static_cast<size_t>(index)]);
+                values.erase(values.begin() + index);
+                result = {
+                    { "field", fieldName },
+                    { "operation", operation },
+                    { "index", index },
+                    { "removedValue", std::move(removedValue) },
+                    { "previousCount", previousCount },
+                    { "count", static_cast<int>(values.size()) },
+                    { "value", FieldValueToJson(values) }
+                };
+                return true;
+            }
+
+            if (operation == "set") {
+                if (!params.contains("value")) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "missing_value" } });
+                    return true;
+                }
+                Element element = values[static_cast<size_t>(index)];
+                if (!ReadFieldValue(params["value"], element)) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "invalid_value" }, { "elementType", FieldTypeName<Element>() } });
+                    return true;
+                }
+                values[static_cast<size_t>(index)] = std::move(element);
+                result = {
+                    { "field", fieldName },
+                    { "operation", operation },
+                    { "index", index },
+                    { "count", static_cast<int>(values.size()) },
+                    { "element", FieldValueToJson(values[static_cast<size_t>(index)]) },
+                    { "value", FieldValueToJson(values) }
+                };
+                return true;
+            }
+
+            if (operation == "set_element_field" || operation == "patch") {
+                json elementJson = FieldValueToJson(values[static_cast<size_t>(index)]);
+                if (!elementJson.is_object()) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "element_is_not_object" }, { "elementType", FieldTypeName<Element>() } });
+                    return true;
+                }
+                if (params.contains("fields")) {
+                    if (!params["fields"].is_object()) {
+                        rejected.push_back({ { "field", fieldName }, { "reason", "fields_must_be_object" } });
+                        return true;
+                    }
+                    for (auto it = params["fields"].begin(); it != params["fields"].end(); ++it) {
+                        elementJson[it.key()] = it.value();
+                    }
+                }
+                else {
+                    const std::string elementField = params.value("elementField", params.value("property", std::string{}));
+                    if (elementField.empty() || !params.contains("value")) {
+                        rejected.push_back({ { "field", fieldName }, { "reason", "missing_element_field_or_value" } });
+                        return true;
+                    }
+                    elementJson[elementField] = params["value"];
+                }
+
+                Element element = values[static_cast<size_t>(index)];
+                if (!ReadFieldValue(elementJson, element)) {
+                    rejected.push_back({ { "field", fieldName }, { "reason", "invalid_element_patch" }, { "elementType", FieldTypeName<Element>() } });
+                    return true;
+                }
+                values[static_cast<size_t>(index)] = std::move(element);
+                result = {
+                    { "field", fieldName },
+                    { "operation", operation },
+                    { "index", index },
+                    { "count", static_cast<int>(values.size()) },
+                    { "element", FieldValueToJson(values[static_cast<size_t>(index)]) },
+                    { "value", FieldValueToJson(values) }
+                };
+                return true;
+            }
+
+            rejected.push_back({
+                { "field", fieldName },
+                { "reason", "unknown_vector_operation" },
+                { "operation", operation }
+            });
+            return true;
+        }
+    }
+
+    template<typename Component>
+    bool ApplyVectorOperationToComponent(Component& component,
+                                         const std::string& fieldName,
+                                         const std::string& operation,
+                                         const json& params,
+                                         json& result,
+                                         json& rejected)
+    {
+        bool matchedField = false;
+        std::apply(
+            [&](auto... field) {
+                ((matchedField = matchedField || TryApplyVectorFieldOperation(component, field, fieldName, operation, params, result, rejected)), ...);
+            },
+            ComponentMeta<Component>::Fields);
+        if (!matchedField) {
+            rejected.push_back({ { "field", fieldName }, { "reason", "unknown_field" } });
+        }
+        return matchedField && rejected.empty();
+    }
+
+    json HandleComponentVectorOperation(Registry& registry, const json& params, const std::string& operationOverride = {})
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        const std::string componentName = params.value("component", params.value("componentType", std::string{}));
+        const std::string fieldName = params.value("field", std::string{});
+        if (componentName.empty() || fieldName.empty()) {
+            ThrowError("missing_param", "component and field are required.");
+        }
+
+        const std::string operation = operationOverride.empty()
+            ? ToLowerCopy(params.value("operation", params.value("op", std::string("get"))))
+            : operationOverride;
+        const bool mutates = operation != "get";
+
+        json result;
+        json rejected = json::array();
+        bool foundType = false;
+        std::apply(
+            [&](auto... component) {
+                ((ComponentNameEquals<std::decay_t<decltype(component)>>(componentName)
+                    ? ([&]() {
+                        using Component = std::decay_t<decltype(component)>;
+                        foundType = true;
+                        Component* current = registry.GetComponent<Component>(entity);
+                        if (!current) {
+                            ThrowError("component_not_found", "Entity does not have the requested component.", {
+                                { "entity", EntityToString(entity) },
+                                { "component", componentName }
+                            });
+                        }
+
+                        Component before = *current;
+                        Component after = before;
+                        if (!ApplyVectorOperationToComponent(after, fieldName, operation, params, result, rejected)) {
+                            return true;
+                        }
+
+                        if (mutates) {
+                            SetDirtyIfPossible(after);
+                            if (params.value("recordUndo", true)) {
+                                auto action = std::make_unique<ComponentUndoAction<Component>>(entity, before, after);
+                                UndoSystem::Instance().ExecuteAction(std::move(action), registry);
+                            }
+                            else {
+                                *current = after;
+                            }
+                            MarkEntityEdited(registry, entity);
+                        }
+
+                        result["entity"] = EntityToString(entity);
+                        result["component"] = componentName;
+                        return true;
+                    }())
+                    : false), ...);
+            },
+            AllComponentTypes{});
+
+        if (!foundType) {
+            ThrowError("component_not_found", "Component type was not found.", { { "component", componentName } });
+        }
+        if (!rejected.empty()) {
+            ThrowError("component_vector_operation_failed", "Vector field operation failed.", {
+                { "component", componentName },
+                { "field", fieldName },
+                { "operation", operation },
+                { "rejected", rejected }
+            });
         }
         return result;
     }
@@ -2392,6 +3125,49 @@ namespace
         return BuildVisualState(kernel);
     }
 
+    // ecs.query 用 value filter 評価。fieldFilters: [{component,field,op,value}]
+    // op: eq/ne/gt/ge/lt/le/contains/regex
+    bool EvalEcsValueFilters(Registry& registry, EntityID entity, const json& filters)
+    {
+        if (!filters.is_array() || filters.empty()) return true;
+        for (const auto& f : filters) {
+            const std::string comp = f.value("component", std::string{});
+            const std::string field = f.value("field", std::string{});
+            const std::string op = f.value("op", std::string("eq"));
+            const json expected = f.value("value", json(nullptr));
+            if (comp.empty() || field.empty()) return false;
+            json got = HandleECSFieldGet(registry,
+                { { "entity", EntityToString(entity) }, { "component", comp }, { "field", field } });
+            if (!got.value("found", false)) return false;
+            const json actual = got.value("value", json(nullptr));
+            auto asNum = [](const json& j, double& out) {
+                if (j.is_number()) { out = j.get<double>(); return true; }
+                return false;
+            };
+            double a, b;
+            bool pass = false;
+            if (op == "eq") pass = (actual == expected);
+            else if (op == "ne") pass = (actual != expected);
+            else if (op == "gt" && asNum(actual,a) && asNum(expected,b)) pass = a > b;
+            else if (op == "ge" && asNum(actual,a) && asNum(expected,b)) pass = a >= b;
+            else if (op == "lt" && asNum(actual,a) && asNum(expected,b)) pass = a < b;
+            else if (op == "le" && asNum(actual,a) && asNum(expected,b)) pass = a <= b;
+            else if (op == "contains" && actual.is_string() && expected.is_string()) {
+                pass = actual.get<std::string>().find(expected.get<std::string>()) != std::string::npos;
+            }
+            else if (op == "regex" && actual.is_string() && expected.is_string()) {
+                try { std::regex re(expected.get<std::string>()); pass = std::regex_search(actual.get<std::string>(), re); }
+                catch (...) { pass = false; }
+            }
+            else if (op == "approx" && asNum(actual,a) && asNum(expected,b)) {
+                const double tol = f.value("tolerance", 0.001);
+                pass = std::abs(a - b) <= tol;
+            }
+            if (!pass) return false;
+        }
+        return true;
+    }
+
     json HandleECSQuery(Registry& registry, const json& params)
     {
         const std::vector<std::string> hasComponents = JsonStringList(params, "hasComponents");
@@ -2400,10 +3176,15 @@ namespace
         const bool activeOnly = params.value("activeOnly", false);
         const bool rootsOnly = params.value("rootsOnly", false);
         const bool includeDetails = params.value("includeDetails", false);
-        const int limit = (std::max)(0, params.value("limit", 0));
+        // Paging: limit + offset で、件数が多い時に分割して取得できる。
+        // limit=0 は「全件返す」(後方互換)、 offset>0 でその件数だけスキップ。
+        const int limit  = (std::max)(0, params.value("limit", 0));
+        const int offset = (std::max)(0, params.value("offset", 0));
+        const json fieldFilters = params.value("fieldFilters", json::array());
 
         json matches = json::array();
         int totalMatched = 0;
+        int skippedForOffset = 0;
         for (Archetype* archetype : registry.GetAllArchetypes()) {
             const Signature signature = archetype->GetSignature();
             const auto& entities = archetype->GetEntities();
@@ -2414,8 +3195,15 @@ namespace
                 if (!EntityMatchesQuery(registry, entity, signature, hasComponents, missingComponents, nameContains, activeOnly, rootsOnly)) {
                     continue;
                 }
+                if (!fieldFilters.empty() && !EvalEcsValueFilters(registry, entity, fieldFilters)) {
+                    continue;
+                }
 
                 ++totalMatched;
+                if (skippedForOffset < offset) {
+                    ++skippedForOffset;
+                    continue;
+                }
                 if (limit > 0 && static_cast<int>(matches.size()) >= limit) {
                     continue;
                 }
@@ -2425,10 +3213,18 @@ namespace
             }
         }
 
+        const int returned = static_cast<int>(matches.size());
+        const int nextOffset = offset + returned;
+        const bool hasMore = (limit > 0) && (nextOffset < totalMatched);
         return {
             { "entities", std::move(matches) },
-            { "count", totalMatched },
-            { "truncated", limit > 0 && totalMatched > limit }
+            { "count", totalMatched },        // フィルタを通った総件数
+            { "returnedCount", returned },     // 今回の page で返した件数
+            { "offset", offset },
+            { "limit", limit },
+            { "nextOffset", hasMore ? nextOffset : -1 },
+            { "hasMore", hasMore },
+            { "truncated", limit > 0 && totalMatched > (offset + returned) }
         };
     }
 
@@ -2467,7 +3263,7 @@ namespace
         }
 
         if (!Entity::IsNull(requestedRoot) && roots.empty()) {
-            throw MakeError("entity_not_found", "Root entity is not alive.", { { "root", params.value("root", json(nullptr)) } });
+            ThrowError("entity_not_found", "Root entity is not alive.", { { "root", params.value("root", json(nullptr)) } });
         }
 
         return {
@@ -2478,9 +3274,9 @@ namespace
 
     json HandleECSDiff(Registry& registry, const json& params)
     {
-        // implicit baseline (action未指定 / "diff") は revision を1つ進める従来挙動。
-        // "snapshot" は baseline 上書きのみ、"reset" は baseline 破棄、"list" は保存済み名前一覧。
-        // name 付きの場合はその名前空間に baseline を保存し、diff/snapshot/reset を独立に扱う。
+        // implicit baseline (action譛ｪ謖・ｮ・/ "diff") 縺ｯ revision 繧・縺､騾ｲ繧√ｋ蠕捺擂謖吝虚縲・
+        // "snapshot" 縺ｯ baseline 荳頑嶌縺阪・縺ｿ縲・reset" 縺ｯ baseline 遐ｴ譽・・list" 縺ｯ菫晏ｭ俶ｸ医∩蜷榊燕荳隕ｧ縲・
+        // name 莉倥″縺ｮ蝣ｴ蜷医・縺昴・蜷榊燕遨ｺ髢薙↓ baseline 繧剃ｿ晏ｭ倥＠縲‥iff/snapshot/reset 繧堤峡遶九↓謇ｱ縺・・
         static std::unordered_map<std::string, json> implicitSnapshot;
         static std::unordered_map<std::string, std::unordered_map<std::string, json>> namedSnapshots;
         static uint64_t revision = 0;
@@ -2489,6 +3285,24 @@ namespace
         const std::string name = params.value("name", std::string{});
         const bool reset = params.value("reset", false) || action == "reset";
         const bool includeBeforeAfter = params.value("includeBeforeAfter", true);
+
+        if (action == "help" || action == "usage") {
+            return {
+                { "command", "ecs.diff" },
+                { "rules", {
+                    "omit action or action='diff' with no name: compare against the implicit baseline and then advance that baseline",
+                    "action='snapshot' with name: replace that named baseline without returning a diff",
+                    "action='diff' with name: compare against the named baseline and keep that baseline unchanged",
+                    "action='reset' with name: delete that named baseline",
+                    "action='list': list named baselines"
+                } },
+                { "examples", {
+                    json{ { "params", json{ { "action", "snapshot" }, { "name", "before_player_edit" } } }, { "meaning", "store a reusable named baseline" } },
+                    json{ { "params", json{ { "action", "diff" }, { "name", "before_player_edit" } } }, { "meaning", "compare repeatedly against that same baseline" } },
+                    json{ { "params", json::object() }, { "meaning", "quick rolling diff; each call advances the implicit baseline" } }
+                } }
+            };
+        }
 
         if (action == "list") {
             json names = json::array();
@@ -2507,7 +3321,7 @@ namespace
         auto& baseline = name.empty() ? implicitSnapshot : namedSnapshots[name];
 
         if (action == "snapshot") {
-            // baseline 上書きのみ、diff 計算しない。
+            // baseline 荳頑嶌縺阪・縺ｿ縲‥iff 險育ｮ励＠縺ｪ縺・・
             baseline = std::move(current);
             return {
                 { "action", "snapshot" },
@@ -2518,7 +3332,7 @@ namespace
         }
 
         if (reset) {
-            // baseline 破棄。
+            // baseline 遐ｴ譽・・
             if (name.empty()) {
                 implicitSnapshot.clear();
             }
@@ -2532,7 +3346,7 @@ namespace
             };
         }
 
-        // ここから diff 本体。
+        // 縺薙％縺九ｉ diff 譛ｬ菴薙・
         json added = json::array();
         json removed = json::array();
         json changed = json::array();
@@ -2563,8 +3377,8 @@ namespace
             }
         }
 
-        // 名前なし diff は従来通り baseline を更新。
-        // 名前付き diff は baseline を据え置く (繰り返し同じ基準点と比較できる)。
+        // 蜷榊燕縺ｪ縺・diff 縺ｯ蠕捺擂騾壹ｊ baseline 繧呈峩譁ｰ縲・
+        // 蜷榊燕莉倥″ diff 縺ｯ baseline 繧呈紺縺育ｽｮ縺・(郢ｰ繧願ｿ斐＠蜷後§蝓ｺ貅也せ縺ｨ豈碑ｼ・〒縺阪ｋ)縲・
         if (name.empty()) {
             baseline = std::move(current);
             ++revision;
@@ -2595,12 +3409,12 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         json out;
@@ -2720,15 +3534,105 @@ namespace
         return false;
     }
 
+    DirectX::XMFLOAT4X4 IdentityMatrixFloat4x4()
+    {
+        DirectX::XMFLOAT4X4 out{};
+        DirectX::XMStoreFloat4x4(&out, DirectX::XMMatrixIdentity());
+        return out;
+    }
+
+    json ScreenSpaceBoundsToGameViewJson(const UIScreenSpaceOverlay::Bounds& bounds,
+                                         const DirectX::XMFLOAT4& gameRect)
+    {
+        const float leftMargin = bounds.min.x - gameRect.x;
+        const float topMargin = bounds.min.y - gameRect.y;
+        const float rightMargin = (gameRect.x + gameRect.z) - bounds.max.x;
+        const float bottomMargin = (gameRect.y + gameRect.w) - bounds.max.y;
+        const float minMargin = (std::min)((std::min)(leftMargin, rightMargin), (std::min)(topMargin, bottomMargin));
+        const float width = bounds.max.x - bounds.min.x;
+        const float height = bounds.max.y - bounds.min.y;
+        const float fillX = gameRect.z > 0.0f ? width / gameRect.z : 0.0f;
+        const float fillY = gameRect.w > 0.0f ? height / gameRect.w : 0.0f;
+
+        json corners = json::array();
+        for (const auto& corner : bounds.corners) {
+            corners.push_back(json::array({ corner.x, corner.y }));
+        }
+
+        return {
+            { "min", json::array({ bounds.min.x, bounds.min.y }) },
+            { "max", json::array({ bounds.max.x, bounds.max.y }) },
+            { "size", json::array({ width, height }) },
+            { "center", json::array({ bounds.center.x, bounds.center.y }) },
+            { "corners", std::move(corners) },
+            { "margins", {
+                { "left", leftMargin },
+                { "top", topMargin },
+                { "right", rightMargin },
+                { "bottom", bottomMargin },
+                { "min", minMargin }
+            } },
+            { "fill", json::array({ fillX, fillY }) },
+            { "maxFill", (std::max)(fillX, fillY) },
+            { "allProjected", true },
+            { "fullyVisible", bounds.fullyVisible }
+        };
+    }
+
+    bool TryBuildScreenSpaceOverlayGameViewResult(Registry& registry,
+                                                  EntityID entity,
+                                                  const DirectX::XMFLOAT4& gameRect,
+                                                  json& out)
+    {
+        const DirectX::XMFLOAT4X4 identity = IdentityMatrixFloat4x4();
+        UIScreenSpaceOverlay::Bounds bounds{};
+        if (!UIScreenSpaceOverlay::ResolveBounds(registry, entity, gameRect, identity, identity, bounds)) {
+            return false;
+        }
+
+        const float localX = gameRect.z > 0.0f ? (bounds.center.x - gameRect.x) / gameRect.z : 0.0f;
+        const float localY = gameRect.w > 0.0f ? (bounds.center.y - gameRect.y) / gameRect.w : 0.0f;
+        const float ndcX = localX * 2.0f - 1.0f;
+        const float ndcY = 1.0f - localY * 2.0f;
+
+        out = {
+            { "entity", EntityToString(entity) },
+            { "name", EntityDisplayName(registry, entity) },
+            { "point", json::array({ bounds.center.x, bounds.center.y, 0.0f }) },
+            { "boundsRadius", 0.0f },
+            { "gameViewRect", json::array({ gameRect.x, gameRect.y, gameRect.z, gameRect.w }) },
+            { "camera", {
+                { "kind", "ScreenSpaceOverlay" },
+                { "entity", json(nullptr) }
+            } },
+            { "gameView", {
+                { "x", bounds.center.x },
+                { "y", bounds.center.y },
+                { "ndc", json::array({ ndcX, ndcY }) },
+                { "visible", bounds.visible }
+            } },
+            { "gameViewBounds", ScreenSpaceBoundsToGameViewJson(bounds, gameRect) },
+            { "visibleInGameView", bounds.visible },
+            { "screenSpaceOverlay", true }
+        };
+        return true;
+    }
+
     json HandleVisualVerifyEntityGameView(EngineKernel& kernel, Registry& registry, const json& params)
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+
+        const DirectX::XMFLOAT4 gameRect = editor->GetGameViewRect();
+        json screenSpaceResult;
+        if (TryBuildScreenSpaceOverlayGameViewResult(registry, entity, gameRect, screenSpaceResult)) {
+            return screenSpaceResult;
         }
 
         DirectX::XMFLOAT3 point{};
@@ -2741,7 +3645,7 @@ namespace
             }
         }
         if (!hasPoint) {
-            throw MakeError("operation_not_allowed", "Entity has no transform or focus bounds.", { { "entity", EntityToString(entity) } });
+            ThrowError("operation_not_allowed", "Entity has no transform or focus bounds.", { { "entity", EntityToString(entity) } });
         }
 
         DirectX::XMFLOAT4X4 view{};
@@ -2749,11 +3653,10 @@ namespace
         EntityID cameraEntity = Entity::NULL_ID;
         std::string cameraKind;
         if (!TryBuildGameViewProjection(kernel, registry, view, projection, cameraEntity, cameraKind)) {
-            throw MakeError("camera_not_found", "Could not build Game View projection.");
+            ThrowError("camera_not_found", "Could not build Game View projection.");
         }
 
         json screen;
-        const DirectX::XMFLOAT4 gameRect = editor->GetGameViewRect();
         const bool projected = ProjectWorldToRect(gameRect, view, projection, point, screen);
         const bool visible = projected && screen.value("visible", false);
         json projectedBounds = nullptr;
@@ -2785,12 +3688,12 @@ namespace
         if (params.contains("entities")) {
             const json& in = params["entities"];
             if (!in.is_array()) {
-                throw MakeError("invalid_param", "entities must be an array.");
+                ThrowError("invalid_param", "entities must be an array.");
             }
             for (const json& item : in) {
                 const EntityID entity = EntityFromJson(item);
                 if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-                    throw MakeError("entity_not_found", "Entity in entities is not alive.", { { "entity", item } });
+                    ThrowError("entity_not_found", "Entity in entities is not alive.", { { "entity", item } });
                 }
                 entities.push_back(entity);
             }
@@ -2798,7 +3701,7 @@ namespace
         else if (params.contains("entity")) {
             const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-                throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+                ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
             }
             entities.push_back(entity);
         }
@@ -2823,17 +3726,18 @@ namespace
         return entities;
     }
 
-    bool ComputeEntityListBounds(Registry& registry,
-                                 const std::vector<EntityID>& entities,
-                                 DirectX::XMFLOAT3& outCenter,
-                                 float& outRadius)
+    bool ComputeEntityListBoundsEx(Registry& registry,
+                                   const std::vector<EntityID>& entities,
+                                   DirectX::XMFLOAT3& outCenter,
+                                   float& outRadius,
+                                   const FocusBoundsOptions& opts)
     {
         bool hasAny = false;
         DirectX::BoundingSphere merged{};
         for (EntityID entity : entities) {
             DirectX::XMFLOAT3 center{};
             float radius = 0.0f;
-            if (!BuildEntityFocusBounds(registry, entity, center, radius)) {
+            if (!BuildEntityFocusBoundsEx(registry, entity, center, radius, opts)) {
                 if (auto* transform = registry.GetComponent<TransformComponent>(entity)) {
                     center = transform->worldPosition;
                     radius = 1.0f;
@@ -2861,6 +3765,16 @@ namespace
         return true;
     }
 
+    // 旧シグネチャ互換 wrapper。default: includeNonMesh=false, includeCollider=true.
+    bool ComputeEntityListBounds(Registry& registry,
+                                 const std::vector<EntityID>& entities,
+                                 DirectX::XMFLOAT3& outCenter,
+                                 float& outRadius)
+    {
+        FocusBoundsOptions opts;
+        return ComputeEntityListBoundsEx(registry, entities, outCenter, outRadius, opts);
+    }
+
     json FrameEntitiesResult(const std::vector<EntityID>& entities,
                              const DirectX::XMFLOAT3& center,
                              float radius,
@@ -2882,18 +3796,22 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         std::vector<EntityID> entities = ResolveEntityListParam(registry, params, true);
         if (entities.empty()) {
-            throw MakeError("entity_not_found", "No entities were available to frame.");
+            ThrowError("entity_not_found", "No entities were available to frame.");
         }
+
+        FocusBoundsOptions boundsOpts;
+        boundsOpts.includeNonMesh = params.value("includeNonMesh", false);
+        boundsOpts.includeCollider = params.value("includeCollider", true);
 
         DirectX::XMFLOAT3 center{};
         float radius = 1.0f;
-        if (!ComputeEntityListBounds(registry, entities, center, radius)) {
-            throw MakeError("operation_not_allowed", "Could not compute bounds for requested entities.");
+        if (!ComputeEntityListBoundsEx(registry, entities, center, radius, boundsOpts)) {
+            ThrowError("operation_not_allowed", "Could not compute bounds for requested entities.");
         }
 
         const float yawDegrees = params.value("yawDegrees", 35.0f);
@@ -2972,7 +3890,7 @@ namespace
         XMVECTOR rotation{};
         XMVECTOR translation{};
         if (!XMMatrixDecompose(&scale, &rotation, &translation, cameraWorld)) {
-            throw MakeError("operation_not_allowed", "Failed to compute camera transform.");
+            ThrowError("operation_not_allowed", "Failed to compute camera transform.");
         }
 
         if (!Entity::IsNull(GetEntityParent(registry, entity))) {
@@ -2980,7 +3898,7 @@ namespace
                 const XMMATRIX parentWorld = XMLoadFloat4x4(&parentTransform->worldMatrix);
                 cameraWorld = cameraWorld * XMMatrixInverse(nullptr, parentWorld);
                 if (!XMMatrixDecompose(&scale, &rotation, &translation, cameraWorld)) {
-                    throw MakeError("operation_not_allowed", "Failed to compute local camera transform.");
+                    ThrowError("operation_not_allowed", "Failed to compute local camera transform.");
                 }
             }
         }
@@ -2996,12 +3914,12 @@ namespace
     {
         std::vector<EntityID> entities = ResolveEntityListParam(registry, params, true);
         if (entities.empty()) {
-            throw MakeError("entity_not_found", "No entities were available to frame.");
+            ThrowError("entity_not_found", "No entities were available to frame.");
         }
         DirectX::XMFLOAT3 center{};
         float radius = 1.0f;
         if (!ComputeEntityListBounds(registry, entities, center, radius)) {
-            throw MakeError("operation_not_allowed", "Could not compute bounds for requested entities.");
+            ThrowError("operation_not_allowed", "Could not compute bounds for requested entities.");
         }
 
         EntityID cameraEntity = EntityFromJson(params.value("camera", json(nullptr)));
@@ -3009,11 +3927,11 @@ namespace
             cameraEntity = FindMainCamera3D(registry);
         }
         if (Entity::IsNull(cameraEntity) || !registry.IsAlive(cameraEntity)) {
-            throw MakeError("camera_not_found", "No live main camera was found.");
+            ThrowError("camera_not_found", "No live main camera was found.");
         }
         auto* transform = registry.GetComponent<TransformComponent>(cameraEntity);
         if (!transform) {
-            throw MakeError("component_not_found", "Camera has no TransformComponent.", { { "camera", EntityToString(cameraEntity) } });
+            ThrowError("component_not_found", "Camera has no TransformComponent.", { { "camera", EntityToString(cameraEntity) } });
         }
 
         const float yawDegrees = params.value("yawDegrees", 0.0f);
@@ -3054,7 +3972,7 @@ namespace
         const float maxFillRatio = params.value("maxFillRatio", 0.88f);
         std::vector<EntityID> entities = ResolveEntityListParam(registry, params, defaultToAllGameplay);
         if (entities.empty()) {
-            throw MakeError("entity_not_found", "No entities were available to assert visibility.");
+            ThrowError("entity_not_found", "No entities were available to assert visibility.");
         }
 
         int visibleCount = 0;
@@ -3588,6 +4506,190 @@ namespace
         return pending;
     }
 
+    const char* InputEventTypeName(InputEventType type)
+    {
+        switch (type) {
+        case InputEventType::KeyDown: return "KeyDown";
+        case InputEventType::KeyUp: return "KeyUp";
+        case InputEventType::MouseMove: return "MouseMove";
+        case InputEventType::MouseButtonDown: return "MouseButtonDown";
+        case InputEventType::MouseButtonUp: return "MouseButtonUp";
+        case InputEventType::MouseWheel: return "MouseWheel";
+        case InputEventType::GamepadButtonDown: return "GamepadButtonDown";
+        case InputEventType::GamepadButtonUp: return "GamepadButtonUp";
+        case InputEventType::GamepadAxis: return "GamepadAxis";
+        case InputEventType::TextInput: return "TextInput";
+        case InputEventType::TextComposition: return "TextComposition";
+        case InputEventType::DeviceAdded: return "DeviceAdded";
+        case InputEventType::DeviceRemoved: return "DeviceRemoved";
+        case InputEventType::WindowFocusGained: return "WindowFocusGained";
+        case InputEventType::WindowFocusLost: return "WindowFocusLost";
+        default: return "Unknown";
+        }
+    }
+
+    const char* InputDeviceTypeName(InputDeviceType type)
+    {
+        switch (type) {
+        case InputDeviceType::Keyboard: return "Keyboard";
+        case InputDeviceType::Mouse: return "Mouse";
+        case InputDeviceType::Gamepad: return "Gamepad";
+        default: return "Unknown";
+        }
+    }
+
+    std::string FixedInputText(const char* value, size_t maxLength)
+    {
+        size_t length = 0;
+        while (length < maxLength && value[length] != '\0') {
+            ++length;
+        }
+        return std::string(value, length);
+    }
+
+    json InputEventToJson(const InputEvent& event, uint64_t frameCount, uint64_t cursor)
+    {
+        json out = {
+            { "cursor", cursor },
+            { "frameCount", frameCount },
+            { "type", InputEventTypeName(event.type) },
+            { "deviceId", event.deviceId },
+            { "timestamp", event.timestamp },
+            { "queueSequence", event.sequence }
+        };
+
+        switch (event.type) {
+        case InputEventType::KeyDown:
+        case InputEventType::KeyUp:
+            out["key"] = {
+                { "scancode", event.key.scancode },
+                { "keycode", event.key.keycode },
+                { "repeat", event.key.repeat }
+            };
+            break;
+        case InputEventType::MouseMove:
+            out["mouseMove"] = {
+                { "x", event.mouseMove.x },
+                { "y", event.mouseMove.y },
+                { "dx", event.mouseMove.dx },
+                { "dy", event.mouseMove.dy }
+            };
+            break;
+        case InputEventType::MouseButtonDown:
+        case InputEventType::MouseButtonUp:
+            out["mouseButton"] = {
+                { "button", event.mouseButton.button },
+                { "x", event.mouseButton.x },
+                { "y", event.mouseButton.y }
+            };
+            break;
+        case InputEventType::MouseWheel:
+            out["mouseWheel"] = {
+                { "scrollX", event.mouseWheel.scrollX },
+                { "scrollY", event.mouseWheel.scrollY }
+            };
+            break;
+        case InputEventType::GamepadButtonDown:
+        case InputEventType::GamepadButtonUp:
+            out["gamepadButton"] = { { "button", event.gamepadButton.button } };
+            break;
+        case InputEventType::GamepadAxis:
+            out["gamepadAxis"] = {
+                { "axis", event.gamepadAxis.axis },
+                { "value", event.gamepadAxis.value }
+            };
+            break;
+        case InputEventType::TextInput:
+            out["text"] = FixedInputText(event.textInput.text, sizeof(event.textInput.text));
+            break;
+        case InputEventType::TextComposition:
+            out["textComposition"] = {
+                { "text", FixedInputText(event.textComposition.text, sizeof(event.textComposition.text)) },
+                { "cursor", event.textComposition.cursor },
+                { "selectionLen", event.textComposition.selectionLen }
+            };
+            break;
+        case InputEventType::DeviceAdded:
+        case InputEventType::DeviceRemoved:
+            out["device"] = {
+                { "deviceId", event.device.deviceId },
+                { "type", InputDeviceTypeName(event.device.type) }
+            };
+            break;
+        default:
+            break;
+        }
+        return out;
+    }
+
+    struct ObservedInputEvent
+    {
+        uint64_t cursor = 0;
+        uint64_t frameCount = 0;
+        InputEvent event;
+    };
+
+    std::vector<ObservedInputEvent>& InputEventHistory()
+    {
+        static std::vector<ObservedInputEvent> history;
+        return history;
+    }
+
+    std::unordered_map<std::string, uint64_t>& InputEventPullCursors()
+    {
+        static std::unordered_map<std::string, uint64_t> cursors;
+        return cursors;
+    }
+
+    uint64_t& NextInputEventCursor()
+    {
+        static uint64_t cursor = 0;
+        return cursor;
+    }
+
+    uint64_t& LastCapturedInputFrame()
+    {
+        static uint64_t frame = (std::numeric_limits<uint64_t>::max)();
+        return frame;
+    }
+
+    int& LastCapturedInputQueueSequence()
+    {
+        static int sequence = -1;
+        return sequence;
+    }
+
+    void CaptureInputEvents(EngineKernel& kernel)
+    {
+        auto& history = InputEventHistory();
+        const uint64_t frame = kernel.GetTime().frameCount;
+        uint64_t& lastFrame = LastCapturedInputFrame();
+        int& lastSequence = LastCapturedInputQueueSequence();
+        if (lastFrame != frame) {
+            lastFrame = frame;
+            lastSequence = -1;
+        }
+
+        for (const InputEvent& event : kernel.GetInputEventQueue().GetEvents()) {
+            if (static_cast<int>(event.sequence) <= lastSequence) {
+                continue;
+            }
+            history.push_back({ ++NextInputEventCursor(), frame, event });
+            lastSequence = (std::max)(lastSequence, static_cast<int>(event.sequence));
+        }
+
+        constexpr size_t kMaxInputEventHistory = 512;
+        if (history.size() > kMaxInputEventHistory) {
+            history.erase(history.begin(), history.begin() + static_cast<std::ptrdiff_t>(history.size() - kMaxInputEventHistory));
+        }
+    }
+
+    void InjectInputForAutomation(EngineKernel& kernel, const InputEvent& event)
+    {
+        kernel.InjectInputEvent(event);
+        CaptureInputEvents(kernel);
+    }
+
     void ProcessPendingInjectedInputs(EngineKernel& kernel)
     {
         auto& pending = PendingInjectedInputs();
@@ -3595,7 +4697,7 @@ namespace
         size_t write = 0;
         for (size_t i = 0; i < pending.size(); ++i) {
             if (pending[i].releaseFrame <= frame) {
-                kernel.InjectInputEvent(pending[i].event);
+                InjectInputForAutomation(kernel, pending[i].event);
             }
             else {
                 if (write != i) {
@@ -3626,11 +4728,11 @@ namespace
         if (params.contains("entity")) {
             const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-                throw MakeError("entity_not_found", "Input target entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+                ThrowError("entity_not_found", "Input target entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
             }
             const auto* map = registry.GetComponent<InputActionMapComponent>(entity);
             if (!map) {
-                throw MakeError("component_not_found", "Input target does not have InputActionMapComponent.", { { "entity", EntityToString(entity) } });
+                ThrowError("component_not_found", "Input target does not have InputActionMapComponent.", { { "entity", EntityToString(entity) } });
             }
             return map;
         }
@@ -3664,7 +4766,7 @@ namespace
             }
         }
         if (!fallback) {
-            throw MakeError("input_map_not_found", "No InputActionMapComponent was found.");
+            ThrowError("input_map_not_found", "No InputActionMapComponent was found.");
         }
         return fallback;
     }
@@ -3681,7 +4783,7 @@ namespace
                 return &action;
             }
         }
-        throw MakeError("input_action_not_found", "Action was not found in the target InputActionMapComponent.", { { "action", actionName } });
+        ThrowError("input_action_not_found", "Action was not found in the target InputActionMapComponent.", { { "action", actionName } });
     }
 
     const AxisBinding* FindAxisBindingForAutomation(Registry& registry, const json& params)
@@ -3696,28 +4798,28 @@ namespace
                 return &axis;
             }
         }
-        throw MakeError("input_axis_not_found", "Axis was not found in the target InputActionMapComponent.", { { "axis", axisName } });
+        ThrowError("input_axis_not_found", "Axis was not found in the target InputActionMapComponent.", { { "axis", axisName } });
     }
 
     json InjectActionBindingEvent(EngineKernel& kernel, const ActionBinding& binding, bool pressed, uint32_t deviceId)
     {
         if (binding.scancode != 0) {
-            kernel.InjectInputEvent(MakeKeyInputEvent(pressed ? InputEventType::KeyDown : InputEventType::KeyUp, binding.scancode));
+            InjectInputForAutomation(kernel, MakeKeyInputEvent(pressed ? InputEventType::KeyDown : InputEventType::KeyUp, binding.scancode));
             return { { "source", "keyboard" }, { "scancode", binding.scancode }, { "pressed", pressed } };
         }
         if (binding.mouseButton != 0) {
-            kernel.InjectInputEvent(MakeMouseButtonInputEvent(pressed ? InputEventType::MouseButtonDown : InputEventType::MouseButtonUp, binding.mouseButton));
+            InjectInputForAutomation(kernel, MakeMouseButtonInputEvent(pressed ? InputEventType::MouseButtonDown : InputEventType::MouseButtonUp, binding.mouseButton));
             return { { "source", "mouse" }, { "button", binding.mouseButton }, { "pressed", pressed } };
         }
         if (binding.gamepadButton != 0xFF) {
-            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(pressed ? InputEventType::GamepadButtonDown : InputEventType::GamepadButtonUp, binding.gamepadButton, deviceId));
+            InjectInputForAutomation(kernel, MakeGamepadButtonInputEvent(pressed ? InputEventType::GamepadButtonDown : InputEventType::GamepadButtonUp, binding.gamepadButton, deviceId));
             return { { "source", "gamepad_button" }, { "button", binding.gamepadButton }, { "pressed", pressed }, { "deviceId", deviceId } };
         }
         if (binding.gamepadAxis != 0xFF) {
-            kernel.InjectInputEvent(MakeGamepadAxisInputEvent(binding.gamepadAxis, pressed ? binding.axisDirection : 0.0f, deviceId));
+            InjectInputForAutomation(kernel, MakeGamepadAxisInputEvent(binding.gamepadAxis, pressed ? binding.axisDirection : 0.0f, deviceId));
             return { { "source", "gamepad_axis" }, { "axis", binding.gamepadAxis }, { "value", pressed ? binding.axisDirection : 0.0f }, { "deviceId", deviceId } };
         }
-        throw MakeError("input_binding_unassigned", "Action binding has no keyboard, mouse, or gamepad source.", { { "action", binding.actionName } });
+        ThrowError("input_binding_unassigned", "Action binding has no keyboard, mouse, or gamepad source.", { { "action", binding.actionName } });
     }
 
     json HandleGameInputPress(EngineKernel& kernel, Registry& registry, const json& params)
@@ -3730,20 +4832,20 @@ namespace
         }
         if (params.contains("scancode")) {
             const uint32_t scancode = params["scancode"].get<uint32_t>();
-            kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyDown, scancode, params.value("keycode", 0u)));
+            InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyDown, scancode, params.value("keycode", 0u)));
             return { { "source", "keyboard" }, { "scancode", scancode }, { "pressed", true } };
         }
         if (params.contains("mouseButton")) {
             const uint8_t button = params["mouseButton"].get<uint8_t>();
-            kernel.InjectInputEvent(MakeMouseButtonInputEvent(InputEventType::MouseButtonDown, button, params.value("x", 0.0f), params.value("y", 0.0f)));
+            InjectInputForAutomation(kernel, MakeMouseButtonInputEvent(InputEventType::MouseButtonDown, button, params.value("x", 0.0f), params.value("y", 0.0f)));
             return { { "source", "mouse" }, { "button", button }, { "pressed", true } };
         }
         if (params.contains("gamepadButton")) {
             const uint8_t button = params["gamepadButton"].get<uint8_t>();
-            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(InputEventType::GamepadButtonDown, button, deviceId));
+            InjectInputForAutomation(kernel, MakeGamepadButtonInputEvent(InputEventType::GamepadButtonDown, button, deviceId));
             return { { "source", "gamepad_button" }, { "button", button }, { "pressed", true }, { "deviceId", deviceId } };
         }
-        throw MakeError("missing_param", "game.input.press requires action, scancode, mouseButton, or gamepadButton.");
+        ThrowError("missing_param", "game.input.press requires action, scancode, mouseButton, or gamepadButton.");
     }
 
     json HandleGameInputRelease(EngineKernel& kernel, Registry& registry, const json& params)
@@ -3756,24 +4858,25 @@ namespace
         }
         if (params.contains("scancode")) {
             const uint32_t scancode = params["scancode"].get<uint32_t>();
-            kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, scancode, params.value("keycode", 0u)));
+            InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyUp, scancode, params.value("keycode", 0u)));
             return { { "source", "keyboard" }, { "scancode", scancode }, { "pressed", false } };
         }
         if (params.contains("mouseButton")) {
             const uint8_t button = params["mouseButton"].get<uint8_t>();
-            kernel.InjectInputEvent(MakeMouseButtonInputEvent(InputEventType::MouseButtonUp, button, params.value("x", 0.0f), params.value("y", 0.0f)));
+            InjectInputForAutomation(kernel, MakeMouseButtonInputEvent(InputEventType::MouseButtonUp, button, params.value("x", 0.0f), params.value("y", 0.0f)));
             return { { "source", "mouse" }, { "button", button }, { "pressed", false } };
         }
         if (params.contains("gamepadButton")) {
             const uint8_t button = params["gamepadButton"].get<uint8_t>();
-            kernel.InjectInputEvent(MakeGamepadButtonInputEvent(InputEventType::GamepadButtonUp, button, deviceId));
+            InjectInputForAutomation(kernel, MakeGamepadButtonInputEvent(InputEventType::GamepadButtonUp, button, deviceId));
             return { { "source", "gamepad_button" }, { "button", button }, { "pressed", false }, { "deviceId", deviceId } };
         }
-        throw MakeError("missing_param", "game.input.release requires action, scancode, mouseButton, or gamepadButton.");
+        ThrowError("missing_param", "game.input.release requires action, scancode, mouseButton, or gamepadButton.");
     }
 
     json HandleGameInputTap(EngineKernel& kernel, Registry& registry, const json& params)
     {
+        const uint64_t pressFrame = kernel.GetTime().frameCount;
         const uint64_t releaseFrame = kernel.GetTime().frameCount + (std::max)(1, params.value("holdFrames", 1));
         const uint32_t deviceId = params.value("deviceId", 0u);
         json pressResult = HandleGameInputPress(kernel, registry, params);
@@ -3814,7 +4917,10 @@ namespace
             PendingInjectedInputs().push_back({ releaseFrame, releaseEvent });
         }
         pressResult["tap"] = true;
+        pressResult["pressFrame"] = pressFrame;
         pressResult["releaseFrame"] = releaseFrame;
+        pressResult["holdFrames"] = (std::max)(1, params.value("holdFrames", 1));
+        pressResult["delivery"] = "press is injected before InputResolveSystem on pressFrame; release is injected before InputResolveSystem on releaseFrame";
         return pressResult;
     }
 
@@ -3825,37 +4931,37 @@ namespace
 
         if (const AxisBinding* axis = FindAxisBindingForAutomation(registry, params)) {
             if (axis->gamepadAxis != 0xFF) {
-                kernel.InjectInputEvent(MakeGamepadAxisInputEvent(axis->gamepadAxis, value, deviceId));
+                InjectInputForAutomation(kernel, MakeGamepadAxisInputEvent(axis->gamepadAxis, value, deviceId));
                 return { { "source", "gamepad_axis" }, { "axisName", axis->axisName }, { "axis", axis->gamepadAxis }, { "value", value }, { "deviceId", deviceId } };
             }
             const uint32_t pressKey = value >= 0.0f ? axis->positiveKey : axis->negativeKey;
             const uint32_t releaseKey = value >= 0.0f ? axis->negativeKey : axis->positiveKey;
             if (releaseKey != 0) {
-                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, releaseKey));
+                InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyUp, releaseKey));
             }
             if (pressKey != 0 && std::fabs(value) > 0.001f) {
-                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyDown, pressKey));
+                InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyDown, pressKey));
             }
             else if (axis->positiveKey != 0) {
-                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, axis->positiveKey));
+                InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyUp, axis->positiveKey));
             }
             if (std::fabs(value) <= 0.001f && axis->negativeKey != 0) {
-                kernel.InjectInputEvent(MakeKeyInputEvent(InputEventType::KeyUp, axis->negativeKey));
+                InjectInputForAutomation(kernel, MakeKeyInputEvent(InputEventType::KeyUp, axis->negativeKey));
             }
             return { { "source", "keyboard_axis" }, { "axisName", axis->axisName }, { "value", value } };
         }
 
         if (params.contains("gamepadAxis")) {
             const uint8_t axis = params["gamepadAxis"].get<uint8_t>();
-            kernel.InjectInputEvent(MakeGamepadAxisInputEvent(axis, value, deviceId));
+            InjectInputForAutomation(kernel, MakeGamepadAxisInputEvent(axis, value, deviceId));
             return { { "source", "gamepad_axis" }, { "axis", axis }, { "value", value }, { "deviceId", deviceId } };
         }
-        throw MakeError("missing_param", "game.input.axis requires axis or gamepadAxis.");
+        ThrowError("missing_param", "game.input.axis requires axis or gamepadAxis.");
     }
 
     json HandleGameInputMouseMove(EngineKernel& kernel, const json& params)
     {
-        kernel.InjectInputEvent(MakeMouseMoveInputEvent(
+        InjectInputForAutomation(kernel, MakeMouseMoveInputEvent(
             params.value("x", 0.0f),
             params.value("y", 0.0f),
             params.value("dx", 0.0f),
@@ -3865,6 +4971,51 @@ namespace
             { "y", params.value("y", 0.0f) },
             { "dx", params.value("dx", 0.0f) },
             { "dy", params.value("dy", 0.0f) }
+        };
+    }
+
+    json HandleInputEventsPull(EngineKernel& kernel, const json& params)
+    {
+        CaptureInputEvents(kernel);
+
+        const std::string cursorName = params.value("cursorName", params.value("name", std::string("default")));
+        auto& cursors = InputEventPullCursors();
+        const uint64_t previousCursor = params.contains("since")
+            ? params["since"].get<uint64_t>()
+            : (cursors.count(cursorName) ? cursors[cursorName] : 0ull);
+        const int limit = (std::max)(0, params.value("limit", 0));
+
+        const auto& history = InputEventHistory();
+        json events = json::array();
+        uint64_t currentCursor = previousCursor;
+        int availableAfterCursor = 0;
+        for (const ObservedInputEvent& item : history) {
+            if (item.cursor <= previousCursor) {
+                continue;
+            }
+            ++availableAfterCursor;
+            currentCursor = (std::max)(currentCursor, item.cursor);
+            if (limit > 0 && static_cast<int>(events.size()) >= limit) {
+                continue;
+            }
+            events.push_back(InputEventToJson(item.event, item.frameCount, item.cursor));
+        }
+
+        cursors[cursorName] = currentCursor;
+        const uint64_t oldestCursor = history.empty() ? NextInputEventCursor() : history.front().cursor;
+        const bool dropped = previousCursor != 0 && previousCursor < oldestCursor;
+
+        return {
+            { "cursorName", cursorName },
+            { "previousCursor", previousCursor },
+            { "currentCursor", currentCursor },
+            { "latestCursor", NextInputEventCursor() },
+            { "returnedCount", static_cast<int>(events.size()) },
+            { "availableCount", availableAfterCursor },
+            { "truncated", limit > 0 && availableAfterCursor > limit },
+            { "dropped", dropped },
+            { "droppedCount", dropped ? static_cast<uint64_t>(oldestCursor - previousCursor - 1) : 0ull },
+            { "events", std::move(events) }
         };
     }
 
@@ -3909,9 +5060,23 @@ namespace
         return EngineModeResult(kernel);
     }
 
+    // Pause/Step 中の deterministic dt 用 override。0 以下なら通常 dt (実時間ベース)。
+    float& PendingStepFixedDt()
+    {
+        static float dt = 0.0f;
+        return dt;
+    }
+
     json HandleGameStepFrames(EngineKernel& kernel, const json& params)
     {
         const uint32_t frames = (std::max)(1, params.value("frames", 1));
+        // fixedDeltaTime > 0 で deterministic step (e.g. 1.0/60.0 で 60Hz 固定)。
+        // テストの再現性を高めるため、physics / animation / gameplay logic が同じ dt で進む。
+        const float fixedDt = (std::max)(0.0f, params.value("fixedDeltaTime", 0.0f));
+        if (fixedDt > 0.0f) {
+            PendingStepFixedDt() = fixedDt;
+            kernel.SetStepFixedDt(fixedDt);
+        }
         PendingStepFrameCount() += frames;
         if (kernel.GetMode() == EngineMode::Editor) {
             kernel.Play();
@@ -3919,7 +5084,12 @@ namespace
         if (kernel.GetMode() == EngineMode::Play) {
             kernel.Pause();
         }
-        return EngineModeResult(kernel);
+        json out = EngineModeResult(kernel);
+        // engine の m_stepFixedDt を返す (step 消費後に 0 に reset される)。
+        // PendingStepFixedDt() は client → engine の入力で、step 消化で reset されないため使わない。
+        out["fixedDeltaTime"] = kernel.GetStepFixedDt();
+        out["queuedFrames"] = static_cast<int>(frames);
+        return out;
     }
 
     json HandleGameSetTimeScale(EngineKernel& kernel, const json& params)
@@ -3929,10 +5099,22 @@ namespace
         return EngineModeResult(kernel);
     }
 
+    json HandleGamePollPendingSteps(EngineKernel& kernel, const json& /*params*/)
+    {
+        // Engine は single-thread のため、command handler 内で block する真の sync wait は不可。
+        // Python 側で `pendingStepFrames > 0` の間 sleep + poll するパターン推奨。
+        return {
+            { "pendingStepFrames", static_cast<int>(PendingStepFrameCount()) },
+            { "frameCount", kernel.GetTime().frameCount },
+            { "mode", ModeToString(kernel.GetMode()) }
+        };
+    }
+
     json FlowEventToJson(const FlowEvent& event, int index)
     {
         return {
             { "index", index },
+            { "sequence", event.sequence },
             { "name", event.name },
             { "value", event.value }
         };
@@ -4003,7 +5185,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         return { { "entity", EntityDetail(registry, entity) } };
     }
@@ -4012,7 +5194,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         EditorSelection::Instance().SelectEntity(entity);
         return { { "selected", EntityToString(entity) } };
@@ -4066,12 +5248,12 @@ namespace
         MeshComponent mesh{};
         mesh.modelFilePath = params.value("modelFilePath", std::string{});
         if (mesh.modelFilePath.empty()) {
-            throw MakeError("missing_param", "modelFilePath is required.");
+            ThrowError("missing_param", "modelFilePath is required.");
         }
         ResolveProjectPath(mesh.modelFilePath, PathAccess::ReadAsset, true);
         mesh.model = ResourceManager::Instance().CreateModelInstance(mesh.modelFilePath);
         if (!mesh.model) {
-            throw MakeError("asset_load_failed", "Failed to load model asset.", { { "modelFilePath", mesh.modelFilePath } });
+            ThrowError("asset_load_failed", "Failed to load model asset.", { { "modelFilePath", mesh.modelFilePath } });
         }
         mesh.isVisible = params.value("isVisible", true);
         mesh.castShadow = params.value("castShadow", true);
@@ -4093,16 +5275,71 @@ namespace
         return { { "entity", EntityToString(entity) } };
     }
 
+    // entity.batch_create: 大量 entity を 1 call で生成する (test scenario セットアップ高速化)。
+    // params: entities: [{name, position?, rotation?, scale?, parent?}, ...]
+    // 既存の create_empty を N 回呼ぶより最大 N 倍速い (dispatch + JSON overhead 削減)。
+    // 部分失敗時は errors[] に index と reason、created[] に成功分の entity id を返す。
+    json HandleEntityBatchCreate(Registry& registry, const json& params)
+    {
+        if (!params.contains("entities") || !params["entities"].is_array()) {
+            ThrowError("missing_param", "entities[] is required.");
+        }
+        const bool recordUndo = params.value("recordUndo", true);
+        const bool select = params.value("selectFirst", false);
+
+        json created = json::array();
+        json errors  = json::array();
+        EntityID firstCreated = Entity::NULL_ID;
+        int idx = 0;
+        for (const json& spec : params["entities"]) {
+            try {
+                TransformComponent transform{};
+                if (spec.contains("position")) ReadFloat3(spec["position"], transform.localPosition);
+                if (spec.contains("rotation")) ReadFloat4(spec["rotation"], transform.localRotation);
+                if (spec.contains("scale"))    ReadFloat3(spec["scale"], transform.localScale);
+                transform.isDirty = true;
+
+                const std::string name = spec.value("name", std::string("Empty") + std::to_string(idx));
+                const EntityID parent = EntityFromJson(spec.value("parent", json(nullptr)));
+
+                EntityID entity = CreateEntityFromSnapshot(
+                    registry,
+                    BuildEntitySnapshot(name, transform, std::nullopt),
+                    parent,
+                    recordUndo,
+                    "AI Batch Create");
+                if (Entity::IsNull(firstCreated)) firstCreated = entity;
+                created.push_back({ { "index", idx }, { "entity", EntityToString(entity) }, { "name", name } });
+            }
+            catch (const AutomationCommandError& err) {
+                errors.push_back({ { "index", idx }, { "error", err.Error() } });
+            }
+            catch (const std::exception& e) {
+                errors.push_back({ { "index", idx }, { "error", MakeError("internal_error", e.what()) } });
+            }
+            ++idx;
+        }
+        if (select && !Entity::IsNull(firstCreated)) {
+            EditorSelection::Instance().SelectEntity(firstCreated);
+        }
+        return {
+            { "createdCount", static_cast<int>(created.size()) },
+            { "errorCount", static_cast<int>(errors.size()) },
+            { "created", std::move(created) },
+            { "errors", std::move(errors) }
+        };
+    }
+
     json HandleSetTransform(Registry& registry, const json& params)
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         auto* transform = registry.GetComponent<TransformComponent>(entity);
         if (!transform) {
-            throw MakeError("component_not_found", "TransformComponent was not found.", { { "entity", EntityToString(entity) } });
+            ThrowError("component_not_found", "TransformComponent was not found.", { { "entity", EntityToString(entity) } });
         }
 
         const TransformComponent before = *transform;
@@ -4144,10 +5381,10 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         if (!PrefabSystem::CanDelete(entity, registry)) {
-            throw MakeError("operation_not_allowed", "Prefab instance children cannot be deleted directly.");
+            ThrowError("operation_not_allowed", "Prefab instance children cannot be deleted directly.");
         }
 
         if (params.value("recordUndo", true)) {
@@ -4170,10 +5407,10 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         if (!PrefabSystem::CanDuplicate(entity, registry)) {
-            throw MakeError("operation_not_allowed", "Entity cannot be duplicated because of prefab restrictions.", {
+            ThrowError("operation_not_allowed", "Entity cannot be duplicated because of prefab restrictions.", {
                 { "entity", EntityToString(entity) }
             });
         }
@@ -4182,7 +5419,7 @@ namespace
         if (params.value("recordUndo", true)) {
             EntitySnapshot::Snapshot snapshot = EntitySnapshot::CaptureSubtree(entity, registry);
             if (snapshot.nodes.empty()) {
-                throw MakeError("operation_not_allowed", "Entity subtree could not be captured.");
+                ThrowError("operation_not_allowed", "Entity subtree could not be captured.");
             }
             EntitySnapshot::AppendRootNameSuffix(snapshot, params.value("nameSuffix", std::string(" (Clone)")));
             const EntityID parent = GetEntityParent(registry, entity);
@@ -4196,7 +5433,7 @@ namespace
         }
 
         if (Entity::IsNull(duplicate)) {
-            throw MakeError("operation_not_allowed", "Failed to duplicate entity.", { { "entity", EntityToString(entity) } });
+            ThrowError("operation_not_allowed", "Failed to duplicate entity.", { { "entity", EntityToString(entity) } });
         }
 
         if (params.value("select", true)) {
@@ -4210,16 +5447,16 @@ namespace
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         const EntityID newParent = EntityFromJson(params.value("parent", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         if (!Entity::IsNull(newParent) && !registry.IsAlive(newParent)) {
-            throw MakeError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
+            ThrowError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
         }
         if (HierarchySystem::WouldCreateCycle(entity, newParent, registry)) {
-            throw MakeError("operation_not_allowed", "Reparent would create a hierarchy cycle.");
+            ThrowError("operation_not_allowed", "Reparent would create a hierarchy cycle.");
         }
         if (!PrefabSystem::CanReparent(entity, newParent, registry)) {
-            throw MakeError("operation_not_allowed", "Entity cannot be reparented because of prefab restrictions.");
+            ThrowError("operation_not_allowed", "Entity cannot be reparented because of prefab restrictions.");
         }
 
         const EntityID oldParent = GetEntityParent(registry, entity);
@@ -4244,24 +5481,24 @@ namespace
     {
         const std::string prefabPath = params.value("path", params.value("prefabPath", std::string{}));
         if (prefabPath.empty()) {
-            throw MakeError("missing_param", "path is required.");
+            ThrowError("missing_param", "path is required.");
         }
         const std::filesystem::path safePath = ResolveProjectPath(prefabPath, PathAccess::ReadAsset, true);
         if (safePath.extension() != ".prefab") {
-            throw MakeError("invalid_param", "Prefab path must use .prefab extension.", { { "path", prefabPath } });
+            ThrowError("invalid_param", "Prefab path must use .prefab extension.", { { "path", prefabPath } });
         }
 
         const EntityID parent = EntityFromJson(params.value("parent", json(nullptr)));
         if (!Entity::IsNull(parent) && !registry.IsAlive(parent)) {
-            throw MakeError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
+            ThrowError("entity_not_found", "Parent entity is not alive.", { { "parent", params.value("parent", json(nullptr)) } });
         }
         if (!PrefabSystem::CanCreateChild(parent, registry)) {
-            throw MakeError("operation_not_allowed", "Cannot create a prefab child under the requested parent.");
+            ThrowError("operation_not_allowed", "Cannot create a prefab child under the requested parent.");
         }
 
         const EntityID entity = PrefabSystem::InstantiatePrefab(safePath, registry, parent);
         if (Entity::IsNull(entity)) {
-            throw MakeError("prefab_instantiate_failed", "Failed to instantiate prefab.", { { "path", prefabPath } });
+            ThrowError("prefab_instantiate_failed", "Failed to instantiate prefab.", { { "path", prefabPath } });
         }
 
         if (params.contains("position")) {
@@ -4282,18 +5519,18 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         DirectX::XMFLOAT3 center{};
         float radius = 1.0f;
         if (!BuildEntityFocusBounds(registry, entity, center, radius)) {
-            throw MakeError("operation_not_allowed", "Could not compute entity bounds.", { { "entity", EntityToString(entity) } });
+            ThrowError("operation_not_allowed", "Could not compute entity bounds.", { { "entity", EntityToString(entity) } });
         }
 
         const DirectX::XMFLOAT3 direction = editor->GetEditorCameraDirection();
@@ -4320,7 +5557,7 @@ namespace
     {
         const EntityID primary = EditorSelection::Instance().GetPrimaryEntity();
         if (Entity::IsNull(primary) || !registry.IsAlive(primary)) {
-            throw MakeError("entity_not_found", "No live primary selected entity.");
+            ThrowError("entity_not_found", "No live primary selected entity.");
         }
         json focusParams = params;
         focusParams["entity"] = EntityToString(primary);
@@ -4331,13 +5568,13 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         DirectX::XMFLOAT3 origin{};
         DirectX::XMFLOAT3 direction{};
         if (!BuildSceneViewRay(*editor, params, origin, direction)) {
-            throw MakeError("invalid_param", "Could not build a ray from the requested Scene View position.");
+            ThrowError("invalid_param", "Could not build a ray from the requested Scene View position.");
         }
 
         const float maxDistance = params.value("maxDistance", 100000.0f);
@@ -4372,24 +5609,24 @@ namespace
         else {
             auto* editor = kernel.GetEditorLayer();
             if (!editor) {
-                throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+                ThrowError("operation_not_allowed", "EditorLayer is not available.");
             }
 
             DirectX::XMFLOAT3 origin{};
             DirectX::XMFLOAT3 direction{};
             if (!BuildSceneViewRay(*editor, params, origin, direction)) {
-                throw MakeError("invalid_param", "Could not build a ray from the requested Scene View position.");
+                ThrowError("invalid_param", "Could not build a ray from the requested Scene View position.");
             }
 
             float groundDistance = 0.0f;
             if (!IntersectGroundPlane(origin, direction, position, groundDistance)) {
-                throw MakeError("operation_not_allowed", "Scene View ray did not hit the ground plane.");
+                ThrowError("operation_not_allowed", "Scene View ray did not hit the ground plane.");
             }
         }
 
         const std::string assetPath = params.value("assetPath", params.value("path", std::string{}));
         if (assetPath.empty()) {
-            throw MakeError("missing_param", "assetPath is required.");
+            ThrowError("missing_param", "assetPath is required.");
         }
 
         const std::filesystem::path safePath = ResolveProjectPath(assetPath, PathAccess::ReadAsset, true);
@@ -4431,7 +5668,7 @@ namespace
         const std::filesystem::path dir = ResolveProjectPath(pathText, PathAccess::ReadAsset, true);
         std::error_code ec;
         if (!std::filesystem::is_directory(dir, ec)) {
-            throw MakeError("invalid_param", "path must be a directory.", { { "path", pathText } });
+            ThrowError("invalid_param", "path must be a directory.", { { "path", pathText } });
         }
 
         const std::string typeFilter = params.value("type", std::string{});
@@ -4456,7 +5693,7 @@ namespace
         const std::string typeFilter = params.value("type", std::string{});
         const int limit = params.value("limit", 100);
         if (query.empty()) {
-            throw MakeError("missing_param", "query is required.");
+            ThrowError("missing_param", "query is required.");
         }
 
         const std::filesystem::path root = ResolveProjectPath(rootText, PathAccess::ReadAsset, true);
@@ -4485,14 +5722,14 @@ namespace
         const std::filesystem::path parent = ResolveProjectPath(params.value("parent", std::string("Data")), PathAccess::WriteAsset, true);
         const std::string name = params.value("name", std::string{});
         if (name.empty()) {
-            throw MakeError("missing_param", "name is required.");
+            ThrowError("missing_param", "name is required.");
         }
         const std::filesystem::path target = (parent / name).lexically_normal();
         ResolveProjectPath(target.string(), PathAccess::WriteAsset, false);
         std::error_code ec;
         std::filesystem::create_directories(target, ec);
         if (ec) {
-            throw MakeError("asset_operation_failed", "Failed to create folder.", { { "path", target.string() } });
+            ThrowError("asset_operation_failed", "Failed to create folder.", { { "path", target.string() } });
         }
         return { { "path", ToGenericProjectPath(target) } };
     }
@@ -4503,7 +5740,7 @@ namespace
         const std::filesystem::path destinationDir = ResolveProjectPath(params.value("destination", std::string{}), PathAccess::WriteAsset, true);
         std::error_code ec;
         if (!std::filesystem::is_directory(destinationDir, ec)) {
-            throw MakeError("invalid_param", "destination must be a directory.");
+            ThrowError("invalid_param", "destination must be a directory.");
         }
 
         const std::filesystem::path target = destinationDir / source.filename();
@@ -4517,7 +5754,7 @@ namespace
             std::filesystem::copy_file(source, target, std::filesystem::copy_options::overwrite_existing, ec);
         }
         if (ec) {
-            throw MakeError("asset_operation_failed", move ? "Failed to move asset." : "Failed to copy asset.", {
+            ThrowError("asset_operation_failed", move ? "Failed to move asset." : "Failed to copy asset.", {
                 { "source", source.string() },
                 { "destination", target.string() }
             });
@@ -4530,14 +5767,14 @@ namespace
         const std::filesystem::path source = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, true);
         const std::string newName = params.value("newName", std::string{});
         if (newName.empty()) {
-            throw MakeError("missing_param", "newName is required.");
+            ThrowError("missing_param", "newName is required.");
         }
         const std::filesystem::path target = source.parent_path() / newName;
         ResolveProjectPath(target.string(), PathAccess::WriteAsset, false);
         std::error_code ec;
         std::filesystem::rename(source, target, ec);
         if (ec) {
-            throw MakeError("asset_operation_failed", "Failed to rename asset.", { { "path", source.string() } });
+            ThrowError("asset_operation_failed", "Failed to rename asset.", { { "path", source.string() } });
         }
         return { { "path", ToGenericProjectPath(target) } };
     }
@@ -4555,7 +5792,7 @@ namespace
                 std::filesystem::remove(source, ec);
             }
             if (ec) {
-                throw MakeError("asset_operation_failed", "Failed to delete asset.", { { "path", source.string() } });
+                ThrowError("asset_operation_failed", "Failed to delete asset.", { { "path", source.string() } });
             }
             return { { "deleted", ToGenericProjectPath(source) }, { "permanent", true } };
         }
@@ -4565,7 +5802,7 @@ namespace
         const std::filesystem::path target = trashRoot / (SanitizeFileStem(source.stem().string()) + "_" + MakeTimestampSuffix() + source.extension().string());
         std::filesystem::rename(source, target, ec);
         if (ec) {
-            throw MakeError("asset_operation_failed", "Failed to move asset to AI trash.", { { "path", source.string() } });
+            ThrowError("asset_operation_failed", "Failed to move asset to AI trash.", { { "path", source.string() } });
         }
         return { { "deleted", ToGenericProjectPath(source) }, { "trashPath", ToGenericProjectPath(target) }, { "permanent", false } };
     }
@@ -4574,7 +5811,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
 
         const std::string path = params.value("path", std::string{});
@@ -4589,14 +5826,14 @@ namespace
         else {
             savedPath = ResolveProjectPath(path, PathAccess::WriteAsset, false);
             if (savedPath.extension() != ".prefab") {
-                throw MakeError("invalid_param", "Prefab path must use .prefab extension.", { { "path", path } });
+                ThrowError("invalid_param", "Prefab path must use .prefab extension.", { { "path", path } });
             }
             std::error_code ec;
             std::filesystem::create_directories(savedPath.parent_path(), ec);
             ok = PrefabSystem::SaveEntityToPrefabPath(entity, registry, savedPath);
         }
         if (!ok) {
-            throw MakeError("prefab_save_failed", "Failed to save prefab.");
+            ThrowError("prefab_save_failed", "Failed to save prefab.");
         }
         return { { "path", ToGenericProjectPath(savedPath) } };
     }
@@ -4605,10 +5842,10 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         if (!PrefabSystem::ApplyPrefab(entity, registry)) {
-            throw MakeError("prefab_apply_failed", "Failed to apply prefab.", { { "entity", EntityToString(entity) } });
+            ThrowError("prefab_apply_failed", "Failed to apply prefab.", { { "entity", EntityToString(entity) } });
         }
         return { { "entity", EntityToString(entity) } };
     }
@@ -4617,10 +5854,10 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         if (!PrefabSystem::UnpackPrefab(entity, registry)) {
-            throw MakeError("prefab_unpack_failed", "Failed to unpack prefab.", { { "entity", EntityToString(entity) } });
+            ThrowError("prefab_unpack_failed", "Failed to unpack prefab.", { { "entity", EntityToString(entity) } });
         }
         return { { "entity", EntityToString(entity) } };
     }
@@ -4650,7 +5887,7 @@ namespace
     void ApplyMaterialFields(MaterialAsset& material, const json& fields)
     {
         if (!fields.is_object()) {
-            throw MakeError("invalid_param", "fields must be an object.");
+            ThrowError("invalid_param", "fields must be an object.");
         }
         if (fields.contains("baseColor")) ReadFloat4(fields["baseColor"], material.baseColor);
         if (fields.contains("metallic")) material.metallic = fields["metallic"].get<float>();
@@ -4674,7 +5911,7 @@ namespace
     {
         const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::WriteAsset, false);
         if (path.extension() != ".material" && path.extension() != ".mat") {
-            throw MakeError("invalid_param", "Material path must use .material or .mat extension.", { { "path", path.string() } });
+            ThrowError("invalid_param", "Material path must use .material or .mat extension.", { { "path", path.string() } });
         }
         std::error_code ec;
         std::filesystem::create_directories(path.parent_path(), ec);
@@ -4706,7 +5943,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
         }
         const std::string pathText = params.value("path", std::string{});
         const std::filesystem::path path = ResolveProjectPath(pathText, PathAccess::ReadAsset, true);
@@ -4831,18 +6068,18 @@ namespace
         if (params.contains("entity")) {
             entity = EntityFromJson(params["entity"]);
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-                throw MakeError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
+                ThrowError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
             }
         }
         else {
             entity = FindFirstEntityWithComponent(registry, TypeManager::GetComponentTypeID<LightComponent>());
             if (Entity::IsNull(entity)) {
-                throw MakeError("entity_not_found", "No entity with LightComponent found.");
+                ThrowError("entity_not_found", "No entity with LightComponent found.");
             }
         }
         const auto* light = registry.GetComponent<LightComponent>(entity);
         if (!light) {
-            throw MakeError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
+            ThrowError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
         }
         return { { "entity", EntityToString(entity) }, { "light", LightComponentToJson(*light) } };
     }
@@ -4851,11 +6088,11 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "entity is required and must be a valid entity ID.");
+            ThrowError("entity_not_found", "entity is required and must be a valid entity ID.");
         }
         auto* light = registry.GetComponent<LightComponent>(entity);
         if (!light) {
-            throw MakeError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
+            ThrowError("component_missing", "Entity has no LightComponent.", { { "entity", EntityToString(entity) } });
         }
         if (params.contains("type"))      { light->type      = LightTypeFromString(params["type"].get<std::string>()); }
         if (params.contains("color"))     { ReadFloat3(params["color"], light->color); }
@@ -4902,18 +6139,18 @@ namespace
         if (params.contains("entity")) {
             entity = EntityFromJson(params["entity"]);
             if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-                throw MakeError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
+                ThrowError("entity_not_found", "Entity not found.", { { "entity", params["entity"] } });
             }
         }
         else {
             entity = FindFirstEntityWithComponent(registry, TypeManager::GetComponentTypeID<CameraLensComponent>());
             if (Entity::IsNull(entity)) {
-                throw MakeError("entity_not_found", "No entity with CameraLensComponent found.");
+                ThrowError("entity_not_found", "No entity with CameraLensComponent found.");
             }
         }
         const auto* lens = registry.GetComponent<CameraLensComponent>(entity);
         if (!lens) {
-            throw MakeError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
+            ThrowError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
         }
         return {
             { "entity", EntityToString(entity) },
@@ -4926,11 +6163,11 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "entity is required and must be a valid entity ID.");
+            ThrowError("entity_not_found", "entity is required and must be a valid entity ID.");
         }
         auto* lens = registry.GetComponent<CameraLensComponent>(entity);
         if (!lens) {
-            throw MakeError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
+            ThrowError("component_missing", "Entity has no CameraLensComponent.", { { "entity", EntityToString(entity) } });
         }
         if (params.contains("fovY"))   { lens->fovY   = params["fovY"].get<float>(); }
         if (params.contains("nearZ"))  { lens->nearZ  = params["nearZ"].get<float>(); }
@@ -4978,7 +6215,7 @@ namespace
         if (params.contains("entity")) {
             const EntityID entity = EntityFromJson(params["entity"]);
             if (Entity::IsNull(entity) || !registry.IsAlive(entity) || !registry.GetComponent<TerrainComponent>(entity)) {
-                throw MakeError("entity_not_found", "Terrain entity is not alive or has no TerrainComponent.", { { "entity", params["entity"] } });
+                ThrowError("entity_not_found", "Terrain entity is not alive or has no TerrainComponent.", { { "entity", params["entity"] } });
             }
             return entity;
         }
@@ -4995,7 +6232,7 @@ namespace
                 }
             }
         }
-        throw MakeError("entity_not_found", "No Terrain entity was found.");
+        ThrowError("entity_not_found", "No Terrain entity was found.");
     }
 
     json TerrainSummary(Registry& registry, EntityID entity)
@@ -5159,7 +6396,7 @@ namespace
         brush.targetHeight = params.value("targetHeight", brush.targetHeight);
         DirectX::XMFLOAT3 position{};
         if (!params.contains("position") || !ReadFloat3(params["position"], position)) {
-            throw MakeError("missing_param", "position [x,y,z] is required.");
+            ThrowError("missing_param", "position [x,y,z] is required.");
         }
         ApplyTerrainBrushToAsset(*terrain->asset, *terrain, brush, position.x, position.z);
         MarkEntityEdited(registry, entity);
@@ -5175,14 +6412,14 @@ namespace
             std::error_code ec;
             std::filesystem::create_directories(path.parent_path(), ec);
             if (!TerrainAssetIO::SaveToFile(*terrain->asset, path)) {
-                throw MakeError("terrain_save_failed", "Failed to save terrain asset.", { { "path", path.string() } });
+                ThrowError("terrain_save_failed", "Failed to save terrain asset.", { { "path", path.string() } });
             }
             return { { "path", ToGenericProjectPath(path) }, { "terrain", TerrainSummary(registry, entity) } };
         }
         const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::ReadAsset, true);
         auto asset = std::make_shared<TerrainAsset>();
         if (!TerrainAssetIO::LoadFromFile(*asset, path)) {
-            throw MakeError("terrain_load_failed", "Failed to load terrain asset.", { { "path", path.string() } });
+            ThrowError("terrain_load_failed", "Failed to load terrain asset.", { { "path", path.string() } });
         }
         EntityID entity = registry.CreateEntity();
         registry.AddComponent(entity, NameComponent{ params.value("name", path.stem().string()) });
@@ -5309,7 +6546,7 @@ namespace
     json HandleTerrainOpen(EngineKernel& kernel, const json& params)
     {
         EditorLayer* editor = kernel.GetEditorLayer();
-        if (!editor) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        if (!editor) ThrowError("editor_unavailable", "EditorLayer is not available.");
         EntityID entity = Entity::NULL_ID;
         if (params.contains("entity")) {
             Registry* reg = kernel.GetGameRegistry();
@@ -5326,7 +6563,7 @@ namespace
     json HandleTerrainSetBrush(EngineKernel& kernel, const json& params)
     {
         EditorLayer* editor = kernel.GetEditorLayer();
-        if (!editor) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        if (!editor) ThrowError("editor_unavailable", "EditorLayer is not available.");
         TerrainBrush& brush = editor->GetTerrainEditorPanel().GetBrushMutable();
         bool activated = false;
         if (params.contains("mode"))         { brush.mode        = TerrainBrushModeFromString(params["mode"].get<std::string>()); activated = true; }
@@ -5556,7 +6793,7 @@ namespace
         a.EnsureDefaultLayers();
         const int idx = params.value("index", 0);
         if (idx < 0 || idx >= static_cast<int>(a.layers.size()))
-            throw MakeError("invalid_index", "Layer index out of range.", { { "index", idx } });
+            ThrowError("invalid_index", "Layer index out of range.", { { "index", idx } });
         TerrainLayer& l = a.layers[idx];
         if (params.contains("albedoPath"))     l.albedoPath    = params["albedoPath"].get<std::string>();
         if (params.contains("normalPath"))     l.normalPath    = params["normalPath"].get<std::string>();
@@ -5589,7 +6826,7 @@ namespace
     {
         const EntityID entity = FindTerrainEntity(registry, params);
         auto* gc = registry.GetComponent<GrassComponent>(entity);
-        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (!gc) ThrowError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
         if (params.contains("enabled"))      gc->enabled      = params["enabled"].get<bool>();
         if (params.contains("drawDistance")) gc->drawDistance = params["drawDistance"].get<float>();
         if (params.contains("windDirection") && params["windDirection"].is_array() && params["windDirection"].size() >= 3)
@@ -5603,7 +6840,7 @@ namespace
     {
         const EntityID entity = FindTerrainEntity(registry, params);
         auto* gc = registry.GetComponent<GrassComponent>(entity);
-        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (!gc) ThrowError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
         FoliageLayer newLayer;
         if (params.contains("name"))     newLayer.name     = params["name"].get<std::string>();
         if (params.contains("meshPath")) newLayer.meshPath = params["meshPath"].get<std::string>();
@@ -5618,10 +6855,10 @@ namespace
     {
         const EntityID entity = FindTerrainEntity(registry, params);
         auto* gc = registry.GetComponent<GrassComponent>(entity);
-        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (!gc) ThrowError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
         const int idx = params.value("index", 0);
         if (idx < 0 || idx >= static_cast<int>(gc->layers.size()))
-            throw MakeError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
+            ThrowError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
         FoliageLayer& l = gc->layers[idx];
         if (params.contains("enabled"))           l.enabled           = params["enabled"].get<bool>();
         if (params.contains("name"))              l.name              = params["name"].get<std::string>();
@@ -5652,10 +6889,10 @@ namespace
     {
         const EntityID entity = FindTerrainEntity(registry, params);
         auto* gc = registry.GetComponent<GrassComponent>(entity);
-        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (!gc) ThrowError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
         const int idx = params.value("index", 0);
         if (idx < 0 || idx >= static_cast<int>(gc->layers.size()))
-            throw MakeError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
+            ThrowError("invalid_index", "Foliage layer index out of range.", { { "index", idx } });
         gc->layers.erase(gc->layers.begin() + idx);
         gc->needsRebuild = true;
         MarkEntityEdited(registry, entity);
@@ -5666,7 +6903,7 @@ namespace
     {
         const EntityID entity = FindTerrainEntity(registry, params);
         auto* gc = registry.GetComponent<GrassComponent>(entity);
-        if (!gc) throw MakeError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
+        if (!gc) ThrowError("no_foliage", "Terrain entity has no GrassComponent.", { { "entity", EntityToString(entity) } });
         gc->layers.clear();
         gc->EnsureDefaultLayers();
         gc->needsRebuild = true;
@@ -5704,7 +6941,7 @@ namespace
         if (lower == "float") return EffectGraphNodeType::Float;
         if (lower == "vec3" || lower == "vector3") return EffectGraphNodeType::Vec3;
         if (lower == "color" || lower == "colour") return EffectGraphNodeType::Color;
-        throw MakeError("invalid_param", "Unknown effect node type.", { { "type", value } });
+        ThrowError("invalid_param", "Unknown effect node type.", { { "type", value } });
     }
 
     std::string EffectValueTypeToStringValue(EffectValueType type)
@@ -5729,7 +6966,7 @@ namespace
         if (lower == "color" || lower == "colour") return EffectValueType::Color;
         if (lower == "mesh") return EffectValueType::Mesh;
         if (lower == "particle") return EffectValueType::Particle;
-        throw MakeError("invalid_param", "Unknown effect value type.", { { "valueType", value } });
+        ThrowError("invalid_param", "Unknown effect value type.", { { "valueType", value } });
     }
 
     DirectX::XMFLOAT2 ReadFloat2OrDefault(const json& value, const DirectX::XMFLOAT2& fallback)
@@ -5837,7 +7074,7 @@ namespace
         const std::string generic = path.generic_string();
         const std::string suffix = ".effectgraph.json";
         if (generic.size() < suffix.size() || generic.compare(generic.size() - suffix.size(), suffix.size(), suffix) != 0) {
-            throw MakeError("invalid_param", "Effect graph path must end with .effectgraph.json.", { { "path", ToGenericProjectPath(path) } });
+            ThrowError("invalid_param", "Effect graph path must end with .effectgraph.json.", { { "path", ToGenericProjectPath(path) } });
         }
         return path;
     }
@@ -5847,7 +7084,7 @@ namespace
         path = ResolveEffectGraphPath(params, access, true);
         EffectGraphAsset asset;
         if (!EffectGraphSerializer::Load(path.string(), asset)) {
-            throw MakeError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+            ThrowError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
         }
         return asset;
     }
@@ -5855,7 +7092,7 @@ namespace
     void SaveEffectGraphAssetOrThrow(const std::filesystem::path& path, const EffectGraphAsset& asset)
     {
         if (!EffectGraphSerializer::Save(path.string(), asset)) {
-            throw MakeError("effect_save_failed", "Failed to save effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+            ThrowError("effect_save_failed", "Failed to save effect graph asset.", { { "path", ToGenericProjectPath(path) } });
         }
     }
 
@@ -5867,10 +7104,10 @@ namespace
 
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (!editor->OpenEffectEditorFromAutomation(path)) {
-            throw MakeError("effect_open_failed", "Failed to reflect the effect graph in Effect Editor.", {
+            ThrowError("effect_open_failed", "Failed to reflect the effect graph in Effect Editor.", {
                 { "path", ToGenericProjectPath(path) }
             });
         }
@@ -5933,7 +7170,7 @@ namespace
     void ApplyEffectNodeFields(EffectGraphNode& node, const json& fields)
     {
         if (!fields.is_object()) {
-            throw MakeError("invalid_param", "fields must be an object.");
+            ThrowError("invalid_param", "fields must be an object.");
         }
         if (fields.contains("title")) node.title = fields["title"].get<std::string>();
         if (fields.contains("position")) node.position = ReadFloat2OrDefault(fields["position"], node.position);
@@ -5962,7 +7199,7 @@ namespace
     void ApplyEffectPreviewDefaults(EffectGraphAsset& asset, const json& fields)
     {
         if (!fields.is_object()) {
-            throw MakeError("invalid_param", "previewDefaults must be an object.");
+            ThrowError("invalid_param", "previewDefaults must be an object.");
         }
         if (fields.contains("duration")) asset.previewDefaults.duration = fields["duration"].get<float>();
         if (fields.contains("seed")) asset.previewDefaults.seed = fields["seed"].get<uint32_t>();
@@ -6027,7 +7264,7 @@ namespace
     void ApplyEffectSemanticParamsToAsset(EffectGraphAsset& asset, const json& fields)
     {
         if (!fields.is_object()) {
-            throw MakeError("invalid_param", "semantic fields must be an object.");
+            ThrowError("invalid_param", "semantic fields must be an object.");
         }
 
         auto* lifetime = EnsureEffectNodeForAutomation(asset, EffectGraphNodeType::Lifetime);
@@ -6069,7 +7306,7 @@ namespace
             else if (shape == "circle") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Circle);
             else if (shape == "line") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Line);
             else if (shape == "ring") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Ring);
-            // "point" は 0 なので、未知の文字列は sphere (1) にフォールバックする。
+            // "point" 縺ｯ 0 縺ｪ縺ｮ縺ｧ縲∵悴遏･縺ｮ譁・ｭ怜・縺ｯ sphere (1) 縺ｫ繝輔か繝ｼ繝ｫ繝舌ャ繧ｯ縺吶ｋ縲・
             else if (shape == "point") emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Point);
             else emitter->intValue2 = static_cast<int>(EffectSpawnShapeType::Sphere);
         }
@@ -6114,9 +7351,9 @@ namespace
 
         EffectEditorInternal::EnsureGuiAuthoringLinks(asset);
 
-        // SpriteRenderer (パーティクル) チェーンが確立された後は、
-        // デフォルトグラフ由来の MeshRenderer / MeshSource ノードは不要になる。
-        // 残留させると "Mesh Renderer has an unconnected flow input." 警告が出続けるため除去する。
+        // SpriteRenderer (繝代・繝・ぅ繧ｯ繝ｫ) 繝√ぉ繝ｼ繝ｳ縺檎｢ｺ遶九＆繧後◆蠕後・縲・
+        // 繝・ヵ繧ｩ繝ｫ繝医げ繝ｩ繝慕罰譚･縺ｮ MeshRenderer / MeshSource 繝弱・繝峨・荳崎ｦ√↓縺ｪ繧九・
+        // 谿狗蕗縺輔○繧九→ "Mesh Renderer has an unconnected flow input." 隴ｦ蜻翫′蜃ｺ邯壹￠繧九◆繧・勁蜴ｻ縺吶ｋ縲・
         {
             std::vector<uint32_t> removeNodeIds;
             for (const auto& node : asset.nodes) {
@@ -6257,7 +7494,7 @@ namespace
         EffectGraphAsset asset;
         if (std::filesystem::exists(path)) {
             if (!EffectGraphSerializer::Load(path.string(), asset)) {
-                throw MakeError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
+                ThrowError("effect_load_failed", "Failed to load effect graph asset.", { { "path", ToGenericProjectPath(path) } });
             }
         }
         else {
@@ -6294,10 +7531,10 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (!editor->IsEffectEditorWorkspaceActive()) {
-            throw MakeError("operation_not_allowed",
+            ThrowError("operation_not_allowed",
                 "Effect Editor workspace is not active. Call effect_editor.open_workspace or "
                 "effect_editor.timeline_play first to activate it before setting the preview view.");
         }
@@ -6346,7 +7583,7 @@ namespace
             : params.value("id", 0u);
         EffectGraphNode* node = asset.FindNode(nodeId);
         if (!node) {
-            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+            ThrowError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
         }
         // Support two calling conventions:
         //   (a) Nested: params["fields"] contains the field map (used by the JSON sample files).
@@ -6365,7 +7602,7 @@ namespace
         EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::WriteAsset);
         const uint32_t nodeId = params.value("nodeId", 0u);
         if (!asset.FindNode(nodeId)) {
-            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+            ThrowError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
         }
         std::vector<uint32_t> pinsToRemove;
         for (const auto& pin : asset.pins) {
@@ -6403,7 +7640,7 @@ namespace
             const uint32_t fromNodeId = params.value("fromNodeId", 0u);
             const uint32_t toNodeId = params.value("toNodeId", 0u);
             if (!asset.FindNode(fromNodeId) || !asset.FindNode(toNodeId)) {
-                throw MakeError("node_not_found", "fromNodeId and toNodeId must refer to existing nodes.", {
+                ThrowError("node_not_found", "fromNodeId and toNodeId must refer to existing nodes.", {
                     { "fromNodeId", fromNodeId },
                     { "toNodeId", toNodeId }
                 });
@@ -6417,7 +7654,7 @@ namespace
         }
         std::string reason;
         if (!CanCreateEffectLink(asset, startPinId, endPinId, reason)) {
-            throw MakeError("effect_link_invalid", "Cannot create effect graph link.", {
+            ThrowError("effect_link_invalid", "Cannot create effect graph link.", {
                 { "reason", reason },
                 { "startPinId", startPinId },
                 { "endPinId", endPinId }
@@ -6452,7 +7689,7 @@ namespace
                 }),
             asset.links.end());
         if (asset.links.size() == before) {
-            throw MakeError("link_not_found", "Effect graph link was not found.");
+            ThrowError("link_not_found", "Effect graph link was not found.");
         }
         SaveEffectGraphAssetOrThrow(path, asset);
         RevealEffectEditorChange(kernel, params, path);
@@ -6465,7 +7702,7 @@ namespace
         EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::ReadAsset);
         auto compiled = EffectCompiler::Compile(asset, ToGenericProjectPath(path));
         if (!compiled) {
-            throw MakeError("effect_compile_failed", "Effect compiler returned no result.", { { "path", ToGenericProjectPath(path) } });
+            ThrowError("effect_compile_failed", "Effect compiler returned no result.", { { "path", ToGenericProjectPath(path) } });
         }
         return { { "compile", EffectCompileResultToJson(*compiled) } };
     }
@@ -6474,7 +7711,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         std::filesystem::path path;
@@ -6482,7 +7719,7 @@ namespace
             path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
         }
         if (!editor->OpenEffectEditorFromAutomation(path)) {
-            throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+            ThrowError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
                 { "path", path.empty() ? json(nullptr) : json(ToGenericProjectPath(path)) }
             });
         }
@@ -6496,7 +7733,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         std::filesystem::path path;
@@ -6506,7 +7743,7 @@ namespace
         const float startTime = params.value("startTime", 0.0f);
         const bool paused = params.value("paused", false);
         if (!editor->PlayEffectTimelineFromAutomation(path, startTime, paused)) {
-            throw MakeError("effect_timeline_play_failed", "Failed to play the Effect Editor timeline.", {
+            ThrowError("effect_timeline_play_failed", "Failed to play the Effect Editor timeline.", {
                 { "path", path.empty() ? json(nullptr) : json(ToGenericProjectPath(path)) },
                 { "startTime", startTime },
                 { "paused", paused }
@@ -6525,10 +7762,10 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (!editor->StopEffectTimelineFromAutomation()) {
-            throw MakeError("effect_timeline_stop_failed", "Failed to stop the Effect Editor timeline.");
+            ThrowError("effect_timeline_stop_failed", "Failed to stop the Effect Editor timeline.");
         }
         return {
             { "effectEditorActive", editor->IsEffectEditorWorkspaceActive() },
@@ -6688,12 +7925,12 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         ImageBuffer clientImage;
         if (!CaptureBackBuffer(clientImage) && !CaptureClientArea(Graphics::Instance().GetWindowHandle(), clientImage)) {
-            throw MakeError("capture_failed", "Failed to capture the engine window back buffer or client area.");
+            ThrowError("capture_failed", "Failed to capture the engine window back buffer or client area.");
         }
 
         if (target == "scene_view") {
@@ -6714,7 +7951,7 @@ namespace
         if (target == "window" || target == "display" || target == "client") {
             return clientImage;
         }
-        throw MakeError("invalid_param", "target must be window, display, client, scene_view, game_view, effect_editor, effect_preview, or ui_editor.", {
+        ThrowError("invalid_param", "target must be window, display, client, scene_view, game_view, effect_editor, effect_preview, or ui_editor.", {
             { "target", target }
         });
     }
@@ -6746,32 +7983,74 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (params.contains("path") && !params.value("path", std::string{}).empty()) {
             const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
             if (!editor->OpenEffectEditorFromAutomation(path)) {
-                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                ThrowError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
                     { "path", ToGenericProjectPath(path) }
                 });
             }
         }
-        if (params.value("compile", false) && !editor->GetEffectEditorPanel().CompileFromAutomation()) {
-            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.");
+        auto& panel = editor->GetEffectEditorPanel();
+        // autoCompileIfDirty=true で、編集後に compile 忘れを防ぐ。
+        // dirty 状態のままだと preview entity の出力が古いままになるため。
+        const bool autoCompileIfDirty = params.value("autoCompileIfDirty", false);
+        const bool explicitCompile = params.value("compile", false);
+        json hints = json::object();
+        bool ranCompile = false;
+        bool compileOk = true;
+        if (explicitCompile || (autoCompileIfDirty && panel.IsCompileDirtyForAutomation())) {
+            compileOk = panel.CompileFromAutomation();
+            ranCompile = true;
+            if (!compileOk && explicitCompile) {
+                ThrowError("effect_compile_failed", "Effect Editor document did not compile.");
+            }
+            hints["compileTriggered"] = true;
+            hints["compileOk"] = compileOk;
+            hints["reason"] = explicitCompile ? "explicit_compile_param" : "autoCompileIfDirty_dirty_state";
         }
-        return { { "state", EffectEditorStateToJson(*editor, registry, params.value("includeGraph", true)) } };
+        if (panel.IsCompileDirtyForAutomation() && !ranCompile) {
+            hints["compileHint"] = "compileDirty=true — call effect_editor.get_state with compile=true (or autoCompileIfDirty=true) before measuring preview output.";
+        }
+        json state = EffectEditorStateToJson(*editor, registry, params.value("includeGraph", true));
+
+        // compile errors / warnings をトップレベルに昇格 (state.compiled.{errors,warnings} は深く埋もれて見落としがち)。
+        // AI agent が一目で compile 失敗を判別できるよう、要約も hints に入れる。
+        auto compiled = panel.GetCompiledForAutomation();
+        if (compiled) {
+            const int errCount = static_cast<int>(compiled->errors.size());
+            const int warnCount = static_cast<int>(compiled->warnings.size());
+            if (errCount > 0) {
+                hints["compileErrorCount"] = errCount;
+                hints["compileErrors"] = compiled->errors;
+                hints["compileFailedHint"] = "Effect compile produced errors. See compileErrors array.";
+            }
+            if (warnCount > 0) {
+                hints["compileWarningCount"] = warnCount;
+                hints["compileWarnings"] = compiled->warnings;
+            }
+            if (errCount == 0 && warnCount == 0 && compiled->valid) {
+                hints["compileClean"] = true;
+            }
+        }
+        return {
+            { "state", std::move(state) },
+            { "hints", std::move(hints) }
+        };
     }
 
     json HandleEffectTimelineSeek(EngineKernel& kernel, Registry& registry, const json& params)
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (params.contains("path") && !params.value("path", std::string{}).empty()) {
             const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
             if (!editor->OpenEffectEditorFromAutomation(path)) {
-                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                ThrowError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
                     { "path", ToGenericProjectPath(path) }
                 });
             }
@@ -6779,7 +8058,7 @@ namespace
         const float time = params.value("time", params.value("startTime", 0.0f));
         const bool paused = params.value("paused", true);
         if (!editor->GetEffectEditorPanel().SeekTimelineFromAutomation(&registry, time, paused)) {
-            throw MakeError("effect_timeline_seek_failed", "Failed to seek the Effect Editor timeline.", {
+            ThrowError("effect_timeline_seek_failed", "Failed to seek the Effect Editor timeline.", {
                 { "time", time },
                 { "paused", paused }
             });
@@ -6791,12 +8070,12 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const float deltaTime = params.value("deltaTime", params.value("seconds", 1.0f / 30.0f));
         const bool paused = params.value("paused", true);
         if (!editor->GetEffectEditorPanel().StepTimelineFromAutomation(&registry, deltaTime, paused)) {
-            throw MakeError("effect_timeline_step_failed", "Failed to step the Effect Editor timeline.", {
+            ThrowError("effect_timeline_step_failed", "Failed to step the Effect Editor timeline.", {
                 { "deltaTime", deltaTime },
                 { "paused", paused }
             });
@@ -6808,14 +8087,14 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const uint32_t nodeId = params.value("nodeId", 0u);
         const bool ok = focus
             ? editor->GetEffectEditorPanel().FocusNodeFromAutomation(nodeId)
             : editor->GetEffectEditorPanel().SelectNodeFromAutomation(nodeId, params.value("nodeMode", false));
         if (!ok) {
-            throw MakeError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
+            ThrowError("node_not_found", "Effect graph node was not found.", { { "nodeId", nodeId } });
         }
         editor->FocusPanelAutomation(EditorLayer::WindowFocusTarget::EffectEditor);
         return { { "state", EffectEditorStateToJson(*editor, kernel.GetGameRegistry(), true) } };
@@ -6825,7 +8104,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         EffectEditorPanel& panel = editor->GetEffectEditorPanel();
         const EntityID previewEntity = panel.GetPreviewEntity();
@@ -6871,13 +8150,13 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         if (params.contains("path") && !params.value("path", std::string{}).empty()) {
             const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
             if (!editor->OpenEffectEditorFromAutomation(path)) {
-                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                ThrowError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
                     { "path", ToGenericProjectPath(path) }
                 });
             }
@@ -6885,7 +8164,7 @@ namespace
 
         EffectEditorPanel& panel = editor->GetEffectEditorPanel();
         if (params.value("compile", true) && !panel.CompileFromAutomation()) {
-            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.", {
+            ThrowError("effect_compile_failed", "Effect Editor document did not compile.", {
                 { "state", EffectEditorStateToJson(*editor, &registry, true) }
             });
         }
@@ -6894,7 +8173,7 @@ namespace
         const bool paused = params.value("paused", true);
         if (params.value("play", true)) {
             if (!panel.SeekTimelineFromAutomation(&registry, time, paused)) {
-                throw MakeError("effect_timeline_seek_failed", "Failed to prepare Effect Editor preview.", {
+                ThrowError("effect_timeline_seek_failed", "Failed to prepare Effect Editor preview.", {
                     { "time", time },
                     { "paused", paused }
                 });
@@ -6939,20 +8218,20 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         if (params.contains("path") && !params.value("path", std::string{}).empty()) {
             const std::filesystem::path path = ResolveEffectGraphPath(params, PathAccess::ReadAsset, true);
             if (!editor->OpenEffectEditorFromAutomation(path)) {
-                throw MakeError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
+                ThrowError("effect_open_failed", "Failed to open effect graph in Effect Editor.", {
                     { "path", ToGenericProjectPath(path) }
                 });
             }
         }
         EffectEditorPanel& panel = editor->GetEffectEditorPanel();
         if (params.value("compile", true) && !panel.CompileFromAutomation()) {
-            throw MakeError("effect_compile_failed", "Effect Editor document did not compile.");
+            ThrowError("effect_compile_failed", "Effect Editor document did not compile.");
         }
 
         std::vector<float> times;
@@ -6975,7 +8254,7 @@ namespace
         for (size_t i = 0; i < times.size(); ++i) {
             const float t = times[i];
             if (!panel.SeekTimelineFromAutomation(&registry, t, params.value("paused", true))) {
-                throw MakeError("effect_timeline_seek_failed", "Failed to seek Effect Editor timeline.", { { "time", t } });
+                ThrowError("effect_timeline_seek_failed", "Failed to seek Effect Editor timeline.", { { "time", t } });
             }
             const std::filesystem::path path = dir / (stem + "_t" + std::to_string(i) + "." + format);
             json captureParams = {
@@ -7006,7 +8285,7 @@ namespace
         EffectGraphAsset asset = LoadEffectGraphAssetFromParams(params, path, PathAccess::ReadAsset);
         auto compiled = EffectCompiler::Compile(asset, ToGenericProjectPath(path));
         if (!compiled || !compiled->valid) {
-            throw MakeError("effect_compile_failed", "Effect graph must compile before preview spawn.", {
+            ThrowError("effect_compile_failed", "Effect graph must compile before preview spawn.", {
                 { "compile", compiled ? EffectCompileResultToJson(*compiled) : json(nullptr) }
             });
         }
@@ -7059,7 +8338,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         const std::filesystem::path path = params.value("path", std::string{});
@@ -7070,7 +8349,7 @@ namespace
 
         const bool saved = editor->SaveSceneFromAutomation(safePath.empty() ? path : safePath);
         if (!saved) {
-            throw MakeError("scene_save_failed", "Failed to save scene.", { { "path", path.string() } });
+            ThrowError("scene_save_failed", "Failed to save scene.", { { "path", path.string() } });
         }
         return { { "path", path.empty() ? editor->GetCurrentScenePath() : ToGenericProjectPath(safePath) } };
     }
@@ -7079,16 +8358,16 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         const std::filesystem::path path = params.value("path", std::string{});
         if (path.empty()) {
-            throw MakeError("missing_param", "path is required.");
+            ThrowError("missing_param", "path is required.");
         }
         const std::filesystem::path safePath = ResolveProjectPath(path.string(), PathAccess::ReadScene, true);
         if (!editor->LoadSceneFromPath(safePath)) {
-            throw MakeError("scene_load_failed", "Failed to load scene.", { { "path", path.string() } });
+            ThrowError("scene_load_failed", "Failed to load scene.", { { "path", path.string() } });
         }
         return { { "path", ToGenericProjectPath(safePath) } };
     }
@@ -7097,7 +8376,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         const std::string target = params.value("target", std::string("window"));
@@ -7105,7 +8384,7 @@ namespace
         const bool inlineResult = params.value("inline", false);
 
         if (format != "bmp" && format != "png") {
-            throw MakeError("invalid_param", "format must be bmp or png.", { { "format", format } });
+            ThrowError("invalid_param", "format must be bmp or png.", { { "format", format } });
         }
 
         const std::string ext = std::string(".") + format;
@@ -7458,7 +8737,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         return editor->GetPlayerEditorPanel();
     }
@@ -7471,7 +8750,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         std::filesystem::path modelPath;
@@ -7481,12 +8760,13 @@ namespace
         }
 
         if (!editor->OpenPlayerEditorFromAutomation(modelPath)) {
-            throw MakeError("player_editor_open_failed", "Failed to open Player Editor.");
+            ThrowError("player_editor_open_failed", "Failed to open Player Editor.");
         }
 
         auto& panel = editor->GetPlayerEditorPanel();
         if (params.contains("actorMode")) {
             panel.SetActorEditorMode(ActorEditorModeFromString(params.value("actorMode", std::string("Player"))));
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
         }
 
         return {
@@ -7500,9 +8780,19 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const auto& panel = editor->GetPlayerEditorPanel();
+        const bool anyDirty =
+            panel.IsStateMachineDirtyForAutomation() ||
+            panel.IsTimelineDirtyForAutomation() ||
+            panel.IsSocketDirtyForAutomation() ||
+            panel.IsColliderDirtyForAutomation() ||
+            panel.IsModelAnimationDirtyForAutomation();
+        json hints = json::object();
+        if (anyDirty) {
+            hints["unsavedChanges"] = "PlayerEditor has unsaved changes. Call player_editor.save_prefab before reading runtime state if you want persistence.";
+        }
         return {
             { "active",           editor->IsPlayerWorkspaceActive() },
             { "modelPath",        panel.GetCurrentModelPath() },
@@ -7510,7 +8800,16 @@ namespace
             { "viewMode",         panel.GetViewMode() == PlayerEditorViewMode::Test ? "Test" : "Edit" },
             { "previewEntity",    Entity::IsNull(panel.GetPreviewEntity()) ? json(nullptr) : json(EntityToString(panel.GetPreviewEntity())) },
             { "isTimelinePlaying",panel.IsTimelinePlaying() },
-            { "playheadFrame",    panel.GetPlayheadFrame() }
+            { "playheadFrame",    panel.GetPlayheadFrame() },
+            { "dirty", {
+                { "any",          anyDirty },
+                { "stateMachine", panel.IsStateMachineDirtyForAutomation() },
+                { "timeline",     panel.IsTimelineDirtyForAutomation() },
+                { "socket",       panel.IsSocketDirtyForAutomation() },
+                { "collider",     panel.IsColliderDirtyForAutomation() },
+                { "modelAnimation", panel.IsModelAnimationDirtyForAutomation() }
+            } },
+            { "hints", std::move(hints) }
         };
     }
 
@@ -7518,17 +8817,127 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const std::filesystem::path path = ResolveProjectPath(
             params.value("path", std::string{}), PathAccess::ReadAsset, true);
 
         if (!editor->OpenPlayerEditorFromAutomation(path)) {
-            throw MakeError("player_editor_load_model_failed", "Failed to load model into Player Editor.", {
+            ThrowError("player_editor_load_model_failed", "Failed to load model into Player Editor.", {
                 { "path", ToGenericProjectPath(path) }
             });
         }
-        return { { "modelPath", editor->GetPlayerEditorPanel().GetCurrentModelPath() } };
+        auto& panel = editor->GetPlayerEditorPanel();
+        if (params.contains("actorMode")) {
+            panel.SetActorEditorMode(ActorEditorModeFromString(params.value("actorMode", std::string("Player"))));
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+        }
+        return {
+            { "modelPath", panel.GetCurrentModelPath() },
+            { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) }
+        };
+    }
+
+    json HandlePlayerEditorSetActorMode(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        const ActorEditorMode mode = ActorEditorModeFromString(params.value("actorMode", params.value("mode", std::string("Player"))));
+        panel.SetActorEditorMode(mode);
+        PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+        return {
+            { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) },
+            { "previewEntity", Entity::IsNull(panel.GetPreviewEntity()) ? json(nullptr) : json(EntityToString(panel.GetPreviewEntity())) }
+        };
+    }
+
+    json BuildPlayerEditorPresetResult(EngineKernel& kernel, PlayerEditorPanel& panel, const char* appliedPreset)
+    {
+        const EntityID previewEntity = panel.GetPreviewEntity();
+        json components = json::object();
+        if (Registry* registry = kernel.GetGameRegistry()) {
+            if (!Entity::IsNull(previewEntity) && registry->IsAlive(previewEntity)) {
+                components = {
+                    { "PlayerTagComponent", registry->GetComponent<PlayerTagComponent>(previewEntity) != nullptr },
+                    { "EnemyTagComponent", registry->GetComponent<EnemyTagComponent>(previewEntity) != nullptr },
+                    { "InputUserComponent", registry->GetComponent<InputUserComponent>(previewEntity) != nullptr },
+                    { "InputContextComponent", registry->GetComponent<InputContextComponent>(previewEntity) != nullptr },
+                    { "InputActionMapComponent", registry->GetComponent<InputActionMapComponent>(previewEntity) != nullptr },
+                    { "ResolvedInputStateComponent", registry->GetComponent<ResolvedInputStateComponent>(previewEntity) != nullptr },
+                    { "CameraTPVControlComponent", registry->GetComponent<CameraTPVControlComponent>(previewEntity) != nullptr },
+                    { "CharacterPhysicsComponent", registry->GetComponent<CharacterPhysicsComponent>(previewEntity) != nullptr },
+                    { "StateMachineAssetComponent", registry->GetComponent<StateMachineAssetComponent>(previewEntity) != nullptr },
+                    { "TimelineLibraryComponent", registry->GetComponent<TimelineLibraryComponent>(previewEntity) != nullptr }
+                };
+            }
+        }
+
+        return {
+            { "appliedPreset", appliedPreset },
+            { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) },
+            { "previewEntity", Entity::IsNull(previewEntity) ? json(nullptr) : json(EntityToString(previewEntity)) },
+            { "components", std::move(components) },
+            { "stateMachine", StateMachineAssetToJson(panel.GetStateMachineAsset()) }
+        };
+    }
+
+    json HandlePlayerEditorApplyFullPlayerPreset(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        if (params.value("setActorMode", true)) {
+            panel.SetActorEditorMode(ActorEditorMode::Player);
+        }
+        panel.ApplyFullPlayerPresetForAutomation();
+        PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+        return BuildPlayerEditorPresetResult(kernel, panel, "FullPlayer");
+    }
+
+    json HandlePlayerEditorApplyAttackComboPreset(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        if (params.contains("actorMode") || params.contains("mode")) {
+            const ActorEditorMode mode = ActorEditorModeFromString(params.value("actorMode", params.value("mode", std::string("Player"))));
+            panel.SetActorEditorMode(mode);
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+        }
+        panel.ApplyAttackComboPresetForAutomation();
+        return BuildPlayerEditorPresetResult(kernel, panel, "AttackCombo");
+    }
+
+    json HandlePlayerEditorApplyActorPreset(EngineKernel& kernel, const json& params)
+    {
+        auto& panel = RequirePlayerEditorPanel(kernel);
+        const ActorEditorMode mode = ActorEditorModeFromString(params.value("actorMode", params.value("mode", std::string("Enemy"))));
+        panel.SetActorEditorMode(mode);
+
+        Registry* registry = kernel.GetGameRegistry();
+        const EntityID previewEntity = panel.GetPreviewEntity();
+        if ((mode == ActorEditorMode::Enemy || mode == ActorEditorMode::NPC) &&
+            (!registry || Entity::IsNull(previewEntity) || !registry->IsAlive(previewEntity))) {
+            ThrowError("entity_not_found", "Player Editor preview entity is not available for actor preset.");
+        }
+
+        switch (mode) {
+        case ActorEditorMode::Player:
+            panel.ApplyFullPlayerPresetForAutomation();
+            break;
+        case ActorEditorMode::Enemy:
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+            EnemyEditorSetupFullEnemy(*registry, previewEntity, panel.GetStateMachineAsset());
+            panel.MarkStateMachineDirty();
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+            break;
+        case ActorEditorMode::NPC:
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+            EnemyEditorSetupFullNPC(*registry, previewEntity, panel.GetStateMachineAsset());
+            panel.MarkStateMachineDirty();
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+            break;
+        default:
+            PlayerEditorSession::ApplyActorEditorModeComponents(panel);
+            break;
+        }
+
+        return BuildPlayerEditorPresetResult(kernel, panel, mode == ActorEditorMode::Player ? "Player" : (mode == ActorEditorMode::NPC ? "NPC" : "Enemy"));
     }
 
     json HandlePlayerEditorGetStateMachine(EngineKernel& kernel)
@@ -7570,7 +8979,7 @@ namespace
         const uint32_t id = params.value("id", 0u);
         StateNode* node = sm.FindState(id);
         if (!node) {
-            throw MakeError("not_found", "State node not found.", { { "id", id } });
+            ThrowError("not_found", "State node not found.", { { "id", id } });
         }
 
         if (params.contains("name"))             node->name             = params["name"].get<std::string>();
@@ -7597,7 +9006,7 @@ namespace
 
         const uint32_t id = params.value("id", 0u);
         if (!sm.FindState(id)) {
-            throw MakeError("not_found", "State node not found.", { { "id", id } });
+            ThrowError("not_found", "State node not found.", { { "id", id } });
         }
 
         sm.RemoveState(id);
@@ -7615,10 +9024,10 @@ namespace
         const uint32_t fromState = params.value("fromState", 0u);
         const uint32_t toState   = params.value("toState",   0u);
         if (!sm.FindState(fromState)) {
-            throw MakeError("not_found", "fromState not found.", { { "fromState", fromState } });
+            ThrowError("not_found", "fromState not found.", { { "fromState", fromState } });
         }
         if (!sm.FindState(toState)) {
-            throw MakeError("not_found", "toState not found.", { { "toState", toState } });
+            ThrowError("not_found", "toState not found.", { { "toState", toState } });
         }
 
         StateTransition* t = sm.AddTransition(fromState, toState);
@@ -7648,7 +9057,7 @@ namespace
             if (tr.id == id) { t = &tr; break; }
         }
         if (!t) {
-            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+            ThrowError("not_found", "Transition not found.", { { "id", id } });
         }
 
         if (params.contains("blendDuration"))      t->blendDuration      = params["blendDuration"].get<float>();
@@ -7673,7 +9082,7 @@ namespace
             if (t.id == id) { found = true; break; }
         }
         if (!found) {
-            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+            ThrowError("not_found", "Transition not found.", { { "id", id } });
         }
 
         sm.RemoveTransition(id);
@@ -7707,7 +9116,7 @@ namespace
             ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
             const int count = comp ? static_cast<int>(comp->elements.size()) : 0;
             if (idx < -1 || idx >= count) {
-                throw MakeError("out_of_range", "Collider index out of range.", {
+                ThrowError("out_of_range", "Collider index out of range.", {
                     { "colliderIndex", idx },
                     { "elementCount", count }
                 });
@@ -7719,7 +9128,7 @@ namespace
             const int idx = params["socketIndex"].get<int>();
             const int count = static_cast<int>(panel.GetSockets().size());
             if (idx < -1 || idx >= count) {
-                throw MakeError("out_of_range", "Socket index out of range.", {
+                ThrowError("out_of_range", "Socket index out of range.", {
                     { "socketIndex", idx },
                     { "socketCount", count }
                 });
@@ -7727,7 +9136,7 @@ namespace
             panel.SelectSocket(idx);
             return { { "selectedSocketIndex", idx } };
         }
-        // 後方互換: selection 文字列ヒントを受け取った場合は index と組み合わせて解決する。
+        // 蠕梧婿莠呈鋤: selection 譁・ｭ怜・繝偵Φ繝医ｒ蜿励￠蜿悶▲縺溷ｴ蜷医・ index 縺ｨ邨・∩蜷医ｏ縺帙※隗｣豎ｺ縺吶ｋ縲・
         if (params.contains("selection")) {
             const std::string sel = ToLowerCopy(params["selection"].get<std::string>());
             if (sel == "collider" && params.contains("index")) {
@@ -7735,7 +9144,7 @@ namespace
                 ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
                 const int count = comp ? static_cast<int>(comp->elements.size()) : 0;
                 if (idx < -1 || idx >= count) {
-                    throw MakeError("out_of_range", "Collider index out of range.", {
+                    ThrowError("out_of_range", "Collider index out of range.", {
                         { "index", idx }, { "elementCount", count }
                     });
                 }
@@ -7746,7 +9155,7 @@ namespace
                 const int idx = params["index"].get<int>();
                 const int count = static_cast<int>(panel.GetSockets().size());
                 if (idx < -1 || idx >= count) {
-                    throw MakeError("out_of_range", "Socket index out of range.", {
+                    ThrowError("out_of_range", "Socket index out of range.", {
                         { "index", idx }, { "socketCount", count }
                     });
                 }
@@ -7766,7 +9175,7 @@ namespace
 
         const uint32_t id = params.value("id", 0u);
         if (!sm.FindState(id)) {
-            throw MakeError("not_found", "State node not found.", { { "id", id } });
+            ThrowError("not_found", "State node not found.", { { "id", id } });
         }
 
         sm.defaultStateId = id;
@@ -7812,7 +9221,7 @@ namespace
             if (t.id == id) { found = true; break; }
         }
         if (!found) {
-            throw MakeError("not_found", "Track not found.", { { "id", id } });
+            ThrowError("not_found", "Track not found.", { { "id", id } });
         }
 
         tl.RemoveTrack(id);
@@ -7850,7 +9259,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         auto& panel = editor->GetPlayerEditorPanel();
 
@@ -7859,16 +9268,23 @@ namespace
         if (!pathStr.empty()) {
             const std::filesystem::path safePath = ResolveProjectPath(pathStr, PathAccess::WriteAsset, false);
             if (!PlayerEditorSession::SavePrefabDocumentToPath(panel, safePath.string())) {
-                throw MakeError("save_failed", "Failed to save prefab to path.", { { "path", pathStr } });
+                ThrowError("save_failed", "Failed to save prefab to path.", { { "path", pathStr } });
             }
-            return { { "saved", true }, { "path", ToGenericProjectPath(safePath) } };
+            return {
+                { "saved", true },
+                { "path", ToGenericProjectPath(safePath) },
+                { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) }
+            };
         }
 
         const bool saveAs = params.value("saveAs", false);
         if (!PlayerEditorSession::SavePrefabDocument(panel, saveAs)) {
-            throw MakeError("save_failed", "Failed to save prefab document.");
+            ThrowError("save_failed", "Failed to save prefab document.");
         }
-        return { { "saved", true } };
+        return {
+            { "saved", true },
+            { "actorMode", ActorEditorModeToString(panel.GetActorEditorMode()) }
+        };
     }
 
     // =========================================================
@@ -8047,7 +9463,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         return editor->GetGameLoopEditorPanel();
     }
@@ -8060,7 +9476,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
 
         std::filesystem::path assetPath;
@@ -8083,7 +9499,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const auto& panel = editor->GetGameLoopEditorPanel();
         const auto& result = panel.GetValidateResult();
@@ -8108,7 +9524,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const std::filesystem::path path = ResolveProjectPath(
             params.value("path", std::string{}), PathAccess::ReadAsset, true);
@@ -8128,7 +9544,7 @@ namespace
             params.value("path", std::string{}), PathAccess::ReadAsset, true);
         GameLoopAsset asset;
         if (!asset.LoadFromFile(path)) {
-            throw MakeError("load_failed", "Failed to load gameflow file.", { { "path", path.generic_string() } });
+            ThrowError("load_failed", "Failed to load gameflow file.", { { "path", path.generic_string() } });
         }
         kernel.RegisterGameLoopAssetFromEditor(asset, path);
         return {
@@ -8173,7 +9589,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         editor->OpenGameLoopEditorFromAutomation();   // ensure visible
 
@@ -8189,7 +9605,7 @@ namespace
         if (type == GameLoopNodeType::Scene) {
             const std::string scenePath = params.value("scenePath", std::string{});
             if (scenePath.empty()) {
-                throw MakeError("missing_param", "scenePath is required for Scene nodes.");
+                ThrowError("missing_param", "scenePath is required for Scene nodes.");
             }
             newId = panel.AddSceneNodeAutomation(scenePath, pos);
         }
@@ -8199,7 +9615,7 @@ namespace
         }
 
         if (newId == 0) {
-            throw MakeError("add_node_failed", "Failed to add node (invalid scenePath?).", {
+            ThrowError("add_node_failed", "Failed to add node (invalid scenePath?).", {
                 { "type", typeStr }
             });
         }
@@ -8216,7 +9632,7 @@ namespace
         const uint32_t id = params.value("id", 0u);
         GameLoopNode* node = asset.FindNode(id);
         if (!node) {
-            throw MakeError("not_found", "Node not found.", { { "id", id } });
+            ThrowError("not_found", "Node not found.", { { "id", id } });
         }
 
         if (params.contains("name"))      node->name      = params["name"].get<std::string>();
@@ -8236,7 +9652,7 @@ namespace
 
         const uint32_t id = params.value("id", 0u);
         if (!panel.GetAsset().FindNode(id)) {
-            throw MakeError("not_found", "Node not found.", { { "id", id } });
+            ThrowError("not_found", "Node not found.", { { "id", id } });
         }
 
         panel.DeleteNodeAutomation(id);
@@ -8247,7 +9663,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         editor->OpenGameLoopEditorFromAutomation();
 
@@ -8257,15 +9673,15 @@ namespace
         const uint32_t from = params.value("fromNodeId", 0u);
         const uint32_t to   = params.value("toNodeId",   0u);
         if (!asset.FindNode(from)) {
-            throw MakeError("not_found", "fromNodeId not found.", { { "fromNodeId", from } });
+            ThrowError("not_found", "fromNodeId not found.", { { "fromNodeId", from } });
         }
         if (!asset.FindNode(to)) {
-            throw MakeError("not_found", "toNodeId not found.", { { "toNodeId", to } });
+            ThrowError("not_found", "toNodeId not found.", { { "toNodeId", to } });
         }
 
         const uint32_t newId = panel.AddTransitionAutomation(from, to);
         if (newId == 0) {
-            throw MakeError("add_transition_failed", "Failed to add transition (same node?).");
+            ThrowError("add_transition_failed", "Failed to add transition (same node?).");
         }
 
         // Apply optional overrides
@@ -8300,7 +9716,7 @@ namespace
             if (tr.id == id) { t = &tr; break; }
         }
         if (!t) {
-            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+            ThrowError("not_found", "Transition not found.", { { "id", id } });
         }
 
         if (params.contains("name"))                  t->name                  = params["name"].get<std::string>();
@@ -8333,7 +9749,7 @@ namespace
             if (t.id == id) { found = true; break; }
         }
         if (!found) {
-            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+            ThrowError("not_found", "Transition not found.", { { "id", id } });
         }
 
         panel.DeleteTransitionByIdAutomation(id);
@@ -8365,7 +9781,7 @@ namespace
 
         const uint32_t id = params.value("id", 0u);
         if (!asset.FindNode(id)) {
-            throw MakeError("not_found", "Node not found.", { { "id", id } });
+            ThrowError("not_found", "Node not found.", { { "id", id } });
         }
 
         asset.startNodeId = id;
@@ -8537,7 +9953,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(sockets.size())) {
-            throw MakeError("out_of_range", "Socket index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Socket index out of range.", { { "index", idx } });
         }
         auto& s = sockets[idx];
         if (params.contains("name"))           s.name           = params["name"].get<std::string>();
@@ -8559,7 +9975,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(sockets.size())) {
-            throw MakeError("out_of_range", "Socket index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Socket index out of range.", { { "index", idx } });
         }
 
         sockets.erase(sockets.begin() + idx);
@@ -8594,7 +10010,7 @@ namespace
         auto& panel = RequirePlayerEditorPanel(kernel);
 
         if (Entity::IsNull(panel.GetPreviewEntity())) {
-            throw MakeError("no_preview_entity", "Load a model into the Player Editor first.");
+            ThrowError("no_preview_entity", "Load a model into the Player Editor first.");
         }
 
         const ColliderAttribute attr = ColliderAttributeFromString(
@@ -8603,7 +10019,7 @@ namespace
 
         ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
         if (!comp || comp->elements.empty()) {
-            throw MakeError("add_collider_failed", "Collider element could not be created.");
+            ThrowError("add_collider_failed", "Collider element could not be created.");
         }
 
         const int newIdx = static_cast<int>(comp->elements.size()) - 1;
@@ -8637,12 +10053,12 @@ namespace
         auto& panel = RequirePlayerEditorPanel(kernel);
         ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
         if (!comp) {
-            throw MakeError("not_found", "No ColliderComponent on the preview entity.");
+            ThrowError("not_found", "No ColliderComponent on the preview entity.");
         }
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
-            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Collider index out of range.", { { "index", idx } });
         }
         auto& e = comp->elements[idx];
 
@@ -8676,12 +10092,12 @@ namespace
         auto& panel = RequirePlayerEditorPanel(kernel);
         ColliderComponent* comp = panel.GetPreviewColliderForAutomation(false);
         if (!comp) {
-            throw MakeError("not_found", "No ColliderComponent on the preview entity.");
+            ThrowError("not_found", "No ColliderComponent on the preview entity.");
         }
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
-            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Collider index out of range.", { { "index", idx } });
         }
 
         comp->elements.erase(comp->elements.begin() + idx);
@@ -8692,16 +10108,16 @@ namespace
     }
 
     // =========================================================
-    // 任意エンティティの ColliderComponent 操作。
-    // set_component_fields は std::vector<ColliderElement> をサポートしないので、
-    // ランタイム/Play scene 上の Player/Enemy 等の collider 編集には専用 API が必要。
+    // 莉ｻ諢上お繝ｳ繝・ぅ繝・ぅ縺ｮ ColliderComponent 謫堺ｽ懊・
+    // set_component_fields 縺ｯ std::vector<ColliderElement> 繧偵し繝昴・繝医＠縺ｪ縺・・縺ｧ縲・
+    // 繝ｩ繝ｳ繧ｿ繧､繝/Play scene 荳翫・ Player/Enemy 遲峨・ collider 邱ｨ髮・↓縺ｯ蟆ら畑 API 縺悟ｿ・ｦ√・
     // =========================================================
 
     json HandleEntityAddColliderElement(Registry& registry, const json& params)
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
         if (!comp) {
@@ -8709,7 +10125,7 @@ namespace
             comp = registry.GetComponent<ColliderComponent>(entity);
         }
         if (!comp) {
-            throw MakeError("component_add_failed", "Failed to add ColliderComponent.");
+            ThrowError("component_add_failed", "Failed to add ColliderComponent.");
         }
 
         ColliderComponent::Element e;
@@ -8745,15 +10161,15 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
         if (!comp) {
-            throw MakeError("not_found", "No ColliderComponent on this entity.");
+            ThrowError("not_found", "No ColliderComponent on this entity.");
         }
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
-            throw MakeError("out_of_range", "Collider index out of range.", {
+            ThrowError("out_of_range", "Collider index out of range.", {
                 { "index", idx }, { "elementCount", static_cast<int>(comp->elements.size()) }
             });
         }
@@ -8788,15 +10204,15 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
         if (!comp) {
-            throw MakeError("not_found", "No ColliderComponent on this entity.");
+            ThrowError("not_found", "No ColliderComponent on this entity.");
         }
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(comp->elements.size())) {
-            throw MakeError("out_of_range", "Collider index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Collider index out of range.", { { "index", idx } });
         }
         comp->elements.erase(comp->elements.begin() + idx);
         return { { "deleted", idx }, { "remaining", static_cast<int>(comp->elements.size()) } };
@@ -8806,7 +10222,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         ColliderComponent* comp = registry.GetComponent<ColliderComponent>(entity);
         json list = json::array();
@@ -8854,7 +10270,7 @@ namespace
     {
         auto* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         auto& panel = editor->GetPlayerEditorPanel();
 
@@ -8864,7 +10280,7 @@ namespace
         if (model) {
             const auto& anims = model->GetAnimations();
             if (idx < 0 || idx >= static_cast<int>(anims.size())) {
-                throw MakeError("out_of_range", "animationIndex out of range.",
+                ThrowError("out_of_range", "animationIndex out of range.",
                     { { "animationIndex", idx }, { "count", static_cast<int>(anims.size()) } });
             }
         }
@@ -8907,7 +10323,7 @@ namespace
 
         map.actions.push_back(std::move(b));
         tab.MarkDirty();
-        panel.SetWorkbenchActiveTab(3); // Input タブを前面に
+        panel.SetWorkbenchActiveTab(3); // Input 繧ｿ繝悶ｒ蜑埼擇縺ｫ
 
         const int newIdx = static_cast<int>(map.actions.size()) - 1;
         return ActionBindingToJson(newIdx, map.actions[newIdx]);
@@ -8921,7 +10337,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(map.actions.size())) {
-            throw MakeError("out_of_range", "Action binding index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Action binding index out of range.", { { "index", idx } });
         }
         auto& b = map.actions[idx];
         if (params.contains("actionName"))    b.actionName    = params["actionName"].get<std::string>();
@@ -8944,7 +10360,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(map.actions.size())) {
-            throw MakeError("out_of_range", "Action binding index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Action binding index out of range.", { { "index", idx } });
         }
 
         map.actions.erase(map.actions.begin() + idx);
@@ -8983,7 +10399,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(map.axes.size())) {
-            throw MakeError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
         }
         auto& b = map.axes[idx];
         if (params.contains("axisName"))    b.axisName    = params["axisName"].get<std::string>();
@@ -9007,7 +10423,7 @@ namespace
 
         const int idx = params.value("index", -1);
         if (idx < 0 || idx >= static_cast<int>(map.axes.size())) {
-            throw MakeError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
+            ThrowError("out_of_range", "Axis binding index out of range.", { { "index", idx } });
         }
 
         map.axes.erase(map.axes.begin() + idx);
@@ -9029,7 +10445,7 @@ namespace
         for (const auto& t : panel.GetAsset().transitions)
             if (t.id == id) { found = true; break; }
         if (!found) {
-            throw MakeError("not_found", "Transition not found.", { { "id", id } });
+            ThrowError("not_found", "Transition not found.", { { "id", id } });
         }
 
         panel.ReverseTransitionByIdAutomation(id);
@@ -9055,7 +10471,7 @@ namespace
     EditorLayer& RequireEditorLayer(EngineKernel& kernel)
     {
         EditorLayer* ed = kernel.GetEditorLayer();
-        if (!ed) throw MakeError("editor_unavailable", "EditorLayer is not available.");
+        if (!ed) ThrowError("editor_unavailable", "EditorLayer is not available.");
         return *ed;
     }
 
@@ -9148,9 +10564,9 @@ namespace
         auto& ed = RequireEditorLayer(kernel);
         DirectX::XMFLOAT3 pos{}, target{};
         if (!params.contains("position") || !ReadFloat3(params["position"], pos))
-            throw MakeError("missing_param", "'position' [x,y,z] is required.");
+            ThrowError("missing_param", "'position' [x,y,z] is required.");
         if (!params.contains("target") || !ReadFloat3(params["target"], target))
-            throw MakeError("missing_param", "'target' [x,y,z] is required.");
+            ThrowError("missing_param", "'target' [x,y,z] is required.");
         ed.SetEditorCameraLookAt(pos, target);
         return { { "ok", true } };
     }
@@ -9294,7 +10710,7 @@ namespace
     json HandleLightingSetEnvironment(Registry& registry, const json& params)
     {
         EntityID ent = FindEntityWithComponent_Environment(registry);
-        if (Entity::IsNull(ent)) throw MakeError("entity_not_found", "No entity with EnvironmentComponent found.");
+        if (Entity::IsNull(ent)) ThrowError("entity_not_found", "No entity with EnvironmentComponent found.");
         auto* c = registry.GetComponent<EnvironmentComponent>(ent);
         if (params.contains("enableSkybox"))    c->enableSkybox    = params["enableSkybox"].get<bool>();
         if (params.contains("skyboxPath"))      c->skyboxPath      = params["skyboxPath"].get<std::string>();
@@ -9307,7 +10723,7 @@ namespace
     json HandleLightingSetPostEffects(Registry& registry, const json& params)
     {
         EntityID ent = FindEntityWithComponent_PostEffect(registry);
-        if (Entity::IsNull(ent)) throw MakeError("entity_not_found", "No entity with PostEffectComponent found.");
+        if (Entity::IsNull(ent)) ThrowError("entity_not_found", "No entity with PostEffectComponent found.");
         auto* c = registry.GetComponent<PostEffectComponent>(ent);
         if (params.contains("enableComputeCulling"))  c->enableComputeCulling  = params["enableComputeCulling"].get<bool>();
         if (params.contains("enableAsyncCompute"))    c->enableAsyncCompute    = params["enableAsyncCompute"].get<bool>();
@@ -9399,9 +10815,18 @@ namespace
         const auto& vs = panel.GetViewState();
         const EntityID sel = panel.GetSelectedEntityAutomation();
         const EntityID canvas = panel.FindCanvasAutomation();
+        // UIEditor は ECS に直接書くため、dirty 状態は scene レベルで判断する。
+        auto* editor = kernel.GetEditorLayer();
+        const bool sceneDirty = editor ? editor->IsSceneDirty() : false;
+        json hints = json::object();
+        if (sceneDirty) {
+            hints["sceneDirty"] = "Scene has unsaved changes. Call scene.save before relying on persisted UI authoring.";
+        }
         return {
             { "selectedEntity", Entity::IsNull(sel)    ? json(nullptr) : json(EntityToString(sel)) },
             { "canvas",         Entity::IsNull(canvas) ? json(nullptr) : json(EntityToString(canvas)) },
+            { "sceneDirty",     sceneDirty },
+            { "hints",          std::move(hints) },
             { "view", {
                 { "referenceResolution", json::array({ vs.referenceResolution.x, vs.referenceResolution.y }) },
                 { "pan",   json::array({ vs.pan.x, vs.pan.y }) },
@@ -9420,7 +10845,7 @@ namespace
         auto& ed     = RequireEditorLayer(kernel);
         auto& panel  = ed.GetUIEditorPanel();
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         panel.SetRegistryForAutomation(reg);
         if (params.contains("entity")) {
             const EntityID ent = EntityFromJson(params["entity"]);
@@ -9433,7 +10858,7 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         auto& panel = ed.GetUIEditorPanel();
         panel.SetRegistryForAutomation(reg);
         const EntityID canvas = panel.FindOrCreateCanvasAutomation();
@@ -9445,7 +10870,7 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         auto& panel = ed.GetUIEditorPanel();
         panel.SetRegistryForAutomation(reg);
         const auto kind = UITemplateKindFromString(params.value("kind", std::string("player_hp")));
@@ -9458,7 +10883,7 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         auto& panel = ed.GetUIEditorPanel();
         panel.SetRegistryForAutomation(reg);
         const auto kind = UIPartKindFromString(params.value("kind", std::string("image")));
@@ -9471,7 +10896,7 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         auto& panel = ed.GetUIEditorPanel();
         panel.SetRegistryForAutomation(reg);
         bool ok = false;
@@ -9608,7 +11033,7 @@ namespace
         const std::filesystem::path path = ResolveProjectPath(params.value("path", std::string{}), PathAccess::ReadAsset, true);
         auto& panel = RequireSequencerPanel(kernel);
         if (!panel.LoadSequenceAutomation(path.generic_string()))
-            throw MakeError("load_failed", "Failed to load sequence.", { { "path", path.string() } });
+            ThrowError("load_failed", "Failed to load sequence.", { { "path", path.string() } });
         return { { "path", ToGenericProjectPath(path) }, { "sequence", CinematicSequenceSummaryToJson(panel.GetSequenceAsset()) } };
     }
 
@@ -9623,7 +11048,7 @@ namespace
             // Fall through to plain save - full save-as dialog not accessible headlessly
         }
         if (!panel.SaveSequenceAutomation(saveAs))
-            throw MakeError("save_failed", "Failed to save sequence.");
+            ThrowError("save_failed", "Failed to save sequence.");
         return { { "path", panel.GetDocumentPathAutomation() } };
     }
 
@@ -9657,7 +11082,7 @@ namespace
     {
         auto& panel   = RequireSequencerPanel(kernel);
         Registry* reg = kernel.GetGameRegistry();
-        if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+        if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
         if (params.contains("entity")) {
             const EntityID ent = EntityFromJson(params["entity"]);
             if (!Entity::IsNull(ent) && reg->IsAlive(ent))
@@ -9667,7 +11092,7 @@ namespace
         panel.AddBindingFromSelectedEntityAutomation(reg);
         const auto& bindings = panel.GetSequenceAsset().bindings;
         if (static_cast<int>(bindings.size()) <= bindingCountBefore)
-            throw MakeError("add_binding_failed", "Failed to add binding. Make sure an entity is selected.");
+            ThrowError("add_binding_failed", "Failed to add binding. Make sure an entity is selected.");
         const auto& newBinding = bindings.back();
         panel.SelectBindingAutomation(newBinding.bindingId);
         return { { "binding", CinematicBindingSummaryToJson(newBinding) } };
@@ -9683,13 +11108,13 @@ namespace
             if (bindings[i].bindingId == bindingId) { bindingIdx = i; break; }
         }
         if (bindingIdx < 0)
-            throw MakeError("binding_not_found", "Binding not found.", { { "bindingId", bindingId } });
+            ThrowError("binding_not_found", "Binding not found.", { { "bindingId", bindingId } });
         const auto trackType = CinematicTrackTypeFromString(params.value("type", std::string("transform")));
         const int trackCountBefore = static_cast<int>(bindings[bindingIdx].tracks.size());
         panel.AddTrackToBindingAutomation(bindingIdx, trackType);
         const auto& tracks = panel.GetSequenceAsset().bindings[bindingIdx].tracks;
         if (static_cast<int>(tracks.size()) <= trackCountBefore)
-            throw MakeError("add_track_failed", "Failed to add track.");
+            ThrowError("add_track_failed", "Failed to add track.");
         const auto& newTrack = tracks.back();
         panel.SelectTrackAutomation(newTrack.trackId);
         panel.MarkDirtyAutomation();
@@ -9704,7 +11129,7 @@ namespace
         panel.AddMasterTrackAutomation(trackType);
         const auto& masterTracks = panel.GetSequenceAsset().masterTracks;
         if (static_cast<int>(masterTracks.size()) <= countBefore)
-            throw MakeError("add_track_failed", "Failed to add master track.");
+            ThrowError("add_track_failed", "Failed to add master track.");
         const auto& newTrack = masterTracks.back();
         panel.SelectTrackAutomation(newTrack.trackId);
         panel.MarkDirtyAutomation();
@@ -9731,12 +11156,12 @@ namespace
                 if (target) break;
             }
         }
-        if (!target) throw MakeError("track_not_found", "Track not found.", { { "trackId", trackId } });
+        if (!target) ThrowError("track_not_found", "Track not found.", { { "trackId", trackId } });
 
         const int sectionCountBefore = static_cast<int>(target->sections.size());
         panel.AddSectionToTrackAutomation(*target);
         if (static_cast<int>(target->sections.size()) <= sectionCountBefore)
-            throw MakeError("add_section_failed", "Failed to add section.");
+            ThrowError("add_section_failed", "Failed to add section.");
         const auto& newSection = target->sections.back();
         panel.SelectSectionAutomation(newSection.sectionId);
         panel.MarkDirtyAutomation();
@@ -9776,13 +11201,27 @@ namespace
     json HandleSceneNew(EngineKernel& kernel, const json& params)
     {
         auto& ed = RequireEditorLayer(kernel);
-        const std::string modeStr = params.value("mode", "3D");
+        const std::string modeStr = params.value("mode", params.value("sceneViewMode", std::string("3D")));
         const EditorLayer::SceneViewMode mode =
             (ToLowerCopy(modeStr) == "2d")
             ? EditorLayer::SceneViewMode::Mode2D
             : EditorLayer::SceneViewMode::Mode3D;
-        ed.RequestNewSceneAutomation(mode);
-        return { { "ok", true }, { "mode", (mode == EditorLayer::SceneViewMode::Mode2D) ? "2D" : "3D" } };
+        const std::string templateName = ToLowerCopy(params.value("template", std::string("empty")));
+        if (templateName != "empty" && templateName != "default") {
+            ThrowError("invalid_param", "scene.new template must be 'empty' or 'default'.", {
+                { "template", templateName }
+            });
+        }
+        const bool cleanSlate = params.value("cleanSlate", true);
+        ed.RequestNewSceneAutomation(mode, cleanSlate);
+        return {
+            { "ok", true },
+            { "mode", (mode == EditorLayer::SceneViewMode::Mode2D) ? "2D" : "3D" },
+            { "template", templateName },
+            { "cleanSlate", cleanSlate },
+            { "deferred", true },
+            { "appliesAt", "next_editor_update" }
+        };
     }
 
     // =========================================================
@@ -9832,10 +11271,10 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         const std::string panel = params.value("panel", std::string{});
-        if (panel.empty()) throw MakeError("missing_param", "'panel' is required.", {});
+        if (panel.empty()) ThrowError("missing_param", "'panel' is required.", {});
         const auto target = PanelNameToFocusTarget(panel);
         if (target == EditorLayer::WindowFocusTarget::None)
-            throw MakeError("invalid_param", "Unknown panel name.", { { "panel", panel } });
+            ThrowError("invalid_param", "Unknown panel name.", { { "panel", panel } });
         ed.FocusPanelAutomation(target);
         return { { "ok", true }, { "panel", panel } };
     }
@@ -9869,9 +11308,9 @@ namespace
     {
         auto& ed = RequireEditorLayer(kernel);
         const std::string panel = params.value("panel", std::string{});
-        if (panel.empty()) throw MakeError("missing_param", "'panel' is required.", {});
+        if (panel.empty()) ThrowError("missing_param", "'panel' is required.", {});
         if (!params.contains("visible"))
-            throw MakeError("missing_param", "'visible' is required.", {});
+            ThrowError("missing_param", "'visible' is required.", {});
         const bool visible = params["visible"].get<bool>();
 
         const std::string n = ToLowerCopy(panel);
@@ -9887,7 +11326,7 @@ namespace
         else if (n == "gbuffer_debug") ed.SetShowGBufferDebug(visible);
         else if (n == "grid_settings") ed.SetShowGridSettings(visible);
         else if (n == "status_bar"   ) ed.SetShowStatusBar(visible);
-        else throw MakeError("invalid_param", "Unknown panel name.", { { "panel", panel } });
+        else ThrowError("invalid_param", "Unknown panel name.", { { "panel", panel } });
 
         return { { "ok", true }, { "panel", panel }, { "visible", visible } };
     }
@@ -10081,9 +11520,9 @@ namespace
     json HandleModelSerializerBuild(EngineKernel& kernel, const json& params)
     {
         if (!params.contains("sourcePath"))
-            throw MakeError("missing_param", "'sourcePath' is required.", {});
+            ThrowError("missing_param", "'sourcePath' is required.", {});
         if (!params.contains("outputPath"))
-            throw MakeError("missing_param", "'outputPath' is required.", {});
+            ThrowError("missing_param", "'outputPath' is required.", {});
 
         const std::string src = params["sourcePath"].get<std::string>();
         const std::string dst = params["outputPath"].get<std::string>();
@@ -10124,7 +11563,7 @@ namespace
     json HandleBatch(EngineKernel& kernel, const json& params)
     {
         if (!params.contains("commands") || !params["commands"].is_array()) {
-            throw MakeError("missing_param", "params.commands must be an array.");
+            ThrowError("missing_param", "params.commands must be an array.");
         }
 
         json results = json::array();
@@ -10135,9 +11574,9 @@ namespace
                 entry["ok"] = true;
                 entry["result"] = std::move(subResult);
             }
-            catch (const json& jsonError) {
+            catch (const AutomationCommandError& error) {
                 entry["ok"] = false;
-                entry["error"] = jsonError;
+                entry["error"] = error.Error();
             }
             catch (const std::exception& e) {
                 entry["ok"] = false;
@@ -10156,20 +11595,88 @@ namespace
     bool g_ecsWatchEnabled = false;
     uint64_t g_lastBroadcastEcsRevision = UINT64_MAX;
 
-    // ecs.watch を request-response 経路から読むための pull バッファ。
-    // 各呼び出しで現在の ECS revision と前回 pull した revision の差分件数を返す。
-    // 名前ごとに独立 cursor を持つので複数の購読者が同じ stream を消費できる。
+    // ecs.watch 繧・request-response 邨瑚ｷｯ縺九ｉ隱ｭ繧縺溘ａ縺ｮ pull 繝舌ャ繝輔ぃ縲・
+    // 蜷・他縺ｳ蜃ｺ縺励〒迴ｾ蝨ｨ縺ｮ ECS revision 縺ｨ蜑榊屓 pull 縺励◆ revision 縺ｮ蟾ｮ蛻・ｻｶ謨ｰ繧定ｿ斐☆縲・
+    // 蜷榊燕縺斐→縺ｫ迢ｬ遶・cursor 繧呈戟縺､縺ｮ縺ｧ隍・焚縺ｮ雉ｼ隱ｭ閠・′蜷後§ stream 繧呈ｶ郁ｲｻ縺ｧ縺阪ｋ縲・
     std::unordered_map<std::string, uint64_t> g_ecsWatchPullCursors;
     uint64_t g_lastPullSnapshotRev = 0;
 
-    // collision.events.pull / log.tail.pull 用の cursor 管理。
-    // queue 側 (DamageEventRuntimeQueue / Logger) は監視時点での累積件数で位置決め。
-    std::unordered_map<std::string, size_t> g_collisionPullCursors;
+    // collision.events.pull / log.tail.pull 逕ｨ縺ｮ cursor 邂｡逅・・
+    // queue 蛛ｴ (DamageEventRuntimeQueue / Logger) 縺ｯ逶｣隕匁凾轤ｹ縺ｧ縺ｮ邏ｯ遨堺ｻｶ謨ｰ縺ｧ菴咲ｽｮ豎ｺ繧√・
+    std::unordered_map<std::string, uint64_t> g_collisionPullCursors;
+    // 各 cursor map の前方宣言だけ済ませる。実体は後ろで定義する。
+    // ClearAllAutomationCursors はこれらをまとめてリセットする helper。
+    // 静的 map に session 跨ぎの cursor 値が残り、新 session で「最初の pull が空配列」になるバグを防ぐ。
+    void ClearAllAutomationCursors();
     std::unordered_map<std::string, size_t> g_logPullCursors;
+    std::unordered_map<std::string, uint64_t> g_gameFlowPullCursors;
+
+    void ClearAllAutomationCursors()
+    {
+        g_collisionPullCursors.clear();
+        g_gameFlowPullCursors.clear();
+        g_logPullCursors.clear();
+        DamageEventRuntimeQueue::ClearRecent();
+    }
+
+    struct BoneStreamTarget
+    {
+        int boneIndex = -1;
+        std::string boneName;
+        DirectX::XMFLOAT3 offsetLocal{ 0.0f, 0.0f, 0.0f };
+    };
+
+    struct BoneStreamFrame
+    {
+        uint64_t cursor = 0;
+        uint64_t frameCount = 0;
+        json samples = json::array();
+    };
+
+    struct BoneStreamState
+    {
+        std::string id;
+        EntityID entity = Entity::NULL_ID;
+        std::vector<BoneStreamTarget> targets;
+        size_t maxFrames = 120;
+        uint64_t nextCursor = 1;
+        uint64_t lastFrameCount = UINT64_MAX;
+        std::deque<BoneStreamFrame> frames;
+    };
+
+    std::unordered_map<std::string, BoneStreamState> g_boneStreams;
+    std::unordered_map<std::string, uint64_t> g_boneStreamPullCursors;
 
     // =========================================================
     // Phase 1: Observation layer extensions
     // =========================================================
+
+    bool FlowEventMatchesValueInsensitive(const FlowEvent& event, const std::string& name, const std::string& value)
+    {
+        if (event.name != name) return false;
+        return value.empty() || ToLowerCopy(event.value) == ToLowerCopy(value);
+    }
+
+    bool ContainsBattleResultEventForObservation(
+        const FlowEventQueue& flowEvents,
+        uint64_t minExclusiveSequence,
+        const std::string& value)
+    {
+        for (const FlowEvent& event : flowEvents.GetEvents()) {
+            if (FlowEventMatchesValueInsensitive(event, "battle.ended", value) ||
+                FlowEventMatchesValueInsensitive(event, "battle.result", value)) {
+                return true;
+            }
+        }
+        for (const FlowEvent& event : flowEvents.GetRecentEvents()) {
+            if (event.sequence <= minExclusiveSequence) continue;
+            if (FlowEventMatchesValueInsensitive(event, "battle.ended", value) ||
+                FlowEventMatchesValueInsensitive(event, "battle.result", value)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // ---- 1) gameflow.get_runtime_state ----
     json HandleGameFlowGetRuntimeState(EngineKernel& kernel, Registry& gameRegistry)
@@ -10187,9 +11694,9 @@ namespace
             return std::string{};
         };
 
-        // 現在ノードから出ていく transition の condition 評価結果を返す。
-        // GameLoopSystem の IsConditionSatisfied は private なのでここでは
-        // flowEvent 内容を直接照合する簡易版を使う（観測用途）。
+        // 迴ｾ蝨ｨ繝弱・繝峨°繧牙・縺ｦ縺・￥ transition 縺ｮ condition 隧穂ｾ｡邨先棡繧定ｿ斐☆縲・
+        // GameLoopSystem 縺ｮ IsConditionSatisfied 縺ｯ private 縺ｪ縺ｮ縺ｧ縺薙％縺ｧ縺ｯ
+        // flowEvent 蜀・ｮｹ繧堤峩謗･辣ｧ蜷医☆繧狗ｰ｡譏鍋沿繧剃ｽｿ縺・ｼ郁ｦｳ貂ｬ逕ｨ騾費ｼ峨・
         const FlowEventQueue& flowEvents = kernel.GetFlowEventQueue();
         json pendingTransitions = json::array();
         for (const auto& t : asset.transitions) {
@@ -10218,8 +11725,7 @@ namespace
                     break;
                 }
                 case GameFlowConditionType::BattleResult:
-                    satisfied = flowEvents.Contains("battle.ended", c.value) ||
-                                flowEvents.Contains("battle.result", c.value);
+                    satisfied = ContainsBattleResultEventForObservation(flowEvents, rt.nodeEventSequenceCursor, c.value);
                     break;
                 case GameFlowConditionType::SceneLoaded:
                     satisfied = flowEvents.Contains("scene.loaded", c.value); break;
@@ -10264,6 +11770,8 @@ namespace
             { "waitingSceneLoad", rt.waitingSceneLoad },
             { "forceReload", rt.forceReload },
             { "nodeTimer", rt.nodeTimer },
+            { "nodeEventSequenceCursor", rt.nodeEventSequenceCursor },
+            { "latestFlowEventSequence", flowEvents.GetLatestSequence() },
             { "pendingActionCount", static_cast<int>(rt.pendingActions.size()) },
             { "actionWaitRemaining", rt.actionWaitRemaining },
             { "fadeRemaining", rt.fadeRemaining },
@@ -10283,32 +11791,36 @@ namespace
     {
         (void)gameRegistry;
         const std::string cursorName = params.value("cursorName", std::string("default"));
-        const int maxEvents = params.value("maxEvents", 64);
+        const int maxEvents = (std::max)(0, params.value("maxEvents", 64));
         const bool peek = params.value("peek", false);
-        const auto& recent = DamageEventRuntimeQueue::GetRecent();
-        const size_t total = recent.size();
 
-        // cursor 戦略: DamageEventRuntimeQueue は ring buffer (capacity 128) なので、
-        // 連続番号は保証されない。cursor は「直近 N 件のうち、前回 pull 時点での 'queue end' 位置」を保存し、
-        // 次回 pull で size が増えた分だけ返す方式にする。
-        size_t prev = 0;
-        auto it = g_collisionPullCursors.find(cursorName);
-        if (it != g_collisionPullCursors.end()) prev = it->second;
+        // sequence ベースの cursor を使い、ring buffer overflow にも安全に対応する。
+        // Thread-safe snapshot を取って、別 thread からの Push と iteration race を防ぐ。
+        const auto recent = DamageEventRuntimeQueue::SnapshotRecentWithSeq();
+        const uint64_t latestSeq = DamageEventRuntimeQueue::GetLatestSequence();
 
-        size_t startIdx = 0;
-        if (prev < total) startIdx = total - (total - prev);
-        else startIdx = total; // 何も新しいものはない
+        uint64_t prevCursor = 0;
+        auto itCur = g_collisionPullCursors.find(cursorName);
+        if (itCur != g_collisionPullCursors.end()) prevCursor = itCur->second;
 
-        size_t newCount = (total > prev) ? (total - prev) : 0;
-        if (static_cast<int>(newCount) > maxEvents) {
-            startIdx = total - maxEvents;
-            newCount = maxEvents;
-        }
+        // recent buffer 内で prevCursor より新しい entry を集める。
+        // ring overflow で prevCursor + 1 の sequence が消えていれば overflowed=true で警告する。
+        const uint64_t oldestRetainedSeq = recent.empty() ? 0 : recent.front().sequence;
+        const bool overflowed = (!recent.empty()) && (prevCursor > 0) && (oldestRetainedSeq > prevCursor + 1);
 
         json events = json::array();
-        for (size_t i = startIdx; i < total; ++i) {
-            const auto& ev = recent[i];
+        size_t droppedCount = 0;
+        size_t collectedCount = 0;
+        for (const auto& entry : recent) {
+            if (entry.sequence <= prevCursor) continue;
+            ++collectedCount;
+            if (maxEvents > 0 && static_cast<int>(events.size()) >= maxEvents) {
+                ++droppedCount;
+                continue;
+            }
+            const auto& ev = entry.event;
             events.push_back({
+                { "sequence", static_cast<uint64_t>(entry.sequence) },
                 { "attackerEntity", EntityToString(ev.attacker) },
                 { "victimEntity", EntityToString(ev.victim) },
                 { "damageAmount", ev.amount },
@@ -10323,16 +11835,20 @@ namespace
         }
 
         if (!peek) {
-            g_collisionPullCursors[cursorName] = total;
+            g_collisionPullCursors[cursorName] = latestSeq;
         }
 
         return {
             { "cursorName", cursorName },
-            { "previousCursor", static_cast<int>(prev) },
-            { "currentCursor", static_cast<int>(total) },
-            { "newEventCount", static_cast<int>(newCount) },
+            { "previousCursor", prevCursor },
+            { "currentCursor", latestSeq },
+            { "newEventCount", static_cast<int>(collectedCount) },
+            { "returnedCount", static_cast<int>(events.size()) },
             { "events", std::move(events) },
-            { "truncated", newCount > static_cast<size_t>(maxEvents) }
+            { "truncated", droppedCount > 0 },
+            { "droppedCount", static_cast<int>(droppedCount) },
+            { "overflowed", overflowed },
+            { "oldestRetainedSequence", static_cast<uint64_t>(oldestRetainedSeq) }
         };
     }
 
@@ -10348,7 +11864,7 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         const Model* model = GetEntityModel(registry, entity);
         if (!model) {
@@ -10372,22 +11888,158 @@ namespace
         };
     }
 
-    json HandleBoneGetWorld(Registry& registry, const json& params)
+    // 与えられた ColliderComponent::Element の world 位置 / world radius / world extents を計算する。
+    // element.nodeIndex >= 0 なら、その bone (model node) の worldTransform * entityWorld 経由で offset を適用する。
+    // nodeIndex < 0 (entity root に直付) なら、entity.worldMatrix * offsetLocal を使う。
+    //
+    // ※ 旧実装は `entity.worldPosition + offsetLocal` で済ませており、bone 付き hitbox (hand_r の attack 球など)
+    //   が常に root 座標 + 定数 offset で計算されていた。これを修正する。
+    // ※ 構造体は forward declaration 済み (line ~128) なので、ここでは実装のみ定義する。
+    ResolvedColliderShape ResolveColliderElementWorld(Registry& registry,
+                                                      EntityID entity,
+                                                      const ColliderComponent::Element& elem)
     {
         using namespace DirectX;
-        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
-        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        ResolvedColliderShape out;
+        const float r = (std::max)(elem.radius, 0.01f);
+        const float h = (std::max)(elem.height, r * 2.0f);
+        switch (elem.type) {
+        case ColliderShape::Box:
+            out.worldExtents = { (std::max)(elem.size.x, 0.01f) * 0.5f,
+                                 (std::max)(elem.size.y, 0.01f) * 0.5f,
+                                 (std::max)(elem.size.z, 0.01f) * 0.5f };
+            out.worldRadius = std::sqrt(out.worldExtents.x * out.worldExtents.x +
+                                        out.worldExtents.y * out.worldExtents.y +
+                                        out.worldExtents.z * out.worldExtents.z);
+            break;
+        case ColliderShape::Capsule:
+            out.worldRadius = r;
+            out.worldExtents = { r, h * 0.5f, r };
+            break;
+        case ColliderShape::Sphere:
+        default:
+            out.worldRadius = r;
+            out.worldExtents = { r, r, r };
+            break;
         }
-        const Model* model = GetEntityModel(registry, entity);
-        if (!model) {
-            throw MakeError("no_model", "Entity has no MeshComponent.model.");
-        }
+
         auto* transform = registry.GetComponent<TransformComponent>(entity);
         if (!transform) {
-            throw MakeError("no_transform", "Entity has no TransformComponent.");
+            out.worldCenter = { elem.offsetLocal.x, elem.offsetLocal.y, elem.offsetLocal.z };
+            return out;
         }
-        const auto& nodes = model->GetNodes();
+
+        XMMATRIX entityWorld = XMLoadFloat4x4(&transform->worldMatrix);
+        XMMATRIX finalWorld = entityWorld;
+        out.resolvedNodeIndex = elem.nodeIndex;
+
+        if (elem.nodeIndex >= 0) {
+            if (auto* mesh = registry.GetComponent<MeshComponent>(entity)) {
+                if (mesh->model) {
+                    const auto& nodes = mesh->model->GetNodes();
+                    if (static_cast<size_t>(elem.nodeIndex) < nodes.size()) {
+                        XMMATRIX boneLocalWorld = XMLoadFloat4x4(&nodes[elem.nodeIndex].worldTransform);
+                        finalWorld = boneLocalWorld * entityWorld;
+                        out.boneAttached = true;
+                    }
+                }
+            }
+        }
+
+        XMFLOAT3 offsetF{ elem.offsetLocal.x, elem.offsetLocal.y, elem.offsetLocal.z };
+        XMVECTOR worldPos = XMVector3TransformCoord(XMLoadFloat3(&offsetF), finalWorld);
+        XMStoreFloat3(&out.worldCenter, worldPos);
+        // shape の orientation を保存。Capsule / Box の正確な overlap 計算に必要。
+        out.shape = elem.type;
+        XMVECTOR scale, rotQuat, translation;
+        if (XMMatrixDecompose(&scale, &rotQuat, &translation, finalWorld)) {
+            XMStoreFloat4(&out.worldOrientation, rotQuat);
+        } else {
+            out.worldOrientation = { 0.0f, 0.0f, 0.0f, 1.0f };
+        }
+        out.height = h;
+        return out;
+    }
+
+    bool CollidersOverlap(const ResolvedColliderShape& a, const ResolvedColliderShape& b)
+    {
+        using namespace DirectX;
+        auto toBoundingSphere = [](const ResolvedColliderShape& s) {
+            return BoundingSphere(s.worldCenter, s.worldRadius);
+        };
+        auto toOrientedBox = [](const ResolvedColliderShape& s) {
+            BoundingOrientedBox box;
+            box.Center = s.worldCenter;
+            box.Extents = s.worldExtents;
+            box.Orientation = s.worldOrientation;
+            return box;
+        };
+
+        // Capsule の overlap は両端 sphere + 中心位置の sphere の和集合で近似する。
+        // (将来 Jolt の Capsule vs Box 厳密判定に差し替え予定。)
+        auto capsulePoints = [](const ResolvedColliderShape& s) {
+            std::vector<BoundingSphere> spheres;
+            const float halfH = (std::max)(s.height * 0.5f - s.worldRadius, 0.0f);
+            XMVECTOR q = XMLoadFloat4(&s.worldOrientation);
+            XMVECTOR upLocal = XMVectorSet(0, 1, 0, 0);
+            XMVECTOR upWorld = XMVector3Rotate(upLocal, q);
+            XMVECTOR center = XMLoadFloat3(&s.worldCenter);
+            XMVECTOR top = XMVectorAdd(center, XMVectorScale(upWorld, halfH));
+            XMVECTOR bot = XMVectorSubtract(center, XMVectorScale(upWorld, halfH));
+            XMFLOAT3 topF, botF, centerF;
+            XMStoreFloat3(&topF, top);
+            XMStoreFloat3(&botF, bot);
+            XMStoreFloat3(&centerF, center);
+            spheres.emplace_back(topF, s.worldRadius);
+            spheres.emplace_back(centerF, s.worldRadius);
+            spheres.emplace_back(botF, s.worldRadius);
+            return spheres;
+        };
+
+        auto anySphereVsSphere = [](const BoundingSphere& x, const BoundingSphere& y) {
+            return x.Intersects(y);
+        };
+        auto anySphereVsBox = [](const BoundingSphere& x, const BoundingOrientedBox& y) {
+            return y.Intersects(x);
+        };
+
+        // 3x3 ペア。Capsule は sphere 列に展開して総当たり (近似)。
+        if (a.shape == ColliderShape::Sphere && b.shape == ColliderShape::Sphere) {
+            return anySphereVsSphere(toBoundingSphere(a), toBoundingSphere(b));
+        }
+        if (a.shape == ColliderShape::Sphere && b.shape == ColliderShape::Box) {
+            return anySphereVsBox(toBoundingSphere(a), toOrientedBox(b));
+        }
+        if (a.shape == ColliderShape::Box && b.shape == ColliderShape::Sphere) {
+            return anySphereVsBox(toBoundingSphere(b), toOrientedBox(a));
+        }
+        if (a.shape == ColliderShape::Box && b.shape == ColliderShape::Box) {
+            return toOrientedBox(a).Intersects(toOrientedBox(b));
+        }
+        // Capsule 展開
+        std::vector<BoundingSphere> aSpheres = (a.shape == ColliderShape::Capsule)
+            ? capsulePoints(a) : std::vector<BoundingSphere>{ toBoundingSphere(a) };
+        std::vector<BoundingSphere> bSpheres = (b.shape == ColliderShape::Capsule)
+            ? capsulePoints(b) : std::vector<BoundingSphere>{ toBoundingSphere(b) };
+        for (const auto& sa : aSpheres) {
+            for (const auto& sb : bSpheres) {
+                if (b.shape == ColliderShape::Box) {
+                    if (anySphereVsBox(sa, toOrientedBox(b))) return true;
+                }
+                else if (a.shape == ColliderShape::Box) {
+                    if (anySphereVsBox(sb, toOrientedBox(a))) return true;
+                }
+                else {
+                    if (anySphereVsSphere(sa, sb)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    int ResolveBoneIndex(const Model& model, const json& params)
+    {
+        const auto& nodes = model.GetNodes();
         int boneIndex = -1;
         if (params.contains("boneIndex")) {
             boneIndex = params["boneIndex"].get<int>();
@@ -10397,17 +12049,35 @@ namespace
                 if (nodes[i].name == name) { boneIndex = static_cast<int>(i); break; }
             }
             if (boneIndex < 0) {
-                throw MakeError("bone_not_found", "Bone name not found in model.", { { "boneName", name } });
+                ThrowError("bone_not_found", "Bone name not found in model.", { { "boneName", name } });
             }
         } else {
-            throw MakeError("missing_param", "boneIndex or boneName is required.");
+            ThrowError("missing_param", "boneIndex or boneName is required.");
         }
         if (boneIndex < 0 || static_cast<size_t>(boneIndex) >= nodes.size()) {
-            throw MakeError("out_of_range", "Bone index out of range.", { { "boneIndex", boneIndex }, { "count", static_cast<int>(nodes.size()) } });
+            ThrowError("out_of_range", "Bone index out of range.", { { "boneIndex", boneIndex }, { "count", static_cast<int>(nodes.size()) } });
         }
+        return boneIndex;
+    }
 
-        DirectX::XMFLOAT3 offsetLocal{ 0.0f, 0.0f, 0.0f };
-        if (params.contains("offsetLocal")) ReadFloat3(params["offsetLocal"], offsetLocal);
+    json BuildBoneWorldSample(Registry& registry, EntityID entity, int boneIndex, const DirectX::XMFLOAT3& offsetLocal)
+    {
+        using namespace DirectX;
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        if (!model) {
+            ThrowError("no_model", "Entity has no MeshComponent.model.");
+        }
+        auto* transform = registry.GetComponent<TransformComponent>(entity);
+        if (!transform) {
+            ThrowError("no_transform", "Entity has no TransformComponent.");
+        }
+        const auto& nodes = model->GetNodes();
+        if (boneIndex < 0 || static_cast<size_t>(boneIndex) >= nodes.size()) {
+            ThrowError("out_of_range", "Bone index out of range.", { { "boneIndex", boneIndex }, { "count", static_cast<int>(nodes.size()) } });
+        }
 
         const auto& node = nodes[boneIndex];
         XMMATRIX entityWorld = XMLoadFloat4x4(&transform->worldMatrix);
@@ -10437,23 +12107,246 @@ namespace
         };
     }
 
+    json HandleBoneGetWorld(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        if (!model) {
+            ThrowError("no_model", "Entity has no MeshComponent.model.");
+        }
+        const int boneIndex = ResolveBoneIndex(*model, params);
+
+        DirectX::XMFLOAT3 offsetLocal{ 0.0f, 0.0f, 0.0f };
+        if (params.contains("offsetLocal")) ReadFloat3(params["offsetLocal"], offsetLocal);
+        return BuildBoneWorldSample(registry, entity, boneIndex, offsetLocal);
+    }
+
     json HandleBoneGetWorldBatch(Registry& registry, const json& params)
     {
         json results = json::array();
         if (!params.contains("queries") || !params["queries"].is_array()) {
-            throw MakeError("missing_param", "queries[] is required.");
+            ThrowError("missing_param", "queries[] is required.");
         }
         for (const auto& q : params["queries"]) {
             json item;
             try {
                 item = HandleBoneGetWorld(registry, q);
                 item["ok"] = true;
-            } catch (const json& e) {
-                item = { { "ok", false }, { "error", e } };
+            } catch (const AutomationCommandError& e) {
+                item = { { "ok", false }, { "error", e.Error() } };
             }
             results.push_back(std::move(item));
         }
         return { { "results", std::move(results) } };
+    }
+
+    BoneStreamTarget ParseBoneStreamTarget(const Model& model, const json& item)
+    {
+        BoneStreamTarget target;
+        target.boneIndex = ResolveBoneIndex(model, item);
+        const auto& nodes = model.GetNodes();
+        if (target.boneIndex >= 0 && static_cast<size_t>(target.boneIndex) < nodes.size()) {
+            target.boneName = nodes[static_cast<size_t>(target.boneIndex)].name;
+        }
+        if (item.contains("offsetLocal")) {
+            ReadFloat3(item["offsetLocal"], target.offsetLocal);
+        }
+        return target;
+    }
+
+    json BoneStreamTargetToJson(const BoneStreamTarget& target)
+    {
+        return {
+            { "boneIndex", target.boneIndex },
+            { "boneName", target.boneName },
+            { "offsetLocal", Float3ToJson(target.offsetLocal) }
+        };
+    }
+
+    void CaptureBoneStreams(EngineKernel& kernel)
+    {
+        if (g_boneStreams.empty()) {
+            return;
+        }
+        Registry* registry = kernel.GetGameRegistry();
+        if (!registry) {
+            return;
+        }
+
+        const uint64_t frameCount = kernel.GetTime().frameCount;
+        for (auto& [id, stream] : g_boneStreams) {
+            if (stream.lastFrameCount == frameCount) {
+                continue;
+            }
+            stream.lastFrameCount = frameCount;
+
+            BoneStreamFrame frame;
+            frame.cursor = stream.nextCursor++;
+            frame.frameCount = frameCount;
+            frame.samples = json::array();
+            for (const BoneStreamTarget& target : stream.targets) {
+                json sample;
+                try {
+                    sample = BuildBoneWorldSample(*registry, stream.entity, target.boneIndex, target.offsetLocal);
+                    sample["ok"] = true;
+                }
+                catch (const AutomationCommandError& error) {
+                    sample = {
+                        { "ok", false },
+                        { "boneIndex", target.boneIndex },
+                        { "boneName", target.boneName },
+                        { "error", error.Error() }
+                    };
+                }
+                frame.samples.push_back(std::move(sample));
+            }
+
+            stream.frames.push_back(std::move(frame));
+            while (stream.frames.size() > stream.maxFrames) {
+                stream.frames.pop_front();
+            }
+        }
+    }
+
+    json HandleBoneStreamStart(Registry& registry, const json& params)
+    {
+        const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
+        if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", params.value("entity", json(nullptr)) } });
+        }
+        const Model* model = GetEntityModel(registry, entity);
+        if (!model) {
+            ThrowError("no_model", "Entity has no MeshComponent.model.");
+        }
+
+        BoneStreamState stream;
+        stream.id = params.value("streamId", params.value("name", std::string{}));
+        if (stream.id.empty()) {
+            stream.id = "bone_stream_" + MakeTimestampSuffix();
+        }
+        stream.entity = entity;
+        stream.maxFrames = static_cast<size_t>((std::max)(1, params.value("maxFrames", 120)));
+
+        if (params.contains("bones")) {
+            if (!params["bones"].is_array()) {
+                ThrowError("invalid_param", "bones must be an array.");
+            }
+            for (const json& item : params["bones"]) {
+                stream.targets.push_back(ParseBoneStreamTarget(*model, item));
+            }
+        }
+        else {
+            stream.targets.push_back(ParseBoneStreamTarget(*model, params));
+        }
+        if (stream.targets.empty()) {
+            ThrowError("missing_param", "boneIndex, boneName, or bones[] is required.");
+        }
+
+        json targets = json::array();
+        for (const BoneStreamTarget& target : stream.targets) {
+            targets.push_back(BoneStreamTargetToJson(target));
+        }
+
+        const std::string streamId = stream.id;
+        g_boneStreams[streamId] = std::move(stream);
+        return {
+            { "streamId", streamId },
+            { "entity", EntityToString(entity) },
+            { "targetCount", static_cast<int>(targets.size()) },
+            { "maxFrames", static_cast<int>(g_boneStreams[streamId].maxFrames) },
+            { "targets", std::move(targets) }
+        };
+    }
+
+    json HandleBoneStreamPull(const json& params)
+    {
+        const std::string streamId = params.value("streamId", params.value("name", std::string{}));
+        if (streamId.empty()) {
+            ThrowError("missing_param", "streamId is required.");
+        }
+        auto it = g_boneStreams.find(streamId);
+        if (it == g_boneStreams.end()) {
+            ThrowError("not_found", "Bone stream was not found.", { { "streamId", streamId } });
+        }
+        BoneStreamState& stream = it->second;
+        const std::string cursorName = params.value("cursorName", std::string("default"));
+        const std::string cursorKey = streamId + ":" + cursorName;
+        const uint64_t previousCursor = params.contains("since")
+            ? params["since"].get<uint64_t>()
+            : (g_boneStreamPullCursors.count(cursorKey) ? g_boneStreamPullCursors[cursorKey] : 0ull);
+        const int limit = (std::max)(0, params.value("limit", 0));
+        const bool peek = params.value("peek", false);
+
+        json frames = json::array();
+        uint64_t currentCursor = previousCursor;
+        int available = 0;
+        for (const BoneStreamFrame& frame : stream.frames) {
+            if (frame.cursor <= previousCursor) {
+                continue;
+            }
+            ++available;
+            currentCursor = (std::max)(currentCursor, frame.cursor);
+            if (limit > 0 && static_cast<int>(frames.size()) >= limit) {
+                continue;
+            }
+            frames.push_back({
+                { "cursor", frame.cursor },
+                { "frameCount", frame.frameCount },
+                { "samples", frame.samples }
+            });
+        }
+        if (!peek) {
+            g_boneStreamPullCursors[cursorKey] = currentCursor;
+        }
+        const uint64_t oldest = stream.frames.empty() ? stream.nextCursor : stream.frames.front().cursor;
+        return {
+            { "streamId", streamId },
+            { "cursorName", cursorName },
+            { "previousCursor", previousCursor },
+            { "currentCursor", currentCursor },
+            { "latestCursor", stream.nextCursor > 0 ? stream.nextCursor - 1 : 0 },
+            { "availableCount", available },
+            { "returnedCount", static_cast<int>(frames.size()) },
+            { "truncated", limit > 0 && available > limit },
+            { "dropped", previousCursor != 0 && previousCursor < oldest },
+            { "frames", std::move(frames) }
+        };
+    }
+
+    json HandleBoneStreamStop(const json& params)
+    {
+        const std::string streamId = params.value("streamId", params.value("name", std::string{}));
+        if (streamId.empty()) {
+            ThrowError("missing_param", "streamId is required.");
+        }
+        const bool erased = g_boneStreams.erase(streamId) > 0;
+        for (auto it = g_boneStreamPullCursors.begin(); it != g_boneStreamPullCursors.end();) {
+            if (it->first.rfind(streamId + ":", 0) == 0) {
+                it = g_boneStreamPullCursors.erase(it);
+            }
+            else {
+                ++it;
+            }
+        }
+        return { { "streamId", streamId }, { "stopped", erased } };
+    }
+
+    json HandleBoneStreamList()
+    {
+        json streams = json::array();
+        for (const auto& [id, stream] : g_boneStreams) {
+            streams.push_back({
+                { "streamId", id },
+                { "entity", EntityToString(stream.entity) },
+                { "targetCount", static_cast<int>(stream.targets.size()) },
+                { "frameCount", static_cast<int>(stream.frames.size()) },
+                { "latestCursor", stream.nextCursor > 0 ? stream.nextCursor - 1 : 0 }
+            });
+        }
+        return { { "count", static_cast<int>(streams.size()) }, { "streams", std::move(streams) } };
     }
 
     // ---- 4) log.tail / log.pull / log.clear ----
@@ -10476,35 +12369,74 @@ namespace
         return levelN >= minN;
     }
 
+    json LogEntryToJson(const LogEntry& entry, size_t index)
+    {
+        return {
+            { "index", static_cast<int>(index) },
+            { "sequence", entry.sequence },
+            { "timestampMs", entry.timestampMs },
+            { "category", entry.category.empty() ? json(nullptr) : json(entry.category) },
+            { "severity", LogLevelToString(entry.level) },
+            { "message", entry.message }
+        };
+    }
+
+    bool LogEntryMatches(const LogEntry& entry,
+                         const std::string& minSeverity,
+                         const std::string& category,
+                         const std::regex* filterRegex,
+                         int64_t sinceTimestampMs)
+    {
+        if (!LogLevelMeetsMin(entry.level, minSeverity)) {
+            return false;
+        }
+        if (!category.empty() && ToLowerCopy(entry.category) != ToLowerCopy(category)) {
+            return false;
+        }
+        if (sinceTimestampMs > 0 && entry.timestampMs < sinceTimestampMs) {
+            return false;
+        }
+        if (filterRegex && !std::regex_search(entry.message, *filterRegex)) {
+            return false;
+        }
+        return true;
+    }
+
     json HandleLogTail(const json& params)
     {
         const int lines = params.value("lines", 50);
         const std::string minSeverity = params.value("minSeverity", std::string("info"));
+        const std::string category = params.value("category", std::string{});
         const std::string filter = params.value("filterRegex", std::string{});
+        const int64_t sinceTimestampMs = params.value("sinceTimestampMs", int64_t{0});
 
-        const auto& logs = Logger::Instance().GetLogs();
+        // Thread-safe snapshot を取る (別 thread からの Print と race しないため)。
+        const std::vector<LogEntry> logs = Logger::Instance().SnapshotLogs();
         const size_t total = logs.size();
         std::vector<json> matched;
         matched.reserve(std::min<size_t>(total, 256));
 
         std::regex re;
-        bool useRegex = false;
+        std::regex* rePtr = nullptr;
         if (!filter.empty()) {
-            try { re = std::regex(filter); useRegex = true; }
-            catch (...) { /* ignore bad regex, no filter */ }
+            try {
+                re = std::regex(filter);
+                rePtr = &re;
+            }
+            catch (const std::exception& e) {
+                ThrowError("invalid_param", "filterRegex is not a valid regular expression.", {
+                    { "filterRegex", filter },
+                    { "reason", e.what() }
+                });
+            }
         }
 
         for (size_t i = 0; i < total; ++i) {
             const auto& e = logs[i];
-            if (!LogLevelMeetsMin(e.level, minSeverity)) continue;
-            if (useRegex && !std::regex_search(e.message, re)) continue;
-            matched.push_back({
-                { "index", static_cast<int>(i) },
-                { "severity", LogLevelToString(e.level) },
-                { "message", e.message }
-            });
+            if (!LogEntryMatches(e, minSeverity, category, rePtr, sinceTimestampMs)) continue;
+            matched.push_back(LogEntryToJson(e, i));
         }
-        // 末尾 N 件
+        // 譛ｫ蟆ｾ N 莉ｶ
         const size_t take = (lines > 0 && static_cast<size_t>(lines) < matched.size())
             ? static_cast<size_t>(lines) : matched.size();
         json out = json::array();
@@ -10515,6 +12447,7 @@ namespace
             { "totalLogCount", static_cast<int>(total) },
             { "matchedCount", static_cast<int>(matched.size()) },
             { "returnedCount", static_cast<int>(take) },
+            { "category", category.empty() ? json(nullptr) : json(category) },
             { "lines", std::move(out) }
         };
     }
@@ -10523,10 +12456,29 @@ namespace
     {
         const std::string cursorName = params.value("cursorName", std::string("default"));
         const std::string minSeverity = params.value("minSeverity", std::string("info"));
+        const std::string category = params.value("category", std::string{});
+        const std::string filter = params.value("filterRegex", std::string{});
         const int maxLines = params.value("maxLines", 256);
         const bool peek = params.value("peek", false);
+        const int64_t sinceTimestampMs = params.value("sinceTimestampMs", int64_t{0});
 
-        const auto& logs = Logger::Instance().GetLogs();
+        std::regex re;
+        std::regex* rePtr = nullptr;
+        if (!filter.empty()) {
+            try {
+                re = std::regex(filter);
+                rePtr = &re;
+            }
+            catch (const std::exception& e) {
+                ThrowError("invalid_param", "filterRegex is not a valid regular expression.", {
+                    { "filterRegex", filter },
+                    { "reason", e.what() }
+                });
+            }
+        }
+
+        // Thread-safe snapshot を取る。
+        const std::vector<LogEntry> logs = Logger::Instance().SnapshotLogs();
         const size_t total = logs.size();
         size_t prev = 0;
         auto it = g_logPullCursors.find(cursorName);
@@ -10538,12 +12490,8 @@ namespace
         size_t emitted = 0;
         for (size_t i = prev; i < total && emitted < static_cast<size_t>(maxLines); ++i) {
             const auto& e = logs[i];
-            if (!LogLevelMeetsMin(e.level, minSeverity)) continue;
-            out.push_back({
-                { "index", static_cast<int>(i) },
-                { "severity", LogLevelToString(e.level) },
-                { "message", e.message }
-            });
+            if (!LogEntryMatches(e, minSeverity, category, rePtr, sinceTimestampMs)) continue;
+            out.push_back(LogEntryToJson(e, i));
             ++emitted;
         }
 
@@ -10554,6 +12502,7 @@ namespace
             { "previousCursor", static_cast<int>(prev) },
             { "currentCursor", static_cast<int>(total) },
             { "returnedCount", static_cast<int>(out.size()) },
+            { "category", category.empty() ? json(nullptr) : json(category) },
             { "lines", std::move(out) }
         };
     }
@@ -10566,7 +12515,7 @@ namespace
     }
 
     // =========================================================
-    // Phase 2: 中核観測 API
+    // Phase 2: 荳ｭ譬ｸ隕ｳ貂ｬ API
     // =========================================================
 
     // ---- animator.get_state ----
@@ -10604,11 +12553,11 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         auto* anim = registry.GetComponent<AnimatorComponent>(entity);
         if (!anim) {
-            throw MakeError("no_animator", "Entity has no AnimatorComponent.");
+            ThrowError("no_animator", "Entity has no AnimatorComponent.");
         }
         const Model* model = GetEntityModel(registry, entity);
         return {
@@ -10629,12 +12578,12 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         auto* resolved = registry.GetComponent<ResolvedInputStateComponent>(entity);
         auto* actionMap = registry.GetComponent<InputActionMapComponent>(entity);
         if (!resolved) {
-            throw MakeError("no_resolved_input", "Entity has no ResolvedInputStateComponent.");
+            ThrowError("no_resolved_input", "Entity has no ResolvedInputStateComponent.");
         }
         json actions = json::array();
         const int actionCount = (std::min)(static_cast<int>(resolved->actionCount),
@@ -10678,8 +12627,8 @@ namespace
     }
 
     // ---- ecs.field.get ----
-    // 単一 field を ComponentMeta 経由で取る。set_component_fields の get 版。
-    // FieldValueToJson が型分岐するので IsEditableFieldType 型のみ扱える。
+    // 蜊倅ｸ field 繧・ComponentMeta 邨檎罰縺ｧ蜿悶ｋ縲Ｔet_component_fields 縺ｮ get 迚医・
+    // FieldValueToJson 縺悟梛蛻・ｲ舌☆繧九・縺ｧ IsEditableFieldType 蝙九・縺ｿ謇ｱ縺医ｋ縲・
     template<typename Component, typename FieldT>
     void TryGetSingleField(const Component& comp, const FieldT& field, const std::string& fieldName,
                             json& outValue, std::string& outType, bool& found)
@@ -10713,12 +12662,12 @@ namespace
     {
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || !registry.IsAlive(entity)) {
-            throw MakeError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
+            ThrowError("entity_not_found", "Entity is not alive.", { { "entity", EntityToString(entity) } });
         }
         const std::string compName = params.value("component", std::string{});
         const std::string fieldName = params.value("field", std::string{});
         if (compName.empty() || fieldName.empty()) {
-            throw MakeError("missing_param", "component and field are required.");
+            ThrowError("missing_param", "component and field are required.");
         }
         json result = {
             { "entity", EntityToString(entity) },
@@ -10747,6 +12696,42 @@ namespace
                         result["value"] = std::move(value);
                         result["type"] = type;
                     } else {
+                        // ComponentMeta に無い field の特別 fallback。
+                        // TransformComponent の worldPosition/worldRotation/worldScale/worldMatrix は
+                        // runtime 計算値 (editable では無い) のため Meta に含まれていないが、
+                        // 観測層からは頻繁に読みたい。直接 cast して返す。
+                        if constexpr (std::is_same_v<Component, TransformComponent>) {
+                            if (fieldName == "worldPosition") {
+                                result["found"] = true;
+                                result["value"] = json::array({ comp->worldPosition.x, comp->worldPosition.y, comp->worldPosition.z });
+                                result["type"] = "XMFLOAT3";
+                                return;
+                            }
+                            if (fieldName == "worldRotation") {
+                                result["found"] = true;
+                                result["value"] = json::array({ comp->worldRotation.x, comp->worldRotation.y, comp->worldRotation.z, comp->worldRotation.w });
+                                result["type"] = "XMFLOAT4";
+                                return;
+                            }
+                            if (fieldName == "worldScale") {
+                                result["found"] = true;
+                                result["value"] = json::array({ comp->worldScale.x, comp->worldScale.y, comp->worldScale.z });
+                                result["type"] = "XMFLOAT3";
+                                return;
+                            }
+                            if (fieldName == "isDirty") {
+                                result["found"] = true;
+                                result["value"] = comp->isDirty;
+                                result["type"] = "bool";
+                                return;
+                            }
+                            if (fieldName == "parent") {
+                                result["found"] = true;
+                                result["value"] = EntityToString(static_cast<EntityID>(comp->parent));
+                                result["type"] = "EntityID";
+                                return;
+                            }
+                        }
                         result["error"] = "field_not_found";
                     }
                 }(), ...);
@@ -10760,7 +12745,7 @@ namespace
     json HandleSessionAssertInvariant(EngineKernel& kernel, Registry& registry, const json& params)
     {
         if (!params.contains("checks") || !params["checks"].is_array()) {
-            throw MakeError("missing_param", "checks[] is required.");
+            ThrowError("missing_param", "checks[] is required.");
         }
         json failures = json::array();
         int passed = 0;
@@ -10806,8 +12791,25 @@ namespace
                         else if (op == "ge" && asNum(actual,a) && asNum(expected,b)) ok = a >= b;
                         else if (op == "lt" && asNum(actual,a) && asNum(expected,b)) ok = a < b;
                         else if (op == "le" && asNum(actual,a) && asNum(expected,b)) ok = a <= b;
+                        else if (op == "contains" && actual.is_string() && expected.is_string()) {
+                            ok = actual.get<std::string>().find(expected.get<std::string>()) != std::string::npos;
+                        }
+                        else if (op == "regex" && actual.is_string() && expected.is_string()) {
+                            try { std::regex re(expected.get<std::string>());
+                                ok = std::regex_search(actual.get<std::string>(), re); }
+                            catch (...) { ok = false; reason = "invalid regex"; }
+                        }
+                        else if (op == "approx" && asNum(actual,a) && asNum(expected,b)) {
+                            const double tol = chk.value("tolerance", 0.001);
+                            ok = std::abs(a - b) <= tol;
+                        }
+                        else if (op == "in_range" && asNum(actual,a) && expected.is_array() && expected.size() == 2) {
+                            const double lo = expected[0].get<double>();
+                            const double hi = expected[1].get<double>();
+                            ok = (a >= lo && a <= hi);
+                        }
                         else ok = false;
-                        if (!ok) reason = "value: actual=" + actual.dump() + " op=" + op + " expected=" + expected.dump();
+                        if (!ok && reason.empty()) reason = "value: actual=" + actual.dump() + " op=" + op + " expected=" + expected.dump();
                     }
                 }
                 else if (kind == "gameflow_node") {
@@ -10824,7 +12826,7 @@ namespace
                     const std::string expected = chk.value("path", std::string{});
                     auto* editor = kernel.GetEditorLayer();
                     const std::string actual = editor ? editor->GetCurrentScenePath() : std::string{};
-                    // 末尾 match で OK にする (絶対/相対パス差吸収)
+                    // 譛ｫ蟆ｾ match 縺ｧ OK 縺ｫ縺吶ｋ (邨ｶ蟇ｾ/逶ｸ蟇ｾ繝代せ蟾ｮ蜷ｸ蜿・
                     ok = !expected.empty() && (actual.size() >= expected.size()) &&
                          (actual.find(expected) != std::string::npos);
                     if (!ok) reason = "scene: actual=" + actual + " expected~=" + expected;
@@ -10836,11 +12838,88 @@ namespace
                     ok = (actual == expected);
                     if (!ok) reason = "mode: actual=" + actual + " expected=" + expected;
                 }
-                else {
-                    ok = false; reason = "unknown kind: " + kind;
+                // 新 shorthand format: {op, lhs: {ecs:{entity,component,field}} | <literal>, rhs: ..., tolerance}
+                // mutate_and_assert と統一された形式。kind を省略可能。
+                else if (kind.empty() && chk.contains("lhs") && chk.contains("rhs")) {
+                    const std::string op = chk.value("op", std::string("eq"));
+                    auto resolveSide = [&](const json& side) -> json {
+                        if (side.is_object() && side.contains("ecs")) {
+                            const json& ecs = side["ecs"];
+                            json sub = { { "entity", ecs.value("entity", json(nullptr)) },
+                                         { "component", ecs.value("component", std::string{}) },
+                                         { "field", ecs.value("field", std::string{}) } };
+                            json got = HandleECSFieldGet(registry, sub);
+                            if (!got.value("found", false)) {
+                                return json(nullptr);
+                            }
+                            return got["value"];
+                        }
+                        return side;
+                    };
+                    const json actual = resolveSide(chk["lhs"]);
+                    const json expected = resolveSide(chk["rhs"]);
+                    auto asNum = [](const json& j, double& out)->bool {
+                        if (j.is_number()) { out = j.get<double>(); return true; }
+                        return false;
+                    };
+                    auto isVecLike = [](const json& j)->bool {
+                        return j.is_array() && j.size() >= 2 && j.size() <= 4 &&
+                               std::all_of(j.begin(), j.end(), [](const json& v){ return v.is_number(); });
+                    };
+                    double a = 0.0, b = 0.0;
+                    const double tol = chk.value("tolerance", 0.001);
+                    // 共通 helper: vector の element-wise approx 比較。
+                    auto vecApproxEq = [&](const json& A, const json& B) -> bool {
+                        if (!isVecLike(A) || !isVecLike(B) || A.size() != B.size()) return false;
+                        for (size_t i = 0; i < A.size(); ++i) {
+                            if (std::abs(A[i].get<double>() - B[i].get<double>()) > tol) return false;
+                        }
+                        return true;
+                    };
+                    if (op == "eq") ok = (actual == expected);
+                    else if (op == "ne") {
+                        // vector の場合は approx 比較で「ほぼ等しい」なら ne=false。
+                        // 完全 JSON 比較だと浮動小数の最後の bit 差異で常に ne=true になる。
+                        if (isVecLike(actual) && isVecLike(expected) && actual.size() == expected.size()) {
+                            ok = !vecApproxEq(actual, expected);
+                        } else {
+                            ok = (actual != expected);
+                        }
+                    }
+                    else if (op == "gt" && asNum(actual,a) && asNum(expected,b)) ok = a > b;
+                    else if (op == "ge" && asNum(actual,a) && asNum(expected,b)) ok = a >= b;
+                    else if (op == "lt" && asNum(actual,a) && asNum(expected,b)) ok = a < b;
+                    else if (op == "le" && asNum(actual,a) && asNum(expected,b)) ok = a <= b;
+                    else if (op == "approx") {
+                        if (asNum(actual,a) && asNum(expected,b)) {
+                            ok = std::abs(a - b) <= tol;
+                        }
+                        else if (isVecLike(actual) && isVecLike(expected) && actual.size() == expected.size()) {
+                            ok = vecApproxEq(actual, expected);
+                        }
+                        else ok = false;
+                    }
+                    else if (op == "contains" && actual.is_string() && expected.is_string()) {
+                        ok = actual.get<std::string>().find(expected.get<std::string>()) != std::string::npos;
+                    }
+                    else if (op == "regex" && actual.is_string() && expected.is_string()) {
+                        try { std::regex re(expected.get<std::string>());
+                            ok = std::regex_search(actual.get<std::string>(), re); }
+                        catch (...) { ok = false; reason = "invalid regex"; }
+                    }
+                    else if (op == "in_range" && asNum(actual,a) && expected.is_array() && expected.size() == 2) {
+                        const double lo = expected[0].get<double>();
+                        const double hi = expected[1].get<double>();
+                        ok = (a >= lo && a <= hi);
+                    }
+                    else ok = false;
+                    if (!ok && reason.empty()) reason = "lhs=" + actual.dump() + " op=" + op + " rhs=" + expected.dump();
                 }
-            } catch (const json& err) {
-                ok = false; reason = std::string("exception: ") + err.dump();
+                else {
+                    ok = false; reason = "unknown kind: " + kind + " (and no lhs/rhs shorthand provided)";
+                }
+            } catch (const AutomationCommandError& err) {
+                ok = false; reason = std::string("exception: ") + err.Error().dump();
             } catch (const std::exception& e) {
                 ok = false; reason = std::string("exception: ") + e.what();
             }
@@ -10857,29 +12936,53 @@ namespace
     }
 
     // ---- gameflow.events.pull / gameflow.eval_conditions ----
-    // GameFlow には専用イベントログが無いので、FlowEventQueue の "battle.*"/"input.*" 等を覗く。
-    json HandleGameFlowEventsPull(EngineKernel& kernel, const json& /*params*/)
+    json HandleGameFlowEventsPull(EngineKernel& kernel, const json& params)
     {
         const FlowEventQueue& q = kernel.GetFlowEventQueue();
-        json events = json::array();
-        // FlowEventQueue は frame ごとに Clear されるので「累積」ではなく「今フレーム」の中身を返す。
-        // 詳細イテレートは internal API 次第。最低限 size を返す。
-        // 簡易: snapshot として既知のイベント名群を Contains で照会する。
-        const std::vector<std::string> watchNames = {
-            "input.keyboard.down","input.gamepad.down","input.action.pressed",
-            "ui.button.clicked","battle.ended","battle.result","scene.loaded"
-        };
-        for (const auto& n : watchNames) {
-            // 値なし Contains はサポート不明なので空 value で照会
-            // (ContainsAny 系が無いなら summary だけ)
+        const std::string cursorName = params.value("cursorName", std::string("default"));
+        const int maxEvents = (std::max)(0, params.value("maxEvents", params.value("limit", 64)));
+        const bool peek = params.value("peek", false);
+        const std::string nameFilter = params.value("name", std::string{});
+        const std::string valueFilter = params.value("value", std::string{});
+
+        uint64_t previousCursor = 0;
+        auto cursorIt = g_gameFlowPullCursors.find(cursorName);
+        if (cursorIt != g_gameFlowPullCursors.end()) {
+            previousCursor = cursorIt->second;
         }
-        events.push_back({ { "note", "FlowEventQueue is frame-scoped; use gameflow.get_runtime_state pendingTransitions.satisfied for current-frame condition state." } });
-        return { { "events", std::move(events) }, { "watchNames", watchNames } };
+
+        json events = json::array();
+        size_t droppedCount = 0;
+        for (const FlowEvent& event : q.GetRecentEvents()) {
+            if (event.sequence <= previousCursor) continue;
+            if (!nameFilter.empty() && event.name != nameFilter) continue;
+            if (!valueFilter.empty() && event.value != valueFilter) continue;
+            if (maxEvents > 0 && static_cast<int>(events.size()) >= maxEvents) {
+                ++droppedCount;
+                continue;
+            }
+            events.push_back(FlowEventToJson(event, static_cast<int>(events.size())));
+        }
+
+        const uint64_t currentCursor = q.GetLatestSequence();
+        if (!peek) {
+            g_gameFlowPullCursors[cursorName] = currentCursor;
+        }
+
+        return {
+            { "cursorName", cursorName },
+            { "previousCursor", previousCursor },
+            { "currentCursor", currentCursor },
+            { "returnedCount", static_cast<int>(events.size()) },
+            { "truncated", droppedCount > 0 },
+            { "droppedCount", droppedCount },
+            { "events", std::move(events) }
+        };
     }
 
     json HandleGameFlowEvalConditions(EngineKernel& kernel, const json& /*params*/)
     {
-        // get_runtime_state.pendingTransitions と同じ評価結果だけ取り出す軽量版。
+        // get_runtime_state.pendingTransitions 縺ｨ蜷後§隧穂ｾ｡邨先棡縺縺大叙繧雁・縺呵ｻｽ驥冗沿縲・
         json full = HandleGameFlowGetRuntimeState(kernel, *kernel.GetGameRegistry());
         return {
             { "currentNodeId", full["currentNodeId"] },
@@ -10889,14 +12992,14 @@ namespace
     }
 
     // =========================================================
-    // Phase 3: 仕上げ API
+    // Phase 3: 莉穂ｸ翫￡ API
     // =========================================================
 
     // ---- visual.find_text ----
     json HandleVisualFindText(EngineKernel& kernel, const json& params)
     {
         const std::string needle = params.value("text", std::string{});
-        if (needle.empty()) throw MakeError("missing_param", "text is required.");
+        if (needle.empty()) ThrowError("missing_param", "text is required.");
         const bool caseSensitive = params.value("caseSensitive", false);
 
         Registry* registry = kernel.GetGameRegistry();
@@ -10959,8 +13062,8 @@ namespace
     json HandleAssetStatus(const json& params)
     {
         const std::string path = params.value("path", std::string{});
-        if (path.empty()) throw MakeError("missing_param", "path is required.");
-        // ResourceManager に has/get_status 系の公開 API が無いので、最低限の試行 get で判定。
+        if (path.empty()) ThrowError("missing_param", "path is required.");
+        // ResourceManager 縺ｫ has/get_status 邉ｻ縺ｮ蜈ｬ髢・API 縺檎┌縺・・縺ｧ縲∵怙菴朱剞縺ｮ隧ｦ陦・get 縺ｧ蛻､螳壹・
         auto& rm = ResourceManager::Instance();
         bool modelLoaded = false, textureLoaded = false, materialLoaded = false;
         try { auto m = rm.GetModel(path); modelLoaded = (m != nullptr); } catch (...) {}
@@ -10975,19 +13078,577 @@ namespace
         };
     }
 
-    // ---- render.queue.snapshot ----
-    // EngineKernel 側に accessor を追加することで前フレームの packet 数を返す。
-    json HandleRenderQueueSnapshot(EngineKernel& kernel)
+    json StringVectorToJsonArray(const std::vector<std::string>& values, int limit)
     {
-        const RenderQueue& q = kernel.GetRenderQueue();
+        json out = json::array();
+        for (const std::string& value : values) {
+            if (limit > 0 && static_cast<int>(out.size()) >= limit) {
+                break;
+            }
+            out.push_back(value);
+        }
+        return out;
+    }
+
+    json HandleAssetListLoaded(const json& params)
+    {
+        const int limit = (std::max)(0, params.value("limit", 0));
+        const std::string type = ToLowerCopy(params.value("type", std::string("all")));
+        auto& rm = ResourceManager::Instance();
+        const auto models = rm.ListLoadedModelKeys();
+        const auto textures = rm.ListLoadedTextureKeys();
+        const auto materials = rm.ListLoadedMaterialKeys();
+
+        json out = {
+            { "counts", {
+                { "models", static_cast<int>(models.size()) },
+                { "textures", static_cast<int>(textures.size()) },
+                { "materials", static_cast<int>(materials.size()) }
+            } }
+        };
+        if (type == "all" || type == "model" || type == "models") {
+            out["models"] = StringVectorToJsonArray(models, limit);
+        }
+        if (type == "all" || type == "texture" || type == "textures") {
+            out["textures"] = StringVectorToJsonArray(textures, limit);
+        }
+        if (type == "all" || type == "material" || type == "materials") {
+            out["materials"] = StringVectorToJsonArray(materials, limit);
+        }
+        return out;
+    }
+
+    // ---- render.queue.snapshot ----
+    std::string BlendStateName(BlendState state)
+    {
+        switch (state) {
+        case BlendState::Opaque: return "Opaque";
+        case BlendState::Transparency: return "Transparency";
+        case BlendState::Additive: return "Additive";
+        case BlendState::Subtraction: return "Subtraction";
+        case BlendState::Multiply: return "Multiply";
+        case BlendState::Alpha: return "Alpha";
+        default: return "Unknown";
+        }
+    }
+
+    std::string DepthStateName(DepthState state)
+    {
+        switch (state) {
+        case DepthState::TestAndWrite: return "TestAndWrite";
+        case DepthState::TestOnly: return "TestOnly";
+        case DepthState::WriteOnly: return "WriteOnly";
+        case DepthState::NoTestNoWrite: return "NoTestNoWrite";
+        default: return "Unknown";
+        }
+    }
+
+    std::string RasterizerStateName(RasterizerState state)
+    {
+        switch (state) {
+        case RasterizerState::SolidCullNone: return "SolidCullNone";
+        case RasterizerState::SolidCullBack: return "SolidCullBack";
+        case RasterizerState::SolidCullFront: return "SolidCullFront";
+        case RasterizerState::WireCullNone: return "WireCullNone";
+        case RasterizerState::WireCullBack: return "WireCullBack";
+        default: return "Unknown";
+        }
+    }
+
+    std::string PointerId(const void* ptr)
+    {
+        std::ostringstream oss;
+        oss << "0x" << std::hex << reinterpret_cast<uintptr_t>(ptr);
+        return oss.str();
+    }
+
+    json MatrixTranslationToJson(const DirectX::XMFLOAT4X4& matrix)
+    {
+        return json::array({ matrix._41, matrix._42, matrix._43 });
+    }
+
+    json Matrix4x4ToJson(const DirectX::XMFLOAT4X4& matrix)
+    {
+        return json::array({
+            json::array({ matrix._11, matrix._12, matrix._13, matrix._14 }),
+            json::array({ matrix._21, matrix._22, matrix._23, matrix._24 }),
+            json::array({ matrix._31, matrix._32, matrix._33, matrix._34 }),
+            json::array({ matrix._41, matrix._42, matrix._43, matrix._44 })
+        });
+    }
+
+    json ModelResourceToJson(const std::shared_ptr<ModelResource>& resource)
+    {
+        if (!resource) {
+            return nullptr;
+        }
+        const DirectX::BoundingBox& bounds = resource->GetLocalBounds();
         return {
+            { "id", PointerId(resource.get()) },
+            { "meshCount", resource->GetMeshCount() },
+            { "hasSkinnedMeshes", resource->HasSkinnedMeshes() },
+            { "localBoundsCenter", Float3ToJson(bounds.Center) },
+            { "localBoundsExtents", Float3ToJson(bounds.Extents) }
+        };
+    }
+
+    json MaterialAssetToQueueJson(const std::shared_ptr<MaterialAsset>& material)
+    {
+        if (!material) {
+            return nullptr;
+        }
+        return {
+            { "id", PointerId(material.get()) },
+            { "path", material->GetFilePath() },
+            { "baseColor", Float4ToJson(material->baseColor) },
+            { "metallic", material->metallic },
+            { "roughness", material->roughness },
+            { "emissive", material->emissive }
+        };
+    }
+
+    json RenderPacketToJson(const RenderPacket& packet, int index, bool includeMatrices)
+    {
+        json item = {
+            { "index", index },
+            { "modelResource", ModelResourceToJson(packet.modelResource) },
+            { "worldPosition", MatrixTranslationToJson(packet.worldMatrix) },
+            { "shaderId", packet.shaderId },
+            { "distanceToCamera", packet.distanceToCamera },
+            { "castShadow", packet.castShadow },
+            { "blendState", BlendStateName(packet.blendState) },
+            { "depthState", DepthStateName(packet.depthState) },
+            { "rasterizerState", RasterizerStateName(packet.rasterizerState) },
+            { "baseColor", Float4ToJson(packet.baseColor) },
+            { "metallic", packet.metallic },
+            { "roughness", packet.roughness },
+            { "emissive", packet.emissive },
+            { "materialGroupHash", packet.materialGroupHash },
+            { "material", MaterialAssetToQueueJson(packet.materialAsset) }
+        };
+        if (includeMatrices) {
+            item["worldMatrix"] = Matrix4x4ToJson(packet.worldMatrix);
+            item["prevWorldMatrix"] = Matrix4x4ToJson(packet.prevWorldMatrix);
+        }
+        return item;
+    }
+
+    json EffectMeshPacketToJson(const EffectMeshPacket& packet, int index, bool includeMatrices)
+    {
+        json item = {
+            { "index", index },
+            { "modelResource", ModelResourceToJson(packet.modelResource) },
+            { "worldPosition", MatrixTranslationToJson(packet.worldMatrix) },
+            { "shaderId", packet.shaderId },
+            { "distanceToCamera", packet.distanceToCamera },
+            { "blendState", BlendStateName(packet.blendState) },
+            { "depthState", DepthStateName(packet.depthState) },
+            { "rasterizerState", RasterizerStateName(packet.rasterizerState) },
+            { "baseColor", Float4ToJson(packet.baseColor) },
+            { "shaderVariantKey", packet.shaderVariantKey },
+            { "sortKey", packet.sortKey },
+            { "lifetimeFade", packet.lifetimeFade },
+            { "material", MaterialAssetToQueueJson(packet.materialAsset) }
+        };
+        if (includeMatrices) {
+            item["worldMatrix"] = Matrix4x4ToJson(packet.worldMatrix);
+            item["prevWorldMatrix"] = Matrix4x4ToJson(packet.prevWorldMatrix);
+        }
+        return item;
+    }
+
+    json EffectParticlePacketToJson(const EffectParticlePacket& packet, int index)
+    {
+        return {
+            { "index", index },
+            { "runtimeInstanceId", packet.runtimeInstanceId },
+            { "drawMode", static_cast<int>(packet.drawMode) },
+            { "sortMode", static_cast<int>(packet.sortMode) },
+            { "shapeType", static_cast<int>(packet.shapeType) },
+            { "origin", Float3ToJson(packet.origin) },
+            { "boundsCenter", Float3ToJson(packet.boundsCenter) },
+            { "boundsExtents", Float3ToJson(packet.boundsExtents) },
+            { "tint", Float4ToJson(packet.tint) },
+            { "spawnRate", packet.spawnRate },
+            { "burstCount", packet.burstCount },
+            { "maxParticles", packet.maxParticles },
+            { "currentTime", packet.currentTime },
+            { "duration", packet.duration },
+            { "lifetimeFade", packet.lifetimeFade },
+            { "blendMode", static_cast<int>(packet.blendMode) },
+            { "collisionEnabled", packet.collisionEnabled }
+        };
+    }
+
+    json UI2DTextPacketToJson(const UI2DTextPacket& packet, int index)
+    {
+        return {
+            { "index", index },
+            { "entity", EntityToString(packet.entity) },
+            { "text", packet.text },
+            { "fontAssetPath", packet.fontAssetPath },
+            { "fontSize", packet.fontSize },
+            { "color", Float4ToJson(packet.color) },
+            { "alignment", packet.alignment },
+            { "worldPosition", Float3ToJson(packet.worldPosition) },
+            { "sizeDelta", Float2ToJson(packet.sizeDelta) },
+            { "screenSpaceOverlay", packet.screenSpaceOverlay },
+            { "pixelSnap", packet.pixelSnap }
+        };
+    }
+
+    json UI2DSpritePacketToJson(const UI2DSpritePacket& packet, int index)
+    {
+        return {
+            { "index", index },
+            { "entity", EntityToString(packet.entity) },
+            { "textureAssetPath", packet.textureAssetPath },
+            { "tint", Float4ToJson(packet.tint) },
+            { "worldPosition", Float3ToJson(packet.worldPosition) },
+            { "sizeDelta", Float2ToJson(packet.sizeDelta) },
+            { "screenSpaceOverlay", packet.screenSpaceOverlay },
+            { "pixelSnap", packet.pixelSnap },
+            { "fillClipEnabled", packet.fillClipEnabled },
+            { "fillRatio", packet.fillRatio },
+            { "fillDirection", packet.fillDirection }
+        };
+    }
+
+    json TerrainChunkToJson(const TerrainChunkDrawCall& chunk, int index)
+    {
+        return {
+            { "index", index },
+            { "indexCount", chunk.indexCount },
+            { "chunkWorldOffset", Float3ToJson(chunk.chunkWorldOffset) },
+            { "boundsCenter", Float3ToJson(chunk.boundsCenter) },
+            { "boundsExtents", Float3ToJson(chunk.boundsExtents) },
+            { "worldSizeX", chunk.worldSizeX },
+            { "worldSizeZ", chunk.worldSizeZ },
+            { "heightScale", chunk.heightScale }
+        };
+    }
+
+    json GrassDrawToJson(const GrassDrawCall& grass, int index)
+    {
+        return {
+            { "index", index },
+            { "meshIndexCount", grass.meshIndexCount },
+            { "instanceCount", grass.instanceCount },
+            { "boundsCenter", Float3ToJson(grass.boundsCenter) },
+            { "boundsExtents", Float3ToJson(grass.boundsExtents) },
+            { "drawDistance", grass.drawDistance },
+            { "useWind", grass.useWind },
+            { "windDirection", Float3ToJson(grass.windDirection) },
+            { "windStrength", grass.windStrength },
+            { "windSpeed", grass.windSpeed }
+        };
+    }
+
+    template<typename T, typename Serializer>
+    json QueueItemsToJson(const std::vector<T>& values, int limit, Serializer serializer)
+    {
+        json items = json::array();
+        const int count = static_cast<int>(values.size());
+        const int take = (limit > 0) ? (std::min)(limit, count) : count;
+        for (int i = 0; i < take; ++i) {
+            items.push_back(serializer(values[static_cast<size_t>(i)], i));
+        }
+        return items;
+    }
+
+    json RenderQueueMetricsToJson(const RenderQueueMetrics& metrics)
+    {
+        return {
+            { "meshExtractMs", metrics.meshExtractMs },
+            { "batchSortMs", metrics.batchSortMs },
+            { "materialResolveCount", metrics.materialResolveCount },
+            { "materialGroupCount", metrics.materialGroupCount },
+            { "opaquePacketCount", metrics.opaquePacketCount },
+            { "transparentPacketCount", metrics.transparentPacketCount },
+            { "opaqueBatchCount", metrics.opaqueBatchCount },
+            { "maxInstancesPerBatch", metrics.maxInstancesPerBatch },
+            { "nonSkinnedOpaquePacketCount", metrics.nonSkinnedOpaquePacketCount },
+            { "skinnedOpaquePacketCount", metrics.skinnedOpaquePacketCount },
+            { "effectMeshPacketCount", metrics.effectMeshPacketCount },
+            { "effectParticlePacketCount", metrics.effectParticlePacketCount }
+        };
+    }
+
+    json HandleRenderQueueSnapshot(EngineKernel& kernel, const json& params)
+    {
+        const RenderQueue& q = AutomationObservationAccess::RenderQueueOf(kernel);
+        const bool includePackets = params.value("includePackets", params.value("details", false));
+        const bool includeMatrices = params.value("includeMatrices", false);
+        const bool includeSummary = params.value("includeSummary", true);
+        const int limit = (std::max)(0, params.value("limit", 32));
+        json out = {
             { "opaquePackets", static_cast<int>(q.opaquePackets.size()) },
             { "transparentPackets", static_cast<int>(q.transparentPackets.size()) },
+            { "opaqueInstanceBatches", static_cast<int>(q.opaqueInstanceBatches.size()) },
+            { "effectMeshPackets", static_cast<int>(q.effectMeshPackets.size()) },
+            { "effectParticlePackets", static_cast<int>(q.effectParticlePackets.size()) },
+            { "trailPackets", static_cast<int>(q.trailPackets.size()) },
             { "ui2DTextPackets", static_cast<int>(q.ui2DTextPackets.size()) },
+            { "ui2DSpritePackets", static_cast<int>(q.ui2DSpritePackets.size()) },
             { "ui2DLayoutNodes", static_cast<int>(q.ui2DLayoutNodes.size()) },
-            { "totalDrawables", static_cast<int>(q.opaquePackets.size() + q.transparentPackets.size() + q.ui2DTextPackets.size()) },
-            { "frameCount", kernel.GetTime().frameCount }
+            { "terrainChunks", static_cast<int>(q.terrainChunks.size()) },
+            { "terrainWater", static_cast<int>(q.terrainWater.size()) },
+            { "grassDraws", static_cast<int>(q.grassDraws.size()) },
+            { "totalDrawables", static_cast<int>(
+                q.opaquePackets.size() + q.transparentPackets.size() + q.effectMeshPackets.size() +
+                q.effectParticlePackets.size() + q.ui2DTextPackets.size() + q.ui2DSpritePackets.size() +
+                q.terrainChunks.size() + q.terrainWater.size() + q.grassDraws.size()) },
+            { "frameCount", kernel.GetTime().frameCount },
+            { "metrics", RenderQueueMetricsToJson(q.metrics) }
         };
+
+        if (includeSummary) {
+            // 安定 key (modelFilePath) で集計するため、registry の MeshComponent から
+            // modelResource* → modelFilePath の逆引き map を先に作る。
+            // packet 側の `modelResource` ポインタが一致するものがあればその path で集計。
+            // (pointer 集計は session 間で再現しない unstable key だったので、ファイルパスで差し替え。)
+            std::unordered_map<const void*, std::string> modelPtrToPath;
+            if (kernel.GetGameRegistry()) {
+                Registry& reg = *kernel.GetGameRegistry();
+                Query<MeshComponent> mq(reg);
+                mq.ForEachWithEntity([&](EntityID /*e*/, MeshComponent& mesh) {
+                    if (mesh.model) {
+                        auto resource = mesh.model->GetModelResource();
+                        if (resource) {
+                            modelPtrToPath[resource.get()] = mesh.modelFilePath;
+                        }
+                    }
+                });
+            }
+            auto modelKeyOf = [&](const std::shared_ptr<ModelResource>& mr) -> std::string {
+                if (!mr) return "<null>";
+                auto it = modelPtrToPath.find(mr.get());
+                if (it != modelPtrToPath.end() && !it->second.empty()) return it->second;
+                // fallback: pointer 文字列 (session 内で diff したい場合用に残す)
+                return "<unmapped:" + PointerId(mr.get()) + ">";
+            };
+
+            std::unordered_map<std::string, int> modelCounts;
+            std::unordered_map<std::string, int> materialCounts;
+            std::unordered_map<int, int> shaderCounts;
+            auto countOpaque = [&](const std::vector<RenderPacket>& list) {
+                for (const auto& p : list) {
+                    if (p.modelResource) ++modelCounts[modelKeyOf(p.modelResource)];
+                    if (p.materialAsset) ++materialCounts[p.materialAsset->GetFilePath()];
+                    ++shaderCounts[p.shaderId];
+                }
+            };
+            countOpaque(q.opaquePackets);
+            countOpaque(q.transparentPackets);
+            for (const auto& p : q.effectMeshPackets) {
+                if (p.modelResource) ++modelCounts[modelKeyOf(p.modelResource)];
+                if (p.materialAsset) ++materialCounts[p.materialAsset->GetFilePath()];
+                ++shaderCounts[p.shaderId];
+            }
+            json modelsArr = json::array();
+            for (const auto& kv : modelCounts) {
+                modelsArr.push_back({ { "modelKey", kv.first }, { "drawCount", kv.second } });
+            }
+            json matsArr = json::array();
+            for (const auto& kv : materialCounts) {
+                matsArr.push_back({ { "materialPath", kv.first }, { "drawCount", kv.second } });
+            }
+            json shadersArr = json::array();
+            for (const auto& kv : shaderCounts) {
+                shadersArr.push_back({ { "shaderId", kv.first }, { "drawCount", kv.second } });
+            }
+            out["summary"] = {
+                { "byModelPath", std::move(modelsArr) },
+                { "byMaterialPath", std::move(matsArr) },
+                { "byShaderId", std::move(shadersArr) },
+                { "note", "modelKey is modelFilePath when resolvable, otherwise <unmapped:hex_id>." }
+            };
+        }
+
+        if (includePackets) {
+            out["limit"] = limit;
+            out["packets"] = {
+                { "opaque", QueueItemsToJson(q.opaquePackets, limit, [&](const RenderPacket& p, int i) { return RenderPacketToJson(p, i, includeMatrices); }) },
+                { "transparent", QueueItemsToJson(q.transparentPackets, limit, [&](const RenderPacket& p, int i) { return RenderPacketToJson(p, i, includeMatrices); }) },
+                { "effectMesh", QueueItemsToJson(q.effectMeshPackets, limit, [&](const EffectMeshPacket& p, int i) { return EffectMeshPacketToJson(p, i, includeMatrices); }) },
+                { "effectParticle", QueueItemsToJson(q.effectParticlePackets, limit, EffectParticlePacketToJson) },
+                { "ui2DText", QueueItemsToJson(q.ui2DTextPackets, limit, UI2DTextPacketToJson) },
+                { "ui2DSprite", QueueItemsToJson(q.ui2DSpritePackets, limit, UI2DSpritePacketToJson) },
+                { "terrainChunks", QueueItemsToJson(q.terrainChunks, limit, TerrainChunkToJson) },
+                { "grassDraws", QueueItemsToJson(q.grassDraws, limit, GrassDrawToJson) }
+            };
+        }
+
+        // entity → modelFilePath マップを返すことで、render packet の materialPath だけでなく
+        // mesh path も観測できるようにする。MeshComponent を全 entity 走査して逆引きする。
+        if (params.value("includeMeshSources", false) && kernel.GetGameRegistry()) {
+            json sources = json::array();
+            Registry& reg = *kernel.GetGameRegistry();
+            Query<MeshComponent> mq(reg);
+            mq.ForEachWithEntity([&](EntityID e, MeshComponent& mesh) {
+                if (!mesh.isVisible) return;
+                sources.push_back({
+                    { "entity", EntityToString(e) },
+                    { "modelFilePath", mesh.modelFilePath },
+                    { "isVisible", mesh.isVisible },
+                    { "castShadow", mesh.castShadow }
+                });
+            });
+            out["meshSources"] = std::move(sources);
+        }
+
+        return out;
+    }
+
+    json HandleRenderPassTimings(EngineKernel& kernel, const json& params)
+    {
+        const std::string contains = ToLowerCopy(params.value("contains", std::string{}));
+        const int limit = (std::max)(0, params.value("limit", 0));
+        json passes = json::array();
+        float totalMs = 0.0f;
+        int matched = 0;
+        for (const ProfileResult& result : Profiler::Instance().GetResults()) {
+            if (!contains.empty() && ToLowerCopy(result.name).find(contains) == std::string::npos) {
+                continue;
+            }
+            ++matched;
+            totalMs += result.timeMs;
+            if (limit > 0 && static_cast<int>(passes.size()) >= limit) {
+                continue;
+            }
+            passes.push_back({
+                { "name", result.name },
+                { "timeMs", result.timeMs }
+            });
+        }
+
+        return {
+            { "frameCount", kernel.GetTime().frameCount },
+            { "count", matched },
+            { "returnedCount", static_cast<int>(passes.size()) },
+            { "truncated", limit > 0 && matched > limit },
+            { "totalMs", totalMs },
+            { "passes", std::move(passes) }
+        };
+    }
+
+    json BuildAutomationManifest()
+    {
+        return {
+            { "version", 1 },
+            { "observationGuide", {
+                json{
+                    { "question", "Find entities by role or component" },
+                    { "use", "ecs.query" },
+                    { "avoid", "list_entities when a component filter is known" }
+                },
+                json{
+                    { "question", "Read one known field" },
+                    { "use", "ecs.field.get" },
+                    { "avoid", "get_component plus manual JSON scanning" }
+                },
+                json{
+                    { "question", "Watch one field over time" },
+                    { "use", "ecs.field.watch.pull" },
+                    { "avoid", "polling screenshots or full entity dumps" }
+                },
+                json{
+                    { "question", "Check mutation side effects" },
+                    { "use", "ecs.diff action=snapshot before mutation, then action=diff name=<same>" },
+                    { "avoid", "two unrelated snapshots compared by eye" }
+                },
+                json{
+                    { "question", "Inspect GameFlow transition blockers" },
+                    { "use", "gameflow.get_runtime_state" },
+                    { "avoid", "guessing from current scene name" }
+                },
+                json{
+                    { "question", "Pull durable flow events" },
+                    { "use", "gameflow.events.pull" },
+                    { "avoid", "reading only frame-scoped FlowEventQueue" }
+                },
+                json{
+                    { "question", "Pull durable input events" },
+                    { "use", "input.events.pull" },
+                    { "avoid", "assuming game.input.tap landed on a frame" }
+                },
+                json{
+                    { "question", "Check UI text rendering" },
+                    { "use", "visual.find_text" },
+                    { "avoid", "manual screenshot inspection" }
+                },
+                json{
+                    { "question", "Check collision activity" },
+                    { "use", "collision.events.pull or collision.overlap_sphere" },
+                    { "avoid", "debug gizmo screenshots" }
+                },
+                json{
+                    { "question", "Inspect draw packet contents" },
+                    { "use", "render.queue.snapshot includePackets=true" },
+                    { "avoid", "count-only render queue checks" }
+                },
+                json{
+                    { "question", "Observe many bones across frames" },
+                    { "use", "bone.stream.start then bone.stream.pull" },
+                    { "avoid", "N bone.get_world round trips per frame" }
+                },
+                json{
+                    { "question", "Filter logs by subsystem" },
+                    { "use", "log.tail category=<name> or log.pull category=<name>" },
+                    { "avoid", "string prefix parsing outside the engine" }
+                },
+                json{
+                    { "question", "Edit vector component fields" },
+                    { "use", "set_component_fields for whole replacement, component.vector.* for element edits" },
+                    { "avoid", "component-specific workaround APIs unless needed for editor UX" }
+                }
+            } },
+            { "commands", {
+                { "scene.new", { { "params", "mode=2D|3D, template=empty|default, cleanSlate=true|false" }, { "mutates", true } } },
+                { "ecs.diff", { { "params", "action=help|snapshot|diff|reset|list, name=<baseline>" }, { "mutates", false } } },
+                { "input.events.pull", { { "params", "cursorName, since, limit" }, { "mutates", false } } },
+                { "component.vector.get", { { "params", "entity, component, field" }, { "mutates", false } } },
+                { "component.vector.insert", { { "params", "entity, component, field, index, value" }, { "mutates", true } } },
+                { "component.vector.remove", { { "params", "entity, component, field, index" }, { "mutates", true } } },
+                { "component.vector.set", { { "params", "entity, component, field, index, value" }, { "mutates", true } } },
+                { "component.vector.set_element_field", { { "params", "entity, component, field, index, elementField/value or fields" }, { "mutates", true } } },
+                { "player_editor.set_actor_mode", { { "params", "actorMode=Player|Enemy|NPC" }, { "mutates", true } } },
+                { "player_editor.set_actor_role", { { "params", "actorMode=Player|Enemy|NPC (alias of set_actor_mode)" }, { "mutates", true } } },
+                { "player_editor.apply_full_player_preset", { { "params", "setActorMode=true|false" }, { "mutates", true } } },
+                { "player_editor.apply_attack_combo_preset", { { "params", "actorMode=Player|Enemy|NPC optional" }, { "mutates", true } } },
+                { "player_editor.apply_actor_preset", { { "params", "actorMode=Player|Enemy|NPC" }, { "mutates", true } } },
+                { "player_editor.apply_enemy_preset", { { "params", "" }, { "mutates", true } } },
+                { "asset.list_loaded", { { "params", "type=all|models|textures|materials, limit" }, { "mutates", false } } },
+                { "render.pass_timings", { { "params", "contains, limit" }, { "mutates", false } } },
+                { "render.queue.snapshot", { { "params", "includePackets, includeMatrices, limit" }, { "mutates", false } } },
+                { "bone.stream.start", { { "params", "streamId, entity, boneIndex|boneName|bones[], maxFrames" }, { "mutates", false } } },
+                { "bone.stream.pull", { { "params", "streamId, cursorName, since, limit, peek" }, { "mutates", false } } },
+                { "bone.stream.stop", { { "params", "streamId" }, { "mutates", false } } },
+                { "bone.stream.list", { { "params", "" }, { "mutates", false } } },
+                { "log.tail", { { "params", "lines, minSeverity, category, filterRegex, sinceTimestampMs" }, { "mutates", false } } },
+                { "log.pull", { { "params", "cursorName, maxLines, minSeverity, category, filterRegex, sinceTimestampMs" }, { "mutates", false } } }
+            } }
+        };
+    }
+
+    json HandleAutomationGetManifest(const json& params)
+    {
+        json manifest = BuildAutomationManifest();
+        const std::string writePath = params.value("writePath", std::string{});
+        if (!writePath.empty()) {
+            const std::filesystem::path path = ResolveProjectPath(writePath, PathAccess::AutomationFile, false);
+            std::error_code ec;
+            std::filesystem::create_directories(path.parent_path(), ec);
+            std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+            if (!ofs.is_open()) {
+                ThrowError("write_failed", "Failed to write automation manifest.", {
+                    { "path", ToGenericProjectPath(path) }
+                });
+            }
+            ofs << manifest.dump(2);
+            manifest["writtenPath"] = ToGenericProjectPath(path);
+        }
+        return manifest;
     }
 
     // ---- collision.raycast ----
@@ -11016,8 +13677,8 @@ namespace
     }
 
     // ---- collision.overlap_sphere ----
-    // ECS の ColliderComponent.elements を直接走査して球と距離テスト。
-    // Phase 1 で導入した entity 単位の Body/Attack に対応。
+    // ECS 縺ｮ ColliderComponent.elements 繧堤峩謗･襍ｰ譟ｻ縺励※逅・→霍晞屬繝・せ繝医・
+    // Phase 1 縺ｧ蟆主・縺励◆ entity 蜊倅ｽ阪・ Body/Attack 縺ｫ蟇ｾ蠢懊・
     json HandleCollisionOverlapSphere(Registry& registry, const json& params)
     {
         DirectX::XMFLOAT3 center{ 0.0f, 0.0f, 0.0f };
@@ -11033,7 +13694,7 @@ namespace
 
         json hits = json::array();
         Query<TransformComponent, ColliderComponent> q(registry);
-        q.ForEachWithEntity([&](EntityID e, TransformComponent& tr, ColliderComponent& cc) {
+        q.ForEachWithEntity([&](EntityID e, TransformComponent& /*tr*/, ColliderComponent& cc) {
             if (e == excludeEntity) return;
             if (!cc.enabled) return;
             for (int i = 0; i < static_cast<int>(cc.elements.size()); ++i) {
@@ -11043,18 +13704,15 @@ namespace
                     const std::string attrStr = (el.attribute == ColliderAttribute::Attack) ? "attack" : "body";
                     if (attrStr != filterAttr) continue;
                 }
-                // World position は entityWorld * boneLocalWorld * offsetLocal の近似。
-                // 簡略: bone 無視で entity 位置に offsetLocal を加算 (将来 hand_r 等への対応は bone.get_world と同等にする)。
-                DirectX::XMFLOAT3 pos = tr.worldPosition;
-                pos.x += el.offsetLocal.x;
-                pos.y += el.offsetLocal.y;
-                pos.z += el.offsetLocal.z;
+                // World 座標は ResolveColliderElementWorld に統一: bone 付き (nodeIndex>=0) なら
+                // bone.worldTransform * entityWorld * offsetLocal で正しく計算される。
+                ResolvedColliderShape rc = ResolveColliderElementWorld(registry, e, el);
+                const DirectX::XMFLOAT3& pos = rc.worldCenter;
                 const float dx = pos.x - center.x;
                 const float dy = pos.y - center.y;
                 const float dz = pos.z - center.z;
                 const float d2 = dx*dx + dy*dy + dz*dz;
-                const float effectiveR = el.radius;
-                const float touchR = radius + effectiveR;
+                const float touchR = radius + rc.worldRadius;
                 if (d2 <= touchR * touchR) {
                     hits.push_back({
                         { "entity", EntityToString(e) },
@@ -11062,7 +13720,9 @@ namespace
                         { "attribute", (el.attribute == ColliderAttribute::Attack) ? "Attack" : "Body" },
                         { "type", (el.type == ColliderShape::Sphere) ? "Sphere"
                                   : (el.type == ColliderShape::Capsule) ? "Capsule" : "Box" },
-                        { "colliderRadius", el.radius },
+                        { "colliderRadius", rc.worldRadius },
+                        { "boneAttached", rc.boneAttached },
+                        { "nodeIndex", rc.resolvedNodeIndex },
                         { "worldPosition", json::array({ pos.x, pos.y, pos.z }) },
                         { "distance", std::sqrt(d2) }
                     });
@@ -11077,22 +13737,113 @@ namespace
         };
     }
 
+    // ---- collision.is_hitting ----
+    // 2 つの entity の collider が現在 overlap しているかを即時返す。
+    // attribute=Attack/Body の片側だけを比較したい場合は sourceAttribute/targetAttribute を指定。
+    json HandleCollisionIsHitting(Registry& registry, const json& params)
+    {
+        const EntityID source = EntityFromJson(params.value("sourceEntity", params.value("entityA", json(nullptr))));
+        const EntityID target = EntityFromJson(params.value("targetEntity", params.value("entityB", json(nullptr))));
+        if (Entity::IsNull(source) || !registry.IsAlive(source)) {
+            ThrowError("entity_not_found", "sourceEntity is not alive.", { { "sourceEntity", EntityToString(source) } });
+        }
+        if (Entity::IsNull(target) || !registry.IsAlive(target)) {
+            ThrowError("entity_not_found", "targetEntity is not alive.", { { "targetEntity", EntityToString(target) } });
+        }
+        const std::string srcAttrFilter = ToLowerCopy(params.value("sourceAttribute", std::string{}));
+        const std::string tgtAttrFilter = ToLowerCopy(params.value("targetAttribute", std::string{}));
+
+        auto* srcTr = registry.GetComponent<TransformComponent>(source);
+        auto* tgtTr = registry.GetComponent<TransformComponent>(target);
+        auto* srcCol = registry.GetComponent<ColliderComponent>(source);
+        auto* tgtCol = registry.GetComponent<ColliderComponent>(target);
+        if (!srcTr || !tgtTr || !srcCol || !tgtCol) {
+            return {
+                { "hitting", false },
+                { "reason", "missing_components" },
+                { "sourceEntity", EntityToString(source) },
+                { "targetEntity", EntityToString(target) }
+            };
+        }
+
+        json overlaps = json::array();
+        bool hitting = false;
+        for (int si = 0; si < static_cast<int>(srcCol->elements.size()); ++si) {
+            const auto& a = srcCol->elements[si];
+            if (!a.enabled) continue;
+            if (!srcAttrFilter.empty()) {
+                const std::string sa = (a.attribute == ColliderAttribute::Attack) ? "attack" : "body";
+                if (sa != srcAttrFilter) continue;
+            }
+            ResolvedColliderShape ra = ResolveColliderElementWorld(registry, source, a);
+            for (int ti = 0; ti < static_cast<int>(tgtCol->elements.size()); ++ti) {
+                const auto& b = tgtCol->elements[ti];
+                if (!b.enabled) continue;
+                if (!tgtAttrFilter.empty()) {
+                    const std::string ta = (b.attribute == ColliderAttribute::Attack) ? "attack" : "body";
+                    if (ta != tgtAttrFilter) continue;
+                }
+                ResolvedColliderShape rb = ResolveColliderElementWorld(registry, target, b);
+                const float dx = ra.worldCenter.x - rb.worldCenter.x;
+                const float dy = ra.worldCenter.y - rb.worldCenter.y;
+                const float dz = ra.worldCenter.z - rb.worldCenter.z;
+                const float d = std::sqrt(dx*dx + dy*dy + dz*dz);
+                const float rSum = ra.worldRadius + rb.worldRadius;
+                // 形状を考慮した正確な overlap (Box vs Box は OBB SAT、Capsule は近似)。
+                const bool overlap = CollidersOverlap(ra, rb);
+                // 旧 sphere 近似 (radius 同士) の結果も参考値として返す。
+                const bool overlapApprox = (d <= rSum);
+                if (overlap) hitting = true;
+                auto shapeName = [](ColliderShape s) {
+                    return (s == ColliderShape::Sphere) ? "Sphere"
+                         : (s == ColliderShape::Capsule) ? "Capsule" : "Box";
+                };
+                overlaps.push_back({
+                    { "sourceColliderIndex", si },
+                    { "targetColliderIndex", ti },
+                    { "sourceAttribute", (a.attribute == ColliderAttribute::Attack) ? "Attack" : "Body" },
+                    { "targetAttribute", (b.attribute == ColliderAttribute::Attack) ? "Attack" : "Body" },
+                    { "sourceShape", shapeName(ra.shape) },
+                    { "targetShape", shapeName(rb.shape) },
+                    { "sourceBoneAttached", ra.boneAttached },
+                    { "targetBoneAttached", rb.boneAttached },
+                    { "sourceNodeIndex", ra.resolvedNodeIndex },
+                    { "targetNodeIndex", rb.resolvedNodeIndex },
+                    { "distance", d },
+                    { "sumRadius", rSum },
+                    { "overlap", overlap },
+                    { "overlapApprox", overlapApprox },
+                    { "sourceWorldPos", json::array({ ra.worldCenter.x, ra.worldCenter.y, ra.worldCenter.z }) },
+                    { "targetWorldPos", json::array({ rb.worldCenter.x, rb.worldCenter.y, rb.worldCenter.z }) }
+                });
+            }
+        }
+
+        return {
+            { "hitting", hitting },
+            { "sourceEntity", EntityToString(source) },
+            { "targetEntity", EntityToString(target) },
+            { "pairCount", static_cast<int>(overlaps.size()) },
+            { "pairs", std::move(overlaps) }
+        };
+    }
+
     // ---- visual.get_pixel_at_screen ----
     json HandleVisualGetPixelAtScreen(EngineKernel& kernel, const json& params)
     {
         const int x = params.value("x", -1);
         const int y = params.value("y", -1);
-        if (x < 0 || y < 0) throw MakeError("missing_param", "x and y required.");
+        if (x < 0 || y < 0) ThrowError("missing_param", "x and y required.");
         const std::string target = params.value("target", std::string("window"));
         ImageBuffer img = CaptureAutomationTargetImage(kernel, target);
         if (x >= static_cast<int>(img.width) || y >= static_cast<int>(img.height)) {
-            throw MakeError("out_of_range", "Pixel coordinates exceed image bounds.", {
+            ThrowError("out_of_range", "Pixel coordinates exceed image bounds.", {
                 { "x", x }, { "y", y },
                 { "width", static_cast<int>(img.width) }, { "height", static_cast<int>(img.height) }
             });
         }
         const size_t idx = (static_cast<size_t>(y) * img.width + x) * 4;
-        // ImageBuffer は BGRA レイアウト。
+        // ImageBuffer 縺ｯ BGRA 繝ｬ繧､繧｢繧ｦ繝医・
         const uint8_t b = img.bgra[idx + 0];
         const uint8_t g = img.bgra[idx + 1];
         const uint8_t r = img.bgra[idx + 2];
@@ -11111,7 +13862,7 @@ namespace
     {
         const std::string pathA = params.value("pathA", std::string{});
         const std::string pathB = params.value("pathB", std::string{});
-        if (pathA.empty() || pathB.empty()) throw MakeError("missing_param", "pathA and pathB required.");
+        if (pathA.empty() || pathB.empty()) ThrowError("missing_param", "pathA and pathB required.");
         const int threshold = params.value("threshold", 16);
 
         auto resolvePath = [](const std::string& p) -> std::filesystem::path {
@@ -11147,10 +13898,10 @@ namespace
         uint32_t wa = 0, ha = 0, wb = 0, hb = 0;
         std::vector<uint8_t> rgba, rgbb;
         if (!loadBMP(resolvePath(pathA), wa, ha, rgba)) {
-            throw MakeError("load_failed", "Failed to load pathA.", { { "path", pathA } });
+            ThrowError("load_failed", "Failed to load pathA.", { { "path", pathA } });
         }
         if (!loadBMP(resolvePath(pathB), wb, hb, rgbb)) {
-            throw MakeError("load_failed", "Failed to load pathB.", { { "path", pathB } });
+            ThrowError("load_failed", "Failed to load pathB.", { { "path", pathB } });
         }
         if (wa != wb || ha != hb) {
             return {
@@ -11172,8 +13923,16 @@ namespace
             if (maxd > threshold) ++diffPixels;
         }
         const double percentDiff = (100.0 * diffPixels) / static_cast<double>(pixels);
+        // match 判定は 2 段階。
+        //   strictMatch  : 1 pixel も違わない (旧 match 判定)
+        //   match        : percentDiff <= matchTolerancePercent (default 0.5%)
+        // 同一 frame 同士でも capture timing で 1-2 pixel 揺らぐので、
+        // 「実用上同じ」を表す指標として match を緩く取る。strict は別フィールドで残す。
+        const double matchTolerance = params.value("matchTolerancePercent", 0.5);
         return {
-            { "match", diffPixels == 0 },
+            { "match", percentDiff <= matchTolerance },
+            { "strictMatch", diffPixels == 0 },
+            { "matchTolerancePercent", matchTolerance },
             { "size", json::array({ wa, ha }) },
             { "totalPixels", static_cast<int>(pixels) },
             { "diffPixels", static_cast<int>(diffPixels) },
@@ -11181,6 +13940,114 @@ namespace
             { "avgChannelDelta", totalDelta / static_cast<double>(pixels) },
             { "threshold", threshold }
         };
+    }
+
+    // ---- visual.baseline.{save,list,delete,compare} ----
+    // Baseline 画像は Saved/Visual_Baselines/<name>.bmp に保存する。
+    // CI に組み込む際は VCS 管理推奨。
+    std::filesystem::path VisualBaselineDir()
+    {
+        std::filesystem::path dir(PathResolver::Resolve("Saved/Visual_Baselines"));
+        std::filesystem::create_directories(dir);
+        return dir;
+    }
+
+    std::filesystem::path VisualBaselinePath(const std::string& name)
+    {
+        std::string sanitized = SanitizeFileStem(name);
+        if (sanitized.empty()) sanitized = "default";
+        return VisualBaselineDir() / (sanitized + ".bmp");
+    }
+
+    json HandleVisualBaselineSave(EngineKernel& kernel, const json& params)
+    {
+        const std::string name = params.value("name", std::string{});
+        if (name.empty()) ThrowError("missing_param", "name required.");
+        const std::string target = params.value("target", std::string("window"));
+        const bool overwrite = params.value("overwrite", true);
+
+        std::filesystem::path dst = VisualBaselinePath(name);
+        if (std::filesystem::exists(dst) && !overwrite) {
+            ThrowError("baseline_exists", "Baseline already exists. Pass overwrite=true to replace.", {
+                { "name", name }, { "path", ToGenericProjectPath(dst) }
+            });
+        }
+        // 既存 capture command を流用: target を screenshot 経由で取得し、BMP として保存。
+        ImageBuffer img = CaptureAutomationTargetImage(kernel, target);
+        if (!(WriteBmp24(dst, img), true)) {
+            ThrowError("save_failed", "Failed to write baseline BMP.", {
+                { "name", name }, { "path", ToGenericProjectPath(dst) }
+            });
+        }
+        return {
+            { "ok", true },
+            { "name", name },
+            { "path", ToGenericProjectPath(dst) },
+            { "size", json::array({ img.width, img.height }) },
+            { "target", target }
+        };
+    }
+
+    json HandleVisualBaselineList(const json& /*params*/)
+    {
+        json items = json::array();
+        for (const auto& entry : std::filesystem::directory_iterator(VisualBaselineDir())) {
+            if (!entry.is_regular_file()) continue;
+            if (entry.path().extension() != ".bmp") continue;
+            items.push_back({
+                { "name", entry.path().stem().string() },
+                { "path", ToGenericProjectPath(entry.path()) },
+                { "sizeBytes", static_cast<int64_t>(entry.file_size()) }
+            });
+        }
+        return { { "baselines", std::move(items) }, { "count", static_cast<int>(items.size()) } };
+    }
+
+    json HandleVisualBaselineDelete(const json& params)
+    {
+        const std::string name = params.value("name", std::string{});
+        if (name.empty()) ThrowError("missing_param", "name required.");
+        std::filesystem::path p = VisualBaselinePath(name);
+        if (!std::filesystem::exists(p)) {
+            return { { "ok", false }, { "reason", "not_found" }, { "name", name } };
+        }
+        std::error_code ec;
+        std::filesystem::remove(p, ec);
+        return { { "ok", !ec }, { "name", name }, { "error", ec ? ec.message() : std::string{} } };
+    }
+
+    json HandleVisualBaselineCompare(EngineKernel& kernel, const json& params)
+    {
+        const std::string name = params.value("name", std::string{});
+        if (name.empty()) ThrowError("missing_param", "name required.");
+        std::filesystem::path baseline = VisualBaselinePath(name);
+        if (!std::filesystem::exists(baseline)) {
+            ThrowError("baseline_not_found", "Baseline does not exist. Save it first via visual.baseline.save.", {
+                { "name", name }, { "path", ToGenericProjectPath(baseline) }
+            });
+        }
+        // 一時 capture を取って tmp BMP に保存し、compare_capture を呼ぶ。
+        const std::string target = params.value("target", std::string("window"));
+        std::filesystem::path tmp = VisualBaselineDir() / ("._tmp_compare_" + SanitizeFileStem(name) + ".bmp");
+        ImageBuffer img = CaptureAutomationTargetImage(kernel, target);
+        if (!(WriteBmp24(tmp, img), true)) {
+            ThrowError("capture_failed", "Failed to capture current target for compare.");
+        }
+        json compareParams = {
+            { "pathA", ToGenericProjectPath(baseline) },
+            { "pathB", ToGenericProjectPath(tmp) },
+            { "threshold", params.value("threshold", 16) }
+        };
+        json result = HandleVisualCompareCapture(compareParams);
+        result["name"] = name;
+        result["baselinePath"] = ToGenericProjectPath(baseline);
+        result["currentCapturePath"] = ToGenericProjectPath(tmp);
+        // CI 用 keepArtifacts=false で tmp を消す
+        if (!params.value("keepArtifacts", false)) {
+            std::error_code ec;
+            std::filesystem::remove(tmp, ec);
+        }
+        return result;
     }
 
     // ---- editor.get_hierarchy_selection ----
@@ -11208,7 +14075,7 @@ namespace
     }
 
     // ---- session.record_macro / replay_macro ----
-    // 直近 N コマンドを記録し、後で順次再実行できる。
+    // 逶ｴ霑・N 繧ｳ繝槭Φ繝峨ｒ險倬鹸縺励∝ｾ後〒鬆・ｬ｡蜀榊ｮ溯｡後〒縺阪ｋ縲・
     struct MacroEntry {
         std::string name;
         json params;
@@ -11259,15 +14126,15 @@ namespace
             }
             return { { "action", "get" }, { "name", macroName }, { "entries", std::move(entries) } };
         }
-        throw MakeError("invalid_param", "action must be start/stop/list/clear/get.");
+        ThrowError("invalid_param", "action must be start/stop/list/clear/get.");
     }
 
     json HandleSessionReplayMacro(EngineKernel& kernel, const json& params)
     {
         const std::string macroName = params.value("name", std::string{});
-        if (macroName.empty()) throw MakeError("missing_param", "name required.");
+        if (macroName.empty()) ThrowError("missing_param", "name required.");
         auto it = g_macros.find(macroName);
-        if (it == g_macros.end()) throw MakeError("not_found", "Macro not found.", { { "name", macroName } });
+        if (it == g_macros.end()) ThrowError("not_found", "Macro not found.", { { "name", macroName } });
         const auto& entries = it->second;
         json results = json::array();
         int okCount = 0, failCount = 0;
@@ -11278,8 +14145,8 @@ namespace
                 entry["ok"] = true;
                 entry["result"] = std::move(result);
                 ++okCount;
-            } catch (const json& err) {
-                entry["ok"] = false; entry["error"] = err; ++failCount;
+            } catch (const AutomationCommandError& err) {
+                entry["ok"] = false; entry["error"] = err.Error(); ++failCount;
             } catch (const std::exception& ex) {
                 entry["ok"] = false; entry["error"] = ex.what(); ++failCount;
             }
@@ -11295,7 +14162,7 @@ namespace
     }
 
     // ---- ecs.field.watch.pull ----
-    // 単一 field の前回 pull 時点との変化を返す。cursor は (entity,component,field,cursorName) で正規化。
+    // 蜊倅ｸ field 縺ｮ蜑榊屓 pull 譎らせ縺ｨ縺ｮ螟牙喧繧定ｿ斐☆縲Ｄursor 縺ｯ (entity,component,field,cursorName) 縺ｧ豁｣隕丞喧縲・
     std::unordered_map<std::string, json> g_fieldWatchCache;
 
     json HandleECSFieldWatchPull(Registry& registry, const json& params)
@@ -11305,11 +14172,11 @@ namespace
         const std::string fieldName = params.value("field", std::string{});
         const EntityID entity = EntityFromJson(params.value("entity", json(nullptr)));
         if (Entity::IsNull(entity) || compName.empty() || fieldName.empty()) {
-            throw MakeError("missing_param", "entity/component/field required.");
+            ThrowError("missing_param", "entity/component/field required.");
         }
         const std::string key = cursorName + "|" + EntityToString(entity) + "|" + compName + "|" + fieldName;
 
-        // 現在値取得 (ecs.field.get と同じロジックを再利用)
+        // 迴ｾ蝨ｨ蛟､蜿門ｾ・(ecs.field.get 縺ｨ蜷後§繝ｭ繧ｸ繝・け繧貞・蛻ｩ逕ｨ)
         json getParams = { { "entity", EntityToString(entity) }, { "component", compName }, { "field", fieldName } };
         json current = HandleECSFieldGet(registry, getParams);
         json currentValue = current.value("value", json(nullptr));
@@ -11321,7 +14188,7 @@ namespace
             prevValue = it->second;
             changed = (prevValue != currentValue);
         } else {
-            // 初回 pull は changed=false (baseline)
+            // 蛻晏屓 pull 縺ｯ changed=false (baseline)
             changed = false;
         }
         g_fieldWatchCache[key] = currentValue;
@@ -11349,6 +14216,327 @@ namespace
     // Before adding a new "Automation" setter: ask whether the render gate is open.
     // If it is not guaranteed, route the operation through the proper open/compile/
     // play pipeline so the gate opens first, then read back state to verify.
+    // =========================================================
+    // Phase 4 (案A): 自動視覚状態付与
+    // 目的: editor mutation 系コマンドの応答に _visualState を自動添付し、
+    //       「データ書いて後でスクショ」のレイテンシをゼロにする。
+    // =========================================================
+
+    bool IsMutationCommandForAutoVisual(const std::string& name)
+    {
+        // entity 系 + 各エディタ系の set/add/delete/connect/disconnect を対象。
+        // 大量にあるので prefix で判定する。
+        static const std::vector<std::string> exactSet = {
+            "set_component_fields", "set_transform", "add_component", "remove_component",
+            "create_empty", "create_model_entity", "delete_entity",
+            "instantiate_prefab", "duplicate_entity", "reparent_entity",
+            "scene.new",
+            "terrain.set_water", "terrain.set_noise", "terrain.set_dimensions",
+            "terrain.set_layer", "terrain.set_auto_splat", "terrain.set_erosion",
+            "terrain.apply_brush", "terrain.regenerate", "terrain.apply_preset"
+        };
+        if (std::find(exactSet.begin(), exactSet.end(), name) != exactSet.end()) return true;
+
+        static const std::vector<std::string> prefixSet = {
+            "player_editor.add_", "player_editor.set_", "player_editor.delete_",
+            "effect_editor.add_", "effect_editor.set_", "effect_editor.delete_",
+            "effect_editor.connect", "effect_editor.disconnect",
+            "ui_editor.create_", "ui_editor.set_view",
+            "game_loop_editor.add_", "game_loop_editor.set_", "game_loop_editor.delete_"
+        };
+        for (const auto& p : prefixSet) {
+            if (name.size() >= p.size() && name.compare(0, p.size(), p) == 0) return true;
+        }
+        return false;
+    }
+
+    json BuildAutoVisualState(EngineKernel& kernel, const std::string& commandName,
+                              const json& params, const json& result)
+    {
+        json vs;
+        vs["frameCount"] = kernel.GetTime().frameCount;
+        vs["mode"] = (kernel.GetMode() == EngineMode::Play) ? "Play"
+                   : (kernel.GetMode() == EngineMode::Pause) ? "Pause" : "Editor";
+
+        auto* editor = kernel.GetEditorLayer();
+        if (editor) {
+            vs["currentScenePath"] = editor->GetCurrentScenePath();
+        }
+
+        // params or result から entity を一つ以上抽出 (複数 entity 対応 = #13)
+        std::vector<EntityID> entities;
+        auto addEntity = [&](const json& v) {
+            try {
+                EntityID e = EntityFromJson(v);
+                if (!Entity::IsNull(e)) {
+                    if (std::find(entities.begin(), entities.end(), e) == entities.end())
+                        entities.push_back(e);
+                }
+            } catch (...) {}
+        };
+        auto scanForEntities = [&](const json& j) {
+            if (!j.is_object()) return;
+            for (const std::string& key : { std::string("entity"), std::string("fromEntity"),
+                                            std::string("toEntity"), std::string("newParent"),
+                                            std::string("newChild"), std::string("childEntity"),
+                                            std::string("parentEntity"), std::string("playerEntity"),
+                                            std::string("enemyEntity") }) {
+                if (j.contains(key)) addEntity(j[key]);
+            }
+            if (j.contains("entities") && j["entities"].is_array()) {
+                for (const auto& e : j["entities"]) addEntity(e);
+            }
+        };
+        scanForEntities(params);
+        scanForEntities(result);
+
+        Registry* registry = kernel.GetGameRegistry();
+        if (registry && !entities.empty()) {
+            json einfos = json::array();
+            for (EntityID entity : entities) {
+                if (!registry->IsAlive(entity)) {
+                    einfos.push_back({ { "id", EntityToString(entity) }, { "alive", false } });
+                    continue;
+                }
+                json einfo;
+                einfo["id"] = EntityToString(entity);
+                einfo["alive"] = true;
+                if (auto* n = registry->GetComponent<NameComponent>(entity)) {
+                    einfo["name"] = n->name;
+                }
+                if (auto* t = registry->GetComponent<TransformComponent>(entity)) {
+                    einfo["worldPosition"] = json::array({ t->worldPosition.x, t->worldPosition.y, t->worldPosition.z });
+                    einfo["localScale"] = json::array({ t->localScale.x, t->localScale.y, t->localScale.z });
+                }
+                // Game View 内可視性 + screen rect (#14)
+                try {
+                    json vp = HandleVisualVerifyEntityGameView(kernel, *registry,
+                        { { "entity", EntityToString(entity) } });
+                    if (vp.contains("gameView")) {
+                        einfo["gameViewVisible"] = vp["gameView"].value("visible", false);
+                        if (vp["gameView"].contains("x") && vp["gameView"].contains("y")) {
+                            einfo["gameViewScreenPos"] = json::array({
+                                vp["gameView"]["x"], vp["gameView"]["y"]
+                            });
+                        }
+                    }
+                    if (vp.contains("gameViewBounds")) {
+                        einfo["gameViewFullyVisible"] = vp["gameViewBounds"].value("fullyVisible", false);
+                        if (vp["gameViewBounds"].contains("margins")) {
+                            einfo["gameViewMargins"] = vp["gameViewBounds"]["margins"];
+                        }
+                    }
+                } catch (...) {
+                    // verify が失敗するエンティティ(UI 等) は静かに無視
+                }
+                einfos.push_back(std::move(einfo));
+            }
+            if (einfos.size() == 1) {
+                vs["entity"] = einfos[0];
+            } else {
+                vs["entity"] = einfos[0];
+                vs["entities"] = std::move(einfos);
+            }
+        }
+
+        // Editor-specific
+        if (editor) {
+            if (commandName.compare(0, 14, "player_editor.") == 0) {
+                auto& panel = editor->GetPlayerEditorPanel();
+                const EntityID p = panel.GetPreviewEntity();
+                vs["playerEditor"] = {
+                    { "active", editor->IsPlayerWorkspaceActive() },
+                    { "previewEntity", Entity::IsNull(p) ? json(nullptr) : json(EntityToString(p)) }
+                };
+            }
+            if (commandName.compare(0, 14, "effect_editor.") == 0) {
+                auto& panel = editor->GetEffectEditorPanel();
+                const EntityID p = panel.GetPreviewEntity();
+                vs["effectEditor"] = {
+                    { "active", editor->IsEffectEditorWorkspaceActive() },
+                    { "previewEntity", Entity::IsNull(p) ? json(nullptr) : json(EntityToString(p)) },
+                    { "compileDirty", panel.IsCompileDirtyForAutomation() }
+                };
+            }
+            if (commandName.compare(0, 10, "ui_editor.") == 0) {
+                vs["uiEditor"] = { { "active", editor->IsUIEditorActive() } };
+            }
+        }
+        return vs;
+    }
+
+    // =========================================================
+    // Phase 4 (案B): editor.mutate_and_assert
+    // =========================================================
+    json HandleEditorMutateAndAssert(EngineKernel& kernel, const json& params)
+    {
+        const std::string mutationCmd = params.value("command", std::string{});
+        if (mutationCmd.empty()) {
+            ThrowError("missing_param", "command required (the mutation to perform).");
+        }
+        const json mutationParams = params.value("params", json::object());
+        const json assertions = params.value("assertions", json::array());
+        // rollbackOnFail=true で、assertion が落ちた場合に Undo を呼んで mutation を巻き戻す。
+        // テスト失敗時に状態が汚染されたまま次に進むのを防ぐ。
+        const bool rollbackOnFail = params.value("rollbackOnFail", false);
+
+        // ファイル I/O を伴う mutation は rollback で巻き戻せない。
+        // scene.save / asset_browser.delete / material.create 等を渡したら警告を出す
+        // (allowFilesystemMutation=true で抑制可)。
+        static const std::vector<std::string> kFilesystemMutations = {
+            "scene.save", "scene.save_as", "asset_browser.delete", "asset_browser.move",
+            "asset_browser.rename", "asset_browser.create_folder", "asset_browser.copy",
+            "material.create", "material.set", "model_serializer.build",
+            "terrain.regenerate", "terrain.run_erosion",
+            "effect_editor.create_asset", "player_editor.save_prefab",
+            "ai_session.end"
+        };
+        const bool allowFsMutation = params.value("allowFilesystemMutation", false);
+        const bool isFsMutation = std::find(kFilesystemMutations.begin(),
+                                            kFilesystemMutations.end(),
+                                            mutationCmd) != kFilesystemMutations.end();
+        if (isFsMutation && !allowFsMutation) {
+            ThrowError("filesystem_mutation_blocked",
+                std::string("Command '") + mutationCmd + "' writes to disk and cannot be rolled back. "
+                "Pass allowFilesystemMutation=true to override.",
+                { { "command", mutationCmd } });
+        }
+
+        // mutation 前の undo stack 深さを記録。失敗時はここまで Undo で戻す。
+        const size_t undoDepthBefore = UndoSystem::Instance().GetECSUndoCount();
+        const uint64_t ecsRevisionBefore = UndoSystem::Instance().GetECSRevision();
+
+        // 1. mutation 実行
+        json mutationResult;
+        bool mutationOk = true;
+        json mutationError;
+        try {
+            json sub = { { "command", mutationCmd }, { "params", mutationParams } };
+            mutationResult = DispatchCommand(kernel, sub);
+        } catch (const json& err) {
+            mutationOk = false; mutationError = err;
+        } catch (const std::exception& ex) {
+            mutationOk = false; mutationError = MakeError("internal_error", ex.what());
+        }
+
+        // 2. 同期 wait: 指定回数だけ「観測非破壊な system」を回して world / hierarchy / camera を即時更新する。
+        //    完全な GameLayer::Update を呼ぶと Physics や Battle が走って副作用が出るので、
+        //    観測用の最小サブセット (Hierarchy → Transform → Animator → Camera) で反映する。
+        //    frameSync >= 1 で複数 frame 相当の再帰反映 (例: 親子が深い chain で 1 回では伝播し切らないとき)。
+        const int frameSync = (std::max)(0, params.value("frameSync", 1));
+        const bool syncAnimator = params.value("syncAnimator", true);
+        const bool syncCamera   = params.value("syncCamera",   true);
+        const bool syncHierarchy = params.value("syncHierarchy", true);
+        const float animatorDt = params.value("animatorDt", 1.0f / 60.0f);
+        if (mutationOk && frameSync > 0 && kernel.GetGameRegistry()) {
+            Registry& reg = *kernel.GetGameRegistry();
+            HierarchySystem hs;
+            TransformSystem ts;
+            for (int i = 0; i < frameSync; ++i) {
+                // Hierarchy: parent から dirty 伝播 + worldMatrix 再計算。
+                if (syncHierarchy) hs.Update(reg);
+                // Transform: dirty な entity の worldMatrix を最終確定する。
+                ts.Update(reg);
+                // Animator: bone の worldTransform を pose state から更新 (skinned mesh 観測に必須)。
+                if (syncAnimator) AnimatorSystem::Update(reg, animatorDt);
+                // Camera: viewMatrix / projMatrix / cameraForward 等を確定 (camera follow 観測に必須)。
+                if (syncCamera) CameraFinalizeSystem::Update(reg);
+            }
+        }
+
+        // 3. (任意) Play frame を 1 個以上 enqueue する。kernel.Step() は次の main update で
+        //    1 frame ずつ消費するため、本コマンド return 時点では assert は physics step 前に走る。
+        //    Physics / Combat / Animator 等の副作用を待ちたい場合は assertAfterSteps=true で
+        //    Step を先に enqueue → assertions は次の game.step_frames の後 (別 call) で実行する。
+        const int stepFrames = (std::max)(0, params.value("stepFrames", 0));
+        const bool assertAfterSteps = params.value("assertAfterSteps", false);
+        if (stepFrames > 0) {
+            PendingStepFrameCount() += static_cast<uint32_t>(stepFrames);
+            if (kernel.GetMode() == EngineMode::Editor) {
+                kernel.Play();
+            }
+            if (kernel.GetMode() == EngineMode::Play) {
+                kernel.Pause();
+            }
+        }
+
+        // 4. assertion 実行 (mutation 失敗時は skip)
+        // assertAfterSteps=true の場合、ここではスキップ。caller が step 後に assert_invariant を呼ぶ前提。
+        json assertResult = json::object();
+        bool assertionsRan = false;
+        bool assertionsPassed = true;
+        if (mutationOk && !assertions.empty() && !assertAfterSteps) {
+            assertResult = HandleSessionAssertInvariant(kernel,
+                *kernel.GetGameRegistry(),
+                { { "checks", assertions } });
+            assertionsRan = true;
+            assertionsPassed = assertResult.value("allPassed", false);
+        }
+
+        // 5. rollback: assertion 失敗 (or mutation 失敗) かつ rollbackOnFail=true なら
+        //    mutation 中に追加された undo action を全部 Undo して mutation 前の状態に戻す。
+        //    actionsReverted=0 (= mutation が undo 対象を残していない) なら executed=false で返す。
+        //    その場合 caller は「rollback したつもりが何も戻ってない」を検出できる。
+        json rollbackInfo = json::object();
+        bool rolledBack = false;
+        if (rollbackOnFail && kernel.GetGameRegistry()) {
+            const bool shouldRollback = !mutationOk || (assertionsRan && !assertionsPassed);
+            if (shouldRollback) {
+                Registry& reg = *kernel.GetGameRegistry();
+                const size_t undoDepthAfter = UndoSystem::Instance().GetECSUndoCount();
+                size_t toUndo = (undoDepthAfter > undoDepthBefore)
+                              ? (undoDepthAfter - undoDepthBefore) : 0;
+                size_t actualReverted = 0;
+                for (size_t i = 0; i < toUndo; ++i) {
+                    if (!UndoSystem::Instance().CanUndoECS()) break;
+                    UndoSystem::Instance().Undo(reg);
+                    ++actualReverted;
+                }
+                // executed=true は「実際に 1 個以上 Undo した」場合のみ。
+                rolledBack = (actualReverted > 0);
+                rollbackInfo = {
+                    { "actionsReverted", static_cast<int>(actualReverted) },
+                    { "undoDepthBefore", static_cast<int>(undoDepthBefore) },
+                    { "undoDepthAfter", static_cast<int>(undoDepthAfter) },
+                    { "ecsRevisionBefore", ecsRevisionBefore },
+                    { "ecsRevisionAfter", UndoSystem::Instance().GetECSRevision() },
+                    { "reason", !mutationOk ? "mutation_failed" : "assertion_failed" },
+                    { "warning", (toUndo == 0) ?
+                        std::string("mutation did not push any undo action; nothing to revert (e.g. read-only command, or mutation skipped undo)") :
+                        std::string{} }
+                };
+            }
+        }
+
+        // 6. 視覚状態自動添付
+        json visualState = BuildAutoVisualState(kernel, mutationCmd, mutationParams, mutationResult);
+
+        return {
+            { "mutation", {
+                { "command", mutationCmd },
+                { "params", mutationParams },
+                { "ok", mutationOk },
+                { "result", mutationOk ? mutationResult : json(nullptr) },
+                { "error", mutationOk ? json(nullptr) : mutationError }
+            }},
+            { "frameSync", frameSync },
+            { "stepFramesQueued", stepFrames },
+            { "pendingStepFrames", static_cast<int>(PendingStepFrameCount()) },
+            { "assertions", assertions.empty() ? json::object()
+                          : json{ { "ran", assertionsRan },
+                                  { "allPassed", assertionsPassed },
+                                  { "deferredToCaller", assertAfterSteps && stepFrames > 0 },
+                                  { "summary", assertResult },
+                                  { "pendingAssertions", (!assertionsRan && assertAfterSteps) ? assertions : json::array() } } },
+            { "rollback", {
+                { "requested", rollbackOnFail },
+                { "executed", rolledBack },
+                { "info", std::move(rollbackInfo) }
+            }},
+            { "_visualState", std::move(visualState) }
+        };
+    }
+
     json DispatchCommand(EngineKernel& kernel, const json& command)
     {
         const std::string name = command.value("command", std::string{});
@@ -11366,6 +14554,9 @@ namespace
         }
         if (name == "get_visual_state") {
             return HandleGetVisualState(kernel);
+        }
+        if (name == "automation.get_manifest") {
+            return HandleAutomationGetManifest(params);
         }
         if (name == "editor.recovery.get_state") {
             return HandleRecoveryGetState(kernel, params);
@@ -11490,6 +14681,18 @@ namespace
         if (name == "bone.get_world_batch") {
             return HandleBoneGetWorldBatch(*registry, params);
         }
+        if (name == "bone.stream.start") {
+            return HandleBoneStreamStart(*registry, params);
+        }
+        if (name == "bone.stream.pull") {
+            return HandleBoneStreamPull(params);
+        }
+        if (name == "bone.stream.stop") {
+            return HandleBoneStreamStop(params);
+        }
+        if (name == "bone.stream.list") {
+            return HandleBoneStreamList();
+        }
         if (name == "log.tail") {
             return HandleLogTail(params);
         }
@@ -11505,6 +14708,9 @@ namespace
         }
         if (name == "input.get_resolved_state") {
             return HandleInputGetResolvedState(*registry, params);
+        }
+        if (name == "input.events.pull") {
+            return HandleInputEventsPull(kernel, params);
         }
         if (name == "ecs.field.get") {
             return HandleECSFieldGet(*registry, params);
@@ -11528,8 +14734,14 @@ namespace
         if (name == "asset.status") {
             return HandleAssetStatus(params);
         }
+        if (name == "asset.list_loaded") {
+            return HandleAssetListLoaded(params);
+        }
         if (name == "render.queue.snapshot") {
-            return HandleRenderQueueSnapshot(kernel);
+            return HandleRenderQueueSnapshot(kernel, params);
+        }
+        if (name == "render.pass_timings") {
+            return HandleRenderPassTimings(kernel, params);
         }
         if (name == "collision.raycast") {
             return HandleCollisionRaycast(params);
@@ -11537,11 +14749,26 @@ namespace
         if (name == "collision.overlap_sphere") {
             return HandleCollisionOverlapSphere(*registry, params);
         }
+        if (name == "collision.is_hitting") {
+            return HandleCollisionIsHitting(*registry, params);
+        }
         if (name == "visual.get_pixel_at_screen") {
             return HandleVisualGetPixelAtScreen(kernel, params);
         }
         if (name == "visual.compare_capture") {
             return HandleVisualCompareCapture(params);
+        }
+        if (name == "visual.baseline.save") {
+            return HandleVisualBaselineSave(kernel, params);
+        }
+        if (name == "visual.baseline.list") {
+            return HandleVisualBaselineList(params);
+        }
+        if (name == "visual.baseline.delete") {
+            return HandleVisualBaselineDelete(params);
+        }
+        if (name == "visual.baseline.compare") {
+            return HandleVisualBaselineCompare(kernel, params);
         }
         if (name == "editor.get_hierarchy_selection") {
             return HandleEditorGetHierarchySelection(kernel);
@@ -11556,9 +14783,9 @@ namespace
             return HandleECSFieldWatchPull(*registry, params);
         }
         if (name == "ecs.watch") {
-            // 後方互換: enable のみで broadcast を on/off。
-            // 追加: action="pull" で前回呼出からの ECS revision delta を返す (request-response 経路)。
-            //       action="status" で現在の watch 状態だけ返す。
+            // 蠕梧婿莠呈鋤: enable 縺ｮ縺ｿ縺ｧ broadcast 繧・on/off縲・
+            // 霑ｽ蜉: action="pull" 縺ｧ蜑榊屓蜻ｼ蜃ｺ縺九ｉ縺ｮ ECS revision delta 繧定ｿ斐☆ (request-response 邨瑚ｷｯ)縲・
+            //       action="status" 縺ｧ迴ｾ蝨ｨ縺ｮ watch 迥ｶ諷九□縺題ｿ斐☆縲・
             const std::string action = ToLowerCopy(params.value("action", std::string{}));
             if (action == "pull") {
                 const std::string cursorName = params.value("name", std::string("default"));
@@ -11590,7 +14817,7 @@ namespace
             return { { "enabled", g_ecsWatchEnabled } };
         }
         if (!registry) {
-            throw MakeError("operation_not_allowed", "Game registry is not available.");
+            ThrowError("operation_not_allowed", "Game registry is not available.");
         }
         if (name == "ecs.query") {
             return HandleECSQuery(*registry, params);
@@ -11658,6 +14885,9 @@ namespace
         if (name == "game.step_frames") {
             return HandleGameStepFrames(kernel, params);
         }
+        if (name == "game.poll_pending_steps") {
+            return HandleGamePollPendingSteps(kernel, params);
+        }
         if (name == "game.set_time_scale") {
             return HandleGameSetTimeScale(kernel, params);
         }
@@ -11676,26 +14906,41 @@ namespace
         if (name == "game.input.mouse_move") {
             return HandleGameInputMouseMove(kernel, params);
         }
-        if (name == "list_entities") {
+        if (name == "list_entities" || name == "entity.list") {
             return HandleListEntities(*registry);
         }
-        if (name == "get_entity") {
+        if (name == "get_entity" || name == "entity.get") {
             return HandleGetEntity(*registry, params);
         }
-        if (name == "get_component") {
+        if (name == "get_component" || name == "component.get") {
             return HandleGetComponent(*registry, params);
         }
-        if (name == "select_entity") {
+        if (name == "select_entity" || name == "entity.select") {
             return HandleSelectEntity(*registry, params);
         }
-        if (name == "add_component") {
+        if (name == "add_component" || name == "component.add") {
             return HandleAddComponent(*registry, params);
         }
-        if (name == "remove_component") {
+        if (name == "remove_component" || name == "component.remove") {
             return HandleRemoveComponent(*registry, params);
         }
-        if (name == "set_component_fields") {
+        if (name == "set_component_fields" || name == "component.set_fields") {
             return HandleSetComponentFields(*registry, params);
+        }
+        if (name == "component.vector.get") {
+            return HandleComponentVectorOperation(*registry, params, "get");
+        }
+        if (name == "component.vector.insert") {
+            return HandleComponentVectorOperation(*registry, params, "insert");
+        }
+        if (name == "component.vector.remove") {
+            return HandleComponentVectorOperation(*registry, params, "remove");
+        }
+        if (name == "component.vector.set") {
+            return HandleComponentVectorOperation(*registry, params, "set");
+        }
+        if (name == "component.vector.set_element_field") {
+            return HandleComponentVectorOperation(*registry, params, "set_element_field");
         }
         if (name == "entity.add_collider_element") {
             return HandleEntityAddColliderElement(*registry, params);
@@ -11709,22 +14954,26 @@ namespace
         if (name == "entity.list_collider_elements") {
             return HandleEntityListColliderElements(*registry, params);
         }
-        if (name == "create_empty") {
+        // entity 系: 短い動詞名と namespace.verb 形の両方を受ける (発見性向上)。
+        if (name == "create_empty" || name == "entity.create_empty" || name == "entity.create") {
             return HandleCreateEmpty(*registry, params);
         }
-        if (name == "create_model_entity") {
+        if (name == "entity.batch_create" || name == "batch_create_empty") {
+            return HandleEntityBatchCreate(*registry, params);
+        }
+        if (name == "create_model_entity" || name == "entity.create_model" || name == "entity.create_from_model") {
             return HandleCreateModelEntity(*registry, params);
         }
-        if (name == "set_transform") {
+        if (name == "set_transform" || name == "entity.set_transform") {
             return HandleSetTransform(*registry, params);
         }
-        if (name == "delete_entity") {
+        if (name == "delete_entity" || name == "entity.delete") {
             return HandleDeleteEntity(*registry, params);
         }
-        if (name == "duplicate_entity") {
+        if (name == "duplicate_entity" || name == "entity.duplicate") {
             return HandleDuplicateEntity(*registry, params);
         }
-        if (name == "reparent_entity") {
+        if (name == "reparent_entity" || name == "entity.reparent") {
             return HandleReparentEntity(*registry, params);
         }
         if (name == "instantiate_prefab") {
@@ -11878,7 +15127,7 @@ namespace
             };
         }
         if (name == "coingame.tag_coins") {
-            if (!registry) throw MakeError("no_registry", "No game registry available.");
+            if (!registry) ThrowError("no_registry", "No game registry available.");
             int tagged = 0;
             const auto nameTypeId = TypeManager::GetComponentTypeID<NameComponent>();
             std::vector<EntityID> toTag;
@@ -11921,6 +15170,23 @@ namespace
         }
         if (name == "player_editor.get_status") {
             return HandlePlayerEditorGetStatus(kernel);
+        }
+        if (name == "player_editor.set_actor_mode" || name == "player_editor.set_actor_role") {
+            return HandlePlayerEditorSetActorMode(kernel, params);
+        }
+        if (name == "player_editor.apply_full_player_preset") {
+            return HandlePlayerEditorApplyFullPlayerPreset(kernel, params);
+        }
+        if (name == "player_editor.apply_attack_combo_preset") {
+            return HandlePlayerEditorApplyAttackComboPreset(kernel, params);
+        }
+        if (name == "player_editor.apply_actor_preset") {
+            return HandlePlayerEditorApplyActorPreset(kernel, params);
+        }
+        if (name == "player_editor.apply_enemy_preset") {
+            json presetParams = params;
+            presetParams["actorMode"] = "Enemy";
+            return HandlePlayerEditorApplyActorPreset(kernel, presetParams);
         }
         if (name == "player_editor.load_model") {
             return HandlePlayerEditorLoadModel(kernel, params);
@@ -12085,17 +15351,17 @@ namespace
         if (name == "lighting.open")                  { return HandleLightingOpen(kernel); }
         if (name == "lighting.get") {
             Registry* reg = kernel.GetGameRegistry();
-            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
             return HandleLightingGet(*reg);
         }
         if (name == "lighting.set_environment") {
             Registry* reg = kernel.GetGameRegistry();
-            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
             return HandleLightingSetEnvironment(*reg, params);
         }
         if (name == "lighting.set_post_effects") {
             Registry* reg = kernel.GetGameRegistry();
-            if (!reg) throw MakeError("registry_unavailable", "Game registry is not available.");
+            if (!reg) ThrowError("registry_unavailable", "Game registry is not available.");
             return HandleLightingSetPostEffects(*reg, params);
         }
         // ---- UI Editor ----
@@ -12133,6 +15399,7 @@ namespace
         if (name == "editor.focus_panel")         { return HandleEditorFocusPanel(kernel, params); }
         if (name == "editor.get_panels")          { return HandleEditorGetPanels(kernel); }
         if (name == "editor.show_panel")          { return HandleEditorShowPanel(kernel, params); }
+        if (name == "editor.mutate_and_assert")   { return HandleEditorMutateAndAssert(kernel, params); }
 
         // ---- scene_view snap / grid / 2D ----
         if (name == "scene_view.get_snap")        { return HandleSceneViewGetSnap(kernel); }
@@ -12151,14 +15418,14 @@ namespace
 
         if (name == "fire_ui_button") {
             const std::string buttonId = params.value("buttonId", std::string{});
-            if (buttonId.empty()) throw MakeError("missing_param", "buttonId is required.");
+            if (buttonId.empty()) ThrowError("missing_param", "buttonId is required.");
             kernel.GetFlowEventQueue().Push("ui.button.clicked", buttonId);
             return { { "fired", true }, { "buttonId", buttonId } };
         }
         if (name == "push_flow_event") {
             const std::string evtName  = params.value("name",  std::string{});
             const std::string evtValue = params.value("value", std::string{});
-            if (evtName.empty()) throw MakeError("missing_param", "name is required.");
+            if (evtName.empty()) ThrowError("missing_param", "name is required.");
             kernel.GetFlowEventQueue().Push(evtName, evtValue);
             return { { "pushed", true }, { "name", evtName }, { "value", evtValue } };
         }
@@ -12173,7 +15440,7 @@ namespace
         if (name == "gameloop_editor.save")       { return HandleGameLoopEditorSave(kernel); }
         if (name == "gameloop_editor.validate")   { return HandleGameLoopEditorValidate(kernel); }
 
-        throw MakeError("unknown_command", "Unknown AI automation command.", { { "command", name } });
+        ThrowError("unknown_command", "Unknown AI automation command.", { { "command", name } });
     }
 
     bool ReadJsonFile(const std::filesystem::path& path, json& out, json& error)
@@ -12245,7 +15512,8 @@ namespace
         return name == "ai_session.begin" ||
                name == "ai_session.status" ||
                name == "ai_session.end" ||
-               name == "ai_session.rollback";
+               name == "ai_session.rollback" ||
+               name == "session.clear_cursors";
     }
 
     std::string LowerCopy(std::string value)
@@ -12411,10 +15679,32 @@ namespace
         return out;
     }
 
+    json HandleSessionClearCursors(const json& params)
+    {
+        const bool clearCollision = params.value("collision", true);
+        const bool clearGameFlow  = params.value("gameflow", true);
+        const bool clearLogs      = params.value("logs", true);
+        const bool clearDamageRecent = params.value("damageRecent", false);
+        size_t before = g_collisionPullCursors.size() + g_gameFlowPullCursors.size() + g_logPullCursors.size();
+        if (clearCollision) g_collisionPullCursors.clear();
+        if (clearGameFlow)  g_gameFlowPullCursors.clear();
+        if (clearLogs)      g_logPullCursors.clear();
+        if (clearDamageRecent) DamageEventRuntimeQueue::ClearRecent();
+        return {
+            { "ok", true },
+            { "clearedCount", static_cast<int>(before) },
+            { "remaining", {
+                { "collision", static_cast<int>(g_collisionPullCursors.size()) },
+                { "gameflow",  static_cast<int>(g_gameFlowPullCursors.size()) },
+                { "logs",      static_cast<int>(g_logPullCursors.size()) }
+            } }
+        };
+    }
+
     json HandleAISessionBegin(EngineKernel& kernel, const json& params)
     {
         if (g_automationSession.active && !params.value("force", false)) {
-            throw MakeError("session_active", "An AI automation session is already active.", {
+            ThrowError("session_active", "An AI automation session is already active.", {
                 { "sessionId", g_automationSession.id }
             });
         }
@@ -12426,6 +15716,10 @@ namespace
             ? SanitizeFileStem(name + "_" + MakeTimestampSuffix())
             : SanitizeFileStem(explicitId);
         const std::filesystem::path dir = std::filesystem::path("Saved") / "AI" / "sessions" / sessionId;
+
+        // session 開始時は automation 由来の pull cursor を全部リセットする。
+        // 前 session の cursor が残っていると、新 session の最初の pull が空配列に見える。
+        ClearAllAutomationCursors();
 
         g_automationSession = AutomationSessionState{};
         g_automationSession.active = true;
@@ -12490,11 +15784,11 @@ namespace
     json HandleAISessionRollback(EngineKernel& kernel, const json& params)
     {
         if (!g_automationSession.active) {
-            throw MakeError("session_not_active", "No AI automation session is active.");
+            ThrowError("session_not_active", "No AI automation session is active.");
         }
         Registry* registry = kernel.GetGameRegistry();
         if (!registry) {
-            throw MakeError("operation_not_allowed", "No active registry is available for rollback.");
+            ThrowError("operation_not_allowed", "No active registry is available for rollback.");
         }
 
         const size_t currentUndoCount = UndoSystem::Instance().GetECSUndoCount();
@@ -12546,7 +15840,7 @@ namespace
     json HandleAISessionEnd(EngineKernel& kernel, const json& params)
     {
         if (!g_automationSession.active) {
-            throw MakeError("session_not_active", "No AI automation session is active.");
+            ThrowError("session_not_active", "No AI automation session is active.");
         }
 
         const bool success = params.value("success", true);
@@ -12584,7 +15878,10 @@ namespace
         if (name == "ai_session.end") {
             return HandleAISessionEnd(kernel, params);
         }
-        throw MakeError("unknown_command", "Unknown AI session command.", { { "command", name } });
+        if (name == "session.clear_cursors") {
+            return HandleSessionClearCursors(params);
+        }
+        ThrowError("unknown_command", "Unknown AI session command.", { { "command", name } });
     }
 
     json RecoveryStateToJson(EditorLayer& editor)
@@ -12604,7 +15901,7 @@ namespace
     {
         EditorLayer* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         if (params.value("refresh", false)) {
             editor->CheckRecoveryCandidateFromAutomation();
@@ -12616,7 +15913,7 @@ namespace
     {
         EditorLayer* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const json before = RecoveryStateToJson(*editor);
         const bool restored = editor->RecoverAutosaveFromAutomation();
@@ -12632,7 +15929,7 @@ namespace
     {
         EditorLayer* editor = kernel.GetEditorLayer();
         if (!editor) {
-            throw MakeError("operation_not_allowed", "EditorLayer is not available.");
+            ThrowError("operation_not_allowed", "EditorLayer is not available.");
         }
         const json before = RecoveryStateToJson(*editor);
         const bool dismissed = editor->DismissAutosaveRecoveryFromAutomation();
@@ -12744,14 +16041,29 @@ namespace
             const size_t beforeUndoCount = UndoSystem::Instance().GetECSUndoCount();
             json beforeState = recordSession ? HandleGetEngineState(kernel) : json(nullptr);
             json result = DispatchCommand(kernel, command);
+
+            // Phase 4 案A: mutation 系コマンドの結果に _visualState を自動添付する。
+            // editor.mutate_and_assert は内部で BuildAutoVisualState を直接呼ぶので、
+            // ここでの二重添付は不要 (既に _visualState を含む)。
+            if (result.is_object() && !result.contains("_visualState") &&
+                IsMutationCommandForAutoVisual(name)) {
+                try {
+                    json vs = BuildAutoVisualState(kernel, name,
+                        command.value("params", json::object()), result);
+                    result["_visualState"] = std::move(vs);
+                } catch (...) {
+                    // 視覚状態構築は best-effort、失敗しても mutation 結果は返す。
+                }
+            }
+
             json response = MakeResult(command, true, std::move(result), nullptr);
             if (recordSession) {
                 RecordAutomationSessionCommand(kernel, command, response, beforeState, beforeRevision, beforeUndoCount);
             }
             return response;
         }
-        catch (const json& jsonError) {
-            json response = MakeResult(command, false, nullptr, jsonError);
+        catch (const AutomationCommandError& error) {
+            json response = MakeResult(command, false, nullptr, error.Error());
             if (g_automationSession.active && !IsSessionCommandName(command.value("command", std::string{}))) {
                 RecordAutomationSessionCommand(
                     kernel,
@@ -12922,8 +16234,8 @@ bool AIAutomationService::TryStartPendingEffectMultiTimeReview(EngineKernel& ker
         m_pendingEffectMultiTimeReview.target = params.value("target", std::string("effect_editor"));
         return true;
     }
-    catch (const json& jsonError) {
-        sendError(jsonError);
+    catch (const AutomationCommandError& error) {
+        sendError(error.Error());
         return true;
     }
     catch (const std::exception& e) {
@@ -13005,8 +16317,8 @@ void AIAutomationService::ProcessPendingEffectMultiTimeReview(EngineKernel& kern
         }
         job.waitFrames = (std::max)(2, job.params.value("settleFrames", 2));
     }
-    catch (const json& jsonError) {
-        finish(false, nullptr, jsonError);
+    catch (const AutomationCommandError& error) {
+        finish(false, nullptr, error.Error());
     }
     catch (const std::exception& e) {
         finish(false, nullptr, MakeError("internal_error", e.what()));
@@ -13018,6 +16330,8 @@ void AIAutomationService::ProcessPendingEffectMultiTimeReview(EngineKernel& kern
 
 void AIAutomationService::ProcessPendingCommands(EngineKernel& kernel)
 {
+    CaptureInputEvents(kernel);
+    CaptureBoneStreams(kernel);
     ProcessPendingInjectedInputs(kernel);
     ProcessPendingEffectMultiTimeReview(kernel);
 

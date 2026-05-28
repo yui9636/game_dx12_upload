@@ -3,6 +3,7 @@
 
 #include "Archetype/Archetype.h"
 #include "Component/ActorTypeComponent.h"
+#include "Component/CameraBehaviorComponent.h"
 #include "Component/ColliderComponent.h"
 #include "Component/ComponentSignature.h"
 #include "Component/HierarchyComponent.h"
@@ -17,12 +18,18 @@
 #include "Gameplay/HitboxTrackingComponent.h"
 #include "Gameplay/HUDLinkComponent.h"
 #include "Gameplay/LocomotionStateComponent.h"
+#include "Gameplay/PlayerTagComponent.h"
 #include "Gameplay/StateMachineAssetComponent.h"
 #include "Gameplay/StateMachineParamsComponent.h"
 #include "Gameplay/TeamComponent.h"
 #include "Gameplay/TimelineComponent.h"
 #include "Gameplay/TimelineItemBuffer.h"
 #include "PlayerEditor/StateMachineAsset.h"
+#include "Input/InputActionMapComponent.h"
+#include "Input/InputBindingComponent.h"
+#include "Input/InputContextComponent.h"
+#include "Input/InputUserComponent.h"
+#include "Input/ResolvedInputStateComponent.h"
 #include "Registry/Registry.h"
 #include "Type/TypeInfo.h"
 
@@ -44,6 +51,17 @@ namespace
         registry.AddComponent(entity, T{});
         return registry.GetComponent<T>(entity);
     }
+
+    void RemovePlayerControlledComponents(Registry& registry, EntityID entity)
+    {
+        registry.RemoveComponent<PlayerTagComponent>(entity);
+        registry.RemoveComponent<InputUserComponent>(entity);
+        registry.RemoveComponent<InputContextComponent>(entity);
+        registry.RemoveComponent<InputActionMapComponent>(entity);
+        registry.RemoveComponent<InputBindingComponent>(entity);
+        registry.RemoveComponent<ResolvedInputStateComponent>(entity);
+        registry.RemoveComponent<CameraTPVControlComponent>(entity);
+    }
 }
 
 // 敵ランタイム構築用の関数群をまとめる名前空間。
@@ -54,6 +72,7 @@ namespace EnemyRuntimeSetup
     {
         if (Entity::IsNull(entity)) return;
 
+        RemovePlayerControlledComponents(registry, entity);
         EnsureComponent<EnemyTagComponent>(registry, entity);
 
         if (auto* actor = EnsureComponent<ActorTypeComponent>(registry, entity)) {
@@ -135,6 +154,7 @@ namespace EnemyRuntimeSetup
     {
         if (Entity::IsNull(entity)) return;
 
+        RemovePlayerControlledComponents(registry, entity);
         if (auto* actor = EnsureComponent<ActorTypeComponent>(registry, entity)) {
             actor->type = ActorType::NPC;
         }

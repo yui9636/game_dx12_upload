@@ -6,6 +6,7 @@
 #include "Input/InputEventQueue.h"
 #include "Registry/Registry.h"
 #include "UI/UIHitTestSystem.h"
+#include "UI/UIScreenSpaceOverlay.h"
 #include "UIButtonClickEventQueue.h"
 
 namespace
@@ -49,6 +50,17 @@ namespace
                                   const DirectX::XMFLOAT4X4& projection,
                                   const DirectX::XMFLOAT2& screenPoint)
     {
+        UIHitTestResult overlayHit = UIScreenSpaceOverlay::PickTopmost(
+            registry,
+            gameViewRect,
+            view,
+            projection,
+            screenPoint);
+
+        if (!Entity::IsNull(overlayHit.entity)) {
+            return ResolveButtonTarget(registry, overlayHit.entity);
+        }
+
         UIHitTestResult hit = UIHitTestSystem::PickTopmost(
             registry,
             gameViewRect,

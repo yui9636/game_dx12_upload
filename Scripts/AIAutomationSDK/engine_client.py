@@ -30,6 +30,26 @@ from urllib.parse import urlparse
 PROTOCOL_VERSION = 1
 DEFAULT_URL = "ws://127.0.0.1:9876"
 DEFAULT_TIMEOUT = 5.0
+HEAVY_COMMAND_TIMEOUTS: Dict[str, float] = {
+    # 重い operation の socket timeout を個別延長する (default 5s ではまず切れる)。
+    # engine は single-thread のため、これらが走ってる間 ping にすら応答しない。
+    "scene.new": 30.0,
+    "scene.load": 30.0,
+    "scene.save": 30.0,
+    "terrain.create": 180.0,
+    "terrain.regenerate": 180.0,
+    "terrain.run_erosion": 180.0,
+    "player_editor.load_model": 180.0,
+    "model_serializer.build": 180.0,
+    "effect_editor.create_asset": 60.0,
+    "effect_editor.load": 60.0,
+    "ai_session.end": 60.0,
+    "visual.baseline.save": 30.0,
+    "visual.baseline.compare": 30.0,
+    "screenshot": 30.0,
+    # ECS query on large scenes can be slow when includeDetails=true
+    "ecs.query": 30.0,
+}
 
 
 # ── ParticleEmitter ノード スロット マッピング (effect_editor.set_node 用) ─────
@@ -66,8 +86,10 @@ COMMANDS: List[str] = [
     "ai_session.status",
     "ai_session.rollback",
     "ai_session.end",
+    "session.clear_cursors",
     "get_engine_state",
     "get_visual_state",
+    "automation.get_manifest",
     "editor.recovery.get_state",
     "editor.recovery.restore",
     "editor.recovery.dismiss",
@@ -121,12 +143,17 @@ COMMANDS: List[str] = [
     "bone.list",
     "bone.get_world",
     "bone.get_world_batch",
+    "bone.stream.start",
+    "bone.stream.pull",
+    "bone.stream.stop",
+    "bone.stream.list",
     "log.tail",
     "log.pull",
     "log.clear",
     # Phase 2
     "animator.get_state",
     "input.get_resolved_state",
+    "input.events.pull",
     "ecs.field.get",
     "session.assert_invariant",
     "gameflow.events.pull",
@@ -135,32 +162,63 @@ COMMANDS: List[str] = [
     "visual.find_text",
     "editor.get_focus",
     "asset.status",
+    "asset.list_loaded",
     "render.queue.snapshot",
+    "render.pass_timings",
     "collision.raycast",
     "collision.overlap_sphere",
+    "collision.is_hitting",
     "visual.get_pixel_at_screen",
     "visual.compare_capture",
+    "visual.baseline.save",
+    "visual.baseline.list",
+    "visual.baseline.delete",
+    "visual.baseline.compare",
     "editor.get_hierarchy_selection",
     "session.record_macro",
     "session.replay_macro",
     "ecs.field.watch.pull",
+    # Phase 4 (A+B hybrid): auto visual state + atomic mutate+assert
+    "editor.mutate_and_assert",
     "list_entities",
     "get_entity",
     "get_component",
     "select_entity",
     "add_component",
+    "component.add",
     "remove_component",
+    "component.remove",
     "set_component_fields",
+    "component.set_fields",
+    "component.get",
+    "entity.list",
+    "entity.get",
+    "entity.select",
+    "component.vector.get",
+    "component.vector.insert",
+    "component.vector.remove",
+    "component.vector.set",
+    "component.vector.set_element_field",
     "entity.add_collider_element",
     "entity.set_collider_element",
     "entity.delete_collider_element",
     "entity.list_collider_elements",
     "create_empty",
+    "entity.create_empty",
+    "entity.create",
+    "entity.batch_create",
+    "batch_create_empty",
     "create_model_entity",
+    "entity.create_model",
+    "entity.create_from_model",
     "set_transform",
+    "entity.set_transform",
     "delete_entity",
+    "entity.delete",
     "duplicate_entity",
+    "entity.duplicate",
     "reparent_entity",
+    "entity.reparent",
     "instantiate_prefab",
     "focus_entity",
     "frame_selection",
@@ -220,6 +278,7 @@ COMMANDS: List[str] = [
     "game.stop",
     "game.pause",
     "game.step_frames",
+    "game.poll_pending_steps",
     "game.set_time_scale",
     "gameplay.get_state",
     "gameplay.get_events",
@@ -231,6 +290,12 @@ COMMANDS: List[str] = [
     "game.input.mouse_move",
     "player_editor.open",
     "player_editor.get_status",
+    "player_editor.set_actor_mode",
+    "player_editor.set_actor_role",
+    "player_editor.apply_full_player_preset",
+    "player_editor.apply_attack_combo_preset",
+    "player_editor.apply_actor_preset",
+    "player_editor.apply_enemy_preset",
     "player_editor.load_model",
     "player_editor.get_state_machine",
     "player_editor.add_state",
@@ -253,6 +318,12 @@ COMMANDS: List[str] = [
     "game_loop_editor.load",
     "game_loop_editor.save",
     "game_loop_editor.validate",
+    "gameloop_editor.open",
+    "gameloop_editor.get_status",
+    "gameloop_editor.get_asset",
+    "gameloop_editor.load",
+    "gameloop_editor.save",
+    "gameloop_editor.validate",
     "game_loop_editor.add_node",
     "game_loop_editor.set_node",
     "game_loop_editor.delete_node",
@@ -391,12 +462,70 @@ class EngineClient:
     commands = tuple(COMMANDS)
     command_methods = dict(COMMAND_METHODS)
 
-    def __init__(self, url: str = DEFAULT_URL, timeout: float = DEFAULT_TIMEOUT):
+    # 自動 reconnect の後に 1 回だけ自動 retry してよい command (読み取り中心の冪等系)。
+    # mutation 系 (entity.create / set_component_fields / scene.save 等) は副作用が
+    # 二重実行されるため、自動 retry はしない。失敗を呼び出し側に返すのみ。
+    SAFE_RETRY_COMMANDS: tuple = (
+        "ping",
+        "get_engine_state",
+        "get_visual_state",
+        "automation.get_manifest",
+        "get_component_schema",
+        "ecs.query",
+        "ecs.field.get",
+        "gameflow.get_runtime_state",
+        "gameflow.eval_conditions",
+        "collision.raycast",
+        "collision.overlap_sphere",
+        "collision.is_hitting",
+        "bone.list",
+        "bone.get_world",
+        "bone.get_world_batch",
+        "log.tail",
+        "animator.get_state",
+        "input.get_resolved_state",
+        "session.assert_invariant",
+        "visual.find_text",
+        "visual.get_pixel_at_screen",
+        "visual.compare_capture",
+        "visual.baseline.list",
+        "visual.baseline.compare",
+        "editor.get_focus",
+        "editor.get_hierarchy_selection",
+        "asset.status",
+        "render.queue.snapshot",
+        "game.poll_pending_steps",
+    )
+
+    # cursor を進める pull 系。peek=true で送られた時のみ retry 安全。
+    # peek=false での retry は cursor 二重進行で event を取り損ねる。
+    CURSOR_ADVANCE_COMMANDS: tuple = (
+        "gameflow.events.pull",
+        "collision.events.pull",
+        "log.pull",
+        "ecs.field.watch.pull",
+    )
+
+    def __init__(
+        self,
+        url: str = DEFAULT_URL,
+        timeout: float = DEFAULT_TIMEOUT,
+        auto_reconnect: bool = True,
+        auto_retry: bool = True,
+        max_reconnect_attempts: int = 3,
+        reconnect_backoff_sec: float = 0.5,
+    ):
         self.endpoint = parse_endpoint(url)
         self.timeout = float(timeout)
+        self.auto_reconnect = bool(auto_reconnect)
+        self.auto_retry = bool(auto_retry)
+        self.max_reconnect_attempts = max(1, int(max_reconnect_attempts))
+        self.reconnect_backoff_sec = max(0.0, float(reconnect_backoff_sec))
         self._socket: Optional[socket.socket] = None
         self._recv_buffer = b""
         self._next_id = 1
+        self._reconnect_count = 0
+        self._last_reconnect_at: Optional[float] = None
 
     def __enter__(self) -> "EngineClient":
         self.connect()
@@ -478,18 +607,25 @@ class EngineClient:
         if self._socket is None:
             self.connect()
 
-        old_timeout = None
-        if timeout is not None and self._socket is not None:
-            old_timeout = self._socket.gettimeout()
-            self._socket.settimeout(float(timeout))
+        effective_timeout = timeout
+        if effective_timeout is None:
+            effective_timeout = HEAVY_COMMAND_TIMEOUTS.get(command_name)
 
-        try:
-            payload = {
+        old_timeout = None
+        if effective_timeout is not None and self._socket is not None:
+            old_timeout = self._socket.gettimeout()
+            self._socket.settimeout(float(effective_timeout))
+
+        def _build_payload() -> dict:
+            return {
                 "version": PROTOCOL_VERSION,
                 "id": command_id or self._make_command_id(command_name),
                 "command": command_name,
                 "params": dict(params or {}),
             }
+
+        def _send_once() -> Any:
+            payload = _build_payload()
             self._send_text(json.dumps(payload, separators=(",", ":")))
             response_text = self._recv_text()
             response = json.loads(response_text)
@@ -500,12 +636,77 @@ class EngineClient:
                     return response
                 raise EngineCommandError(response)
             return response if raw_response else response.get("result")
+
+        try:
+            return _send_once()
+        except (OSError, socket.timeout, EngineConnectionError) as exc:
+            self.close()
+            reconnected = False
+            last_err: Optional[BaseException] = exc
+            if self.auto_reconnect:
+                # exponential backoff で最大 N 回 reconnect 試行する
+                for attempt in range(self.max_reconnect_attempts):
+                    sleep_sec = self.reconnect_backoff_sec * (2 ** attempt)
+                    if sleep_sec > 0:
+                        time.sleep(sleep_sec)
+                    try:
+                        self.connect()
+                        reconnected = True
+                        self._reconnect_count += 1
+                        self._last_reconnect_at = time.time()
+                        break
+                    except Exception as reconnect_err:
+                        last_err = reconnect_err
+                        continue
+            # retry 判定: 完全冪等な SAFE_RETRY_COMMANDS、または
+            # cursor を進めうるが peek=true で呼ばれている CURSOR_ADVANCE_COMMANDS。
+            is_safe_retry = command_name in self.SAFE_RETRY_COMMANDS
+            is_peek_cursor = (
+                command_name in self.CURSOR_ADVANCE_COMMANDS and
+                bool((params or {}).get("peek", False))
+            )
+            if reconnected and self.auto_retry and (is_safe_retry or is_peek_cursor):
+                # idempotent な command のみ再送する
+                if effective_timeout is not None and self._socket is not None:
+                    self._socket.settimeout(float(effective_timeout))
+                try:
+                    return _send_once()
+                except (OSError, socket.timeout, EngineConnectionError) as retry_exc:
+                    last_err = retry_exc
+                    self.close()
+            suffix = " Reconnected; the next command can continue." if reconnected else ""
+            raise EngineConnectionError(
+                f"Connection lost while running {command_name!r}: {last_err}.{suffix}"
+            ) from exc
         finally:
             if old_timeout is not None and self._socket is not None:
                 self._socket.settimeout(old_timeout)
 
     def request(self, command_name: str, params: Optional[Mapping[str, Any]] = None, **kwargs: Any) -> Any:
         return self.command(command_name, params, **kwargs)
+
+    def wait_for_steps_completed(
+        self,
+        timeout_sec: float = 5.0,
+        poll_interval_sec: float = 0.05,
+    ) -> Dict[str, Any]:
+        """`game.step_frames` で queue した step が消化されるまで block する。
+
+        Engine は single-thread なので、command handler 内で block できない。
+        Python 側で polling する。timeout 超過時は最後の poll 結果を返す。
+        """
+        deadline = time.time() + max(0.0, float(timeout_sec))
+        last: Dict[str, Any] = {}
+        while True:
+            last = self.command("game.poll_pending_steps") or {}
+            pending = last.get("pendingStepFrames", 0)
+            if pending == 0:
+                last["_timedOut"] = False
+                return last
+            if time.time() >= deadline:
+                last["_timedOut"] = True
+                return last
+            time.sleep(max(0.001, float(poll_interval_sec)))
 
     def available_commands(self) -> List[str]:
         return list(COMMANDS)
@@ -676,6 +877,7 @@ __all__ = [
     "EngineCommandError",
     "EngineConnectionError",
     "EngineProtocolError",
+    "HEAVY_COMMAND_TIMEOUTS",
     "PROTOCOL_VERSION",
     "command_to_method_name",
 ]

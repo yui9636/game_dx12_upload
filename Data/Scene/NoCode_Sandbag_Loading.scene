@@ -1,0 +1,390 @@
+{
+  "editor": {
+    "sceneViewMode": "2D"
+  },
+  "nodes": [
+    {
+      "components": {
+        "AudioSettingsComponent": {
+          "bgmVolume": 1.0,
+          "debugDraw": false,
+          "masterVolume": 1.0,
+          "muteAll": false,
+          "sfxVolume": 1.0,
+          "uiVolume": 1.0
+        },
+        "NameComponent": {
+          "name": "Audio Settings"
+        }
+      },
+      "id": 0
+    },
+    {
+      "components": {
+        "AudioListenerComponent": {
+          "isPrimary": true,
+          "volumeScale": 1.0
+        },
+        "Camera2DComponent": {
+          "aspectPolicy": "Fit",
+          "backgroundColor": {
+            "w": 1.0,
+            "x": 0.15000000596046448,
+            "y": 0.15000000596046448,
+            "z": 0.15000000596046448
+          },
+          "clearMode": "SolidColor",
+          "farZ": 1000.0,
+          "letterboxColor": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "nearZ": 0.10000000149011612,
+          "orthographicSize": 10.0,
+          "pixelSnap": true,
+          "priority": 0,
+          "referenceResolution": [
+            1920,
+            1080
+          ],
+          "zoom": 1.0
+        },
+        "Camera2DMainTagComponent": {},
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Camera 2D"
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": -100.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 1
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": false,
+          "lockAspect": false,
+          "orderInLayer": -100,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "LoadingCanvas"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 1920.0,
+            "y": 1080.0
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 2
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 2,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "LoadingSubText"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": -70.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 900.0,
+            "y": 52.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 0.5,
+            "y": 0.7599999904632568,
+            "z": 1.0
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 30.0,
+          "lineSpacing": 1.0,
+          "text": "Preparing arena",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": -70.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 3,
+      "parent": 2
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": true,
+          "lockAspect": false,
+          "orderInLayer": 2,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "LoadingText"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 40.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 900.0,
+            "y": 120.0
+          }
+        },
+        "TextComponent": {
+          "alignment": 1,
+          "color": {
+            "w": 1.0,
+            "x": 0.9399999976158142,
+            "y": 0.9599999785423279,
+            "z": 1.0
+          },
+          "fontAssetPath": "Data/Font/ArialUni.ttf",
+          "fontSize": 76.0,
+          "lineSpacing": 1.0,
+          "text": "LOADING",
+          "wrapping": false
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 40.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 4,
+      "parent": 2
+    },
+    {
+      "components": {
+        "CanvasItemComponent": {
+          "interactable": false,
+          "lockAspect": false,
+          "orderInLayer": -20,
+          "pixelSnap": true,
+          "screenSpaceOverlay": true,
+          "sortingLayer": 0,
+          "visible": true
+        },
+        "HierarchyComponent": {
+          "isActive": true
+        },
+        "NameComponent": {
+          "name": "Loading_Backdrop"
+        },
+        "RectTransformComponent": {
+          "anchorMax": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchorMin": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "anchoredPosition": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "pivot": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "rotationZ": 0.0,
+          "scale2D": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "sizeDelta": {
+            "x": 1920.0,
+            "y": 1080.0
+          }
+        },
+        "SpriteComponent": {
+          "textureAssetPath": "Data/Texture/UI/White.png",
+          "tint": {
+            "w": 1.0,
+            "x": 0.019999999552965164,
+            "y": 0.029999999329447746,
+            "z": 0.05000000074505806
+          }
+        },
+        "TransformComponent": {
+          "localPosition": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localRotation": {
+            "w": 1.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+          },
+          "localScale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+          }
+        }
+      },
+      "id": 5,
+      "parent": 2
+    }
+  ],
+  "rootLocalIds": [
+    0,
+    1,
+    2
+  ],
+  "type": "scene",
+  "version": 1
+}

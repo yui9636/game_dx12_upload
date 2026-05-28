@@ -1,5 +1,6 @@
 ﻿#include "EditorLayerInternal.h"
 #include "Gameplay/PlayerRuntimeSetup.h"
+#include "Gameplay/DamageEventComponent.h"
 
 void EditorLayer::DrawUnsavedChangesPopup()
 {
@@ -84,7 +85,8 @@ void EditorLayer::ProcessDeferredEditorActions()
     // registry を破棄して再構築しても安全。
     if (m_pendingNewSceneRequest) {
         m_pendingNewSceneRequest = false;
-        NewScene(m_pendingNewSceneMode);
+        NewScene(m_pendingNewSceneMode, m_pendingNewSceneCleanSlate);
+        m_pendingNewSceneCleanSlate = false;
     }
 
     const bool requestNewScene = m_requestNewScene;
@@ -227,7 +229,7 @@ bool EditorLayer::ExecutePendingSceneAction()
 }
 
 
-void EditorLayer::NewScene(SceneViewMode mode)
+void EditorLayer::NewScene(SceneViewMode mode, bool cleanSlate)
 {
     if (!m_gameLayer) {
         return;
@@ -236,6 +238,11 @@ void EditorLayer::NewScene(SceneViewMode mode)
     EngineKernel::Instance().ResetRenderStateForSceneChange();
 
     Registry& registry = m_gameLayer->GetRegistry();
+    if (cleanSlate) {
+        m_playerEditorPanel.Suspend();
+        m_sequencerPanel.Suspend(&registry);
+        StopEffectTimelineFromAutomation();
+    }
     EditorSelection::Instance().Clear();
     UndoSystem::Instance().ClearECSHistory();
     m_scenePickPending = false;
@@ -251,13 +258,13 @@ void EditorLayer::NewScene(SceneViewMode mode)
     m_autosaveAccumulator = 0.0;
     m_hasCheckedRecovery = true;
 
-    ClearRegistryEntities(registry);
+    ClearRegistryEntities(registry, !cleanSlate);
     CreateDefaultSceneEntities(registry, mode);
 
     m_sceneViewMode = mode;
     m_sceneSavePath = kDefaultSceneSavePath;
     MarkSceneSaved();
-    LOG_INFO("[Editor] New scene created. mode=%s", SceneViewModeToString(mode));
+    LOG_INFO("[Editor] New scene created. mode=%s cleanSlate=%d", SceneViewModeToString(mode), cleanSlate ? 1 : 0);
 }
 
 void EditorLayer::DrawNewSceneModePopup()
@@ -329,6 +336,20 @@ bool EditorLayer::LoadSceneFromPath(const std::filesystem::path& scenePath)
     if (!m_gameLayer) {
         return false;
     }
+
+    // scene 切替前に Player / Sequencer / Effect editor の preview を確実に閉じる。
+    // これらが残ると、PrefabSystem::LoadSceneIntoRegistry が preview entity を
+    // 「保護対象」として残すため、新しい scene と古い preview が混在することがある。
+    Registry& registryRef = m_gameLayer->GetRegistry();
+    m_playerEditorPanel.Suspend();
+    m_sequencerPanel.Suspend(&registryRef);
+    StopEffectTimelineFromAutomation();
+
+    // 古い automation cursor をクリア。前 scene の damage / flow event が
+    // 新 scene の先頭 event とごっちゃになるのを防ぐ。
+    // 直接 ClearRecent (DamageEventRuntimeQueue) を呼ぶ。Automation cursor は
+    // AIAutomationService 側で管理されるが、ここでは event buffer 自体を flush する。
+    DamageEventRuntimeQueue::ClearRecent();
 
     EngineKernel::Instance().ResetRenderStateForSceneChange();
     SceneFileMetadata metadata;
